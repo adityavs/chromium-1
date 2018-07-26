@@ -6,10 +6,12 @@
 
 #include <stddef.h>
 
+#include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/account_tracker_service_factory.h"
 #include "chrome/browser/signin/signin_manager_factory.h"
 #include "chrome/browser/ssl/security_state_tab_helper.h"
+#include "chrome/browser/ui/autofill/popup_constants.h"
 #include "chrome/browser/ui/autofill/save_card_bubble_view.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_finder.h"
@@ -29,15 +31,6 @@
 DEFINE_WEB_CONTENTS_USER_DATA_KEY(autofill::SaveCardBubbleControllerImpl);
 
 namespace autofill {
-
-namespace {
-
-// Number of seconds the bubble and icon will survive navigations, starting
-// from when the bubble is shown.
-// TODO(bondd): Share with ManagePasswordsUIController.
-const int kSurviveNavigationSeconds = 5;
-
-}  // namespace
 
 SaveCardBubbleControllerImpl::SaveCardBubbleControllerImpl(
     content::WebContents* web_contents)
@@ -71,7 +64,7 @@ void SaveCardBubbleControllerImpl::ShowBubbleForLocalSave(
 
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_SHOW_REQUESTED, is_uploading_,
-      is_reshow_,
+      is_reshow_, should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -91,7 +84,7 @@ void SaveCardBubbleControllerImpl::ShowBubbleForUpload(
     return;
 
   // Fetch the logged-in user's AccountInfo if it has not yet been done.
-  if (should_request_name_from_user && !account_info_.IsEmpty())
+  if (should_request_name_from_user && account_info_.IsEmpty())
     FetchAccountInfo();
 
   is_uploading_ = true;
@@ -99,7 +92,7 @@ void SaveCardBubbleControllerImpl::ShowBubbleForUpload(
   should_request_name_from_user_ = should_request_name_from_user;
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_SHOW_REQUESTED, is_uploading_,
-      is_reshow_,
+      is_reshow_, should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -108,7 +101,7 @@ void SaveCardBubbleControllerImpl::ShowBubbleForUpload(
                                /*escape_apostrophes=*/true)) {
     AutofillMetrics::LogSaveCardPromptMetric(
         AutofillMetrics::SAVE_CARD_PROMPT_END_INVALID_LEGAL_MESSAGE,
-        is_uploading_, is_reshow_,
+        is_uploading_, is_reshow_, should_request_name_from_user_,
         pref_service_->GetInteger(
             prefs::kAutofillAcceptSaveCreditCardPromptState),
         GetSecurityLevel());
@@ -135,7 +128,7 @@ void SaveCardBubbleControllerImpl::ReshowBubble() {
   is_reshow_ = true;
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_SHOW_REQUESTED, is_uploading_,
-      is_reshow_,
+      is_reshow_, should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -189,6 +182,10 @@ void SaveCardBubbleControllerImpl::OnSaveButton(
   if (!upload_save_card_callback_.is_null()) {
     base::string16 name_provided_by_user;
     if (!cardholder_name.empty()) {
+      // Log whether the name was changed by the user or simply accepted without
+      // edits.
+      AutofillMetrics::LogSaveCardCardholderNameWasEdited(
+          cardholder_name != base::UTF8ToUTF16(account_info_.full_name));
       // Trim the cardholder name provided by the user and send it in the
       // callback so it can be included in the final request.
       DCHECK(ShouldRequestNameFromUser());
@@ -203,6 +200,7 @@ void SaveCardBubbleControllerImpl::OnSaveButton(
   }
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_END_ACCEPTED, is_uploading_, is_reshow_,
+      should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -216,6 +214,7 @@ void SaveCardBubbleControllerImpl::OnCancelButton() {
   local_save_card_callback_.Reset();
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_END_DENIED, is_uploading_, is_reshow_,
+      should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -228,7 +227,7 @@ void SaveCardBubbleControllerImpl::OnLegalMessageLinkClicked(const GURL& url) {
   OpenUrl(url);
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_DISMISS_CLICK_LEGAL_MESSAGE,
-      is_uploading_, is_reshow_,
+      is_uploading_, is_reshow_, should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -265,7 +264,7 @@ void SaveCardBubbleControllerImpl::DidFinishNavigation(
 
   // Don't do anything if a navigation occurs before a user could reasonably
   // interact with the bubble.
-  if (Elapsed() < base::TimeDelta::FromSeconds(kSurviveNavigationSeconds))
+  if (Elapsed() < kCardBubbleSurviveNavigationTime)
     return;
 
   // Otherwise, get rid of the bubble and icon.
@@ -282,7 +281,7 @@ void SaveCardBubbleControllerImpl::DidFinishNavigation(
       bubble_was_visible
           ? AutofillMetrics::SAVE_CARD_PROMPT_END_NAVIGATION_SHOWING
           : AutofillMetrics::SAVE_CARD_PROMPT_END_NAVIGATION_HIDDEN,
-      is_uploading_, is_reshow_,
+      is_uploading_, is_reshow_, should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());
@@ -335,6 +334,7 @@ void SaveCardBubbleControllerImpl::ShowBubble() {
 
   AutofillMetrics::LogSaveCardPromptMetric(
       AutofillMetrics::SAVE_CARD_PROMPT_SHOWN, is_uploading_, is_reshow_,
+      should_request_name_from_user_,
       pref_service_->GetInteger(
           prefs::kAutofillAcceptSaveCreditCardPromptState),
       GetSecurityLevel());

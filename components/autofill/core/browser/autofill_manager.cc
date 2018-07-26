@@ -69,6 +69,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/security_state/core/security_state.h"
 #include "components/strings/grit/components_strings.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/geometry/rect.h"
 #include "url/gurl.h"
@@ -94,23 +95,6 @@ const size_t kWaitTimeForDynamicFormsMs = 200;
 
 // The time limit, in ms, between a fill and when a refill can happen.
 const int kLimitBeforeRefillMs = 1000;
-
-// Precondition: |form_structure| and |form| should correspond to the same
-// logical form.  Returns true if any field in the given |section| within |form|
-// is auto-filled.
-bool SectionHasAutofilledField(const FormStructure& form_structure,
-                               const FormData& form,
-                               const std::string& section) {
-  DCHECK_EQ(form_structure.field_count(), form.fields.size());
-  for (size_t i = 0; i < form_structure.field_count(); ++i) {
-    if (form_structure.field(i)->section == section &&
-        form.fields[i].is_autofilled) {
-      return true;
-    }
-  }
-
-  return false;
-}
 
 // Returns the credit card field |value| trimmed from whitespace and with stop
 // characters removed.
@@ -206,6 +190,9 @@ void AutofillManager::RegisterProfilePrefs(
       prefs::kAutofillCreditCardSigninPromoImpressionCount, 0);
   registry->RegisterBooleanPref(
       prefs::kAutofillEnabled, true,
+      user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(
+      prefs::kAutofillProfileEnabled, true,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
   registry->RegisterIntegerPref(
       prefs::kAutofillLastVersionDeduped, 0,
@@ -365,7 +352,8 @@ void AutofillManager::OnFormSubmittedImpl(const FormData& form,
   }
   autocomplete_history_manager_->OnWillSubmitForm(form_for_autocomplete);
 
-  address_form_event_logger_->OnWillSubmitForm();
+  if (IsProfileAutofillEnabled())
+    address_form_event_logger_->OnWillSubmitForm();
   if (IsCreditCardAutofillEnabled())
     credit_card_form_event_logger_->OnWillSubmitForm();
 
@@ -384,8 +372,9 @@ void AutofillManager::OnFormSubmittedImpl(const FormData& form,
   AutofillMetrics::CardNumberStatus card_number_status =
       GetCardNumberStatus(credit_card);
 
-  address_form_event_logger_->OnFormSubmitted(/*force_logging=*/false,
-                                              card_number_status);
+  if (IsProfileAutofillEnabled())
+    address_form_event_logger_->OnFormSubmitted(/*force_logging=*/false,
+                                                card_number_status);
   if (IsCreditCardAutofillEnabled())
     credit_card_form_event_logger_->OnFormSubmitted(enable_ablation_logging_,
                                                     card_number_status);
@@ -396,6 +385,7 @@ void AutofillManager::OnFormSubmittedImpl(const FormData& form,
   // Update Personal Data with the form's submitted data.
   // Also triggers offering local/upload credit card save, if applicable.
   form_data_importer_->ImportFormData(*submitted_form,
+                                      IsProfileAutofillEnabled(),
                                       IsCreditCardAutofillEnabled());
 }
 
@@ -527,7 +517,8 @@ void AutofillManager::OnQueryFormFieldAutofillImpl(
     int query_id,
     const FormData& form,
     const FormFieldData& field,
-    const gfx::RectF& transformed_box) {
+    const gfx::RectF& transformed_box,
+    bool autoselect_first_suggestion) {
   external_delegate_->OnQuery(query_id, form, field, transformed_box);
 
   std::vector<Suggestion> suggestions;
@@ -542,7 +533,8 @@ void AutofillManager::OnQueryFormFieldAutofillImpl(
       case SuppressReason::kCreditCardsAblation:
         enable_ablation_logging_ = true;
         autocomplete_history_manager_->CancelPendingQuery();
-        external_delegate_->OnSuggestionsReturned(query_id, suggestions);
+        external_delegate_->OnSuggestionsReturned(query_id, suggestions,
+                                                  autoselect_first_suggestion);
         return;
 
       case SuppressReason::kAutocompleteOff:
@@ -559,8 +551,7 @@ void AutofillManager::OnQueryFormFieldAutofillImpl(
       // suggestions available.
       // TODO(mathp): Differentiate between number of suggestions available
       // (current metric) and number shown to the user.
-      if (!has_logged_address_suggestions_count_ &&
-          !context.section_has_autofilled_field) {
+      if (!has_logged_address_suggestions_count_) {
         AutofillMetrics::LogAddressSuggestionsCount(suggestions.size());
         has_logged_address_suggestions_count_ = true;
       }
@@ -592,6 +583,7 @@ void AutofillManager::OnQueryFormFieldAutofillImpl(
   // Send Autofill suggestions (could be an empty list).
   autocomplete_history_manager_->CancelPendingQuery();
   external_delegate_->OnSuggestionsReturned(query_id, suggestions,
+                                            autoselect_first_suggestion,
                                             context.is_all_server_suggestions);
 }
 
@@ -987,7 +979,8 @@ void AutofillManager::OnLoadedServerPredictions(
     return;
 
   // Parse and store the server predictions.
-  FormStructure::ParseQueryResponse(std::move(response), queried_forms);
+  FormStructure::ParseQueryResponse(std::move(response), queried_forms,
+                                    form_interactions_ukm_logger_.get());
 
   // Will log quality metrics for each FormStructure based on the presence of
   // autocomplete attributes, if available.
@@ -1052,7 +1045,12 @@ bool AutofillManager::IsAutofillEnabled() const {
          client_->IsAutofillSupported();
 }
 
-bool AutofillManager::IsCreditCardAutofillEnabled() {
+bool AutofillManager::IsProfileAutofillEnabled() const {
+  return client_->GetPrefs()->GetBoolean(prefs::kAutofillProfileEnabled) &&
+         client_->IsAutofillSupported();
+}
+
+bool AutofillManager::IsCreditCardAutofillEnabled() const {
   return client_->GetPrefs()->GetBoolean(prefs::kAutofillCreditCardEnabled) &&
          client_->IsAutofillSupported();
 }
@@ -1150,7 +1148,7 @@ AutofillManager::AutofillManager(
     : AutofillHandler(driver),
       client_(client),
       payments_client_(std::make_unique<payments::PaymentsClient>(
-          driver->GetURLRequestContext(),
+          driver->GetURLLoaderFactory(),
           client->GetPrefs(),
           client->GetIdentityManager(),
           /*unmask_delegate=*/this,
@@ -1405,6 +1403,7 @@ std::unique_ptr<FormStructure> AutofillManager::ValidateSubmittedForm(
     return std::unique_ptr<FormStructure>();
 
   submitted_form->RetrieveFromCache(*cached_submitted_form,
+                                    /*apply_value=*/false,
                                     /*apply_is_autofilled=*/false,
                                     /*only_server_and_autofill_state=*/false);
   return submitted_form;
@@ -1966,7 +1965,12 @@ void AutofillManager::TriggerRefill(const FormData& form,
   DCHECK(itr != filling_contexts_map_.end());
   FillingContext* filling_context = itr->second.get();
 
-  DCHECK(!filling_context->attempted_refill);
+  // The refill attempt can happen from different paths, some of which happen
+  // after waiting for a while. Therefore, although this condition has been
+  // checked prior to calling TriggerRefill, it may not hold, when we get here.
+  if (filling_context->attempted_refill)
+    return;
+
   filling_context->attempted_refill = true;
 
   // Try to find the field from which the original field originated.
@@ -2021,10 +2025,7 @@ void AutofillManager::GetAvailableSuggestions(
     }
   }
 
-  context->is_context_secure =
-      !IsFormNonSecure(form) ||
-      !base::FeatureList::IsEnabled(
-          features::kAutofillRequireSecureCreditCardContext);
+  context->is_context_secure = !IsFormNonSecure(form);
 
   // TODO(rogerm): Early exit here on !driver()->RendererIsAvailable()?
   // We skip populating autofill data, but might generate warnings and or
@@ -2075,27 +2076,6 @@ void AutofillManager::GetAvailableSuggestions(
     warning_suggestion.frontend_id =
         POPUP_ITEM_ID_INSECURE_CONTEXT_PAYMENT_DISABLED_MESSAGE;
     suggestions->assign(1, warning_suggestion);
-  } else {
-    context->section_has_autofilled_field = SectionHasAutofilledField(
-        *context->form_structure, form, context->focused_field->section);
-    if (context->section_has_autofilled_field) {
-      // If the relevant section has auto-filled  fields and the renderer is
-      // querying for suggestions, then for some fields, the user is editing
-      // the value of a field. In this case, mimic autocomplete: don't
-      // display labels or icons, as that information is redundant.
-      // Moreover, filter out duplicate suggestions.
-      std::set<base::string16> seen_values;
-      for (auto iter = suggestions->begin(); iter != suggestions->end();) {
-        if (!seen_values.insert(iter->value).second) {
-          // If we've seen this suggestion value before, remove it.
-          iter = suggestions->erase(iter);
-        } else {
-          iter->label.clear();
-          iter->icon.clear();
-          ++iter;
-        }
-      }
-    }
   }
 }
 

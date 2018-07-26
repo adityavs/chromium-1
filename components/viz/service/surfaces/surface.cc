@@ -15,6 +15,7 @@
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
+#include "components/viz/service/surfaces/referenced_surface_tracker.h"
 #include "components/viz/service/surfaces/surface_client.h"
 #include "components/viz/service/surfaces/surface_manager.h"
 #include "components/viz/service/viz_service_export.h"
@@ -29,7 +30,11 @@ Surface::Surface(const SurfaceInfo& surface_info,
     : surface_info_(surface_info),
       surface_manager_(surface_manager),
       surface_client_(std::move(surface_client)),
-      needs_sync_tokens_(needs_sync_tokens) {}
+      needs_sync_tokens_(needs_sync_tokens) {
+  TRACE_EVENT_ASYNC_BEGIN1(TRACE_DISABLED_BY_DEFAULT("viz.surface_lifetime"),
+                           "Surface", this, "surface_info",
+                           surface_info.ToString());
+}
 
 Surface::~Surface() {
   ClearCopyRequests();
@@ -43,6 +48,10 @@ Surface::~Surface() {
 
   if (deadline_)
     deadline_->Cancel();
+
+  TRACE_EVENT_ASYNC_END1(TRACE_DISABLED_BY_DEFAULT("viz.surface_lifetime"),
+                         "Surface", this, "surface_info",
+                         surface_info_.ToString());
 }
 
 void Surface::SetDependencyDeadline(
@@ -89,27 +98,43 @@ void Surface::UnrefResources(const std::vector<ReturnedResource>& resources) {
     surface_client_->UnrefResources(resources);
 }
 
+void Surface::UpdateSurfaceReferences() {
+  const base::flat_set<SurfaceId>& existing_referenced_surfaces =
+      surface_manager_->GetSurfacesReferencedByParent(surface_id());
+  base::flat_set<SurfaceId> new_referenced_surfaces(
+      active_referenced_surfaces().begin(), active_referenced_surfaces().end(),
+      base::KEEP_FIRST_OF_DUPES);
+
+  // Populate list of surface references to add and remove by getting the
+  // difference between existing surface references and surface references for
+  // latest activated CompositorFrame.
+  std::vector<SurfaceReference> references_to_add;
+  std::vector<SurfaceReference> references_to_remove;
+  GetSurfaceReferenceDifference(surface_id(), existing_referenced_surfaces,
+                                new_referenced_surfaces, &references_to_add,
+                                &references_to_remove);
+
+  // Modify surface references stored in SurfaceManager.
+  if (!references_to_add.empty())
+    surface_manager_->AddSurfaceReferences(references_to_add);
+  if (!references_to_remove.empty())
+    surface_manager_->RemoveSurfaceReferences(references_to_remove);
+}
+
 void Surface::RejectCompositorFramesToFallbackSurfaces() {
-  const std::vector<SurfaceId>& activation_dependencies =
-      GetPendingFrame().metadata.activation_dependencies;
-
-  for (const SurfaceId& surface_id :
+  for (const SurfaceRange& surface_range :
        GetPendingFrame().metadata.referenced_surfaces) {
-    // A surface ID in |referenced_surfaces| that has a corresponding surface
-    // ID in |activation_dependencies| with the same frame sink ID is said to
-    // be a fallback surface that can be used in place of the primary surface
-    // if the deadline passes before the dependency becomes available.
-    auto it = std::find_if(
-        activation_dependencies.begin(), activation_dependencies.end(),
-        [surface_id](const SurfaceId& dependency) {
-          return dependency.frame_sink_id() == surface_id.frame_sink_id();
-        });
-    bool is_fallback_surface = it != activation_dependencies.end();
-    if (!is_fallback_surface)
+    // Only close the fallback surface if it exists, has a different
+    // LocalSurfaceId than the primary surface but has the same FrameSinkId
+    // as the primary surface.
+    if (!surface_range.start() ||
+        surface_range.start() == surface_range.end() ||
+        surface_range.start()->frame_sink_id() !=
+            surface_range.end().frame_sink_id()) {
       continue;
-
-    Surface* fallback_surface =
-        surface_manager_->GetLatestInFlightSurface(*it, surface_id);
+    }
+    Surface* fallback_surface = surface_manager_->GetLatestInFlightSurface(
+        surface_range.end(), *surface_range.start());
 
     // A misbehaving client may report a non-existent surface ID as a
     // |referenced_surface|. In that case, |surface| would be nullptr, and
@@ -127,8 +152,6 @@ bool Surface::QueueFrame(
     CompositorFrame frame,
     uint64_t frame_index,
     base::ScopedClosureRunner frame_rejected_callback,
-    base::OnceClosure callback,
-    const AggregatedDamageCallback& aggregated_damage_callback,
     PresentedCallback presented_callback) {
   late_activation_dependencies_.clear();
 
@@ -161,13 +184,11 @@ bool Surface::QueueFrame(
       (deadline_ && !deadline.deadline_in_frames())) {
     // If there are no blockers, then immediately activate the frame.
     ActivateFrame(
-        FrameData(std::move(frame), frame_index, std::move(callback),
-                  aggregated_damage_callback, std::move(presented_callback)),
+        FrameData(std::move(frame), frame_index, std::move(presented_callback)),
         base::nullopt);
   } else {
     pending_frame_data_ =
-        FrameData(std::move(frame), frame_index, std::move(callback),
-                  aggregated_damage_callback, std::move(presented_callback));
+        FrameData(std::move(frame), frame_index, std::move(presented_callback));
     RejectCompositorFramesToFallbackSurfaces();
 
     // If the deadline is in the past, then we will activate immediately.
@@ -257,16 +278,12 @@ void Surface::ActivatePendingFrameForDeadline(
   ActivatePendingFrame(duration);
 }
 
-Surface::FrameData::FrameData(
-    CompositorFrame&& frame,
-    uint64_t frame_index,
-    base::OnceClosure draw_callback,
-    const AggregatedDamageCallback& aggregated_damage_callback,
-    PresentedCallback presented_callback)
+Surface::FrameData::FrameData(CompositorFrame&& frame,
+                              uint64_t frame_index,
+                              PresentedCallback presented_callback)
     : frame(std::move(frame)),
       frame_index(frame_index),
-      draw_callback(std::move(draw_callback)),
-      aggregated_damage_callback(aggregated_damage_callback),
+      frame_processed(false),
       presented_callback(std::move(presented_callback)) {}
 
 Surface::FrameData::FrameData(FrameData&& other) = default;
@@ -312,6 +329,13 @@ void Surface::ActivateFrame(FrameData frame_data,
 
   active_frame_data_ = std::move(frame_data);
 
+  active_referenced_surfaces_.clear();
+  for (SurfaceRange surface_range :
+       active_frame_data_->frame.metadata.referenced_surfaces) {
+    if (surface_range.start())
+      active_referenced_surfaces_.emplace_back(*surface_range.start());
+  }
+
   for (auto& copy_request : old_copy_requests)
     RequestCopyOfOutput(std::move(copy_request));
 
@@ -324,6 +348,14 @@ void Surface::ActivateFrame(FrameData frame_data,
     surface_client_->OnSurfaceActivated(this);
 
   if (!seen_first_frame_activation_) {
+    TRACE_EVENT_WITH_FLOW2(
+        TRACE_DISABLED_BY_DEFAULT("viz.surface_id_flow"),
+        "LocalSurfaceId.Submission.Flow",
+        TRACE_ID_GLOBAL(
+            surface_info_.id().local_surface_id().submission_trace_id()),
+        TRACE_EVENT_FLAG_FLOW_IN, "step", "FirstSurfaceActivation",
+        "surface_id", surface_info_.id().ToString());
+
     seen_first_frame_activation_ = true;
     surface_manager_->FirstSurfaceActivation(surface_info_);
   }
@@ -365,6 +397,14 @@ FrameDeadline Surface::UpdateActivationDependencies(
       new_activation_dependencies.insert(surface_id);
       if (!track_dependencies)
         continue;
+
+      TRACE_EVENT_WITH_FLOW2(
+          TRACE_DISABLED_BY_DEFAULT("viz.surface_id_flow"),
+          "LocalSurfaceId.Embed.Flow",
+          TRACE_ID_GLOBAL(surface_id.local_surface_id().embed_trace_id()),
+          TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "step",
+          "AddedActivationDependency", "child_surface_id",
+          surface_id.ToString());
 
       // Record the latest |parent_sequence_number| this surface is interested
       // in observing for the provided FrameSinkId.
@@ -482,19 +522,20 @@ bool Surface::TakePresentedCallback(PresentedCallback* callback) {
 }
 
 void Surface::RunDrawCallback() {
-  if (active_frame_data_ && !active_frame_data_->draw_callback.is_null())
-    std::move(active_frame_data_->draw_callback).Run();
+  if (!active_frame_data_ || active_frame_data_->frame_processed)
+    return;
+  active_frame_data_->frame_processed = true;
+  if (surface_client_)
+    surface_client_->OnSurfaceProcessed(this);
 }
 
 void Surface::NotifyAggregatedDamage(const gfx::Rect& damage_rect,
                                      base::TimeTicks expected_display_time) {
-  if (!active_frame_data_ ||
-      active_frame_data_->aggregated_damage_callback.is_null())
+  if (!active_frame_data_ || !surface_client_)
     return;
-
-  active_frame_data_->aggregated_damage_callback.Run(
-      surface_id().local_surface_id(), active_frame_data_->frame, damage_rect,
-      expected_display_time);
+  surface_client_->OnSurfaceAggregatedDamage(
+      this, surface_id().local_surface_id(), active_frame_data_->frame,
+      damage_rect, expected_display_time);
 }
 
 void Surface::OnDeadline(base::TimeDelta duration) {
@@ -515,8 +556,8 @@ void Surface::UnrefFrameResourcesAndRunCallbacks(
     resource.sync_token.Clear();
   surface_client_->UnrefResources(resources);
 
-  if (frame_data->draw_callback)
-    std::move(frame_data->draw_callback).Run();
+  if (!frame_data->frame_processed)
+    surface_client_->OnSurfaceProcessed(this);
 
   if (frame_data->presented_callback) {
     std::move(frame_data->presented_callback)
@@ -560,6 +601,16 @@ void Surface::TakeLatencyInfoFromFrame(
 }
 
 void Surface::OnWillBeDrawn() {
+  if (!seen_first_surface_embedding_) {
+    seen_first_surface_embedding_ = true;
+
+    TRACE_EVENT_WITH_FLOW2(
+        TRACE_DISABLED_BY_DEFAULT("viz.surface_id_flow"),
+        "LocalSurfaceId.Embed.Flow",
+        TRACE_ID_GLOBAL(surface_info_.id().local_surface_id().embed_trace_id()),
+        TRACE_EVENT_FLAG_FLOW_IN, "step", "FirstSurfaceEmbedding", "surface_id",
+        surface_info_.id().ToString());
+  }
   surface_manager_->SurfaceWillBeDrawn(this);
 }
 

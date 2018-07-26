@@ -269,26 +269,17 @@ class ServiceWorkerMetrics {
     base::TimeTicks local_end;
   };
 
+  // Records worker activities. Currently this only records
+  // StartHintPrecision histogram.
   class ScopedEventRecorder {
    public:
-    explicit ScopedEventRecorder(EventType start_worker_purpose);
+    ScopedEventRecorder();
     ~ScopedEventRecorder();
 
-    void RecordEventHandledStatus(EventType event, bool handled);
+    void RecordEventHandledStatus(EventType event);
 
    private:
-    struct EventStat {
-      size_t fired_events = 0;
-      size_t handled_events = 0;
-    };
-
-    // Records how much of dispatched events are handled.
-    static void RecordEventHandledRatio(EventType event,
-                                        size_t handled_events,
-                                        size_t fired_events);
-
-    std::map<EventType, EventStat> event_stats_;
-    const EventType start_worker_purpose_;
+    bool frame_fetch_event_fired_ = false;
 
     DISALLOW_COPY_AND_ASSIGN(ScopedEventRecorder);
   };
@@ -398,21 +389,7 @@ class ServiceWorkerMetrics {
   static void RecordFallbackedRequestMode(
       network::mojom::FetchRequestMode mode);
 
-  // Called at the beginning of each ServiceWorkerVersion::Dispatch*Event
-  // function. Records the time elapsed since idle (generally the time since the
-  // previous event ended).
-  static void RecordTimeBetweenEvents(base::TimeDelta time);
-
-  // The following record steps of EmbeddedWorkerInstance's start sequence.
-  // TODO(crbug.com/855952): Remove most of these and replace with
-  // RecordStartWorkingTiming().
   static void RecordProcessCreated(bool is_new_process);
-  static void RecordTimeToSendStartWorker(base::TimeDelta duration,
-                                          StartSituation start_situation);
-  static void RecordTimeToStartThread(base::TimeDelta duration,
-                                      StartSituation start_situation);
-  static void RecordTimeToEvaluateScript(base::TimeDelta duration,
-                                         StartSituation start_situation);
 
   CONTENT_EXPORT static void RecordStartWorkerTiming(const StartTimes& times,
                                                      StartSituation situation);

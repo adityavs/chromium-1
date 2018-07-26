@@ -71,10 +71,8 @@ constexpr SkColor kDefaultColorNTPText = SK_ColorBLACK;
 const SkColor kDefaultColorNTPLink = SkColorSetRGB(0x06, 0x37, 0x74);
 #endif  // OS_WIN
 
-// Then new MD Incognito NTP uses a slightly different shade of black.
-// TODO(msramek): Remove the old entry when the new NTP fully launches.
 const SkColor kDefaultColorNTPBackgroundIncognito =
-    SkColorSetRGB(0x30, 0x30, 0x30);
+    SkColorSetRGB(0x32, 0x36, 0x39);
 
 const SkColor kDefaultColorNTPHeader = SkColorSetRGB(0x96, 0x96, 0x96);
 constexpr SkColor kDefaultColorButtonBackground = SK_ColorTRANSPARENT;
@@ -154,9 +152,10 @@ base::Optional<SkColor> MaybeGetDefaultColorForNewerMaterialUi(int id,
 
   switch (id) {
     case ThemeProperties::COLOR_FRAME:
-    case ThemeProperties::COLOR_FRAME_INACTIVE:
     case ThemeProperties::COLOR_BACKGROUND_TAB:
       return incognito ? gfx::kGoogleGrey900 : SkColorSetRGB(0xDE, 0xE1, 0xE6);
+    case ThemeProperties::COLOR_FRAME_INACTIVE:
+      return incognito ? gfx::kGoogleGrey800 : SkColorSetRGB(0xE7, 0xEA, 0xED);
     case ThemeProperties::COLOR_TOOLBAR:
       return incognito ? SkColorSetRGB(0x32, 0x36, 0x39) : SK_ColorWHITE;
 
@@ -339,6 +338,10 @@ SkColor ThemeProperties::GetDefaultColor(int id, bool incognito) {
       return kDefaultColorTabAlertRecordingIcon;
     case COLOR_TAB_ALERT_CAPTURING:
       return kDefaultColorTabAlertCapturingIcon;
+    case COLOR_TAB_CLOSE_BUTTON_BACKGROUND_HOVER:
+      return SkColorSetRGB(0xDB, 0x44, 0x37);
+    case COLOR_TAB_CLOSE_BUTTON_BACKGROUND_PRESSED:
+      return SkColorSetRGB(0xA8, 0x35, 0x2A);
 #if defined(OS_MACOSX)
     case COLOR_FRAME_VIBRANCY_OVERLAY:
       return incognito ? kDefaultColorFrameVibrancyOverlayIncognito

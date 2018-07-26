@@ -205,22 +205,29 @@ void Animation::AddKeyframeModelForKeyframeEffect(
       ->AddKeyframeModel(std::move(keyframe_model));
 }
 
-void Animation::RemoveKeyframeModelsForKeyframeEffect(
+void Animation::PauseKeyframeModelForKeyframeEffect(
+    int keyframe_model_id,
+    double time_offset,
     KeyframeEffectId keyframe_effect_id) {
   DCHECK(GetKeyframeEffectById(keyframe_effect_id));
-  GetKeyframeEffectById(keyframe_effect_id)->RemoveKeyframeModels();
+  GetKeyframeEffectById(keyframe_effect_id)
+      ->PauseKeyframeModel(keyframe_model_id, time_offset);
 }
 
-void Animation::PauseKeyframeEffect(double time_offset,
-                                    KeyframeEffectId keyframe_effect_id) {
+void Animation::RemoveKeyframeModelForKeyframeEffect(
+    int keyframe_model_id,
+    KeyframeEffectId keyframe_effect_id) {
   DCHECK(GetKeyframeEffectById(keyframe_effect_id));
   GetKeyframeEffectById(keyframe_effect_id)
-      ->Pause(base::TimeDelta::FromSecondsD(time_offset));
+      ->RemoveKeyframeModel(keyframe_model_id);
 }
 
-void Animation::AbortKeyframeEffect(KeyframeEffectId keyframe_effect_id) {
+void Animation::AbortKeyframeModelForKeyframeEffect(
+    int keyframe_model_id,
+    KeyframeEffectId keyframe_effect_id) {
   DCHECK(GetKeyframeEffectById(keyframe_effect_id));
-  GetKeyframeEffectById(keyframe_effect_id)->Abort();
+  GetKeyframeEffectById(keyframe_effect_id)
+      ->AbortKeyframeModel(keyframe_model_id);
 }
 
 void Animation::AbortKeyframeModelsWithProperty(
@@ -232,6 +239,10 @@ void Animation::AbortKeyframeModelsWithProperty(
 }
 
 void Animation::PushPropertiesTo(Animation* animation_impl) {
+  // In general when pushing proerties to impl thread we first push attached
+  // properties to impl followed by removing the detached ones. However, we
+  // never remove individual keyframe effect from an animation so there is no
+  // need to remove the detached ones.
   PushAttachedKeyframeEffectsToImplThread(animation_impl);
   PushPropertiesToImplThread(animation_impl);
 }

@@ -40,6 +40,10 @@ extern const base::Feature kAnimatedAppMenuIcon;
 extern const base::Feature kAppBanners;
 #endif  // !defined(OS_ANDROID)
 
+#if defined(OS_ANDROID)
+extern const base::Feature kAppNotificationStatusMessaging;
+#endif  // defined(OS_ANDROID)
+
 extern const base::Feature kAssetDownloadSuggestionsFeature;
 
 extern const base::Feature kAsyncDns;
@@ -171,6 +175,8 @@ extern const base::Feature kHappinessTrackingSystem;
 extern const base::Feature kViewsCastDialog;
 #endif
 
+extern const base::Feature kIdnNavigationSuggestions;
+
 extern const base::Feature kImprovedRecoveryComponent;
 
 #if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
@@ -202,6 +208,8 @@ extern const base::Feature kWarnBeforeQuitting;
 #endif
 
 extern const base::Feature kMaterialDesignIncognitoNTP;
+
+extern const base::Feature kMirroringService;
 
 extern const base::Feature kModalPermissionPrompts;
 
@@ -246,6 +254,7 @@ extern const base::Feature kPreloadLockScreen;
 #endif
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+extern const base::Feature kCloudPrinterHandler;
 extern const base::Feature kNewPrintPreview;
 extern const base::Feature kNupPrinting;
 #endif
@@ -279,6 +288,8 @@ extern const char kSitePerProcessOnlyForHighMemoryClientsParamName[];
 extern const base::Feature kNativeSmb;
 #endif
 
+extern const base::Feature kSingleTabMode;
+
 extern const base::Feature kSoundContentSetting;
 
 #if defined(OS_MACOSX)
@@ -307,6 +318,8 @@ extern const base::Feature kUseGoogleLocalNtp;
 extern const base::Feature kAdaptiveScreenBrightnessLogging;
 
 extern const base::Feature kUserActivityEventLogging;
+
+extern const base::Feature kUserActivityPrediction;
 #endif
 
 extern const base::Feature kUseSameCacheForMedia;
@@ -334,11 +347,11 @@ extern const base::Feature kCrosCompUpdates;
 
 extern const base::Feature kCrOSComponent;
 
-extern const base::Feature kInstantTethering;
-
 extern const base::Feature kTPMFirmwareUpdate;
 
 extern const base::Feature kCrOSEnableUSMUserService;
+
+extern const base::Feature kMachineLearningService;
 #endif  // defined(OS_CHROMEOS)
 
 #if !defined(OS_ANDROID)

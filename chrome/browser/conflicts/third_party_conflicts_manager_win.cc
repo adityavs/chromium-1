@@ -19,6 +19,7 @@
 #include "base/task_runner.h"
 #include "base/task_runner_util.h"
 #include "base/task_scheduler/post_task.h"
+#include "base/win/windows_version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/conflicts/incompatible_applications_updater_win.h"
 #include "chrome/browser/conflicts/installed_applications_win.h"
@@ -124,6 +125,11 @@ void ThirdPartyConflictsManager::OnModuleDatabaseIdle() {
   // The InstalledApplications instance is only needed for the incompatible
   // applications warning.
   if (!base::FeatureList::IsEnabled(features::kIncompatibleApplicationsWarning))
+    return;
+
+  // The incompatible applications warning feature is not available on Windows
+  // versions other than 10.
+  if (base::win::GetVersion() < base::win::VERSION_WIN10)
     return;
 
   base::PostTaskAndReplyWithResult(
@@ -281,13 +287,6 @@ void ThirdPartyConflictsManager::InitializeIfReady() {
     return;
   }
 
-  if (installed_applications_) {
-    incompatible_applications_updater_ =
-        std::make_unique<IncompatibleApplicationsUpdater>(
-            module_database_event_source_, *exe_certificate_info_,
-            module_list_filter_, *installed_applications_);
-  }
-
   if (base::FeatureList::IsEnabled(features::kThirdPartyModulesBlocking)) {
     // It is safe to use base::Unretained() since the callback will not be
     // invoked if the updater is freed.
@@ -300,7 +299,25 @@ void ThirdPartyConflictsManager::InitializeIfReady() {
                 base::Unretained(this)));
   }
 
-  SetTerminalState(State::kInitialized);
+  // The |incompatible_applications_updater_| instance must be created last so
+  // that it is registered to the Module Database observer's API after the
+  // ModuleBlacklistCacheUpdater instance. This way, it knows about which
+  // modules were added to the module blacklist cache so that it's possible to
+  // not warn about them.
+  if (installed_applications_) {
+    incompatible_applications_updater_ =
+        std::make_unique<IncompatibleApplicationsUpdater>(
+            module_database_event_source_, *exe_certificate_info_,
+            module_list_filter_, *installed_applications_);
+  }
+
+  if (!incompatible_applications_updater_) {
+    SetTerminalState(State::kBlockingInitialized);
+  } else if (!module_blacklist_cache_updater_) {
+    SetTerminalState(State::kWarningInitialized);
+  } else {
+    SetTerminalState(State::kWarningAndBlockingInitialized);
+  }
 }
 
 void ThirdPartyConflictsManager::OnModuleBlacklistCacheUpdated(

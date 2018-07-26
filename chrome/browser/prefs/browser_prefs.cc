@@ -10,6 +10,7 @@
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
 #include "chrome/browser/about_flags.h"
+#include "chrome/browser/accessibility/accessibility_ui.h"
 #include "chrome/browser/accessibility/invert_bubble_prefs.h"
 #include "chrome/browser/browser_process_impl.h"
 #include "chrome/browser/chrome_content_browser_client.h"
@@ -27,6 +28,7 @@
 #include "chrome/browser/media/media_device_id_salt.h"
 #include "chrome/browser/media/media_engagement_service.h"
 #include "chrome/browser/media/media_storage_id_salt.h"
+#include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_devices_controller.h"
 #include "chrome/browser/metrics/chrome_metrics_service_client.h"
@@ -38,6 +40,7 @@
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/notifications/notification_channels_provider_android.h"
 #include "chrome/browser/notifications/notifier_state_tracker.h"
+#include "chrome/browser/notifications/platform_notification_service_impl.h"
 #include "chrome/browser/pepper_flash_settings_manager.h"
 #include "chrome/browser/policy/developer_tools_policy_handler.h"
 #include "chrome/browser/policy/policy_helpers.h"
@@ -92,6 +95,7 @@
 #include "components/ntp_snippets/user_classifier.h"
 #include "components/ntp_tiles/most_visited_sites.h"
 #include "components/offline_pages/buildflags/buildflags.h"
+#include "components/omnibox/browser/document_provider.h"
 #include "components/omnibox/browser/zero_suggest_provider.h"
 #include "components/password_manager/core/browser/password_bubble_experiment.h"
 #include "components/password_manager/core/browser/password_manager.h"
@@ -107,7 +111,6 @@
 #include "components/safe_browsing/common/safe_browsing_prefs.h"
 #include "components/search_engines/template_url_prepopulate_data.h"
 #include "components/sessions/core/session_id_generator.h"
-#include "components/signin/core/browser/profile_management_switches.h"
 #include "components/startup_metric_utils/browser/startup_metric_utils.h"
 #include "components/subresource_filter/core/browser/ruleset_service.h"
 #include "components/sync/base/sync_prefs.h"
@@ -132,7 +135,7 @@
 
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "chrome/browser/accessibility/animation_policy_prefs.h"
-#include "chrome/browser/apps/shortcut_manager.h"
+#include "chrome/browser/apps/platform_apps/shortcut_manager.h"
 #include "chrome/browser/extensions/activity_log/activity_log.h"
 #include "chrome/browser/extensions/api/commands/command_service.h"
 #include "chrome/browser/extensions/api/cryptotoken_private/cryptotoken_private_api.h"
@@ -289,7 +292,7 @@
 #endif
 
 #if defined(OS_WIN)
-#include "chrome/browser/apps/app_launch_for_metro_restart_win.h"
+#include "chrome/browser/apps/platform_apps/app_launch_for_metro_restart_win.h"
 #include "chrome/browser/component_updater/sw_reporter_installer_win.h"
 #if defined(GOOGLE_CHROME_BUILD)
 #include "chrome/browser/conflicts/incompatible_applications_updater_win.h"
@@ -307,6 +310,10 @@
 
 #if defined(TOOLKIT_VIEWS)
 #include "chrome/browser/ui/browser_view_prefs.h"
+#endif
+
+#if !defined(OS_ANDROID)
+#include "components/ntp_tiles/custom_links_manager_impl.h"
 #endif
 
 namespace {
@@ -507,6 +514,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   TRACE_EVENT0("browser", "chrome::RegisterProfilePrefs");
   SCOPED_UMA_HISTOGRAM_TIMER("Settings.RegisterProfilePrefsTime");
   // User prefs. Please keep this list alphabetized.
+  AccessibilityUIMessageHandler::RegisterProfilePrefs(registry);
   autofill::AutofillManager::RegisterProfilePrefs(registry);
   browsing_data::prefs::RegisterBrowserUserPrefs(registry);
   certificate_transparency::prefs::RegisterPrefs(registry);
@@ -518,6 +526,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   chrome_browser_net::RegisterPredictionOptionsProfilePrefs(registry);
   chrome_prefs::RegisterProfilePrefs(registry);
   dom_distiller::DistilledPagePrefs::RegisterProfilePrefs(registry);
+  DocumentProvider::RegisterProfilePrefs(registry);
   DownloadPrefs::RegisterProfilePrefs(registry);
   HostContentSettingsMap::RegisterProfilePrefs(registry);
   ImportantSitesUtil::RegisterProfilePrefs(registry);
@@ -540,6 +549,7 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   password_bubble_experiment::RegisterPrefs(registry);
   password_manager::PasswordManager::RegisterProfilePrefs(registry);
   payments::RegisterProfilePrefs(registry);
+  PlatformNotificationServiceImpl::RegisterProfilePrefs(registry);
   policy::DeveloperToolsPolicyHandler::RegisterProfilePrefs(registry);
   policy::URLBlacklistManager::RegisterProfilePrefs(registry);
   PrefProxyConfigTrackerImpl::RegisterProfilePrefs(registry);
@@ -554,7 +564,6 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   secure_origin_whitelist::RegisterProfilePrefs(registry);
   SafeBrowsingTriggeredPopupBlocker::RegisterProfilePrefs(registry);
   SessionStartupPref::RegisterProfilePrefs(registry);
-  signin::RegisterAccountConsistencyProfilePrefs(registry);
   syncer::SyncPrefs::RegisterProfilePrefs(registry);
   syncer::PerUserTopicRegistrationManager::RegisterProfilePrefs(registry);
   TemplateURLPrepopulateData::RegisterProfilePrefs(registry);
@@ -643,6 +652,8 @@ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
   InstantService::RegisterProfilePrefs(registry);
   gcm::GCMChannelStatusSyncer::RegisterProfilePrefs(registry);
   gcm::RegisterProfilePrefs(registry);
+  media_router::RegisterProfilePrefs(registry);
+  ntp_tiles::CustomLinksManagerImpl::RegisterProfilePrefs(registry);
   StartupBrowserCreator::RegisterProfilePrefs(registry);
 #endif
 

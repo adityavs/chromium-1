@@ -177,13 +177,11 @@ void JsonRequest::OnSimpleLoaderComplete(
         .Run(/*result=*/nullptr, FetchResult::URL_REQUEST_STATUS_ERROR,
              /*error_details=*/base::StringPrintf(" %d", net_error));
   } else if (response_code / 100 != 2) {
-    // TODO(jkrcal): https://crbug.com/609084
-    // We need to deal with the edge case again where the auth
-    // token expires just before we send the request (in which case we need to
-    // fetch a new auth token). We should extract that into a common class
-    // instead of adding it to every single class that uses auth tokens.
+    FetchResult result = response_code == net::HTTP_UNAUTHORIZED
+                             ? FetchResult::HTTP_ERROR_UNAUTHORIZED
+                             : FetchResult::HTTP_ERROR;
     std::move(request_completed_callback_)
-        .Run(/*result=*/nullptr, FetchResult::HTTP_ERROR,
+        .Run(/*result=*/nullptr, result,
              /*error_details=*/base::StringPrintf(" %d", response_code));
   } else {
     last_response_string_ = std::move(*response_body);
@@ -288,11 +286,10 @@ JsonRequest::Builder::BuildResourceRequest() const {
     resource_request->headers.SetHeader("Authorization", auth_header_);
   }
   // Add X-Client-Data header with experiment IDs from field trials.
-  // Note: It's OK to pass SignedIn::kNo if it's unknown, as it does not affect
-  // transmission of experiments coming from the variations server.
-  variations::AppendVariationHeaders(url_, variations::InIncognito::kNo,
-                                     variations::SignedIn::kNo,
-                                     &resource_request->headers);
+  // TODO: We should call AppendVariationHeaders with explicit
+  // variations::SignedIn::kNo If the auth_header_ is empty
+  variations::AppendVariationHeadersUnknownSignedIn(
+      url_, variations::InIncognito::kNo, &resource_request->headers);
   return resource_request;
 }
 

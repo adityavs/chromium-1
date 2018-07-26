@@ -18,6 +18,7 @@
 #include "base/containers/circular_deque.h"
 #include "base/containers/flat_map.h"
 #include "base/macros.h"
+#include "base/memory/memory_coordinator_client.h"
 #include "base/memory/memory_pressure_listener.h"
 #include "base/sequenced_task_runner.h"
 #include "base/time/time.h"
@@ -52,6 +53,7 @@
 #include "components/viz/common/surfaces/child_local_surface_id_allocator.h"
 #include "components/viz/common/surfaces/local_surface_id.h"
 #include "components/viz/common/surfaces/surface_id.h"
+#include "components/viz/common/surfaces/surface_range.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/latency/frame_metrics.h"
 
@@ -134,6 +136,11 @@ class LayerTreeHostImplClient {
   virtual void WillPrepareTiles() = 0;
   virtual void DidPrepareTiles() = 0;
 
+  // TODO(gyuyoung): OnMemoryPressure is deprecated. So this should be removed
+  // when the memory coordinator is enabled by default.
+  virtual void OnMemoryPressureOnImplThread(
+      base::MemoryPressureListener::MemoryPressureLevel level) = 0;
+
   // Called when page scale animation has completed on the impl thread.
   virtual void DidCompletePageScaleAnimationOnImplThread() = 0;
 
@@ -169,7 +176,8 @@ class CC_EXPORT LayerTreeHostImpl
       public ScrollbarAnimationControllerClient,
       public VideoFrameControllerClient,
       public MutatorHostClient,
-      public base::SupportsWeakPtr<LayerTreeHostImpl> {
+      public base::SupportsWeakPtr<LayerTreeHostImpl>,
+      public base::MemoryCoordinatorClient {
  public:
   // This structure is used to build all the state required for producing a
   // single CompositorFrame. The |render_passes| list becomes the set of
@@ -233,8 +241,7 @@ class CC_EXPORT LayerTreeHostImpl
   ~LayerTreeHostImpl() override;
 
   // InputHandler implementation
-  void BindToClient(InputHandlerClient* client,
-                    bool wheel_scroll_latching_enabled) override;
+  void BindToClient(InputHandlerClient* client) override;
   InputHandler::ScrollStatus ScrollBegin(
       ScrollState* scroll_state,
       InputHandler::ScrollInputType type) override;
@@ -252,7 +259,6 @@ class CC_EXPORT LayerTreeHostImpl
   void SetSynchronousInputHandlerRootScrollOffset(
       const gfx::ScrollOffset& root_offset) override;
   void ScrollEnd(ScrollState* scroll_state, bool should_snap = false) override;
-  InputHandler::ScrollStatus FlingScrollBegin() override;
 
   void MouseDown() override;
   void MouseUp() override;
@@ -278,12 +284,14 @@ class CC_EXPORT LayerTreeHostImpl
   EventListenerTypeForTouchStartOrMoveAt(
       const gfx::Point& viewport_port,
       TouchAction* out_touch_action) override;
+  bool HasWheelEventHandlerAt(const gfx::Point& viewport_point) const override;
   std::unique_ptr<SwapPromiseMonitor> CreateLatencyInfoSwapPromiseMonitor(
       ui::LatencyInfo* latency) override;
   ScrollElasticityHelper* CreateScrollElasticityHelper() override;
-  bool GetScrollOffsetForLayer(int layer_id,
+  bool GetScrollOffsetForLayer(ElementId element_id,
                                gfx::ScrollOffset* offset) override;
-  bool ScrollLayerTo(int layer_id, const gfx::ScrollOffset& offset) override;
+  bool ScrollLayerTo(ElementId element_id,
+                     const gfx::ScrollOffset& offset) override;
   bool ScrollingShouldSwitchtoMainThread() override;
 
   // BrowserControlsOffsetManagerClient implementation.
@@ -312,7 +320,6 @@ class CC_EXPORT LayerTreeHostImpl
   void ActivateAnimations();
   void Animate();
   void AnimatePendingTreeAfterCommit();
-  void MainThreadHasStoppedFlinging();
   void DidAnimateScrollOffset();
   void SetFullViewportDamage();
   void SetViewportDamage(const gfx::Rect& damage_rect);
@@ -440,7 +447,8 @@ class CC_EXPORT LayerTreeHostImpl
   void ReclaimResources(
       const std::vector<viz::ReturnedResource>& resources) override;
   void SetMemoryPolicy(const ManagedMemoryPolicy& policy) override;
-  void SetTreeActivationCallback(const base::Closure& callback) override;
+  void SetTreeActivationCallback(
+      const base::RepeatingClosure& callback) override;
   void OnDraw(const gfx::Transform& transform,
               const gfx::Rect& viewport,
               bool resourceless_software_draw,
@@ -542,11 +550,6 @@ class CC_EXPORT LayerTreeHostImpl
 
   ManagedMemoryPolicy ActualManagedMemoryPolicy() const;
 
-  void SetViewportSize(const gfx::Size& device_viewport_size);
-  const gfx::Size& device_viewport_size() const {
-    return device_viewport_size_;
-  }
-
   void SetViewportVisibleRect(const gfx::Rect& visible_rect);
   gfx::Rect viewport_visible_rect() const { return viewport_visible_rect_; }
 
@@ -615,8 +618,8 @@ class CC_EXPORT LayerTreeHostImpl
   gfx::ScrollOffset GetVisualScrollOffset(const ScrollNode& scroll_node) const;
 
   bool GetSnapFlingInfo(const gfx::Vector2dF& natural_displacement_in_viewport,
-                        gfx::Vector2dF* initial_offset,
-                        gfx::Vector2dF* target_offset) const override;
+                        gfx::Vector2dF* out_initial_offset,
+                        gfx::Vector2dF* out_target_offset) const override;
 
   // Returns the amount of delta that can be applied to scroll_node, taking
   // page scale into account.
@@ -628,12 +631,13 @@ class CC_EXPORT LayerTreeHostImpl
   viz::CompositorFrameMetadata MakeCompositorFrameMetadata();
   RenderFrameMetadata MakeRenderFrameMetadata(FrameData* frame);
 
-  // Viewport rectangle and clip in device space.  These rects are used to
-  // prioritize raster and determine what is submitted in a CompositorFrame.
-  gfx::Rect DeviceViewport() const;
+  const gfx::Rect& external_viewport() const { return external_viewport_; }
+
   // Viewport rect to be used for tiling prioritization instead of the
   // DeviceViewport().
-  const gfx::Rect ViewportRectForTilePriority() const;
+  const gfx::Rect& viewport_rect_for_tile_priority() const {
+    return viewport_rect_for_tile_priority_;
+  }
 
   // When a SwapPromiseMonitor is created on the impl thread, it calls
   // InsertSwapPromiseMonitor() to register itself with LayerTreeHostImpl.
@@ -712,6 +716,11 @@ class CC_EXPORT LayerTreeHostImpl
 
   void SetRenderFrameObserver(
       std::unique_ptr<RenderFrameMetadataObserver> observer);
+
+  void SetActiveURL(const GURL& url);
+
+  // Overriden from base::MemoryCoordinatorClient.
+  void OnPurgeMemory() override;
 
  protected:
   LayerTreeHostImpl(
@@ -872,9 +881,6 @@ class CC_EXPORT LayerTreeHostImpl
   // active tree.
   void ActivateStateForImages();
 
-  void OnMemoryPressure(
-      base::MemoryPressureListener::MemoryPressureLevel level);
-
   const LayerTreeSettings settings_;
   const bool is_synchronous_single_threaded_;
 
@@ -982,12 +988,6 @@ class CC_EXPORT LayerTreeHostImpl
   // manager, if there were no limit on memory usage.
   size_t max_memory_needed_bytes_ = 0;
 
-  // Viewport size passed in from the main thread, in physical pixels.  This
-  // value is the default size for all concepts of physical viewport (draw
-  // viewport, scrolling viewport and device viewport), but it can be
-  // overridden.
-  gfx::Size device_viewport_size_;
-
   // Viewport clip rect passed in from the main thrad, in physical pixels.
   // This is used for out-of-process iframes whose size exceeds the window
   // in order to prevent full raster.
@@ -1066,8 +1066,6 @@ class CC_EXPORT LayerTreeHostImpl
   bool has_scrolled_by_wheel_ = false;
   bool has_scrolled_by_touch_ = false;
 
-  bool touchpad_and_wheel_scroll_latching_enabled_ = false;
-
   ImplThreadPhase impl_thread_phase_ = ImplThreadPhase::IDLE;
 
   ImageAnimationController image_animation_controller_;
@@ -1081,7 +1079,7 @@ class CC_EXPORT LayerTreeHostImpl
   uint32_t next_frame_token_ = 1u;
 
   viz::LocalSurfaceId last_draw_local_surface_id_;
-  base::flat_set<viz::SurfaceId> last_draw_referenced_surfaces_;
+  base::flat_set<viz::SurfaceRange> last_draw_referenced_surfaces_;
   base::Optional<RenderFrameMetadata> last_draw_render_frame_metadata_;
   viz::ChildLocalSurfaceIdAllocator child_local_surface_id_allocator_;
 

@@ -27,7 +27,7 @@ class CORE_EXPORT V8StringSequenceCallbackFunctionLongSequenceArg final : public
 
   ~V8StringSequenceCallbackFunctionLongSequenceArg() override = default;
 
-  // TraceWrapperBase overrides:
+  // NameClient overrides:
   const char* NameInHeapSnapshot() const override;
 
   // Performs "invoke".
@@ -40,7 +40,7 @@ class CORE_EXPORT V8StringSequenceCallbackFunctionLongSequenceArg final : public
 };
 
 template <>
-class CORE_TEMPLATE_CLASS_EXPORT V8PersistentCallbackFunction<V8StringSequenceCallbackFunctionLongSequenceArg> final : public V8PersistentCallbackFunctionBase {
+class V8PersistentCallbackFunction<V8StringSequenceCallbackFunctionLongSequenceArg> final : public V8PersistentCallbackFunctionBase {
   using V8CallbackFunction = V8StringSequenceCallbackFunctionLongSequenceArg;
 
  public:
@@ -49,7 +49,6 @@ class CORE_TEMPLATE_CLASS_EXPORT V8PersistentCallbackFunction<V8StringSequenceCa
   // Returns a wrapper-tracing version of this callback function.
   V8CallbackFunction* ToNonV8Persistent() { return Proxy(); }
 
-  CORE_EXTERN_TEMPLATE_EXPORT
   v8::Maybe<Vector<String>> Invoke(ScriptWrappable* callback_this_value, const Vector<int32_t>& arg) WARN_UNUSED_RESULT;
 
  private:

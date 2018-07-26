@@ -157,7 +157,7 @@ class PLATFORM_EXPORT ThreadHeapStatsCollector {
   struct PLATFORM_EXPORT Event {
     double marking_time_in_ms() const;
     double marking_time_in_bytes_per_second() const;
-    double sweeping_time_in_ms() const;
+    TimeDelta sweeping_time() const;
 
     // Marked bytes collected during sweeping.
     size_t marked_bytes = 0;
@@ -221,6 +221,10 @@ class PLATFORM_EXPORT ThreadHeapStatsCollector {
 
   // Statistics for the previously running garbage collection.
   const Event& previous() const { return previous_; }
+
+  TimeDelta marking_time_so_far() const {
+    return TimeDelta::FromMilliseconds(current_.marking_time_in_ms());
+  }
 
  private:
   // Statistics for the currently running garbage collection. Note that the

@@ -454,6 +454,9 @@ const char kEnableVulkan[] = "enable-vulkan";
 // https://w3c.github.io/webauthn
 const char kEnableWebAuthTestingAPI[] = "enable-web-authentication-testing-api";
 
+// Enable WebGL2 Compute context.
+const char kEnableWebGL2ComputeContext[] = "enable-webgl2-compute-context";
+
 // Enables WebGL extensions not yet approved by the community.
 const char kEnableWebGLDraftExtensions[] = "enable-webgl-draft-extensions";
 
@@ -475,6 +478,11 @@ const char kExplicitlyAllowedPorts[]        = "explicitly-allowed-ports";
 // (pointer on Windows) as a string, followed by a comma, then the size of the
 // shared memory segment as a string.
 const char kFieldTrialHandle[] = "field-trial-handle";
+
+// Define an alias root directory which is replaced with the replacement string
+// in file URLs. The format is "/alias=/replacement", which would turn
+// file:///alias/some/path.html into file:///replacement/some/path.html.
+const char kFileUrlPathAlias[] = "file-url-path-alias";
 
 // Always use the Skia GPU backend for drawing layer tiles. Only valid with GPU
 // accelerated compositing + impl-side painting. Overrides the

@@ -290,16 +290,11 @@ void WindowSelector::Init(const WindowList& windows,
     // as we don't want to cause any window updates until all windows in
     // overview are observed. See http://crbug.com/384495.
     for (std::unique_ptr<WindowGrid>& window_grid : grid_list_) {
-      if (IsNewOverviewAnimationsEnabled()) {
-        window_grid->SetWindowListAnimationStates(/*selected_item=*/nullptr,
-                                                  OverviewTransition::kEnter);
-      }
+      window_grid->SetWindowListAnimationStates(/*selected_item=*/nullptr,
+                                                OverviewTransition::kEnter);
       window_grid->PrepareForOverview();
-      window_grid->PositionWindows(/*animate=*/true);
-      // Reset |should_animate_when_entering_| in order to animate during
-      // overview mode, such as dragging animations.
-      if (IsNewOverviewAnimationsEnabled())
-        window_grid->ResetWindowListAnimationStates();
+      window_grid->PositionWindows(/*animate=*/true, /*ignore_item=*/nullptr,
+                                   OverviewTransition::kEnter);
     }
 
     // Image used for text filter textfield.
@@ -343,26 +338,24 @@ void WindowSelector::Shutdown() {
 
   size_t remaining_items = 0;
   for (std::unique_ptr<WindowGrid>& window_grid : grid_list_) {
-    if (IsNewOverviewAnimationsEnabled()) {
-      // During shutdown, do not animate all windows in overview if we need to
-      // animate the snapped window.
-      if (split_view_controller->IsSplitViewModeActive() &&
-          split_view_controller->GetDefaultSnappedWindow()->GetRootWindow() ==
-              window_grid->root_window() &&
-          split_view_controller->snapped_window_animation_observer()) {
-        // OverviewWindowAnimationObserver is used to obseve the snapped window
-        // animation. And the windows in |window_grid| will restore their
-        // transform when the snapped window completes its animation.
-        window_grid->set_window_animation_observer(
-            split_view_controller->snapped_window_animation_observer());
-        window_grid->SetWindowListNotAnimatedWhenExiting();
-      } else {
-        window_grid->SetWindowListAnimationStates(
-            selected_item_ && selected_item_->window_grid() == window_grid.get()
-                ? selected_item_
-                : nullptr,
-            OverviewTransition::kExit);
-      }
+    // During shutdown, do not animate all windows in overview if we need to
+    // animate the snapped window.
+    if (split_view_controller->IsSplitViewModeActive() &&
+        split_view_controller->GetDefaultSnappedWindow()->GetRootWindow() ==
+            window_grid->root_window() &&
+        split_view_controller->snapped_window_animation_observer()) {
+      // OverviewWindowAnimationObserver is used to obseve the snapped window
+      // animation. And the windows in |window_grid| will restore their
+      // transform when the snapped window completes its animation.
+      window_grid->set_window_animation_observer(
+          split_view_controller->snapped_window_animation_observer());
+      window_grid->SetWindowListNotAnimatedWhenExiting();
+    } else {
+      window_grid->SetWindowListAnimationStates(
+          selected_item_ && selected_item_->window_grid() == window_grid.get()
+              ? selected_item_
+              : nullptr,
+          OverviewTransition::kExit);
     }
     for (const auto& window_selector_item : window_grid->window_list())
       window_selector_item->RestoreWindow(/*reset_transform=*/true);
@@ -526,13 +519,13 @@ WindowGrid* WindowSelector::GetGridWithRootWindow(aura::Window* root_window) {
   return nullptr;
 }
 
-void WindowSelector::AddItem(aura::Window* window) {
+void WindowSelector::AddItem(aura::Window* window, bool reposition) {
   // Early exit if a grid already contains |window|.
   WindowGrid* grid = GetGridWithRootWindow(window->GetRootWindow());
   if (!grid || grid->GetWindowSelectorItemContaining(window))
     return;
 
-  grid->AddItem(window);
+  grid->AddItem(window, reposition);
   ++num_items_;
 
   // Transfer focus from |window| to the text widget, to match the behavior of
@@ -540,7 +533,8 @@ void WindowSelector::AddItem(aura::Window* window) {
   wm::ActivateWindow(GetTextFilterWidgetWindow());
 }
 
-void WindowSelector::RemoveWindowSelectorItem(WindowSelectorItem* item) {
+void WindowSelector::RemoveWindowSelectorItem(WindowSelectorItem* item,
+                                              bool reposition) {
   if (item->GetWindow()->HasObserver(this)) {
     item->GetWindow()->RemoveObserver(this);
     observed_windows_.erase(item->GetWindow());
@@ -551,7 +545,7 @@ void WindowSelector::RemoveWindowSelectorItem(WindowSelectorItem* item) {
   // Remove |item| from the corresponding grid.
   for (std::unique_ptr<WindowGrid>& grid : grid_list_) {
     if (grid->GetWindowSelectorItemContaining(item->GetWindow())) {
-      grid->RemoveItem(item);
+      grid->RemoveItem(item, reposition);
       --num_items_;
       break;
     }
@@ -619,16 +613,16 @@ void WindowSelector::OnWindowDragStarted(aura::Window* dragged_window) {
   target_grid->OnWindowDragStarted(dragged_window);
 }
 
-void WindowSelector::OnWindowDragContinued(
-    aura::Window* dragged_window,
-    const gfx::Point& location_in_screen) {
+void WindowSelector::OnWindowDragContinued(aura::Window* dragged_window,
+                                           const gfx::Point& location_in_screen,
+                                           IndicatorState indicator_state) {
   WindowGrid* target_grid =
       GetGridWithRootWindow(dragged_window->GetRootWindow());
   if (!target_grid)
     return;
-  target_grid->OnWindowDragContinued(dragged_window, location_in_screen);
+  target_grid->OnWindowDragContinued(dragged_window, location_in_screen,
+                                     indicator_state);
 }
-
 void WindowSelector::OnWindowDragEnded(aura::Window* dragged_window,
                                        const gfx::Point& location_in_screen) {
   WindowGrid* target_grid =
@@ -660,13 +654,6 @@ bool WindowSelector::ShouldAnimateWallpaper(aura::Window* root_window) {
 
   if (!grid)
     return false;
-
-  // It is possible we leave overview mode to enter split view mode with both
-  // windows snapped. Do not animate the wallpaper in this case.
-  if (Shell::Get()->split_view_controller()->state() ==
-      SplitViewController::BOTH_SNAPPED) {
-    return false;
-  }
 
   // If one of the windows covers the workspace, we do not need to animate.
   for (const auto& selector_item : grid->window_list()) {

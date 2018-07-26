@@ -1,11 +1,18 @@
-// Copyright 2017 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-/** @implements {settings.MultideviceBrowserProxy} */
+/**
+ * @implements {settings.MultideviceBrowserProxy}
+ * Note: Only showMultiDeviceSetupDialog is used by the multidevice-page
+ * element.
+ */
 class TestMultideviceBrowserProxy extends TestBrowserProxy {
   constructor() {
-    super(['showMultiDeviceSetupDialog']);
+    super([
+      'showMultiDeviceSetupDialog',
+      'getPageContentData',
+    ]);
   }
 
   /** @override */
@@ -16,14 +23,19 @@ class TestMultideviceBrowserProxy extends TestBrowserProxy {
 
 suite('Multidevice', function() {
   let multidevicePage = null;
-
   let browserProxy = null;
-
+  let HOST_SET_MODES;
   const HOST_DEVICE = {
     name: 'Pixel XL',
   };
 
-  let HOST_SET_MODES;
+  function setPageContentData(newMode, newHostDevice) {
+    multidevicePage.pageContentData = {
+      mode: newMode,
+      hostDevice: newHostDevice,
+    };
+    Polymer.dom.flush();
+  }
 
   suiteSetup(function() {
     HOST_SET_MODES = [
@@ -49,17 +61,11 @@ suite('Multidevice', function() {
     multidevicePage.remove();
   });
 
-  const setPageContentData = function(newMode, newHostDevice) {
-    multidevicePage.pageContentData = {
-      mode: newMode,
-      hostDevice: newHostDevice,
-    };
-    Polymer.dom.flush();
-  };
-
   const getLabel = () => multidevicePage.$$('#multidevice-label').textContent;
 
-  test('pressing setup shows multidevice setup dialog', function() {
+  const getSubpage = () => multidevicePage.$$('settings-multidevice-subpage');
+
+  test('clicking setup shows multidevice setup dialog', function() {
     setPageContentData(settings.MultiDeviceSettingsMode.NO_HOST_SET, null);
     const button = multidevicePage.$$('paper-button');
     assertTrue(!!button);
@@ -86,4 +92,38 @@ suite('Multidevice', function() {
         settings.MultiDeviceSettingsMode.HOST_SET_VERIFIED, anotherHost);
     assertEquals(getLabel(), anotherHost.name);
   });
+
+  test('item is actionable if and only if a host is set', function() {
+    setPageContentData(settings.MultiDeviceSettingsMode.NO_HOST_SET, null);
+    assertFalse(
+        multidevicePage.$$('#multidevice-item').hasAttribute('actionable'));
+    for (let mode of HOST_SET_MODES) {
+      setPageContentData(mode, HOST_DEVICE);
+      assertTrue(
+          multidevicePage.$$('#multidevice-item').hasAttribute('actionable'));
+    }
+  });
+
+  test(
+      'clicking item with verified host opens subpage with features',
+      function() {
+        setPageContentData(
+            settings.MultiDeviceSettingsMode.HOST_SET_VERIFIED, HOST_DEVICE);
+        assertFalse(!!getSubpage());
+        multidevicePage.$$('#multidevice-item').click();
+        assertTrue(!!getSubpage());
+        assertTrue(!!getSubpage().$$('settings-multidevice-feature-item'));
+      });
+
+  test(
+      'clicking item with unverified set host opens subpage without features',
+      function() {
+        setPageContentData(
+            settings.MultiDeviceSettingsMode.HOST_SET_WAITING_FOR_VERIFICATION,
+            HOST_DEVICE);
+        assertFalse(!!getSubpage());
+        multidevicePage.$$('#multidevice-item').click();
+        assertTrue(!!getSubpage());
+        assertFalse(!!getSubpage().$$('settings-multidevice-feature-item'));
+      });
 });

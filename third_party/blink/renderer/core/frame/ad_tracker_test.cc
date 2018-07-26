@@ -244,4 +244,78 @@ TEST_F(AdTrackerSimTest, Contexts) {
                                String("https://example.com/library.js")));
 }
 
+TEST_F(AdTrackerSimTest, SameOriginSubframeFromAdScript) {
+  SimRequest ad_resource("https://example.com/ad_script.js", "text/javascript");
+  SimRequest iframe_resource("https://example.com/iframe.html", "text/html");
+  ad_tracker_->SetAdSuffix("ad_script.js");
+
+  main_resource_->Complete(R"HTML(
+    <body></body><script src=ad_script.js></script>
+    )HTML");
+  ad_resource.Complete(R"SCRIPT(
+    var iframe = document.createElement("iframe");
+    iframe.src = "iframe.html";
+    document.body.appendChild(iframe);
+    )SCRIPT");
+
+  iframe_resource.Complete("iframe data");
+
+  Frame* subframe = GetDocument().GetFrame()->Tree().FirstChild();
+  ASSERT_TRUE(subframe->IsLocalFrame());
+  LocalFrame* local_subframe = ToLocalFrame(subframe);
+  EXPECT_TRUE(local_subframe->IsAdSubframe());
+}
+
+TEST_F(AdTrackerSimTest, SameOriginDocWrittenSubframeFromAdScript) {
+  SimRequest ad_resource("https://example.com/ad_script.js", "text/javascript");
+  ad_tracker_->SetAdSuffix("ad_script.js");
+
+  main_resource_->Complete(R"HTML(
+    <body></body><script src=ad_script.js></script>
+    )HTML");
+  ad_resource.Complete(R"SCRIPT(
+    var iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    var iframeDocument = iframe.contentWindow.document;
+    iframeDocument.open();
+    iframeDocument.write("iframe data");
+    iframeDocument.close();
+    )SCRIPT");
+
+  Frame* subframe = GetDocument().GetFrame()->Tree().FirstChild();
+  ASSERT_TRUE(subframe->IsLocalFrame());
+  LocalFrame* local_subframe = ToLocalFrame(subframe);
+  EXPECT_TRUE(local_subframe->IsAdSubframe());
+}
+
+class AdTrackerDisabledSimTest : public SimTest {
+ protected:
+  void SetUp() override {
+    RuntimeEnabledFeatures::SetAdTaggingEnabled(false);
+
+    SimTest::SetUp();
+    main_resource_ = std::make_unique<SimRequest>(
+        "https://example.com/test.html", "text/html");
+
+    LoadURL("https://example.com/test.html");
+    main_resource_->Start();
+  }
+
+  void TearDown() override { SimTest::TearDown(); }
+
+  std::unique_ptr<SimRequest> main_resource_;
+};
+
+TEST_F(AdTrackerDisabledSimTest, ResourceLoadedWhenAdTaggingDisabled) {
+  SimRequest iframe_resource("https://example.com/iframe.html", "text/html");
+
+  main_resource_->Complete(R"HTML(
+    <iframe src=https://example.com/iframe.html></iframe>
+    )HTML");
+
+  iframe_resource.Complete("<body></body>");
+
+  EXPECT_FALSE(GetDocument().GetFrame()->IsAdSubframe());
+}
+
 }  // namespace blink

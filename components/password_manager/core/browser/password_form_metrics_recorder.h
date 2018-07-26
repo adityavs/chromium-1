@@ -13,6 +13,7 @@
 
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "base/optional.h"
 #include "components/autofill/core/common/password_form.h"
 #include "components/autofill/core/common/signatures_util.h"
 #include "components/password_manager/core/browser/password_form_user_action.h"
@@ -202,6 +203,13 @@ class PasswordFormMetricsRecorder
   // Stores whether the a generated password has been modified by the user.
   void SetHasGeneratedPasswordChanged(bool has_changed_generated_password);
 
+  // Reports the priority of a PasswordGenerationRequirementsSpec for a
+  // generated password. This can be used for debugging as a 0 means that
+  // no spec was used, a 10 means that the spec came from autofill and was crowd
+  // sourced, a 20 means that it was overrideen per domain and a 30 means that
+  // is was overridden for the form.
+  void ReportSpecPriorityForGeneratedPassword(uint32_t spec_priority);
+
   // Stores the password manager and user actions and logs them.
   void SetManagerAction(ManagerAction manager_action);
   void SetUserAction(UserAction user_action);
@@ -264,6 +272,11 @@ class PasswordFormMetricsRecorder
   void RecordParsingsComparisonResult(
       ParsingComparisonResult comparison_result);
 
+  // Records that Chrome noticed that it should show a manual fallback for
+  // saving.
+  void RecordShowManualFallbackForSaving(bool has_generated_password,
+                                         bool is_update);
+
  private:
   friend class base::RefCounted<PasswordFormMetricsRecorder>;
 
@@ -323,6 +336,8 @@ class PasswordFormMetricsRecorder
   // user.
   bool has_generated_password_changed_ = false;
 
+  base::Optional<uint32_t> spec_priority_of_generated_password_;
+
   // Tracks which bubble is currently being displayed to the user.
   CurrentBubbleOfInterest current_bubble_ = CurrentBubbleOfInterest::kNone;
 
@@ -358,6 +373,12 @@ class PasswordFormMetricsRecorder
   // Counter for DetailedUserActions observed during the lifetime of a
   // PasswordFormManager. Reported upon destruction.
   std::map<DetailedUserAction, int64_t> detailed_user_actions_counts_;
+
+  // Bitmap of whether and why a manual fallback for saving was shown:
+  // 1 = the fallback was shown.
+  // 2 = the password was generated.
+  // 4 = this was an update prompt.
+  base::Optional<uint32_t> showed_manual_fallback_for_saving_;
 
   DISALLOW_COPY_AND_ASSIGN(PasswordFormMetricsRecorder);
 };

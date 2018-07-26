@@ -2,10 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-#ifndef UI_ACCESSIBILITY_AX_PLATFORM_NODE_AURALINUX_H_
-#define UI_ACCESSIBILITY_AX_PLATFORM_NODE_AURALINUX_H_
+#ifndef UI_ACCESSIBILITY_PLATFORM_AX_PLATFORM_NODE_AURALINUX_H_
+#define UI_ACCESSIBILITY_PLATFORM_AX_PLATFORM_NODE_AURALINUX_H_
 
 #include <atk/atk.h>
+
+#include <string>
 
 #include "base/macros.h"
 #include "base/strings/utf_string_conversions.h"
@@ -57,6 +59,7 @@ class AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
   bool GrabFocus();
   bool DoDefaultAction();
   const gchar* GetDefaultActionName();
+  AtkAttributeSet* GetAtkAttributes() const;
 
   void SetExtentsRelativeToAtkCoordinateType(
       gint* x, gint* y, gint* width, gint* height,
@@ -71,6 +74,10 @@ class AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
 
   // Misc helpers
   void GetFloatAttributeInGValue(ax::mojom::FloatAttribute attr, GValue* value);
+  AtkAttributeSet* AddIntAttributeToAtkAttributeSet(
+      AtkAttributeSet* attributes,
+      ax::mojom::IntAttribute attribute,
+      const char* atk_attribute) const;
 
   // Event helpers
   void OnFocused();
@@ -124,4 +131,4 @@ class AXPlatformNodeAuraLinux : public AXPlatformNodeBase {
 
 }  // namespace ui
 
-#endif  // UI_ACCESSIBILITY_AX_PLATFORM_NODE_AURALINUX_H_
+#endif  // UI_ACCESSIBILITY_PLATFORM_AX_PLATFORM_NODE_AURALINUX_H_

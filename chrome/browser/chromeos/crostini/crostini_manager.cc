@@ -4,6 +4,7 @@
 
 #include "chrome/browser/chromeos/crostini/crostini_manager.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -24,12 +25,14 @@
 #include "chromeos/dbus/concierge_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/debug_daemon_client.h"
+#include "chromeos/dbus/image_loader_client.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/keyed_service/content/browser_context_keyed_service_factory.h"
 #include "content/public/browser/browser_thread.h"
 #include "dbus/message.h"
 #include "extensions/browser/extension_registry.h"
 #include "net/base/escape.h"
+#include "net/base/network_change_notifier.h"
 
 namespace crostini {
 
@@ -142,26 +145,8 @@ class CrostiniRestarter : public base::RefCountedThreadSafe<CrostiniRestarter> {
       return;
     }
 
-    if (chromeos::DBusThreadManager::Get()->IsUsingFakes()) {
-      // Running in test. We still PostTask to prevent races between
-      // observers aborting.
-      content::BrowserThread::PostTask(
-          content::BrowserThread::UI, FROM_HERE,
-          base::BindOnce(
-              &CrostiniRestarter::InstallImageLoaderFinishedOnUIThread,
-              base::WrapRefCounted(this),
-              component_updater::CrOSComponentManager::Error::NONE,
-              base::FilePath()));
-      return;
-    }
-    auto* cros_component_manager =
-        g_browser_process->platform_part()->cros_component_manager();
-    DCHECK(cros_component_manager);
-    cros_component_manager->Load(
-        "cros-termina",
-        component_updater::CrOSComponentManager::MountPolicy::kMount,
-        base::BindOnce(&CrostiniRestarter::InstallImageLoaderFinished,
-                       base::WrapRefCounted(this)));
+    crostini_manager->InstallTerminaComponent(base::BindOnce(
+        &CrostiniRestarter::LoadComponentFinished, base::WrapRefCounted(this)));
   }
 
   void AddObserver(CrostiniManager::RestartObserver* observer) {
@@ -194,26 +179,10 @@ class CrostiniRestarter : public base::RefCountedThreadSafe<CrostiniRestarter> {
     restarter_service_->RunPendingCallbacks(this, result);
   }
 
-  static void InstallImageLoaderFinished(
-      scoped_refptr<CrostiniRestarter> restarter,
-      component_updater::CrOSComponentManager::Error error,
-      const base::FilePath& result) {
-    DCHECK(!content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
-    if (restarter->is_aborted_)
-      return;
-    content::BrowserThread::PostTask(
-        content::BrowserThread::UI, FROM_HERE,
-        base::BindOnce(&CrostiniRestarter::InstallImageLoaderFinishedOnUIThread,
-                       restarter, error, result));
-  }
-
-  void InstallImageLoaderFinishedOnUIThread(
-      component_updater::CrOSComponentManager::Error error,
-      const base::FilePath& result) {
+  void LoadComponentFinished(bool is_successful) {
     ConciergeClientResult client_result =
-        error == component_updater::CrOSComponentManager::Error::NONE
-            ? ConciergeClientResult::SUCCESS
-            : ConciergeClientResult::CONTAINER_START_FAILED;
+        is_successful ? ConciergeClientResult::SUCCESS
+                      : ConciergeClientResult::CONTAINER_START_FAILED;
     // Tell observers.
     for (auto& observer : observer_list_) {
       observer.OnComponentLoaded(client_result);
@@ -221,9 +190,6 @@ class CrostiniRestarter : public base::RefCountedThreadSafe<CrostiniRestarter> {
     if (is_aborted_)
       return;
     if (client_result != ConciergeClientResult::SUCCESS) {
-      LOG(ERROR)
-          << "Failed to install the cros-termina component with error code: "
-          << static_cast<int>(error);
       FinishRestart(client_result);
       return;
     }
@@ -414,6 +380,25 @@ CrostiniManager* CrostiniManager::GetInstance() {
   return base::Singleton<CrostiniManager>::get();
 }
 
+bool CrostiniManager::IsVmRunning(Profile* profile, std::string vm_name) {
+  return running_vms_.find(std::make_pair(CryptohomeIdForProfile(profile),
+                                          std::move(vm_name))) !=
+         running_vms_.end();
+}
+
+bool CrostiniManager::IsContainerRunning(Profile* profile,
+                                         std::string vm_name,
+                                         std::string container_name) {
+  auto range = running_containers_.equal_range(
+      std::make_pair(CryptohomeIdForProfile(profile), std::move(vm_name)));
+  for (auto it = range.first; it != range.second; ++it) {
+    if (it->second == container_name) {
+      return true;
+    }
+  }
+  return false;
+}
+
 CrostiniManager::CrostiniManager() : weak_ptr_factory_(this) {
   // Cicerone/ConciergeClient and its observer_list_ will be destroyed together.
   // We add, but don't need to remove the observer. (Doing so would force a
@@ -426,10 +411,94 @@ CrostiniManager::~CrostiniManager() {}
 
 // static
 bool CrostiniManager::IsCrosTerminaInstalled() {
-  return !g_browser_process->platform_part()
-              ->cros_component_manager()
-              ->GetCompatiblePath("cros-termina")
+  // |component_manager| can be nullptr in tests.
+  auto* component_manager =
+      g_browser_process->platform_part()->cros_component_manager();
+  return component_manager &&
+         !component_manager
+              ->GetCompatiblePath(imageloader::kTerminaComponentName)
               .empty();
+}
+
+void CrostiniManager::MaybeUpgradeCrostini(Profile* profile) {
+  if (!IsCrostiniAllowedForProfile(profile) || !IsCrosTerminaInstalled()) {
+    return;
+  }
+  termina_update_check_needed_ = true;
+  if (net::NetworkChangeNotifier::IsOffline()) {
+    // Can't do a component Load with kForce when offline.
+    VLOG(1) << "Not online, so can't check now for cros-termina upgrade.";
+    return;
+  }
+  InstallTerminaComponent(base::DoNothing());
+}
+
+namespace {
+void InstallTerminaComponentLoaderCallback(
+    CrostiniManager::BoolCallback callback,
+    component_updater::CrOSComponentManager::Error error,
+    const base::FilePath& result) {
+  DCHECK(!content::BrowserThread::CurrentlyOn(content::BrowserThread::UI));
+
+  bool is_successful =
+      error == component_updater::CrOSComponentManager::Error::NONE;
+
+  if (!is_successful) {
+    LOG(ERROR)
+        << "Failed to install the cros-termina component with error code: "
+        << static_cast<int>(error);
+  }
+  // Hop to the UI thread to update state and run |callback|.
+  content::BrowserThread::PostTask(
+      content::BrowserThread::UI, FROM_HERE,
+      base::BindOnce(std::move(callback), is_successful));
+}
+}  // namespace
+
+void CrostiniManager::InstallTerminaComponent(BoolCallback callback) {
+  if (chromeos::DBusThreadManager::Get()->IsUsingFakes()) {
+    // Running in test. We still PostTask to prevent races.
+    content::BrowserThread::PostTask(
+        content::BrowserThread::UI, FROM_HERE,
+        base::BindOnce(&CrostiniManager::OnInstallTerminaComponent,
+                       weak_ptr_factory_.GetWeakPtr(), std::move(callback),
+                       true, true));
+    return;
+  }
+  auto* cros_component_manager =
+      g_browser_process->platform_part()->cros_component_manager();
+  DCHECK(cros_component_manager);
+
+  using UpdatePolicy = component_updater::CrOSComponentManager::UpdatePolicy;
+  UpdatePolicy update_policy;
+  if (termina_update_check_needed_ &&
+      !net::NetworkChangeNotifier::IsOffline()) {
+    // Don't use kForce all the time because it generates traffic to
+    // ComponentUpdaterService.
+    update_policy = UpdatePolicy::kForce;
+  } else {
+    update_policy = UpdatePolicy::kDontForce;
+  }
+
+  cros_component_manager->Load(
+      imageloader::kTerminaComponentName,
+      component_updater::CrOSComponentManager::MountPolicy::kMount,
+      update_policy,
+      base::BindOnce(
+          InstallTerminaComponentLoaderCallback,
+          base::BindOnce(&CrostiniManager::OnInstallTerminaComponent,
+                         weak_ptr_factory_.GetWeakPtr(), std::move(callback),
+                         update_policy == UpdatePolicy::kForce)));
+}
+
+void CrostiniManager::OnInstallTerminaComponent(BoolCallback callback,
+                                                bool is_update_checked,
+                                                bool is_successful) {
+  if (is_successful && is_update_checked) {
+    VLOG(1) << "cros-termina update check successful.";
+    termina_update_check_needed_ = false;
+  }
+  std::move(callback).Run(is_successful);
 }
 
 void CrostiniManager::StartConcierge(StartConciergeCallback callback) {
@@ -632,7 +701,8 @@ void CrostiniManager::StartTerminaVm(std::string owner_id,
   GetConciergeClient()->StartTerminaVm(
       request,
       base::BindOnce(&CrostiniManager::OnStartTerminaVm,
-                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+                     weak_ptr_factory_.GetWeakPtr(), request.owner_id(),
+                     request.name(), std::move(callback)));
 }
 
 void CrostiniManager::StopVm(Profile* profile,
@@ -644,13 +714,16 @@ void CrostiniManager::StopVm(Profile* profile,
     return;
   }
 
+  std::string owner_id = CryptohomeIdForProfile(profile);
+
   vm_tools::concierge::StopVmRequest request;
-  request.set_owner_id(CryptohomeIdForProfile(profile));
-  request.set_name(std::move(name));
+  request.set_owner_id(owner_id);
+  request.set_name(name);
 
   GetConciergeClient()->StopVm(
       std::move(request),
       base::BindOnce(&CrostiniManager::OnStopVm, weak_ptr_factory_.GetWeakPtr(),
+                     std::move(owner_id), std::move(name),
                      std::move(callback)));
 }
 
@@ -745,6 +818,34 @@ void CrostiniManager::GetContainerAppIcons(
   GetCiceroneClient()->GetContainerAppIcons(
       std::move(request),
       base::BindOnce(&CrostiniManager::OnGetContainerAppIcons,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void CrostiniManager::InstallLinuxPackage(
+    Profile* profile,
+    std::string vm_name,
+    std::string container_name,
+    std::string package_path,
+    InstallLinuxPackageCallback callback) {
+  if (!GetCiceroneClient()->IsInstallLinuxPackageProgressSignalConnected()) {
+    // Technically we could still start the install, but we wouldn't be able to
+    // detect when the install completes, successfully or otherwise.
+    LOG(ERROR)
+        << "Attempted to install package when progress signal not connected.";
+    std::move(callback).Run(ConciergeClientResult::INSTALL_LINUX_PACKAGE_FAILED,
+                            std::string());
+    return;
+  }
+
+  vm_tools::cicerone::InstallLinuxPackageRequest request;
+  request.set_owner_id(CryptohomeIdForProfile(profile));
+  request.set_vm_name(std::move(vm_name));
+  request.set_container_name(std::move(container_name));
+  request.set_file_path(std::move(package_path));
+
+  GetCiceroneClient()->InstallLinuxPackage(
+      std::move(request),
+      base::BindOnce(&CrostiniManager::OnInstallLinuxPackage,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
@@ -855,6 +956,28 @@ void CrostiniManager::AddShutdownContainerCallback(
       std::move(shutdown_callback));
 }
 
+void CrostiniManager::AddInstallLinuxPackageProgressObserver(
+    Profile* profile,
+    InstallLinuxPackageProgressObserver* observer) {
+  install_linux_package_progress_observers_.emplace(
+      CryptohomeIdForProfile(profile), observer);
+}
+
+void CrostiniManager::RemoveInstallLinuxPackageProgressObserver(
+    Profile* profile,
+    InstallLinuxPackageProgressObserver* observer) {
+  auto range = install_linux_package_progress_observers_.equal_range(
+      CryptohomeIdForProfile(profile));
+  for (auto it = range.first; it != range.second; ++it) {
+    if (it->second != observer) {
+      install_linux_package_progress_observers_.erase(it);
+      return;
+    }
+  }
+
+  NOTREACHED();
+}
+
 void CrostiniManager::OnCreateDiskImage(
     CreateDiskImageCallback callback,
     base::Optional<vm_tools::concierge::CreateDiskImageResponse> reply) {
@@ -920,6 +1043,8 @@ void CrostiniManager::OnListVmDisks(
 }
 
 void CrostiniManager::OnStartTerminaVm(
+    std::string owner_id,
+    std::string vm_name,
     StartTerminaVmCallback callback,
     base::Optional<vm_tools::concierge::StartVmResponse> reply) {
   if (!reply.has_value()) {
@@ -934,10 +1059,13 @@ void CrostiniManager::OnStartTerminaVm(
     std::move(callback).Run(ConciergeClientResult::VM_START_FAILED);
     return;
   }
+  running_vms_.emplace(std::move(owner_id), std::move(vm_name));
   std::move(callback).Run(ConciergeClientResult::SUCCESS);
 }
 
 void CrostiniManager::OnStopVm(
+    std::string owner_id,
+    std::string vm_name,
     StopVmCallback callback,
     base::Optional<vm_tools::concierge::StopVmResponse> reply) {
   if (!reply.has_value()) {
@@ -960,7 +1088,11 @@ void CrostiniManager::OnStopVm(
       return;
     }
   }
-
+  // Remove from running_vms_.
+  auto key = std::make_pair(std::move(owner_id), std::move(vm_name));
+  running_vms_.erase(key);
+  // Remove containers from running_containers_
+  running_containers_.erase(key);
   std::move(callback).Run(ConciergeClientResult::SUCCESS);
 }
 
@@ -1000,6 +1132,9 @@ void CrostiniManager::OnContainerStarted(
     std::move(it->second).Run(ConciergeClientResult::SUCCESS);
   }
   start_container_callbacks_.erase(range.first, range.second);
+  running_containers_.emplace(
+      std::make_pair(signal.owner_id(), signal.vm_name()),
+      signal.container_name());
 }
 
 void CrostiniManager::OnContainerStartupFailed(
@@ -1022,6 +1157,41 @@ void CrostiniManager::OnContainerShutdown(
     std::move(it->second).Run();
   }
   shutdown_container_callbacks_.erase(range.first, range.second);
+}
+
+void CrostiniManager::OnInstallLinuxPackageProgress(
+    const vm_tools::cicerone::InstallLinuxPackageProgressSignal& signal) {
+  if (signal.progress_percent() < 0 || signal.progress_percent() > 100) {
+    LOG(ERROR) << "Received install progress with invalid progress of "
+               << signal.progress_percent() << "%.";
+    return;
+  }
+
+  InstallLinuxPackageProgressStatus status;
+  switch (signal.status()) {
+    case vm_tools::cicerone::InstallLinuxPackageProgressSignal::SUCCEEDED:
+      status = InstallLinuxPackageProgressStatus::SUCCEEDED;
+      break;
+    case vm_tools::cicerone::InstallLinuxPackageProgressSignal::FAILED:
+      status = InstallLinuxPackageProgressStatus::FAILED;
+      break;
+    case vm_tools::cicerone::InstallLinuxPackageProgressSignal::DOWNLOADING:
+      status = InstallLinuxPackageProgressStatus::DOWNLOADING;
+      break;
+    case vm_tools::cicerone::InstallLinuxPackageProgressSignal::INSTALLING:
+      status = InstallLinuxPackageProgressStatus::INSTALLING;
+      break;
+    default:
+      NOTREACHED();
+  }
+
+  auto range =
+      install_linux_package_progress_observers_.equal_range(signal.owner_id());
+  for (auto it = range.first; it != range.second; ++it) {
+    it->second->OnInstallLinuxPackageProgress(
+        signal.vm_name(), signal.container_name(), status,
+        signal.progress_percent(), signal.failure_details());
+  }
 }
 
 void CrostiniManager::OnLaunchContainerApplication(
@@ -1062,6 +1232,39 @@ void CrostiniManager::OnGetContainerAppIcons(
              .content = std::move(*icon.mutable_icon())});
   }
   std::move(callback).Run(ConciergeClientResult::SUCCESS, icons);
+}
+
+void CrostiniManager::OnInstallLinuxPackage(
+    InstallLinuxPackageCallback callback,
+    base::Optional<vm_tools::cicerone::InstallLinuxPackageResponse> reply) {
+  if (!reply.has_value()) {
+    LOG(ERROR) << "Failed to install Linux package. Empty response.";
+    std::move(callback).Run(
+        ConciergeClientResult::LAUNCH_CONTAINER_APPLICATION_FAILED,
+        std::string());
+    return;
+  }
+  vm_tools::cicerone::InstallLinuxPackageResponse response = reply.value();
+
+  if (response.status() ==
+      vm_tools::cicerone::InstallLinuxPackageResponse::FAILED) {
+    LOG(ERROR) << "Failed to install Linux package: "
+               << response.failure_reason();
+    std::move(callback).Run(ConciergeClientResult::INSTALL_LINUX_PACKAGE_FAILED,
+                            response.failure_reason());
+    return;
+  }
+
+  if (response.status() ==
+      vm_tools::cicerone::InstallLinuxPackageResponse::INSTALL_ALREADY_ACTIVE) {
+    LOG(WARNING) << "Failed to install Linux package, install already active.";
+    std::move(callback).Run(
+        ConciergeClientResult::INSTALL_LINUX_PACKAGE_ALREADY_ACTIVE,
+        std::string());
+    return;
+  }
+
+  std::move(callback).Run(ConciergeClientResult::SUCCESS, std::string());
 }
 
 void CrostiniManager::OnGetContainerSshKeys(

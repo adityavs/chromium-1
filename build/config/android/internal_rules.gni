@@ -13,7 +13,8 @@ import("//build/config/sanitizers/sanitizers.gni")
 assert(is_android)
 
 # These identify targets that have .build_config files (except for android_apk,
-# java_binary, resource_rewriter, since we never need to depend on these).
+# java_binary, resource_rewriter, android_app_bundle since we never need to
+# depend on these).
 _java_target_whitelist = [
   "*:*_java",
   "*:*_javalib",
@@ -30,6 +31,7 @@ _java_target_whitelist = [
   "*:*_resources",
   "*:*_grd",
   "*:*locale_paks",
+  "*_module",
 
   # TODO(agrieve): Rename targets below to match above patterns.
   "*android_webview/glue:glue",
@@ -67,7 +69,8 @@ template("write_build_config") {
   # consider them in dependency chains.
   if (_type != "android_apk" && _type != "java_binary" &&
       _type != "resource_rewriter" && _type != "dist_jar" &&
-      _type != "java_annotation_processor" && _type != "dist_aar") {
+      _type != "java_annotation_processor" && _type != "dist_aar" &&
+      _type != "android_app_bundle") {
     set_sources_assignment_filter(_java_target_whitelist)
     _parent_invoker = invoker.invoker
     _target_label =
@@ -187,6 +190,12 @@ template("write_build_config") {
         rebase_path(invoker.dex_path, root_build_dir),
       ]
     }
+    if (defined(invoker.final_dex_path)) {
+      args += [
+        "--final-dex-path",
+        rebase_path(invoker.final_dex_path, root_build_dir),
+      ]
+    }
     if (defined(invoker.supports_android) && invoker.supports_android) {
       args += [ "--supports-android" ]
     }
@@ -300,6 +309,13 @@ template("write_build_config") {
       ]
     }
 
+    if (defined(invoker.secondary_abi_loadable_modules) &&
+        invoker.secondary_abi_loadable_modules != []) {
+      _rebased_modules =
+          rebase_path(invoker.secondary_abi_loadable_modules, root_build_dir)
+      args += [ "--secondary-native-libs=$_rebased_modules" ]
+    }
+
     if (defined(invoker.uncompress_shared_libraries) &&
         invoker.uncompress_shared_libraries) {
       args += [ "--uncompress-shared-libraries" ]
@@ -322,10 +338,6 @@ template("write_build_config") {
       }
     }
 
-    if (defined(invoker.non_native_packed_relocations) &&
-        invoker.non_native_packed_relocations) {
-      args += [ "--non-native-packed-relocations" ]
-    }
     if (defined(invoker.java_sources_file)) {
       args += [
         "--java-sources-file",
@@ -595,10 +607,6 @@ template("test_runner_script") {
           _apk_under_test = "@FileArg($_rebased_apk_under_test_build_config:deps_info:incremental_apk_path)"
         }
         test_runner_args += [ "--apk-under-test=$_apk_under_test" ]
-        test_runner_args += [
-          "--non-native-packed-relocations",
-          "@FileArg($_rebased_apk_under_test_build_config:deps_info:non_native_packed_relocations)",
-        ]
       }
       if (defined(invoker.proguard_enabled) && invoker.proguard_enabled) {
         test_runner_args += [ "--enable-java-deobfuscation" ]
@@ -770,9 +778,6 @@ template("stack_script") {
 }
 
 if (enable_java_templates) {
-  import("//build/config/zip.gni")
-  import("//third_party/android_platform/config.gni")
-
   android_sdk_jar = "$android_sdk/android.jar"
   android_default_aapt_path = "$android_sdk_build_tools/aapt"
   android_default_aapt2_path = "$android_sdk_build_tools/aapt2"
@@ -932,7 +937,7 @@ if (enable_java_templates) {
         "--output-path",
         rebase_path(_output_jar_path, root_build_dir),
         "--classpath",
-        "@FileArg($_rebased_build_config:android:sdk_jars)",
+        "@FileArg($_rebased_build_config:deps_info:proguard_classpath_jars)",
       ]
       if (proguard_verbose) {
         args += [ "--verbose" ]
@@ -1242,6 +1247,9 @@ if (enable_java_templates) {
     _enable_custom_resources = defined(invoker.enable_build_hooks_android) &&
                                invoker.enable_build_hooks_android
 
+    # Turned off because of existing code which fails the assertion
+    _enable_thread_annotations = false
+
     _desugar = defined(invoker.supports_android) && invoker.supports_android
     _emma_instrument = invoker.emma_instrument
 
@@ -1261,7 +1269,8 @@ if (enable_java_templates) {
     _deps = []
     _previous_output_jar = _input_jar_path
 
-    if (_enable_assert || _enable_custom_resources) {
+    if (_enable_assert || _enable_custom_resources ||
+        _enable_thread_annotations) {
       _java_bytecode_rewriter_target = "${target_name}__bytecode_rewrite"
       _java_bytecode_rewriter_input_jar = _previous_output_jar
       _java_bytecode_rewriter_output_jar =
@@ -1296,6 +1305,9 @@ if (enable_java_templates) {
         }
         if (_enable_custom_resources) {
           args += [ "--enable-custom-resources" ]
+        }
+        if (_enable_thread_annotations) {
+          args += [ "--enable-thread-annotations" ]
         }
         args += [
           "--extra-classpath-jar",
@@ -1776,6 +1788,19 @@ if (enable_java_templates) {
       _srcjar_path = "${_srcjar_path}.intermediate.srcjar"
     }
 
+    _proto_format = defined(invoker.proto_format) && invoker.proto_format
+
+    # NOTE: Regarding the names of the depfiles used by this template:
+    #       They all have the same prefix, related to invoker.target_name,
+    #       instead of $target_name, so it is important they have different
+    #       file paths. Otherwise, extra-rebuilds or even incorrect builds
+    #       may happen due to incorrect dependency information. The suffixes
+    #       used are:
+    #
+    #       _1.d for the unprocessed compiled resources.
+    #       _2.d for the optional processed compiled resources.
+    #       _3.d for the proto-compiled resources.
+
     action(_compile_resources_target_name) {
       set_sources_assignment_filter([])
       forward_variables_from(invoker,
@@ -1790,15 +1815,14 @@ if (enable_java_templates) {
       outputs = []
 
       _android_aapt_path = android_default_aapt_path
-      if (defined(invoker.proto_format) && invoker.proto_format) {
-        _android_aapt_path = "$android_sdk_app_bundle_build_tools/aapt"
+      if (_proto_format) {
+        _android_aapt2_path = android_sdk_tools_bundle_aapt2
+        depfile = "$target_gen_dir/${invoker.target_name}_3.d"
       }
-      _android_aapt2_path = android_default_aapt2_path
 
       inputs = [
         invoker.build_config,
         _android_aapt_path,
-        _android_aapt2_path,
       ]
       if (compute_inputs_for_analyze) {
         inputs += _compile_resources_py
@@ -1812,12 +1836,18 @@ if (enable_java_templates) {
         "--android-sdk-jars=@FileArg($_rebased_build_config:android:sdk_jars)",
         "--aapt-path",
         rebase_path(_android_aapt_path, root_build_dir),
-        "--aapt2-path",
-        rebase_path(_android_aapt2_path, root_build_dir),
         "--dependencies-res-zips=@FileArg($_rebased_build_config:resources:dependency_zips)",
         "--extra-res-packages=@FileArg($_rebased_build_config:resources:extra_package_names)",
         "--extra-r-text-files=@FileArg($_rebased_build_config:resources:extra_r_text_files)",
       ]
+
+      if (_proto_format) {
+        inputs += [ _android_aapt2_path ]
+        args += [
+          "--aapt2-path",
+          rebase_path(_android_aapt2_path, root_build_dir),
+        ]
+      }
 
       inputs += [ invoker.android_manifest ]
       args += [
@@ -1884,7 +1914,6 @@ if (enable_java_templates) {
         ]
       }
 
-      _proto_format = defined(invoker.proto_format) && invoker.proto_format
       if (_proto_format) {
         args += [ "--proto-format" ]
       }
@@ -2008,57 +2037,6 @@ if (enable_java_templates) {
     }
   }
 
-  # Compile resources for an APK.
-  #
-  # This is very similar to compile_resources, except that it can *also*
-  # compile the same set of inputs using the new protocol-buffer based
-  # format, if proto_outut and proto_resources_target are set.
-  #
-  # Takes the same variables as compile_resources, with the following
-  # extras:
-  #
-  #   proto_output: optional. If provided, the path to an output file that
-  #     will contain the resources compiled in the new protocol buffer format.
-  #   proto_resources_target: required when proto_output is set. Name of the
-  #     target associated with compiling the protocol-buffer based resources.
-  #
-  template("compile_apk_resources") {
-    # First call to compile_resources() is used to generate the compiled
-    # resources using the standard binary xml + resources.arsc format.
-    compile_resources(target_name) {
-      forward_variables_from(invoker,
-                             "*",
-                             [
-                               "proto_format",
-                               "proto_output",
-                               "proto_resources_target",
-                             ])
-    }
-
-    # The second call is optional, and is only used to compile the resources
-    # using the new protocol buffer based format. This omits the generation of
-    # R.txt, /srcjar and proguard files (performed during the first call), or
-    # resources post-processing.
-    if (defined(invoker.proto_output)) {
-      compile_resources(invoker.proto_resources_target) {
-        forward_variables_from(invoker,
-                               "*",
-                               [
-                                 "output",
-                                 "post_process_script",
-                                 "proguard_file",
-                                 "proguard_file_main_dex",
-                                 "proto_output",
-                                 "proto_resources_target",
-                                 "r_text_out_path",
-                                 "srcjar_path",
-                               ])
-        output = invoker.proto_output
-        proto_format = true
-      }
-    }
-  }
-
   # Create an apk.jar.info file by merging several .jar.info files into one.
   #
   # Variables:
@@ -2116,7 +2094,7 @@ if (enable_java_templates) {
   #   native_libs_filearg: @FileArg() of additionally native libraries.
   #   secondary_abi_native_libs: (optional) List of native libraries for
   #     secondary ABI.
-  #   secondary_abi_native_libs_filearg: (optiona). @FileArg() of additional
+  #   secondary_abi_native_libs_filearg: (optional). @FileArg() of additional
   #     secondary ABI native libs.
   #   write_asset_list: Adds an extra file to the assets, which contains a list of
   #     all other asset files.
@@ -2230,8 +2208,8 @@ if (enable_java_templates) {
         args += [ "--android-abi=$android_app_abi" ]
       }
       if (defined(invoker.secondary_abi_native_libs_filearg) ||
-          (defined(invoker.secondary_native_libs) &&
-           invoker.secondary_native_libs != []) ||
+          (defined(invoker.secondary_abi_loadable_modules) &&
+           invoker.secondary_abi_loadable_modules != []) ||
           _secondary_native_lib_placeholders != []) {
         assert(defined(android_app_secondary_abi))
         args += [ "--secondary-android-abi=$android_app_secondary_abi" ]
@@ -2250,14 +2228,8 @@ if (enable_java_templates) {
         args += [ "--secondary-native-lib-placeholders=$_secondary_native_lib_placeholders" ]
       }
 
-      # TODO (michaelbai): Remove the secondary_native_libs variable.
       if (defined(invoker.secondary_abi_native_libs_filearg)) {
         args += [ "--secondary-native-libs=${invoker.secondary_abi_native_libs_filearg}" ]
-      } else if (defined(invoker.secondary_native_libs) &&
-                 invoker.secondary_native_libs != []) {
-        inputs += invoker.secondary_native_libs
-        _secondary_native_libs = rebase_path(invoker.secondary_native_libs)
-        args += [ "--secondary-native-libs=$_secondary_native_libs" ]
       }
 
       if (defined(invoker.uncompress_shared_libraries) &&
@@ -2294,7 +2266,8 @@ if (enable_java_templates) {
       _native_libs = invoker.native_libs
     }
     _native_libs_even_when_incremental = []
-    if (defined(invoker.native_libs_even_when_incremental)) {
+    if (defined(invoker.native_libs_even_when_incremental) &&
+        invoker.native_libs_even_when_incremental != []) {
       _native_libs_even_when_incremental =
           invoker.native_libs_even_when_incremental
     }
@@ -2317,7 +2290,7 @@ if (enable_java_templates) {
                                "packaged_resources_path",
                                "secondary_native_lib_placeholders",
                                "secondary_abi_native_libs_filearg",
-                               "secondary_native_libs",
+                               "secondary_abi_loadable_modules",
                                "uncompress_shared_libraries",
                                "write_asset_list",
                              ])
@@ -2398,7 +2371,7 @@ if (enable_java_templates) {
         forward_variables_from(invoker,
                                [
                                  "assets_build_config",
-                                 "secondary_native_libs",
+                                 "secondary_abi_loadable_modules",
                                  "uncompress_shared_libraries",
                                ])
         if (!defined(uncompress_shared_libraries)) {
@@ -2784,9 +2757,6 @@ if (enable_java_templates) {
   #  incremental_install_json_path: If incremental_allowed, path to the output
   #    incremental install json configuration file.
   #  proguard_output_jar_path: Path to .jar file produced from ProGuard step.
-  #  non_native_packed_relocations: Optional. True if the target Android
-  #    system does not support compressed relocations in native shared
-  #    libraries.
   #  shared_libraries_runtime_deps_file: Optional. Path to a file listing the
   #    native shared libraries required at runtime by the APK.
   #  secondary_abi_shared_libraries_runtime_deps_file:
@@ -2982,26 +2952,34 @@ if (enable_java_templates) {
                                "proguard_configs",
                                "proguard_enabled",
                                "proguard_output_jar_path",
+                               "secondary_abi_loadable_modules",
                                "type",
                              ])
-      if (type == "android_apk") {
+      if (type == "android_apk" || type == "android_app_bundle_module") {
         forward_variables_from(
             invoker,
             [
               "android_manifest",
               "android_manifest_dep",
-              "apk_path",
-              "apk_under_test",
               "extra_shared_libraries",
-              "incremental_allowed",
-              "incremental_apk_path",
-              "incremental_install_json_path",
-              "non_native_packed_relocations",
-              "proto_resources_path",
+              "final_dex_path",
               "secondary_abi_shared_libraries_runtime_deps_file",
               "shared_libraries_runtime_deps_file",
               "uncompress_shared_libraries",
             ])
+      }
+      if (type == "android_apk") {
+        forward_variables_from(invoker,
+                               [
+                                 "apk_path",
+                                 "apk_under_test",
+                                 "incremental_allowed",
+                                 "incremental_apk_path",
+                                 "incremental_install_json_path",
+                               ])
+      }
+      if (type == "android_app_bundle_module") {
+        forward_variables_from(invoker, [ "proto_resources_path" ])
       }
       build_config = _build_config
       is_prebuilt = _is_prebuilt
@@ -3100,7 +3078,8 @@ if (enable_java_templates) {
       }
       if (_lint_enabled) {
         android_lint("${_main_target_name}__lint") {
-          if (invoker.type == "android_apk") {
+          if (invoker.type == "android_apk" ||
+              invoker.type == "android_app_bundle_module") {
             forward_variables_from(invoker, [ "android_manifest" ])
           } else if (defined(_android_manifest_for_lint)) {
             android_manifest = _android_manifest_for_lint
@@ -3270,39 +3249,72 @@ if (enable_java_templates) {
       }
     }
   }
+}
 
-  template("pack_relocation_section") {
-    assert(defined(invoker.file_list_json))
-    assert(defined(invoker.libraries_filearg))
-    action(target_name) {
-      forward_variables_from(invoker,
-                             [
-                               "deps",
-                               "public_deps",
-                               "inputs",
-                               "testonly",
-                             ])
-      script = "//build/android/gyp/pack_relocations.py"
-      depfile = "$target_gen_dir/$target_name.d"
-      _packed_libraries_dir = "$target_gen_dir/$target_name/packed-libs"
-      outputs = [
-        invoker.file_list_json,
-      ]
-      deps += [ relocation_packer_target ]
+# Create a zip archive corresponding to an application bundle module.
+#
+# Compile all the components of a given android_apk_or_module() target into a zip archive
+# suitable to later create an android_app_bundle() target. This archive's format is very
+# similar to that on an APK, except for a few differences in internal directory
+# layouts, and the fact that resources, as well ass xml files, are compiled using a
+# protocol-buffer based format (instead of the regular binary xml + resources.arsc).
+#
+# A final application bundle is built from one or more module bundle modules,
+# plus some configuration file.
+#
+# Variables:
+#   module_zip_path: Output module path.
+#
+#   build_config: Path to build_config of the android_apk_or_module() target.
+#
+template("create_android_app_bundle_module") {
+  _build_config = invoker.build_config
+  _rebased_build_config = rebase_path(_build_config, root_build_dir)
 
-      args = [
-        "--depfile",
-        rebase_path(depfile, root_build_dir),
-        "--enable-packing=1",
-        "--android-pack-relocations",
-        rebase_path(relocation_packer_exe, root_build_dir),
-        "--stripped-libraries-dir",
-        rebase_path(root_build_dir, root_build_dir),
-        "--packed-libraries-dir",
-        rebase_path(_packed_libraries_dir, root_build_dir),
-        "--libraries=${invoker.libraries_filearg}",
-        "--filelistjson",
-        rebase_path(invoker.file_list_json, root_build_dir),
+  action(target_name) {
+    forward_variables_from(invoker,
+                           [
+                             "testonly",
+                             "visibility",
+                             "deps",
+                           ])
+    script = "//build/android/gyp/apkbuilder.py"
+    depfile = "$target_gen_dir/$target_name.d"
+
+    # NOTE: Compared to the inputs of the "package_apk" template action,
+    #       this list is much smaller, since finalize_apk is never called
+    #       by apkbuild.py --format=bundle-module. This means not using
+    #       apksigner and zipalign as well, nor the keystore. Other
+    #       dependencies like extra native libraries are all pulled from the
+    #       .build_config through @FileArg() references (see below) and
+    #       will be listed in the generated depfile instead.
+    inputs = build_utils_py + [ _build_config ]
+    outputs = [
+      invoker.module_zip_path,
+    ]
+    args = [
+      "--depfile",
+      rebase_path(depfile, root_build_dir),
+      "--format=bundle-module",
+      "--output-apk",
+      rebase_path(invoker.module_zip_path, root_build_dir),
+      "--dex-file=@FileArg($_rebased_build_config:final_dex:path)",
+      "--resource-apk=@FileArg(" +
+          "$_rebased_build_config:deps_info:proto_resources_path)",
+      "--assets=@FileArg($_rebased_build_config:assets)",
+      "--uncompressed-assets=@FileArg(" +
+          "$_rebased_build_config:uncompressed_assets)",
+      "--native-libs=@FileArg($_rebased_build_config:native:libraries)",
+      "--native-libs=@FileArg($_rebased_build_config:native:extra_shared_libraries)",
+      "--android-abi=$android_app_abi",
+      "--uncompress-shared-libraries=@FileArg(" +
+          "$_rebased_build_config:native:uncompress_shared_libraries)",
+    ]
+    if (defined(android_app_secondary_abi)) {
+      args += [
+        "--secondary-native-libs=@FileArg(" +
+            "$_rebased_build_config:native:secondary_abi_libraries)",
+        "--secondary-android-abi=$android_app_secondary_abi",
       ]
     }
   }

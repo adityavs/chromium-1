@@ -38,6 +38,7 @@
 #include "base/win/scoped_handle.h"
 #include "base/win/win_util.h"
 #include "base/win/windows_version.h"
+#include "sandbox/constants.h"
 #include "sandbox/win/src/app_container_profile.h"
 #include "sandbox/win/src/job.h"
 #include "sandbox/win/src/process_mitigations.h"
@@ -565,13 +566,13 @@ sandbox::ResultCode SetJobMemoryLimit(const base::CommandLine& cmd_line,
   DCHECK_NE(policy->GetJobLevel(), sandbox::JOB_NONE);
 
 #ifdef _WIN64
-  int64_t GB = 1024 * 1024 * 1024;
-  size_t memory_limit = 4 * GB;
+  size_t memory_limit = static_cast<size_t>(sandbox::kDataSizeLimit);
 
   // Note that this command line flag hasn't been fetched by all
   // callers of SetJobLevel, only those in this file.
   if (service_manager::SandboxTypeFromCommandLine(cmd_line) ==
       service_manager::SANDBOX_TYPE_GPU) {
+    int64_t GB = 1024 * 1024 * 1024;
     // Allow the GPU process's sandbox to access more physical memory if
     // it's available on the system.
     int64_t physical_memory = base::SysInfo::AmountOfPhysicalMemory();
@@ -789,7 +790,7 @@ bool SandboxWin::InitBrokerServices(sandbox::BrokerServices* broker_services) {
       result = g_iat_patch_duplicate_handle.Patch(
           module_name, "kernel32.dll", "DuplicateHandle",
           reinterpret_cast<void*>(DuplicateHandlePatch));
-      CHECK(result == 0);
+      CHECK_EQ(0, result);
       g_iat_orig_duplicate_handle =
           reinterpret_cast<DuplicateHandleFunctionPtr>(
               g_iat_patch_duplicate_handle.original_function());
@@ -886,8 +887,10 @@ sandbox::ResultCode SandboxWin::StartSandboxedProcess(
                 sandbox::MITIGATION_DLL_SEARCH_ORDER;
   if (!cmd_line->HasSwitch(switches::kAllowThirdPartyModules))
     mitigations |= sandbox::MITIGATION_FORCE_MS_SIGNED_BINS;
-  if (sandbox_type == SANDBOX_TYPE_NETWORK)
+  if (sandbox_type == SANDBOX_TYPE_NETWORK ||
+      sandbox_type == SANDBOX_TYPE_AUDIO) {
     mitigations |= sandbox::MITIGATION_DYNAMIC_CODE_DISABLE;
+  }
 
   result = policy->SetDelayedProcessMitigations(mitigations);
   if (result != sandbox::SBOX_ALL_OK)

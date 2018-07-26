@@ -10,6 +10,7 @@
 #include "chrome/browser/ui/app_list/arc/arc_app_launcher.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_utils.h"
 #include "chrome/browser/ui/ash/launcher/chrome_launcher_controller.h"
+#include "components/arc/metrics/arc_metrics_constants.h"
 #include "ui/events/event_constants.h"
 
 ArcPlaystoreShortcutLauncherItemController::
@@ -31,7 +32,8 @@ void ArcPlaystoreShortcutLauncherItemController::ItemSelected(
             ChromeLauncherController::instance()->profile(),
             arc::kPlayStoreAppId,
             base::Optional<std::string>() /* launch_intent */,
-            true /* deferred_launch_allowed */, display_id);
+            true /* deferred_launch_allowed */, display_id,
+            arc::UserInteractionType::APP_STARTED_FROM_SHELF);
     // ArcAppLauncher may launch Play Store in case it exists already. In this
     // case this instance of ArcPlaystoreShortcutLauncherItemController may be
     // deleted. If Play Store does not exist at this moment, then let

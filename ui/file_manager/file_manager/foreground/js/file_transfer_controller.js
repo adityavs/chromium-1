@@ -703,7 +703,34 @@ FileTransferController.prototype.paste = function(
       this.preparePaste(clipboardData, opt_destinationEntry, opt_effect);
 
   return util.URLsToEntries(pastePlan.sourceURLs).then(function(entriesResult) {
-    var sourceEntries = entriesResult.entries;
+    const sourceEntries = entriesResult.entries;
+    const destinationEntry = pastePlan.destinationEntry;
+    const destinationLocationInfo =
+        this.volumeManager_.getLocationInfo(destinationEntry);
+
+    const destinationIsOutsideOfDrive =
+        VolumeManagerCommon.getVolumeTypeFromRootType(
+            destinationLocationInfo.rootType) !==
+        VolumeManagerCommon.VolumeType.DRIVE;
+
+    // Disallow transferring hosted files from Team Drives to outside of Drive.
+    // This is because hosted files aren't 'real' files, so it doesn't make
+    // sense to allow a 'local' copy (e.g. in Downloads, or on a USB), where the
+    // file can't be accessed offline (or necessarily accessed at all) by the
+    // person who tries to open it.
+    // In future, block this for all hosted files, regardless of their source.
+    // For now, to maintain backwards-compatibility, just block this for hosted
+    // files stored in a Team Drive.
+    if (sourceEntries.some(
+            entry =>
+                util.isTeamDriveEntry(entry) && FileType.isHosted(entry)) &&
+        destinationIsOutsideOfDrive) {
+      // For now, just don't execute the paste.
+      // TODO(sashab): Display a warning message, and disallow drag-drop
+      // operations.
+      return null;
+    }
+
     if (sourceEntries.length == 0) {
       // This can happen when copied files were deleted before pasting them.
       // We execute the plan as-is, so as to share the post-copy logic.
@@ -1364,12 +1391,23 @@ FileTransferController.prototype.canCutOrCopy_ = function(isMove) {
       return false;
     }
 
-    if (!isMove)
-      return true;
+    // Cut is unavailable on Team Drive roots.
+    if (util.isTeamDriveRoot(selectedItem.entry)) {
+      return false;
+    }
+
+    var metadata = this.metadataModel_.getCache(
+        [selectedItem.entry], ['canCopy', 'canDelete']);
+    assert(metadata.length === 1);
+
+    if (!isMove) {
+      return metadata[0].canCopy !== false;
+    }
 
     // We need to check source volume is writable for move operation.
     var volumeInfo = this.volumeManager_.getVolumeInfo(selectedItem.entry);
-    return !volumeInfo.isReadOnly;
+    return !volumeInfo.isReadOnly && metadata[0].canCopy !== false &&
+        metadata[0].canDelete !== false;
   }
 
   return isMove ? this.canCutOrDrag_() : this.canCopyOrDrag_() ;
@@ -1435,7 +1473,7 @@ FileTransferController.prototype.onPaste_ = function(event) {
     return;
   }
   event.preventDefault();
-  this.paste(assert(event.clipboardData), destination).then(function(effect) {
+  this.paste(assert(event.clipboardData), destination).then(effect => {
     // On cut, we clear the clipboard after the file is pasted/moved so we don't
     // try to move/delete the original file again.
     if (effect === 'move') {
@@ -1444,7 +1482,7 @@ FileTransferController.prototype.onPaste_ = function(event) {
         event.clipboardData.setData('fs/clear', '');
       });
     }
-  }.bind(this));
+  });
 };
 
 /**
@@ -1463,7 +1501,8 @@ FileTransferController.prototype.onBeforePaste_ = function(event) {
 
 /**
  * @param {!ClipboardData} clipboardData Clipboard data object.
- * @param {DirectoryEntry|FakeEntry} destinationEntry Destination entry.
+ * @param {DirectoryEntry|FakeEntry|FilesAppEntry} destinationEntry Destination
+ *    entry.
  * @return {boolean} Returns true if items stored in {@code clipboardData} can
  *     be pasted to {@code destinationEntry}. Otherwise, returns false.
  * @private
@@ -1502,7 +1541,7 @@ FileTransferController.prototype.canPasteOrDrop_ =
 /**
  * Execute paste command.
  *
- * @param {DirectoryEntry|FakeEntry} destinationEntry
+ * @param {DirectoryEntry|FakeEntry|FilesAppEntry} destinationEntry
  * @return {boolean}  Returns true, the paste is success. Otherwise, returns
  *     false.
  */
@@ -1610,7 +1649,8 @@ FileTransferController.prototype.onFileSelectionChangedThrottled_ = function() {
  * @param {!Event} event Drag event.
  * @param {Object<string>} dragAndDropData drag & drop data from
  *     getDragAndDropGlobalData_().
- * @param {DirectoryEntry|FakeEntry} destinationEntry Destination entry.
+ * @param {DirectoryEntry|FakeEntry|FilesAppEntry} destinationEntry Destination
+ *     entry.
  * @return {DropEffectAndLabel} Returns the appropriate drop query type
  *     ('none', 'move' or copy') to the current modifiers status and the
  *     destination, as well as label message to describe why the operation is

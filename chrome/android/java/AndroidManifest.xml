@@ -434,10 +434,14 @@ by a child template that "extends" this file.
 
             <intent-filter android:priority="-1">
                 <category android:name="com.google.intent.category.DAYDREAM" />
+                <!-- Trick Android into thinking this intent filter contains data authorities, and
+                     so cannot serve as the default browser. crbug.com/847921 -->
+                <data android:host="*" />
                 {{ self.common_view_intent_shared_filter_body() }}
             </intent-filter>
             <intent-filter android:priority="-1">
                 <category android:name="com.google.intent.category.DAYDREAM" />
+                <data android:host="*" />
                 {{ self.common_view_intent_shared_filter_with_mime_body() }}
             </intent-filter>
             <intent-filter android:priority="-1">
@@ -449,18 +453,6 @@ by a child template that "extends" this file.
                 {{ self.mhtml_view_intent_shared_filter_with_mime_body() }}
             </intent-filter>
         </activity-alias>
-        <activity android:name="org.chromium.chrome.browser.vr.CustomTabVrActivity"
-            android:theme="@style/VrSupportTheme"
-            android:screenOrientation="landscape"
-            android:enableVrMode="@string/gvr_vr_mode_component"
-            android:taskAffinity=""
-            android:persistableMode="persistNever"
-            android:autoRemoveFromRecents="false"
-            {{ self.chrome_activity_common() }}
-            {{ self.supports_video_persistence() }}
-        >
-            {{ self.supports_vr() }}
-        </activity>
         {% endif %}
 
         <!-- ChromeTabbedActivity related -->
@@ -571,7 +563,7 @@ by a child template that "extends" this file.
             {{ self.first_run_activity_common() }}>
         </activity>
         {% if enable_vr == "true" %}
-        <activity android:name="org.chromium.chrome.browser.vr_shell.VrFirstRunActivity"
+        <activity android:name="org.chromium.chrome.browser.vr.VrFirstRunActivity"
             android:exported="false"
             android:launchMode="singleInstance"
             android:theme="@style/VrActivityTheme"
@@ -788,7 +780,7 @@ by a child template that "extends" this file.
         </activity>
 
         <activity
-            android:name="org.chromium.chrome.browser.vr_shell.VrCancelAnimationActivity"
+            android:name="org.chromium.chrome.browser.vr.VrCancelAnimationActivity"
             android:exported="false"
             android:theme="@android:style/Theme.NoDisplay"
             android:noHistory="true"

@@ -134,11 +134,6 @@
 
       If the policy is left not set, the default value 'Multi-ProfileUserBehaviourMustBePrimary' applies for enterprise-managed users and 'Multi-ProfileUserBehaviourUnrestricted' will be used for non-managed users.</translation>
 <translation id="1465619815762735808">Click to play</translation>
-<translation id="1466133662354365542">Enables <ph name="PRODUCT_NAME" />'s AutoFill feature and allows users to auto complete credit card and address information in web forms using previously stored information.
-
-      If you disable this setting, Autofill will never suggest, or fill credit card information, nor will it save additional credit card information that the user might submit while browsing the web.
-
-      If you enable this setting or do not set a value, then user will be able to control the overall AutoFill feature (including credit cards) in the UI.</translation>
 <translation id="1468307069016535757">Set the default state of the high contrast mode accessibility feature on the login screen.
 
           If this policy is set to true, high contrast mode will be enabled when the login screen is shown.
@@ -223,12 +218,6 @@
       The policy should be set to a URL from which <ph name="PRODUCT_OS_NAME" /> can download the Terms of Service. The Terms of Service must be plain text, served as MIME type text/plain. No markup is allowed.</translation>
 <translation id="1750315445671978749">Block all downloads</translation>
 <translation id="1781356041596378058">This policy also controls access to Android Developer Options. If you set this policy to true, users cannot access Developer Options. If you set this policy to false or leave it unset, users can access Developer Options by tapping seven times on the build number in the Android settings app.</translation>
-<translation id="178832255504524723">Configure the change password URL (HTTP and HTTPS schemes only). Password protection service will send users to this URL to change their passwords if they've been phished.
-      For <ph name="PRODUCT_NAME" /> to correctly capture the new password fingerprint on this change password page, please make sure that your change password page follows the guidelines on https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
-
-      If this setting is enabled, password protection service will send users to this URL to change their passwords if they've been phished.
-      If this setting is disabled or not set, password protection service will send users to https://myaccounts.google.com to change their password.
-      This policy is not available on Windows instances that are not joined to a <ph name="MS_AD_NAME" /> domain.</translation>
 <translation id="1797233582739332495">Show a recurring prompt to the user indicating that a relaunch is required</translation>
 <translation id="1803646570632580723">List of pinned apps to show in the launcher</translation>
 <translation id="1808715480127969042">Block cookies on these sites</translation>
@@ -251,6 +240,13 @@
       Otherwise, if compatibility with a buggy server must be maintained, this policy may be set to "tls1.1". This is a stopgap measure and the server should be rapidly fixed.</translation>
 <translation id="1864269674877167562">If this policy is set to a blank string or not configured, <ph name="PRODUCT_OS_NAME" /> will not show an auto-complete option during user sign-in flow.
       If this policy is set to a string representing a domain name, <ph name="PRODUCT_OS_NAME" /> will show an auto-complete option during user sign-in allowing the user to type in only their user name without the domain name extension. The user will be able to overwrite this domain name extension.</translation>
+<translation id="1864382791685519617">Enables network prediction in <ph name="PRODUCT_NAME" /> and prevents users from changing this setting.
+
+      This controls DNS pre-fetching, TCP and SSL pre-connection and pre-rendering of web pages.
+
+      If you set this policy, users cannot change or override this setting in <ph name="PRODUCT_NAME" />.
+
+      If this policy is left not set, network prediction will be enabled but the user will be able to change it.</translation>
 <translation id="1865417998205858223">Key Permissions</translation>
 <translation id="186719019195685253">Action to take when the idle delay is reached while running on AC power</translation>
 <translation id="187819629719252111">Allows access to local files on the machine by allowing <ph name="PRODUCT_NAME" /> to display file selection dialogues.
@@ -703,17 +699,24 @@ The contents of the list 'URLs to open at start-up' are ignored unless you selec
 
       If you enable this setting, Print Preview will use the OS system default printer as the default destination choice.</translation>
 <translation id="2867699958489427143">Roll back and stay on target version if OS version is newer than target. Do a full Powerwash during the process.</translation>
-<translation id="286802604195763750">Allows you to control the triggering of password protection warning. Password protection alerts users when they reuse their protected password on potentially suspicious sites.
-
-      If this policy is set to 'PasswordProtectionWarningOff', no password protection warning will be shown.
-      If this policy is set to 'PasswordProtectionWarningOnPasswordReuse', password protection warning will be shown when the user reuses their Google password on a non-whitelisted site.
-      If this policy is set to 'PasswordProtectionWarningOnPhishingReuse', password protection warning will be shown when the user reuses their Google password on a phishing site.
-      If this policy is left unset, password protection warning will be triggered when the user reuses their Google password on a phishing site, but the user will be able to change this setting.</translation>
 <translation id="2872961005593481000">Shut down</translation>
 <translation id="2874209944580848064">Note for <ph name="PRODUCT_OS_NAME" /> devices supporting Android apps:</translation>
 <translation id="2877225735001246144">Disable CNAME lookup when negotiating Kerberos authentication</translation>
 <translation id="2893546967669465276">Send system logs to the management server</translation>
 <translation id="2899002520262095963">Android apps can use the network configurations and CA certificates set via this policy, but do not have access to some configuration options.</translation>
+<translation id="290002216614278247">Allows you to lock the user's session based on the client time or the usage quota of the day.
+
+          The |time_window_limit| specifies a daily window in which the user's session should be locked. We only support one rule for each day of the week, therefore the |entries| array may vary from 0 to 7 in size. |starts_at| and |ends_at| are the beginning and the end of the window limit, when |ends_at| is smaller than |starts_at| it means that the |time_limit_window| ends on the following day. |last_updated_millis| is the UTC timestamp for the last time that this entry was updated; it is sent as a string because the timestamp wouldn't fit in an integer.
+
+          The |time_usage_limit| specifies a daily screen quota, so when the user reaches it, the user's session is locked. There is a property for each day of the week, and it should be set only if there is an active quota for that day. |usage_quota_mins| is the amount of time that the managed device can be used in a day and |reset_at| is the time when the usage quota is renewed. The default value for |reset_at| is midnight ({'hour': 0, 'minute': 0}). |last_updated_millis| is the UTC timestamp for the last time that this entry was updated; it is sent as a string because the timestamp wouldn't fit in an integer.
+
+          |overrides| is provided to invalidate temporarily one or more of the previous rules.
+          * If neither time_window_limit nor time_usage_limit is active, |LOCK| can be used to lock the device.
+          * |LOCK| temporarily locks a user session until the next time_window_limit or time_usage_limit starts.
+          * |UNLOCK| unlocks a user's session locked by time_window_limit or time_usage_limit.
+          |created_time_millis| is the UTC timestamp for the override creation; it is sent as a String because the timestamp wouldn't fit in an integer. It is used to determine whether this override should still be applied. If the current active time limit feature (time usage limit or time window limit) started after the override was created, it should not take action. Also, if the override was created before the last change of the active time_window_limit or time_usage_window, it should not be applied.
+
+          Multiple overrides may be sent; the newest valid entry is the one that is going to be applied.</translation>
 <translation id="2906874737073861391">List of AppPack extensions</translation>
 <translation id="2907992746861405243">Controls which printers from the <ph name="BULK_PRINTERS_POLICY" /> are available to users.
 
@@ -722,6 +725,7 @@ The contents of the list 'URLs to open at start-up' are ignored unless you selec
       If this policy is not set, <ph name="PRINTERS_ALLOW_ALL" /> is assumed.
       </translation>
 <translation id="2908277604670530363">Maximum number of concurrent connections to the proxy server</translation>
+<translation id="2951386431828317490">Enable Auto-Fill for profiles</translation>
 <translation id="2956777931324644324">This policy has been retired as of <ph name="PRODUCT_NAME" /> version 36.
 
       Specifies whether the TLS domain-bound certificates extension should be enabled.
@@ -730,6 +734,7 @@ The contents of the list 'URLs to open at start-up' are ignored unless you selec
 <translation id="2957506574938329824">Do not allow any site to request access to Bluetooth devices via the Web Bluetooth API</translation>
 <translation id="2957513448235202597">Account type for <ph name="HTTP_NEGOTIATE" /> authentication</translation>
 <translation id="2959898425599642200">Proxy bypass rules</translation>
+<translation id="2960128438010718932">The staging schedule for applying a new update</translation>
 <translation id="2960691910306063964">Enable or disable PIN-less authentication for remote access hosts</translation>
 <translation id="2976002782221275500">Specifies the length of time without user input after which the screen is dimmed when running on battery power.
 
@@ -772,6 +777,7 @@ The contents of the list 'URLs to open at start-up' are ignored unless you selec
       Independent of whether or how this policy is set, the WPAD optimisation setting cannot be changed by users.</translation>
 <translation id="3072045631333522102">Screen saver to be used on the sign-in screen in retail mode</translation>
 <translation id="3072847235228302527">Set the Terms of Service for a device-local account</translation>
+<translation id="3077183141551274418">Enables or disables tab lifecycles</translation>
 <translation id="3086995894968271156">Configure the cast receiver in <ph name="PRODUCT_NAME" />.</translation>
 <translation id="3088796212846734853">Allows you to set a list of URL patterns that specify sites which are allowed to display images.
 
@@ -1347,6 +1353,11 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
       These suggestions are fetched remotely from Google servers.
 
       If this setting is set to false, suggestions will not be fetched or displayed.</translation>
+<translation id="4788252609789586009">Enables <ph name="PRODUCT_NAME" />'s Auto-Fill feature and allows users to auto-complete credit card information in web forms using previously stored information.
+
+      If this setting is disabled, Auto-fill will never suggest or fill in credit card information, nor will it save additional credit card information that the user might submit while browsing the web.
+
+      If this setting is enabled or has no value, the user will be able to control Auto-fill for credit cards in the UI.</translation>
 <translation id="4791031774429044540">Enable the large cursor accessibility feature.
 
           If this policy is set to true, the large cursor will always be enabled.
@@ -1487,6 +1498,11 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
       If this policy is set to True, <ph name="PRODUCT_OS_NAME" /> will prevent the device from booting into developer mode. The system will refuse to boot and show an error screen when the developer switch is turned on.
 
       If this policy is unset or set to False, developer mode will remain available for the device.</translation>
+<translation id="520403427390290017">The tab life cycles feature reclaims CPU and eventually memory associated with running tabs that have not been used in a long period of time, by first throttling them, then freezing them and finally discarding them.
+
+      If the policy is set to false then tab lifecycles are disabled, and all tabs will be left running normally.
+
+      If the policy is set to true or left unspecified then tab life cycles are enabled.</translation>
 <translation id="5208240613060747912">Allows you to set a list of url patterns that specify sites which are not allowed to display notifications.
 
           If this policy is left unset the global default value will be used for all sites either from the 'DefaultNotificationsSetting' policy, if it is set, or the user's personal configuration otherwise.</translation>
@@ -1534,6 +1550,11 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 
           If this policy is set to False, users will not be able to cast content to their device. If this policy is set to True, users are allowed to cast content. If this policy is not set, users are not allowed to cast content to enrolled Chrome OS devices, but can cast to non-enrolled devices.</translation>
 <translation id="5330684698007383292">Allow <ph name="PRODUCT_FRAME_NAME" /> to handle the following content types</translation>
+<translation id="5360146044009867539">Enables <ph name="PRODUCT_NAME" />'s Auto-Fill feature and allows users to auto-complete profile and address information in web forms using previously stored information.
+
+      If this setting is disabled, Auto-fill will never suggest or fill in address information, nor will it save additional address information that the user might submit while browsing the web.
+
+      If this setting is enabled or has no value, the user will be able to control Auto-fill for addresses in the UI.</translation>
 <translation id="5365946944967967336">Show Home button on the toolbar</translation>
 <translation id="5366745336748853475">Allows you to specify a list of URL patterns that specify sites for which a client certificate is automatically selected on the sign-in screen in the frame hosting the SAML flow, if the site requests a certificate. An example usage is to configure a device-wide certificate to be presented to the SAML IdP.
 
@@ -1830,6 +1851,12 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 <translation id="6155936611791017817">Set default state of the large cursor on the login screen</translation>
 <translation id="6157537876488211233">Comma-separated list of proxy bypass rules</translation>
 <translation id="6158324314836466367">Enterprise web store name (deprecated)</translation>
+<translation id="6164955668342404660">Deprecated in M69. Use OverrideSecurityRestrictionsOnInsecureOrigin instead.
+
+      The policy specifies a list of origins (URLs) to be treated as secure context. The intent is to allow organisations to set up a staging server for internal web development, so that their developers can test out features requiring secure contexts without having to deploy TLS on the staging server.
+      Setting a list of URLs in this policy has the same effect as setting the command-line flag '--unsafely-treat-insecure-origin-as-secure' to a comma-separated list of the same URLs. If the policy is set, it will override the command-line flag.
+      For more information on secure contexts, see https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6181608880636987460">Allows you to set a list of URL patterns that specify sites which are not allowed to run the <ph name="FLASH_PLUGIN_NAME" /> plug-in.
 
           If this policy is left not set the global default value will be used for all sites either from the 'DefaultPluginsSetting' policy if it is set, or the user's personal configuration otherwise.</translation>
@@ -1950,13 +1977,6 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 
       If this policy is left not set or the list is empty all schemes will be accessible in <ph name="PRODUCT_NAME" />.</translation>
 <translation id="6652197835259177259">Locally managed users settings</translation>
-<translation id="6654559957643809067">Enables network prediction in <ph name="PRODUCT_NAME" /> and prevents users from changing this setting.
-
-      This controls DNS prefetching, TCP and SSL preconnection and prerendering of web pages.
-
-      If you set this preference to 'always', 'never' or 'Wi-Fi only', users cannot change or override this setting in <ph name="PRODUCT_NAME" />.
-
-      If this policy is left not set, network prediction will be enabled but the user will be able to change it.</translation>
 <translation id="6658245400435704251">Specifies the number of seconds up to which a device may randomly delay its download of an update from the time the update was first pushed out to the server. The device may wait a portion of this time in terms of wall-clock-time and the remaining portion in terms of the number of update checks. In any case, the scatter is upper bounded to a constant amount of time so that a device does not ever get stuck waiting to download an update forever.</translation>
 <translation id="6665670272107384733">Set how often user has to enter password to use quick unlock</translation>
 <translation id="6681229465468164801">Allows you to set a list of url patterns that specify sites which are prevented from asking the user to grant them access to a USB device.
@@ -2007,6 +2027,11 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 <translation id="6786967369487349613">Set the roaming profile directory</translation>
 <translation id="6810445994095397827">Block JavaScript on these sites</translation>
 <translation id="681446116407619279">Supported authentication schemes</translation>
+<translation id="6832455357698286434">
+      The policy specifies a list of origins (URLs) or hostname patterns (such as '*.example.com') to be treated as secure contexts. The intent is to allow organisations to set up a staging server for internal web development, so that their developers can test out features requiring secure contexts without having to deploy TLS on the staging server.
+      Setting a list of URLs in this policy has the same effect as setting the command-line flag '--unsafely-treat-insecure-origin-as-secure' to a comma-separated list of the same URLs. If the policy is set, it will override the command-line flag.
+      For more information on secure contexts, see https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6835883744948188639">Show a recurring prompt to the user indicating that a relaunch is recommended</translation>
 <translation id="6838056959556423778">Overrides <ph name="PRODUCT_NAME" /> default printer selection rules.
 
@@ -2251,6 +2276,15 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 
           If this setting is disabled, then this feature will not be available.</translation>
 <translation id="7275334191706090484">Managed Bookmarks</translation>
+<translation id="729492886167634859">This policy defines a list of percentages that will define the fraction of <ph name="PRODUCT_OS_NAME" /> devices in the OU to update per week starting from the day on which the update is first discovered. The discovery time is later than the update published time, since it could be a while after the update is published until the device checks for updates.
+
+      The n-th value in the list will be used as the percentage of devices that should complete updating to the next version in the n-th week after the update has been discovered. For example, if an update is discovered today, then the first value in the list defines the percentage of devices in the OU that should update to that version by a week from today. The second value defines the percentage of devices in the OU that should update to that version by 2 weeks from today, and so on.
+
+      If there is a value defined for this policy, updates will ignore the <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" /> policy and follow this policy instead.
+
+      If this list is empty, there will be no staging and updates will be applied according to other device policies.
+
+      This policy does not apply for channel switches.</translation>
 <translation id="7295019613773647480">Enable supervised users</translation>
 <translation id="7301543427086558500">Specifies a list of alternative URLs that can be used to extract search terms from the search engine. The URLs should contain the string <ph name="SEARCH_TERM_MARKER" />, which will be used to extract the search terms.
 
@@ -2329,17 +2363,6 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 <translation id="7511361072385293666">If this policy is set to true or not set usage of QUIC protocol in <ph name="PRODUCT_NAME" /> is allowed.
       If this policy is set to false usage of QUIC protocol is disallowed.</translation>
 <translation id="7519251620064708155">Allow key generation on these sites</translation>
-<translation id="7529083451528428240">Allows you to lock the user's session based on the client time or the usage quota of the day.
-
-          The |time_window_limit| specifies a daily window in which the user's session should be locked. We only support one rule for each day of the week, therefore the |entries| array may vary from 0-7 in size. |starts_at| and |ends_at| are the beginning and the end of the window limit, when |ends_at| is smaller than |starts_at| it means that the |time_limit_window| ends on the following day. |last_updated_millis| is the UTC timestamp for the last time that this entry was updated. It is sent as a string because the timestamp wouldn't fit in an integer.
-
-          The |time_usage_limit| specifies a daily screen quota, so when the user reaches it, the user's session is locked. There is a property for each day of the week, and it should be set only if there is an active quota for that day. |usage_quota_mins| is the amount of time that the managed device can be used in a day and |reset_at| is the time when the usage quota is renewed. The default value for |reset_at| is midnight ({'hour': 0, 'minute': 0}). |last_updated_millis| is the UTC timestamp for the last time that this entry was updated. It is sent as a string because the timestamp wouldn't fit in an integer.
-
-          |overrides| is provided to temporarily invalidate one or more of the previous rules.
-          * If neither time_window_limit nor time_usage_limit is active, |LOCK| can be used to lock the device.
-          * |LOCK| temporarily locks a user session until the next time_window_limit or time_usage_limit starts.
-          * |UNLOCK| unlocks a user's session locked by time_window_limit or time_usage_limit.
-          |created_time_millis| is the UTC timestamp for the override creation. It is sent as a String because the timestamp wouldn't fit in an integer. It is used to determine whether this override should still be applied. If the current active time limit feature (time usage limit or time window limit) started after the override was created, it should not take action. Also, if the override was created before the last change of the active time_window_limit or time_usage_window it should not be applied.</translation>
 <translation id="7529100000224450960">Allows you to set a list of url patterns that specify sites which are allowed to open pop-ups.
 
           If this policy is left unset the global default value will be used for all sites either from the 'DefaultPop-upsSetting' policy, if it is set, or the user's personal configuration otherwise.</translation>
@@ -2376,6 +2399,7 @@ If this setting is not set, <ph name="PRODUCT_NAME" /> will allow the user to co
 <translation id="7617319494457709698">This policy specifies the allowed extensions to use the <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> function <ph name="CHALLENGE_USER_KEY_FUNCTION" /> for remote attestation. Extensions must be added to this list to use the API.
 
           If an extension is not in the list, or the list is not set, the call to the API will fail with an error code.</translation>
+<translation id="7620300057302654932">Origins or hostname patterns to be treated as secure context.</translation>
 <translation id="7625444193696794922">Specifies the release channel that this device should be locked to.</translation>
 <translation id="7632724434767231364">GSSAPI library name</translation>
 <translation id="7635471475589566552">Configures the application locale in <ph name="PRODUCT_NAME" /> and prevents users from changing the locale.
@@ -2726,6 +2750,12 @@ The recommended way to configure policy on Windows is via GPO, although provisio
 
           For example patterns see https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8493645415242333585">Disable saving browser history</translation>
+<translation id="8498293625012059298">Configure the change password URL (HTTP and HTTPS schemes only). Password protection service will send users to this URL to change their password after seeing a warning in the browser.
+      In order for <ph name="PRODUCT_NAME" /> to correctly capture the new password fingerprint on this change password page, please make sure that your change password page follows the guidelines on https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
+
+      If this setting is enabled, then password protection service will send users to this URL to change their password after seeing a warning in the browser.
+      If this setting is disabled or not set, then password protection service will send users to https://myaccounts.google.com to change their password.
+      This policy is not available on Windows instances that are not joined to a <ph name="MS_AD_NAME" /> domain.</translation>
 <translation id="8499172469244085141">Default Settings (users can override)</translation>
 <translation id="8507835864888987300">Sets a target version for Auto Updates.
 
@@ -2779,6 +2809,14 @@ The recommended way to configure policy on Windows is via GPO, although provisio
       When this policy is changed to False, it applies to starting new virtual machines but does not shut down virtual machines which are already running.
       When this policy is not set on a managed device, the device is not allowed to run virtual machines.
       Unmanaged devices are allowed to run virtual machines.</translation>
+<translation id="8669669491594628013">Allows you to control the triggering of password protection warning. Password protection alerts users when they reuse their protected password on potentially suspicious sites.
+
+      You can use 'PasswordProtectionLoginURLs' and 'PasswordProtectionChangePasswordURL' policies to configure which password to protect.
+
+      If this policy is set to 'PasswordProtectionWarningOff', no password protection warning will be shown.
+      If this policy is set to 'PasswordProtectionWarningOnPasswordReuse', password protection warning will be shown when the user reuses their protected password on a non-whitelisted site.
+      If this policy is set to 'PasswordProtectionWarningOnPhishingReuse', password protection warning will be shown when the user reuses their protected password on a phishing site.
+      If this policy is left unset, password protection service will only protect Google passwords, but the user will be able to change this setting.</translation>
 <translation id="8672321184841719703">Target Auto-Update Version</translation>
 <translation id="867410340948518937">U2F (Universal Second Factor)</translation>
 <translation id="8685024486845674965">Password protection warning is triggered by password reuse</translation>
@@ -2851,11 +2889,6 @@ The recommended way to configure policy on Windows is via GPO, although provisio
       If this setting is left not set the user can decide to use this function or not.</translation>
 <translation id="8870318296973696995">Homepage</translation>
 <translation id="8882006618241293596">Block the <ph name="FLASH_PLUGIN_NAME" /> plug-in on these sites</translation>
-<translation id="8894962626537183708">
-      The policy specifies a list of origins (URLs) to be treated as secure context. The intent is to allow organisations to set up a staging server for internal web development, so that their developers can test out features requiring secure contexts without having to deploy TLS on the staging server.
-      Setting a list of URLs in this policy has the same effect as setting the command-line flag ' – unsafely-treat-insecure-origin-as-secure' to a comma-separated list of the same URLs. If the policy is set, it will override the command-line flag.
-      For more information on secure contexts, see https://www.w3.org/TR/secure-contexts/
-      </translation>
 <translation id="890403179930035128">Force-enables spellcheck languages. Unrecognised languages in that list will be ignored.
 
       If you enable this policy, spellcheck will be enabled for the languages specified, in addition to the languages for which the user has enabled spellcheck.

@@ -7,22 +7,21 @@
 namespace blink {
 namespace scheduler {
 
-CompositorMetricsHelper::CompositorMetricsHelper()
-    : MetricsHelper(WebThreadType::kCompositorThread) {}
+CompositorMetricsHelper::CompositorMetricsHelper(
+    bool has_cpu_timing_for_each_task)
+    : MetricsHelper(WebThreadType::kCompositorThread,
+                    has_cpu_timing_for_each_task) {}
 
 CompositorMetricsHelper::~CompositorMetricsHelper() {}
 
 void CompositorMetricsHelper::RecordTaskMetrics(
     NonMainThreadTaskQueue* queue,
     const base::sequence_manager::TaskQueue::Task& task,
-    base::TimeTicks start_time,
-    base::TimeTicks end_time,
-    base::Optional<base::TimeDelta> thread_time) {
-  if (ShouldDiscardTask(queue, task, start_time, end_time, thread_time))
+    const base::sequence_manager::TaskQueue::TaskTiming& task_timing) {
+  if (ShouldDiscardTask(queue, task, task_timing))
     return;
 
-  MetricsHelper::RecordCommonTaskMetrics(queue, task, start_time, end_time,
-                                         thread_time);
+  MetricsHelper::RecordCommonTaskMetrics(queue, task, task_timing);
 }
 
 }  // namespace scheduler

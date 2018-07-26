@@ -32,6 +32,8 @@
 
 #include <utility>
 
+#include "cc/test/test_ukm_recorder_factory.h"
+#include "cc/trees/layer_tree_host.h"
 #include "cc/trees/layer_tree_settings.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom-blink.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -42,6 +44,7 @@
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/platform/web_url_response.h"
 #include "third_party/blink/public/web/web_frame_widget.h"
+#include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/public/web/web_tree_scope_type.h"
 #include "third_party/blink/public/web/web_view_client.h"
@@ -98,6 +101,13 @@ std::unique_ptr<T> CreateDefaultClientIfNeeded(T*& client) {
   return owned_client;
 }
 
+WebNavigationTimings BuildDummyWebNavigationTimings() {
+  WebNavigationTimings web_navigation_timings;
+  web_navigation_timings.navigation_start = base::TimeTicks::Now();
+  web_navigation_timings.fetch_start = base::TimeTicks::Now();
+  return web_navigation_timings;
+}
+
 }  // namespace
 
 void LoadFrame(WebLocalFrame* frame, const std::string& url) {
@@ -107,16 +117,17 @@ void LoadFrame(WebLocalFrame* frame, const std::string& url) {
   } else {
     frame->CommitNavigation(
         WebURLRequest(web_url), blink::WebFrameLoadType::kStandard,
-        blink::WebHistoryItem(), false, base::UnguessableToken::Create());
+        blink::WebHistoryItem(), false, base::UnguessableToken::Create(),
+        nullptr, BuildDummyWebNavigationTimings());
   }
-  PumpPendingRequestsForFrameToLoad(frame);
+  PumpPendingRequestsForFrameToLoad();
 }
 
 void LoadHTMLString(WebLocalFrame* frame,
                     const std::string& html,
                     const WebURL& base_url) {
   frame->LoadHTMLString(WebData(html.data(), html.size()), base_url);
-  PumpPendingRequestsForFrameToLoad(frame);
+  PumpPendingRequestsForFrameToLoad();
 }
 
 void LoadHistoryItem(WebLocalFrame* frame,
@@ -126,21 +137,22 @@ void LoadHistoryItem(WebLocalFrame* frame,
   frame->CommitNavigation(
       WrappedResourceRequest(history_item->GenerateResourceRequest(cache_mode)),
       WebFrameLoadType::kBackForward, item,
-      /*is_client_redirect=*/false, base::UnguessableToken::Create());
-  PumpPendingRequestsForFrameToLoad(frame);
+      /*is_client_redirect=*/false, base::UnguessableToken::Create(), nullptr,
+      BuildDummyWebNavigationTimings());
+  PumpPendingRequestsForFrameToLoad();
 }
 
 void ReloadFrame(WebLocalFrame* frame) {
   frame->StartReload(WebFrameLoadType::kReload);
-  PumpPendingRequestsForFrameToLoad(frame);
+  PumpPendingRequestsForFrameToLoad();
 }
 
 void ReloadFrameBypassingCache(WebLocalFrame* frame) {
   frame->StartReload(WebFrameLoadType::kReloadBypassingCache);
-  PumpPendingRequestsForFrameToLoad(frame);
+  PumpPendingRequestsForFrameToLoad();
 }
 
-void PumpPendingRequestsForFrameToLoad(WebFrame* frame) {
+void PumpPendingRequestsForFrameToLoad() {
   Platform::Current()->CurrentThread()->GetTaskRunner()->PostTask(
       FROM_HERE, WTF::Bind(&RunServeAsyncRequestsTask));
   test::EnterRunLoop();
@@ -365,19 +377,12 @@ void WebViewHelper::Resize(WebSize size) {
   test_web_view_client_->ClearAnimationScheduled();
 }
 
-void WebViewHelper::SetViewportSize(const WebSize& size) {
-  content::RenderWidgetCompositor* compositor =
-      test_web_view_client_->compositor();
-  compositor->SetViewportSizeAndScale(
-      static_cast<gfx::Size>(size), /*device_scale_factor=*/1.f,
-      compositor->layer_tree_host()->local_surface_id_from_parent());
-}
-
 void WebViewHelper::InitializeWebView(TestWebViewClient* web_view_client,
                                       class WebView* opener) {
   owned_test_web_view_client_ = CreateDefaultClientIfNeeded(web_view_client);
-  web_view_ = static_cast<WebViewImpl*>(WebView::Create(
-      web_view_client, mojom::PageVisibilityState::kVisible, opener));
+  web_view_ = static_cast<WebViewImpl*>(
+      WebView::Create(web_view_client, web_view_client,
+                      mojom::PageVisibilityState::kVisible, opener));
   web_view_->GetSettings()->SetJavaScriptEnabled(true);
   web_view_->GetSettings()->SetPluginsEnabled(true);
   // Enable (mocked) network loads of image URLs, as this simplifies
@@ -445,12 +450,6 @@ void TestWebFrameClient::DidStopLoading() {
 
 void TestWebFrameClient::DidCreateDocumentLoader(
     WebDocumentLoader* document_loader) {
-  base::TimeTicks redirect_start;
-  base::TimeTicks redirect_end;
-  base::TimeTicks fetch_start = base::TimeTicks::Now();
-  bool has_redirect = false;
-  document_loader->UpdateNavigation(redirect_start, redirect_end, fetch_start,
-                                    has_redirect);
 }
 
 TestWebRemoteFrameClient::TestWebRemoteFrameClient() = default;
@@ -469,7 +468,12 @@ void TestWebRemoteFrameClient::FrameDetached(DetachType type) {
   self_owned_.reset();
 }
 
-content::RenderWidgetCompositor* RenderWidgetCompositorFactory::Initialize() {
+content::LayerTreeView* LayerTreeViewFactory::Initialize() {
+  return Initialize(/*delegate=*/nullptr);
+}
+
+content::LayerTreeView* LayerTreeViewFactory::Initialize(
+    content::LayerTreeViewDelegate* specified_delegate) {
   cc::LayerTreeSettings settings;
   // Use synchronous compositing so that the MessageLoop becomes idle and the
   // test makes progress.
@@ -483,19 +487,23 @@ content::RenderWidgetCompositor* RenderWidgetCompositorFactory::Initialize() {
   if (RuntimeEnabledFeatures::BlinkGenPropertyTreesEnabled())
     settings.use_layer_lists = true;
 
-  compositor_ = std::make_unique<content::RenderWidgetCompositor>(
-      &delegate_, &compositor_deps_);
-  compositor_->Initialize(settings);
-  return compositor_.get();
+  layer_tree_view_ = std::make_unique<content::LayerTreeView>(
+      specified_delegate ? specified_delegate : &delegate_,
+      Platform::Current()->CurrentThread()->GetTaskRunner(),
+      /*compositor_thread=*/nullptr, &test_task_graph_runner_,
+      &fake_renderer_scheduler_);
+  layer_tree_view_->Initialize(settings,
+                               std::make_unique<cc::TestUkmRecorderFactory>());
+  return layer_tree_view_.get();
 }
 
 WebLayerTreeView* TestWebWidgetClient::InitializeLayerTreeView() {
-  return compositor_factory_.Initialize();
+  return layer_tree_view_factory_.Initialize();
 }
 
 WebLayerTreeView* TestWebViewClient::InitializeLayerTreeView() {
-  compositor_ = compositor_factory_.Initialize();
-  return compositor_;
+  layer_tree_view_ = layer_tree_view_factory_.Initialize();
+  return layer_tree_view_;
 }
 
 }  // namespace FrameTestHelpers

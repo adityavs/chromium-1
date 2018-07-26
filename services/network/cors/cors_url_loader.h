@@ -28,13 +28,17 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CORSURLLoader
     : public mojom::URLLoader,
       public mojom::URLLoaderClient {
  public:
+  using DeleteCallback = base::OnceCallback<void(mojom::URLLoader* loader)>;
+
   // Assumes network_loader_factory outlives this loader.
   // TODO(yhirano): Remove |request_finalizer| when the network service is
   // fully enabled.
   CORSURLLoader(
+      mojom::URLLoaderRequest loader_request,
       int32_t routing_id,
       int32_t request_id,
       uint32_t options,
+      DeleteCallback delete_callback,
       const ResourceRequest& resource_request,
       mojom::URLLoaderClientPtr client,
       const net::MutableNetworkTrafficAnnotationTag& traffic_annotation,
@@ -42,6 +46,10 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CORSURLLoader
       const base::RepeatingCallback<void(int)>& request_finalizer);
 
   ~CORSURLLoader() override;
+
+  // Starts processing the request. This is expected to be called right after
+  // the constructor.
+  void Start();
 
   // mojom::URLLoader overrides:
   void FollowRedirect(const base::Optional<std::vector<std::string>>&
@@ -69,7 +77,8 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CORSURLLoader
 
  private:
   void StartRequest();
-  void StartNetworkRequest(base::Optional<CORSErrorStatus> status);
+  void StartNetworkRequest(int net_error,
+                           base::Optional<CORSErrorStatus> status);
 
   // Called when there is a connection error on the upstream pipe used for the
   // actual request.
@@ -78,10 +87,16 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) CORSURLLoader
   // Handles OnComplete() callback.
   void HandleComplete(const URLLoaderCompletionStatus& status);
 
+  void OnConnectionError();
+
+  mojo::Binding<mojom::URLLoader> binding_;
+
   // We need to save these for redirect.
   const int32_t routing_id_;
   const int32_t request_id_;
   const uint32_t options_;
+
+  DeleteCallback delete_callback_;
 
   // This raw URLLoaderFactory pointer is shared with the CORSURLLoaderFactory
   // that created and owns this object.

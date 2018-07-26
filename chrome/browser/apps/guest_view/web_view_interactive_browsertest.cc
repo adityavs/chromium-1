@@ -17,7 +17,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/apps/app_browsertest_util.h"
+#include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu_browsertest_util.h"
@@ -965,7 +965,8 @@ IN_PROC_BROWSER_TEST_F(WebViewInteractiveTest, EditCommands) {
 }
 
 // Tests that guests receive edit commands and respond appropriately.
-IN_PROC_BROWSER_TEST_F(WebViewInteractiveTest, EditCommandsNoMenu) {
+// Flaky test - crbug.com/859478
+IN_PROC_BROWSER_TEST_F(WebViewInteractiveTest, DISABLED_EditCommandsNoMenu) {
   SetupTest("web_view/edit_commands_no_menu",
       "/extensions/platform_apps/web_view/edit_commands_no_menu/"
       "guest.html");

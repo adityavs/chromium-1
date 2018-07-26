@@ -107,11 +107,12 @@ MinMaxSize ComputeMinAndMaxContentContribution(
 
 // Resolves the computed value in style.logicalWidth (Length) to a layout unit,
 // then constrains the result by the resolved min logical width and max logical
-// width from the ComputedStyle object.
+// width from the ComputedStyle object. Calls Node::ComputeMinMaxSize if needed.
+// override_minmax is provided *solely* for use by unit tests.
 CORE_EXPORT LayoutUnit
 ComputeInlineSizeForFragment(const NGConstraintSpace&,
-                             const ComputedStyle&,
-                             const base::Optional<MinMaxSize>&);
+                             NGLayoutInputNode,
+                             const MinMaxSize* override_minmax = nullptr);
 
 // Same as ComputeInlineSizeForFragment, but uses height instead of width.
 CORE_EXPORT LayoutUnit ComputeBlockSizeForFragment(const NGConstraintSpace&,
@@ -173,15 +174,16 @@ CORE_EXPORT NGBoxStrut ComputeBorders(const NGConstraintSpace& constraint_space,
 CORE_EXPORT NGBoxStrut ComputePadding(const NGConstraintSpace&,
                                       const ComputedStyle&);
 
-// Resolves margin: auto in the inline direction.
-// This uses the available size from the constraint space and inline size to
-// compute the margins that are auto, if any, and adjusts
-// the given NGBoxStrut accordingly.
-CORE_EXPORT void ApplyAutoMargins(const ComputedStyle& child_style,
-                                  const ComputedStyle& containing_block_style,
-                                  LayoutUnit available_inline_size,
-                                  LayoutUnit inline_size,
-                                  NGBoxStrut* margins);
+// Convert inline margins from computed to used values. This will resolve 'auto'
+// values and over-constrainedness. This uses the available size from the
+// constraint space and inline size to compute the margins that are auto, if
+// any, and adjusts the given NGBoxStrut accordingly.
+CORE_EXPORT void ResolveInlineMargins(
+    const ComputedStyle& child_style,
+    const ComputedStyle& containing_block_style,
+    LayoutUnit available_inline_size,
+    LayoutUnit inline_size,
+    NGBoxStrut* margins);
 
 // Calculate the adjustment needed for the line's left position, based on
 // text-align, direction and amount of unused space.
@@ -203,15 +205,10 @@ NGBoxStrut CalculateBorderScrollbarPadding(
     const NGConstraintSpace& constraint_space,
     const NGBlockNode node);
 
-inline NGLogicalSize CalculateBorderBoxSize(
+NGLogicalSize CalculateBorderBoxSize(
     const NGConstraintSpace& constraint_space,
-    const ComputedStyle& style,
-    const base::Optional<MinMaxSize>& min_and_max,
-    LayoutUnit block_content_size = NGSizeIndefinite) {
-  return NGLogicalSize(
-      ComputeInlineSizeForFragment(constraint_space, style, min_and_max),
-      ComputeBlockSizeForFragment(constraint_space, style, block_content_size));
-}
+    const NGBlockNode& node,
+    LayoutUnit block_content_size = NGSizeIndefinite);
 
 NGLogicalSize CalculateContentBoxSize(
     const NGLogicalSize border_box_size,

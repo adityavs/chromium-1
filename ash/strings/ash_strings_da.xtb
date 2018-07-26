@@ -4,8 +4,10 @@
 <translation id="1012876632442809908">USB-C-enhed (port foran)</translation>
 <translation id="1013923882670373915">Bluetooth-enheden "<ph name="DEVICE_NAME" />" vil gerne have parringstilladelse. Angiv denne pinkode på den pågældende enhed: <ph name="PINCODE" /></translation>
 <translation id="1032891413405719768">Styluspennen er ved at løbe tør for batteri</translation>
+<translation id="1037492556044956303"><ph name="DEVICE_NAME" /> blev tilføjet</translation>
 <translation id="1056775291175587022">Der er ingen netværk</translation>
 <translation id="1059194134494239015"><ph name="DISPLAY_NAME" />: <ph name="RESOLUTION" /></translation>
+<translation id="1104621072296271835">Dine enheder fungerer endnu bedre sammen</translation>
 <translation id="112308213915226829">Skjul hylde automatisk</translation>
 <translation id="1153356358378277386">Parrede enheder</translation>
 <translation id="1195412055398077112">overscan</translation>
@@ -34,7 +36,6 @@
 <translation id="1658406695958299976">Din adgangskode kunne stadig ikke bekræftes. Bemærk! Hvis du har ændret din adgangskode for nylig, anvendes din nye adgangskode først, når du har logget ud. Du skal bruge den gamle adgangskode her.</translation>
 <translation id="1677472565718498478"><ph name="TIME" /> tilbage</translation>
 <translation id="1698760176351776263">IPv6-adresse: <ph name="ADDRESS" /></translation>
-<translation id="170389796989115980">Enhedsadministratoren kan muligvis overvåge din aktivitet.</translation>
 <translation id="1734367976349034509">Denne enhed er virksomhedsadministreret</translation>
 <translation id="1746730358044914197">Indtastningsmetoder konfigureres af din administrator.</translation>
 <translation id="1747827819627189109">Skærmtastaturet er aktiveret</translation>
@@ -60,7 +61,6 @@
 <translation id="2050339315714019657">Stående</translation>
 <translation id="2067602449040652523">Lysstyrke for tastatur</translation>
 <translation id="2081529251031312395">$1 kan stadig logge ind senere.</translation>
-<translation id="2122028596993374965">Stop med at caste <ph name="TAB_NAME" /> til <ph name="RECEIVER_NAME" /></translation>
 <translation id="2127372758936585790">Oplader ved lav kraft</translation>
 <translation id="2135456203358955318">Fastgjort lupvindue</translation>
 <translation id="2144487987174258011">Genstart for at opdatere Adobe Flash Player</translation>
@@ -73,7 +73,6 @@
 <translation id="2303600792989757991">Skift vinduesoversigt</translation>
 <translation id="2338501278241028356">Slå Bluetooth til for at opdage enheder i nærheden</translation>
 <translation id="2339073806695260576">Tryk på knappen for styluspen på hylden for at skrive en note, tage et screenshot eller bruge lasermarkøren og luppen.</translation>
-<translation id="2351266942280602854">Sprog og indtastning</translation>
 <translation id="2352467521400612932">Penneindstillinger</translation>
 <translation id="2354174487190027830">Aktiverer <ph name="NAME" /></translation>
 <translation id="2359808026110333948">Fortsæt</translation>
@@ -91,7 +90,6 @@
 <translation id="2597972630681408282">Nattelys: <ph name="NIGHT_LIGHT_STATUS" /></translation>
 <translation id="2617342710774726426">SIM-kortet er låst</translation>
 <translation id="2653659639078652383">Indsend</translation>
-<translation id="2696763960464195425">Dine oplysninger fjernes, når du logger ud. <ph name="LEARN_MORE" /></translation>
 <translation id="2700493154570097719">Angiv dit tastatur</translation>
 <translation id="2718395828230677721">Nattelys</translation>
 <translation id="2727977024730340865">Tilsluttet en oplader med lav kraft. Batteriopladningen er muligvis ikke pålidelig.</translation>
@@ -99,6 +97,7 @@
 <translation id="277257480934873581">Genopretter forbindelsen til <ph name="NAME" /></translation>
 <translation id="2792498699870441125">Alt+Søg</translation>
 <translation id="2805756323405976993">Apps</translation>
+<translation id="2808012452536866044">Better Together skiftede til en ny telefon</translation>
 <translation id="2819276065543622893">Du bliver logget ud nu.</translation>
 <translation id="2825619548187458965">Hylde</translation>
 <translation id="2844169650293029770">USB-C-enhed (porten foran i venstre side)</translation>
@@ -107,10 +106,12 @@
 <translation id="2878884018241093801">Der er ingen nye elementer</translation>
 <translation id="2903844815300039659">Der er forbindelse til <ph name="NAME" />, <ph name="STRENGTH" /></translation>
 <translation id="2911940648265863620">Du deler din skærm</translation>
+<translation id="2942350706960889382">Fastgjort lupvindue</translation>
 <translation id="2942516765047364088">Hyldeplacering</translation>
 <translation id="2946119680249604491">Tilføj forbindelse</translation>
 <translation id="2961963223658824723">Der opstod en fejl. Prøv igen om et par sekunder.</translation>
 <translation id="2963773877003373896">mod3</translation>
+<translation id="2996462380875591307">Fastgjort lupvindue er aktiveret. Tryk på Ctrl+Søg+D igen for at deaktivere tilstanden.</translation>
 <translation id="2999742336789313416"><ph name="DISPLAY_NAME" /> er en offentlig session administreret af <ph name="DOMAIN" /></translation>
 <translation id="3000461861112256445">Monolyd</translation>
 <translation id="3009178788565917040">Output</translation>
@@ -170,6 +171,7 @@
 <translation id="4072264167173457037">Middel signal</translation>
 <translation id="4200057768455216496">Du trykkede på genvejen for det fastgjorte lupvindue. Vil du aktivere indstillingen?</translation>
 <translation id="4217571870635786043">Diktering</translation>
+<translation id="4274921305979314545">Knyt din Chromebook til din telefon</translation>
 <translation id="4279490309300973883">Spejling</translation>
 <translation id="4321179778687042513">ctrl</translation>
 <translation id="4331809312908958774">Chrome OS</translation>
@@ -189,6 +191,7 @@
 <translation id="4544944664594876241">Genvejen til at låse skærmen er ændret. Brug <ph name="NEW_SHORTCUT" /> i stedet for <ph name="OLD_SHORTCUT" />.</translation>
 <translation id="4564869809620998694">Skrifttypetjeneste</translation>
 <translation id="4570957409596482333">Knap for Tekstoplæsning</translation>
+<translation id="4585337515783392668">Stop med at caste på en ukendt modtager</translation>
 <translation id="4628757576491864469">Enheder</translation>
 <translation id="4659419629803378708">ChromeVox er aktiveret</translation>
 <translation id="4734965478015604180">Vandret</translation>
@@ -223,6 +226,7 @@
 <translation id="554893713779400387">Slå diktering til/fra</translation>
 <translation id="5571066253365925590">Bluetooth er aktiveret</translation>
 <translation id="5597451508971090205"><ph name="SHORT_WEEKDAY" /> d. <ph name="DATE" /></translation>
+<translation id="5598551463564921617">Better Together er aktiveret</translation>
 <translation id="5600837773213129531">Tryk på Ctrl+Alt+Z for at deaktivere oplæsning.</translation>
 <translation id="5648021990716966815">Stik til mikrofon</translation>
 <translation id="5669267381087807207">Aktiverer</translation>
@@ -234,12 +238,13 @@
 <translation id="5805697420284793859">Vinduesadministrator</translation>
 <translation id="5820394555380036790">Chromium OS</translation>
 <translation id="5832805196449965646">Tilføj person</translation>
+<translation id="5837036133683224804">Stop <ph name="ROUTE_TITLE" /> på <ph name="RECEIVER_NAME" /></translation>
 <translation id="5860033963881614850">Fra</translation>
 <translation id="5895138241574237353">Genstart</translation>
 <translation id="5901316534475909376">Shift+Esc</translation>
 <translation id="5911533659001334206">Genvejsviser</translation>
 <translation id="5916664084637901428">Til</translation>
-<translation id="5927132638760172455">Caster til en ukendt modtager</translation>
+<translation id="592343074608792716">Denne Chromebook og din telefon forbindes automatisk</translation>
 <translation id="5947494881799873997">Fortryd</translation>
 <translation id="595202126637698455">Sporing af ydelsen er aktiveret</translation>
 <translation id="5957083217255311415">Mobildata er slået fra.</translation>
@@ -262,6 +267,7 @@
 <translation id="6164005077879661055">Alle filer og lokale data, der er knyttet til den administrerede bruger, 
 slettes permanent, når den administrerede bruger fjernes. Besøgte websites og indstillinger for denne administrerede bruger er muligvis stadig synlige for administratoren på <ph name="MANAGEMENT_URL" />.</translation>
 <translation id="6165508094623778733">Flere oplysninger</translation>
+<translation id="6259254695169772643">Vælg ved hjælp af din styluspen</translation>
 <translation id="6267036997247669271"><ph name="NAME" />: Aktiverer...</translation>
 <translation id="6284232397434400372">Opløsningen blev ændret</translation>
 <translation id="6297287540776456956">Brug pennen til at vælge et område</translation>
@@ -270,6 +276,7 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="639644700271529076">CAPS LOCK er deaktiveret</translation>
 <translation id="6406704438230478924">altgr</translation>
 <translation id="643147933154517414">Færdig</translation>
+<translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> på <ph name="RECEIVER_NAME" /></translation>
 <translation id="6452181791372256707">Afvis</translation>
 <translation id="6453179446719226835">Sproget er blevet ændret</translation>
 <translation id="6459472438155181876">Udvider skærmen til <ph name="DISPLAY_NAME" /></translation>
@@ -304,7 +311,6 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="698231206551913481">Alle filer og lokale data, der er knyttet til denne bruger, slettes permanent, når brugeren fjernes.</translation>
 <translation id="7015766095477679451">Vend tilbage kl. <ph name="COME_BACK_TIME" />.</translation>
 <translation id="7029814467594812963">Afslut session</translation>
-<translation id="7034339000180558234">Caster <ph name="TAB_NAME" /> til <ph name="RECEIVER_NAME" /></translation>
 <translation id="7037152028959403492">Du trykkede på genvejen for høj kontrast. Vil du aktivere indstillingen?</translation>
 <translation id="7066646422045619941">Din administrator har deaktiveret dette netværk.</translation>
 <translation id="7067196344162293536">Automatisk rotering</translation>
@@ -351,21 +357,23 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="7982789257301363584">Netværk</translation>
 <translation id="7994370417837006925">Samlet login fra flere konti</translation>
 <translation id="8000066093800657092">Intet netværk</translation>
+<translation id="8029241286966751120">Forstørrelse af fuld skærm er aktiveret. Tryk på Ctrl+Søg+M igen for at deaktivere tilstanden.</translation>
 <translation id="8054466585765276473">Beregner batteritid.</translation>
 <translation id="8061464966246066292">Høj kontrast</translation>
-<translation id="8098591350844501178">Stop med at caste skærmen til <ph name="RECEIVER_NAME" /></translation>
+<translation id="8098591350844501178">Stop cast skærmen til <ph name="RECEIVER_NAME" /></translation>
 <translation id="8113423164597455979">Aktiveret, alle apps</translation>
 <translation id="8132793192354020517">Forbundet til <ph name="NAME" /></translation>
 <translation id="813913629614996137">Initialiserer...</translation>
 <translation id="8142699993796781067">Privat netværk</translation>
 <translation id="8152119955266188852">Du trykkede på genvejen for forstørrelse af fuld skærm. Vil du aktivere indstillingen?</translation>
-<translation id="8180896103888046100">Stop med at caste til en ukendt modtager</translation>
 <translation id="8190698733819146287">Tilpas sprog og indtastning...</translation>
 <translation id="8261506727792406068">Slet</translation>
 <translation id="8297006494302853456">Svag</translation>
 <translation id="8308637677604853869">Forrige menu</translation>
 <translation id="8351131234907093545">Opret note</translation>
 <translation id="8392451568018454956">Menuen Indstillinger for <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="8406981827175133772">Forstørrelse af fuld skærm</translation>
+<translation id="8427213022735114808">Diktering sender din stemme til Google, så du kan indtale tekst i alle tekstfelter.</translation>
 <translation id="8428213095426709021">Indstillinger</translation>
 <translation id="8431190899827883166">Vis tryk</translation>
 <translation id="8433186206711564395">Netværksindstillinger</translation>
@@ -399,7 +407,6 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="8984179138335769204">Hurtig start</translation>
 <translation id="8995603266996330174">Administreres af <ph name="DOMAIN" /></translation>
 <translation id="9029474291399787231">Der er en tilgængelig Adobe Flash Player-opdatering</translation>
-<translation id="9033907480196064950">Du caster i øjeblikket <ph name="TAB_NAME" /></translation>
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9079731690316798640">Wi-Fi: <ph name="ADDRESS" /></translation>
 <translation id="9080206825613744995">Mikrofonen er i brug.</translation>
@@ -408,6 +415,7 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="9111102763498581341">Lås op</translation>
 <translation id="9151726767154816831">Genstart, og udfør en powerwash for at opdatere</translation>
 <translation id="9179259655489829027">Denne funktion giver dig hurtig adgang til alle brugere, der er logget ind, uden at du behøver at angive en adgangskode. Brug kun denne funktion til konti, du har tillid til.</translation>
+<translation id="9193626018745640770">Caster på en ukendt modtager</translation>
 <translation id="9194617393863864469">Log ind med en anden bruger...</translation>
 <translation id="9201131092683066720">Batteriet er <ph name="PERCENTAGE" /> % opladet.</translation>
 <translation id="9210037371811586452">Lukker tilstanden Kombineret skrivebord</translation>

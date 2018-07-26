@@ -4,7 +4,6 @@
 
 #include "chrome/browser/android/vr/arcore_device/arcore_device.h"
 
-#include <jni.h>
 #include "base/bind.h"
 #include "base/numerics/math_constants.h"
 #include "base/optional.h"
@@ -22,6 +21,7 @@
 #include "components/content_settings/core/common/content_settings_types.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "device/vr/vr_display_impl.h"
 #include "ui/display/display.h"
 
 using base::android::JavaRef;
@@ -136,6 +136,10 @@ void ARCoreDevice::OnARCoreGlThreadInitialized() {
   DCHECK(IsOnMainThread());
 
   is_arcore_gl_thread_initialized_ = true;
+
+  if (pending_request_session_callback_) {
+    std::move(pending_request_session_callback_).Run();
+  }
 }
 
 void ARCoreDevice::RequestSession(
@@ -146,12 +150,17 @@ void ARCoreDevice::RequestSession(
   // TODO(https://crbug.com/849568): Instead of splitting the initialization
   // of this class between construction and RequestSession, perform all the
   // initialization at once on the first successful RequestSession call.
-
-  // TODO(https://crbug.com/846521): If the RequestSession call comes before
-  // the arcore gl thread is initialized, the resolution of the request should
-  // be delayed.
   if (!is_arcore_gl_thread_initialized_) {
-    std::move(callback).Run(nullptr, nullptr);
+    if (pending_request_session_callback_) {
+      // We can only store one request at a time, so reject any further
+      // requests.
+      // TODO(http://crbug.com/836496) Make this queue session requests.
+      std::move(callback).Run(nullptr, nullptr);
+    }
+
+    pending_request_session_callback_ =
+        base::BindOnce(&ARCoreDevice::RequestSession, GetWeakPtr(),
+                       std::move(options), std::move(callback));
     return;
   }
 
@@ -268,30 +277,42 @@ bool ARCoreDevice::ShouldPauseTrackingWhenFrameDataRestricted() {
 }
 
 void ARCoreDevice::OnMagicWindowFrameDataRequest(
-    const gfx::Size& frame_size,
-    display::Display::Rotation display_rotation,
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   TRACE_EVENT0("gpu", __FUNCTION__);
   DCHECK(IsOnMainThread());
+  // We should not be able to reach this point if we are not initialized.
+  DCHECK(is_arcore_gl_thread_initialized_);
 
-  // TODO(ijamardo): Do we need to queue requests to avoid breaking
-  // applications?
-  // TODO(https://crbug.com/837944): Ensure is_arcore_gl_thread_initialized_
-  // is always true by blocking requestDevice()'s callback until it is true
-  if (is_paused_ || !is_arcore_gl_thread_initialized_) {
+  if (is_paused_) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
+  // TODO(https://crbug.com/836496) This current implementation does not handle
+  // multiple sessions well. There should be a better way to handle this than
+  // taking the max of all sessions.
+  gfx::Size max_size(0, 0);
+  display::Display::Rotation rotation;
+  for (auto& session : magic_window_sessions_) {
+    max_size.SetToMax(session->sessionFrameSize());
+    // We have to pick a rotation so just go with the last one.
+    rotation = session->sessionRotation();
+  }
+
+  if (max_size.IsEmpty()) {
+    DLOG(ERROR) << "No valid AR frame size provided!";
     std::move(callback).Run(nullptr);
     return;
   }
 
   PostTaskToGlThread(base::BindOnce(
       &ARCoreGl::ProduceFrame, arcore_gl_thread_->GetARCoreGl()->GetWeakPtr(),
-      frame_size, display_rotation,
-      CreateMainThreadCallback(std::move(callback))));
+      max_size, rotation, CreateMainThreadCallback(std::move(callback))));
 }
 
 void ARCoreDevice::RequestHitTest(
     mojom::XRRayPtr ray,
-    mojom::VRMagicWindowProvider::RequestHitTestCallback callback) {
+    mojom::XREnviromentIntegrationProvider::RequestHitTestCallback callback) {
   DCHECK(IsOnMainThread());
 
   PostTaskToGlThread(base::BindOnce(
@@ -368,9 +389,8 @@ void ARCoreDevice::OnRequestCameraPermissionResult(
       // Show the Android camera permission info bar.
       PermissionUpdateInfoBarDelegate::Create(
           web_contents, content_settings_types,
-          base::BindRepeating(
-              &ARCoreDevice::OnRequestAndroidCameraPermissionResult,
-              GetWeakPtr(), base::Passed(&callback)));
+          base::BindOnce(&ARCoreDevice::OnRequestAndroidCameraPermissionResult,
+                         GetWeakPtr(), base::Passed(&callback)));
       return;
     case ShowPermissionInfoBarState::CANNOT_SHOW_PERMISSION_INFOBAR:
       std::move(callback).Run(false);
@@ -421,16 +441,19 @@ void ARCoreDevice::OnARCoreGlInitializationComplete(
         &ARCoreGl::Resume, arcore_gl_thread_->GetARCoreGl()->GetWeakPtr()));
   }
 
-  // TODO(offenwanger) When the XRMagicWindowProvider or equivalent is returned
-  // here, clean out this dummy code.
-  auto connection = mojom::XRPresentationConnection::New();
-  mojom::VRSubmitFrameClientPtr submit_client;
-  connection->client_request = mojo::MakeRequest(&submit_client);
-  mojom::VRPresentationProviderPtr provider;
-  mojo::MakeRequest(&provider);
-  connection->provider = provider.PassInterface();
-  connection->transport_options = mojom::VRDisplayFrameTransportOptions::New();
-  std::move(callback).Run(std::move(connection), nullptr);
+  auto session = mojom::XRSession::New();
+
+  mojom::XRFrameDataProviderPtr data_provider;
+  mojom::XREnviromentIntegrationProviderPtr enviroment_provider;
+  mojom::XRSessionControllerPtr controller;
+  magic_window_sessions_.push_back(std::make_unique<VRDisplayImpl>(
+      this, mojo::MakeRequest(&data_provider),
+      mojo::MakeRequest(&enviroment_provider), mojo::MakeRequest(&controller)));
+
+  session->data_provider = data_provider.PassInterface();
+  session->enviroment_provider = enviroment_provider.PassInterface();
+
+  std::move(callback).Run(std::move(session), std::move(controller));
 }
 
 void ARCoreDevice::OnRequestAndroidCameraPermissionResult(

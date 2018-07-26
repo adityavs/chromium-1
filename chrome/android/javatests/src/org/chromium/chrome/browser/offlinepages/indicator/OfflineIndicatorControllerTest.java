@@ -48,6 +48,7 @@ public class OfflineIndicatorControllerTest {
 
     @Before
     public void setUp() throws Exception {
+        OfflineIndicatorController.skipSystemCheckForTesting();
         mActivityTestRule.startMainActivityOnBlankPage();
         ThreadUtils.runOnUiThreadBlocking(() -> {
             if (!NetworkChangeNotifier.isInitialized()) {
@@ -108,8 +109,7 @@ public class OfflineIndicatorControllerTest {
         checkOfflineIndicatorVisibility(mActivityTestRule.getActivity(), true);
 
         // Reconnect the network.
-        ThreadUtils.runOnUiThreadBlocking(
-                () -> { NetworkChangeNotifier.forceConnectivityState(true); });
+        setNetworkConnectivity(true);
 
         // Offline indicator should go away.
         checkOfflineIndicatorVisibility(mActivityTestRule.getActivity(), false);

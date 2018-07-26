@@ -11,6 +11,7 @@
 #include "ui/views/mus/mus_client_test_api.h"
 #include "ui/views/test/views_test_base.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/widget/widget_delegate.h"
 
 namespace views {
 namespace {
@@ -109,8 +110,21 @@ TEST_F(AXRemoteHostTest, AutomationEnabled) {
 
   // Event was sent with initial hierarchy.
   EXPECT_EQ(ax::mojom::Event::kLoadComplete, service.last_event_.event_type);
-  EXPECT_EQ(AXAuraObjCache::GetInstance()->GetID(widget->client_view()),
+  EXPECT_EQ(AXAuraObjCache::GetInstance()->GetID(
+                widget->widget_delegate()->GetContentsView()),
             service.last_event_.id);
+}
+
+// Views can trigger accessibility events during Widget construction before the
+// AXRemoteHost starts monitoring the widget. This happens with the material
+// design focus ring on text fields. Verify we don't crash in this case.
+// https://crbug.com/862759
+TEST_F(AXRemoteHostTest, SendEventBeforeWidgetCreated) {
+  TestAXHostService service(true /*automation_enabled*/);
+  AXRemoteHost* remote = CreateRemote(&service);
+  views::View view;
+  remote->HandleEvent(&view, ax::mojom::Event::kLocationChanged);
+  // No crash.
 }
 
 TEST_F(AXRemoteHostTest, CreateWidgetThenEnableAutomation) {
@@ -127,7 +141,8 @@ TEST_F(AXRemoteHostTest, CreateWidgetThenEnableAutomation) {
 
   // Event was sent with initial hierarchy.
   EXPECT_EQ(ax::mojom::Event::kLoadComplete, service.last_event_.event_type);
-  EXPECT_EQ(AXAuraObjCache::GetInstance()->GetID(widget->client_view()),
+  EXPECT_EQ(AXAuraObjCache::GetInstance()->GetID(
+                widget->widget_delegate()->GetContentsView()),
             service.last_event_.id);
 }
 

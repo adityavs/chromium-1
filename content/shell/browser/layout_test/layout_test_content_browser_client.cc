@@ -91,14 +91,10 @@ class TestOverlayWindow : public OverlayWindow {
   ui::Layer* GetLayer() override { return nullptr; }
   gfx::Rect GetBounds() const override { return gfx::Rect(); }
   void UpdateVideoSize(const gfx::Size& natural_size) override {}
-  void UpdatePlayPauseControlsIcon(bool is_playing) override {}
+  void SetPlaybackState(PlaybackState playback_state) override {}
+  ui::Layer* GetWindowBackgroundLayer() override { return nullptr; }
   ui::Layer* GetVideoLayer() override { return nullptr; }
-  ui::Layer* GetControlsBackgroundLayer() override { return nullptr; }
-  ui::Layer* GetCloseControlsLayer() override { return nullptr; }
-  ui::Layer* GetPlayPauseControlsLayer() override { return nullptr; }
   gfx::Rect GetVideoBounds() override { return gfx::Rect(); }
-  gfx::Rect GetCloseControlsBounds() override { return gfx::Rect(); }
-  gfx::Rect GetPlayPauseControlsBounds() override { return gfx::Rect(); }
 
  private:
   DISALLOW_COPY_AND_ASSIGN(TestOverlayWindow);
@@ -231,12 +227,6 @@ void LayoutTestContentBrowserClient::AppendExtraCommandLineSwitches(
           switches::kEnableDisplayCompositorPixelDump)) {
     command_line->AppendSwitch(switches::kEnableDisplayCompositorPixelDump);
   }
-  // This non-sandboxed gpu process used for Windows gpu info collection
-  // is not needed here. (This task is delayed 15 seconds after the browser
-  // starts and quits when the job is done.) Because it might interfere with the
-  // layout test, a command line switch is added to skip this gpu process.
-  command_line->AppendSwitch(
-      switches::kDisableGpuProcessForDX12VulkanInfoCollection);
 }
 
 BrowserMainParts* LayoutTestContentBrowserClient::CreateBrowserMainParts(

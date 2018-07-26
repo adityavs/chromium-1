@@ -82,10 +82,6 @@ enum FieldFilterMask {
                                      FILTER_NON_FOCUSABLE_ELEMENTS,
 };
 
-// If true, operations causing layout computation should be avoided. Set by
-// ScopedLayoutPreventer.
-bool g_prevent_layout = false;
-
 void TruncateString(base::string16* str, size_t max_length) {
   if (str->length() > max_length)
     str->resize(max_length);
@@ -880,9 +876,6 @@ void ForEachMatchingFormFieldCommon(
              base::i18n::ToLower(element->Value().Utf16())))
       continue;
 
-    DCHECK(!g_prevent_layout || !(filters & FILTER_NON_FOCUSABLE_ELEMENTS))
-        << "The callsite of this code wanted to both prevent layout and check "
-           "isFocusable. Pick one.";
     if (((filters & FILTER_DISABLED_ELEMENTS) && !element->IsEnabled()) ||
         ((filters & FILTER_READONLY_ELEMENTS) && element->IsReadOnly()) ||
         // See description for FILTER_NON_FOCUSABLE_ELEMENTS.
@@ -1285,18 +1278,6 @@ bool ScriptModifiedUsernameAcceptable(
 
 }  // namespace
 
-ScopedLayoutPreventer::ScopedLayoutPreventer() {
-  DCHECK(!g_prevent_layout) << "Is any other instance of ScopedLayoutPreventer "
-                               "alive in the same process?";
-  g_prevent_layout = true;
-}
-
-ScopedLayoutPreventer::~ScopedLayoutPreventer() {
-  DCHECK(g_prevent_layout) << "Is any other instance of ScopedLayoutPreventer "
-                              "alive in the same process?";
-  g_prevent_layout = false;
-}
-
 GURL StripAuthAndParams(const GURL& gurl) {
   GURL::Replacements rep;
   rep.ClearUsername();
@@ -1439,6 +1420,10 @@ bool IsAutofillableElement(const WebFormControlElement& element) {
          IsSelectElement(element) || IsTextAreaElement(element);
 }
 
+bool IsWebElementVisible(const blink::WebElement& element) {
+  return element.IsFocusable();
+}
+
 const base::string16 GetFormIdentifier(const WebFormElement& form) {
   base::string16 identifier = form.GetName().Utf16();
   CR_DEFINE_STATIC_LOCAL(WebString, kId, ("id"));
@@ -1448,13 +1433,18 @@ const base::string16 GetFormIdentifier(const WebFormElement& form) {
   return identifier;
 }
 
-bool IsWebElementVisible(const blink::WebElement& element) {
-  // Testing anything related to visibility is likely to trigger layout. If that
-  // should not happen, all elements are suspected of being visible. This is
-  // consistent with the default value of FormFieldData::is_focusable.
-  if (g_prevent_layout)
-    return true;
-  return element.IsFocusable();
+base::i18n::TextDirection GetTextDirectionForElement(
+    const blink::WebFormControlElement& element) {
+  // Use 'text-align: left|right' if set or 'direction' otherwise.
+  // See https://crbug.com/482339
+  base::i18n::TextDirection direction = element.DirectionForFormData() == "rtl"
+                                            ? base::i18n::RIGHT_TO_LEFT
+                                            : base::i18n::LEFT_TO_RIGHT;
+  if (element.AlignmentForFormData() == "left")
+    direction = base::i18n::LEFT_TO_RIGHT;
+  else if (element.AlignmentForFormData() == "right")
+    direction = base::i18n::RIGHT_TO_LEFT;
+  return direction;
 }
 
 std::vector<blink::WebFormControlElement> ExtractAutofillableElementsFromSet(
@@ -1535,15 +1525,7 @@ void WebFormControlElementToFormField(
     field->is_focusable = IsWebElementVisible(element);
     field->should_autocomplete = element.AutoComplete();
 
-    // Use 'text-align: left|right' if set or 'direction' otherwise.
-    // See crbug.com/482339
-    field->text_direction = element.DirectionForFormData() == "rtl"
-                                ? base::i18n::RIGHT_TO_LEFT
-                                : base::i18n::LEFT_TO_RIGHT;
-    if (element.AlignmentForFormData() == "left")
-      field->text_direction = base::i18n::LEFT_TO_RIGHT;
-    else if (element.AlignmentForFormData() == "right")
-      field->text_direction = base::i18n::RIGHT_TO_LEFT;
+    field->text_direction = GetTextDirectionForElement(element);
     field->is_enabled = element.IsEnabled();
     field->is_readonly = element.IsReadOnly();
     field->is_default = element.GetAttribute("value") == element.Value();

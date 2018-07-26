@@ -12,6 +12,8 @@
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_task_environment.h"
+#include "build/build_config.h"
+#include "cc/trees/layer_tree_host.h"
 #include "components/viz/common/features.h"
 #include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "content/common/input/input_handler.mojom.h"
@@ -22,8 +24,9 @@
 #include "content/public/common/content_features.h"
 #include "content/public/test/mock_render_thread.h"
 #include "content/renderer/devtools/render_widget_screen_metrics_emulator.h"
-#include "content/renderer/gpu/render_widget_compositor.h"
+#include "content/renderer/gpu/layer_tree_view.h"
 #include "content/renderer/input/widget_input_handler_manager.h"
+#include "content/renderer/render_widget_owner_delegate.h"
 #include "content/test/fake_compositor_dependencies.h"
 #include "content/test/mock_render_process.h"
 #include "ipc/ipc_test_sink.h"
@@ -281,25 +284,6 @@ TEST_F(RenderWidgetUnittest, EventOverscroll) {
   widget()->SendInputEvent(scroll, handled_event.GetCallback());
 }
 
-TEST_F(RenderWidgetUnittest, FlingOverscroll) {
-  ui::DidOverscrollParams expected_overscroll;
-  expected_overscroll.latest_overscroll_delta = gfx::Vector2dF(10, 5);
-  expected_overscroll.accumulated_overscroll = gfx::Vector2dF(5, 5);
-  expected_overscroll.causal_event_viewport_point = gfx::PointF(1, 1);
-  expected_overscroll.current_fling_velocity = gfx::Vector2dF(10, 5);
-
-  EXPECT_CALL(*widget()->mock_input_handler_host(),
-              DidOverscroll(expected_overscroll))
-      .Times(1);
-
-  // Overscroll notifications received outside of handling an input event should
-  // be sent as a separate IPC.
-  widget()->DidOverscroll(blink::WebFloatSize(10, 5), blink::WebFloatSize(5, 5),
-                          blink::WebFloatPoint(1, 1),
-                          blink::WebFloatSize(10, 5), cc::OverscrollBehavior());
-  base::RunLoop().RunUntilIdle();
-}
-
 TEST_F(RenderWidgetUnittest, RenderWidgetInputEventUmaMetrics) {
   SyntheticWebTouchEvent touch;
   touch.PressPoint(10, 10);
@@ -385,13 +369,19 @@ TEST_F(RenderWidgetUnittest, AutoResizeAllocatedLocalSurfaceId) {
   widget()->SynchronizeVisualProperties(visual_properties);
   EXPECT_EQ(allocator.GetCurrentLocalSurfaceId(),
             widget()->local_surface_id_from_parent());
-  EXPECT_FALSE(widget()->compositor()->HasNewLocalSurfaceIdRequest());
+  EXPECT_FALSE(widget()
+                   ->layer_tree_view()
+                   ->layer_tree_host()
+                   ->new_local_surface_id_request_for_testing());
 
   constexpr gfx::Size size(200, 200);
   widget()->DidAutoResize(size);
   EXPECT_EQ(allocator.GetCurrentLocalSurfaceId(),
             widget()->local_surface_id_from_parent());
-  EXPECT_TRUE(widget()->compositor()->HasNewLocalSurfaceIdRequest());
+  EXPECT_TRUE(widget()
+                  ->layer_tree_view()
+                  ->layer_tree_host()
+                  ->new_local_surface_id_request_for_testing());
 }
 
 class PopupRenderWidget : public RenderWidget {
@@ -417,8 +407,15 @@ class PopupRenderWidget : public RenderWidget {
       bool,
       const blink::WebDeviceEmulationParams&) override {}
 
+  // Shuts down the metrics emulator, the compositor, and destroys the internal
+  // WebWidget. Should be called before destroying the object.
+  void Shutdown() {
+    RenderWidget::Close();
+    shutdown_ = true;
+  }
+
  protected:
-  ~PopupRenderWidget() override { webwidget_internal_ = nullptr; }
+  ~PopupRenderWidget() override { DCHECK(shutdown_); }
 
   bool Send(IPC::Message* msg) override {
     sink_.OnMessageReceived(*msg);
@@ -427,6 +424,7 @@ class PopupRenderWidget : public RenderWidget {
   }
 
  private:
+  bool shutdown_ = false;
   IPC::TestSink sink_;
   MockWebWidget mock_webwidget_;
   static int routing_id_;
@@ -446,7 +444,7 @@ class RenderWidgetPopupUnittest : public testing::Test {
     widget_->Release();
     DCHECK(widget_->HasOneRef());
   }
-  ~RenderWidgetPopupUnittest() override {}
+  ~RenderWidgetPopupUnittest() override { widget_->Shutdown(); }
 
   PopupRenderWidget* widget() const { return widget_.get(); }
   FakeCompositorDependencies compositor_deps_;
@@ -460,6 +458,44 @@ class RenderWidgetPopupUnittest : public testing::Test {
   scoped_refptr<PopupRenderWidget> widget_;
 
   DISALLOW_COPY_AND_ASSIGN(RenderWidgetPopupUnittest);
+};
+
+class StubRenderWidgetOwnerDelegate : public RenderWidgetOwnerDelegate {
+ public:
+  blink::WebWidget* GetWebWidgetForWidget() const override { return nullptr; }
+  bool RenderWidgetWillHandleMouseEventForWidget(
+      const blink::WebMouseEvent& event) override {
+    return false;
+  }
+  void SetActiveForWidget(bool active) override {}
+  void SetBackgroundOpaqueForWidget(bool opaque) override {}
+  bool SupportsMultipleWindowsForWidget() override { return true; }
+  void DidHandleGestureEventForWidget(
+      const blink::WebGestureEvent& event) override {}
+  void OverrideCloseForWidget() override {}
+  void DidCloseWidget() override {}
+  void ApplyNewSizeForWidget(const gfx::Size& old_size,
+                             const gfx::Size& new_size) override {}
+  void ApplyNewDisplayModeForWidget(
+      const blink::WebDisplayMode& new_display_mode) override {}
+  void ApplyAutoResizeLimitsForWidget(const gfx::Size& min_size,
+                                      const gfx::Size& max_size) override {}
+  void DisableAutoResizeForWidget() override {}
+  void ScrollFocusedNodeIntoViewForWidget() override {}
+  void DidReceiveSetFocusEventForWidget() override {}
+  void DidChangeFocusForWidget() override {}
+  GURL GetURLForGraphicsContext3DForWidget() override { return {}; }
+  void DidCommitCompositorFrameForWidget() override {}
+  void DidCompletePageScaleAnimationForWidget() override {}
+  void ResizeWebWidgetForWidget(
+      const gfx::Size& size,
+      float top_controls_height,
+      float bottom_controls_height,
+      bool browser_controls_shrink_blink_size) override {}
+  void RequestScheduleAnimationForWidget() override {}
+  void SetScreenMetricsEmulationParametersForWidget(
+      bool enabled,
+      const blink::WebDeviceEmulationParams& params) override {}
 };
 
 TEST_F(RenderWidgetPopupUnittest, EmulatingPopupRect) {
@@ -489,12 +525,16 @@ TEST_F(RenderWidgetPopupUnittest, EmulatingPopupRect) {
   scoped_refptr<PopupRenderWidget> parent_widget(
       new PopupRenderWidget(&compositor_deps_));
   parent_widget->Release();  // Balance Init().
-  RenderWidgetScreenMetricsEmulator emulator(
-      parent_widget.get(), emulation_params, visual_properties,
-      parent_window_rect, parent_window_rect);
-  emulator.Apply();
 
-  widget()->SetPopupOriginAdjustmentsForEmulation(&emulator);
+  // Emulation only happens for RenderWidgets with an owner delegate.
+  StubRenderWidgetOwnerDelegate delegate;
+  parent_widget->set_owner_delegate(&delegate);
+
+  // Setup emulation on the |parent_widget|.
+  parent_widget->OnSynchronizeVisualProperties(visual_properties);
+  parent_widget->OnEnableDeviceEmulation(emulation_params);
+  // Then use it for the popup widget under test.
+  widget()->ApplyEmulatedScreenMetricsForPopupWidget(parent_widget.get());
 
   // Position of the popup as seen by the emulated widget.
   gfx::Point emulated_position(
@@ -518,6 +558,33 @@ TEST_F(RenderWidgetPopupUnittest, EmulatingPopupRect) {
   EXPECT_EQ(popup_emulated_rect.y, widget()->WindowRect().y);
   EXPECT_EQ(popup_emulated_rect.x, widget()->ViewRect().x);
   EXPECT_EQ(popup_emulated_rect.y, widget()->ViewRect().y);
+
+  parent_widget->Shutdown();
 }
+
+// Verify desktop memory limit calculations.
+#if !defined(OS_ANDROID)
+TEST(RenderWidgetTest, IgnoreGivenMemoryPolicy) {
+  auto policy = RenderWidget::GetGpuMemoryPolicy(cc::ManagedMemoryPolicy(256),
+                                                 gfx::Size(), 1.f);
+  EXPECT_EQ(512u * 1024u * 1024u, policy.bytes_limit_when_visible);
+  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
+            policy.priority_cutoff_when_visible);
+}
+
+TEST(RenderWidgetTest, LargeScreensUseMoreMemory) {
+  auto policy = RenderWidget::GetGpuMemoryPolicy(cc::ManagedMemoryPolicy(256),
+                                                 gfx::Size(4096, 2160), 1.f);
+  EXPECT_EQ(2u * 512u * 1024u * 1024u, policy.bytes_limit_when_visible);
+  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
+            policy.priority_cutoff_when_visible);
+
+  policy = RenderWidget::GetGpuMemoryPolicy(cc::ManagedMemoryPolicy(256),
+                                            gfx::Size(2048, 1080), 2.f);
+  EXPECT_EQ(2u * 512u * 1024u * 1024u, policy.bytes_limit_when_visible);
+  EXPECT_EQ(gpu::MemoryAllocation::CUTOFF_ALLOW_NICE_TO_HAVE,
+            policy.priority_cutoff_when_visible);
+}
+#endif  // !defined(OS_ANDROID)
 
 }  // namespace content

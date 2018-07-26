@@ -20,7 +20,6 @@
 #include "media/cdm/default_cdm_factory.h"
 #include "media/renderers/default_decoder_factory.h"
 #include "media/renderers/default_renderer_factory.h"
-#include "media/video/gpu_video_accelerator_factories.h"
 
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
 #include "media/cdm/cdm_paths.h"  // nogncheck
@@ -57,6 +56,7 @@ void TestMojoMediaClient::Initialize(
 }
 
 std::unique_ptr<Renderer> TestMojoMediaClient::CreateRenderer(
+    service_manager::mojom::InterfaceProvider* host_interfaces,
     scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     MediaLog* media_log,
     const std::string& /* audio_device_id */) {

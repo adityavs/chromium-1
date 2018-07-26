@@ -5,6 +5,7 @@
 #ifndef ASH_ASSISTANT_UI_DIALOG_PLATE_DIALOG_PLATE_H_
 #define ASH_ASSISTANT_UI_DIALOG_PLATE_DIALOG_PLATE_H_
 
+#include <memory>
 #include <string>
 
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
@@ -16,9 +17,9 @@
 #include "ui/views/controls/textfield/textfield_controller.h"
 #include "ui/views/view.h"
 
-namespace views {
-class ImageButton;
-}  // namespace views
+namespace ui {
+class CallbackLayerAnimationObserver;
+}  // namespace ui
 
 namespace ash {
 
@@ -92,18 +93,22 @@ class DialogPlate : public views::View,
 
  private:
   void InitLayout();
-  void InitKeyboardLayoutContainer();
-  void InitVoiceLayoutContainer();
+  void InitKeyboardLayoutContainer(
+      views::View* input_modality_layout_container);
+  void InitVoiceLayoutContainer(views::View* input_modality_layout_container);
 
   void OnButtonPressed(DialogPlateButtonId id);
 
+  void OnAnimationStarted(const ui::CallbackLayerAnimationObserver& observer);
+  bool OnAnimationEnded(const ui::CallbackLayerAnimationObserver& observer);
+
   AssistantController* const assistant_controller_;  // Owned by Shell.
 
-  views::ImageButton* keyboard_input_toggle_;        // Owned by view hierarchy.
   views::View* keyboard_layout_container_;           // Owned by view hierarchy.
-  views::Textfield* textfield_;                      // Owned by view hierarchy.
-  views::ImageButton* voice_input_toggle_;           // Owned by view hierarchy.
   views::View* voice_layout_container_;              // Owned by view hierarchy.
+  views::Textfield* textfield_;                      // Owned by view hierarchy.
+
+  std::unique_ptr<ui::CallbackLayerAnimationObserver> animation_observer_;
 
   base::ObserverList<DialogPlateObserver> observers_;
 

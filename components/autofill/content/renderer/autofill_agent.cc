@@ -126,8 +126,8 @@ AutofillAgent::ShowSuggestionsOptions::ShowSuggestionsOptions()
     : autofill_on_empty_values(false),
       requires_caret_at_end(false),
       show_full_suggestion_list(false),
-      show_password_suggestions_only(false) {
-}
+      show_password_suggestions_only(false),
+      autoselect_first_suggestion(false) {}
 
 AutofillAgent::AutofillAgent(content::RenderFrame* render_frame,
                              PasswordAutofillAgent* password_autofill_agent,
@@ -238,7 +238,6 @@ void AutofillAgent::FocusedNodeChanged(const WebNode& node) {
   }
 
   HidePopup();
-  last_input_element_.Reset();
 
   if (node.IsNull() || !node.IsElementNode()) {
     if (!last_interacted_form_.IsNull()) {
@@ -265,7 +264,6 @@ void AutofillAgent::FocusedNodeChanged(const WebNode& node) {
     return;
 
   element_ = *element;
-  last_input_element_ = *element;
 
   FormData form;
   FormFieldData field;
@@ -355,6 +353,8 @@ void AutofillAgent::TextFieldDidReceiveKeyDown(const WebInputElement& element,
     ShowSuggestionsOptions options;
     options.autofill_on_empty_values = true;
     options.requires_caret_at_end = true;
+    options.autoselect_first_suggestion =
+        ShouldAutoselectFirstSuggestionOnArrowDown();
     ShowSuggestions(element, options);
   }
 }
@@ -411,6 +411,28 @@ void AutofillAgent::DoAcceptDataListSuggestion(
   DoFillFieldWithValue(new_value, input_element);
 }
 
+void AutofillAgent::TriggerRefillIfNeeded(const FormData& form) {
+  if (!base::FeatureList::IsEnabled(features::kAutofillDynamicForms))
+    return;
+
+  ReplaceElementIfNowInvalid(form);
+
+  FormFieldData field;
+  FormData updated_form;
+  if (form_util::FindFormAndFieldForFormControlElement(element_, &updated_form,
+                                                       &field) &&
+      (!element_.IsAutofilled() || !form.DynamicallySameFormAs(updated_form))) {
+    base::TimeTicks forms_seen_timestamp = base::TimeTicks::Now();
+    WebLocalFrame* frame = render_frame()->GetWebFrame();
+    std::vector<FormData> forms;
+    forms.push_back(updated_form);
+    // Always communicate to browser process for topmost frame.
+    if (!forms.empty() || !frame->Parent()) {
+      GetAutofillDriver()->FormsSeen(forms, forms_seen_timestamp);
+    }
+  }
+}
+
 // mojom::AutofillAgent:
 void AutofillAgent::FillForm(int32_t id, const FormData& form) {
   if (element_.IsNull())
@@ -430,6 +452,8 @@ void AutofillAgent::FillForm(int32_t id, const FormData& form) {
     UpdateLastInteractedForm(element_.Form());
 
   GetAutofillDriver()->DidFillAutofillFormData(form, base::TimeTicks::Now());
+
+  TriggerRefillIfNeeded(form);
 }
 
 void AutofillAgent::PreviewForm(int32_t id, const FormData& form) {
@@ -627,7 +651,7 @@ void AutofillAgent::ShowSuggestions(const WebFormControlElement& element,
     return;
   }
 
-  QueryAutofillSuggestions(element);
+  QueryAutofillSuggestions(element, options.autoselect_first_suggestion);
 }
 
 void AutofillAgent::SetQueryPasswordSuggestion(bool query) {
@@ -643,7 +667,8 @@ void AutofillAgent::SetFocusRequiresScroll(bool require) {
 }
 
 void AutofillAgent::QueryAutofillSuggestions(
-    const WebFormControlElement& element) {
+    const WebFormControlElement& element,
+    bool autoselect_first_suggestion) {
   if (!element.GetDocument().GetFrame())
     return;
 
@@ -686,7 +711,8 @@ void AutofillAgent::QueryAutofillSuggestions(
   GetAutofillDriver()->SetDataList(data_list_values, data_list_labels);
   GetAutofillDriver()->QueryFormFieldAutofill(
       autofill_query_id_, form, field,
-      render_frame()->GetRenderView()->ElementBoundsInWindow(element_));
+      render_frame()->GetRenderView()->ElementBoundsInWindow(element_),
+      autoselect_first_suggestion);
 }
 
 void AutofillAgent::DoFillFieldWithValue(const base::string16& value,
@@ -816,14 +842,9 @@ void AutofillAgent::FormControlElementClicked(
   last_clicked_form_control_element_was_focused_for_testing_ = was_focused;
   was_last_action_fill_ = false;
 
-  last_input_element_.Reset();
   const WebInputElement* input_element = ToWebInputElement(&element);
   if (!input_element && !form_util::IsTextAreaElement(element))
     return;
-
-  if (input_element) {
-    last_input_element_ = *input_element;
-  }
 
   ShowSuggestionsOptions options;
   options.autofill_on_empty_values = true;
@@ -994,7 +1015,6 @@ void AutofillAgent::ResetLastInteractedElements() {
   last_clicked_form_control_element_for_testing_.Reset();
   formless_elements_user_edited_.clear();
   provisionally_saved_form_.reset();
-  last_input_element_.Reset();
 }
 
 void AutofillAgent::UpdateLastInteractedForm(blink::WebFormElement form) {
@@ -1010,10 +1030,61 @@ void AutofillAgent::OnFormNoLongerSubmittable() {
   submitted_forms_.clear();
 }
 
+bool AutofillAgent::FindTheUniqueNewVersionOfOldElement(
+    WebVector<WebFormControlElement>& elements,
+    bool& element_found,
+    const WebString& original_element_section,
+    const WebFormControlElement& original_element) {
+  for (const WebFormControlElement& current_element : elements) {
+    if (current_element.IsFocusable() &&
+        original_element.NameForAutofill() ==
+            current_element.NameForAutofill()) {
+      if (!element_found) {
+        element_ = current_element;
+        element_found = true;
+      } else if (current_element.AutofillSection() ==
+                     element_.AutofillSection() ||
+                 (current_element.AutofillSection() !=
+                      original_element_section &&
+                  element_.AutofillSection() != original_element_section)) {
+        // If there are two elements that share the same name with the element_,
+        // and the section can't tell them apart, we can't decide between the
+        // two.
+        element_ = original_element;
+        return false;
+      } else if (current_element.AutofillSection() ==
+                 original_element_section) {
+        // If the current element has the right section, update the element_.
+        element_ = current_element;
+      }
+    }
+  }
+  return true;
+}
+
 void AutofillAgent::ReplaceElementIfNowInvalid(const FormData& original_form) {
   // If the document is invalid, bail out.
   if (element_.GetDocument().IsNull())
     return;
+
+  WebVector<WebFormElement> forms;
+  WebVector<WebFormControlElement> elements;
+
+  if (original_form.name.empty()) {
+    // If the form has no name, check all the forms.
+    bool element_found = false;
+    element_.GetDocument().Forms(forms);
+    for (const WebFormElement& form : forms) {
+      form.GetFormControlElements(elements);
+      // If finding a unique element is impossible, return.
+      if (!FindTheUniqueNewVersionOfOldElement(
+              elements, element_found, element_.AutofillSection(), element_))
+        return;
+    }
+    // If the element is not found, we should still check for unowned elements.
+    if (element_found)
+      return;
+  }
 
   if (!element_.Form().IsNull()) {
     // If |element_|'s parent form has no elements, |element_| is now invalid
@@ -1024,29 +1095,32 @@ void AutofillAgent::ReplaceElementIfNowInvalid(const FormData& original_form) {
       return;
   }
 
-  // Try to find the new version of the form.
   WebFormElement form_element;
-  WebVector<WebFormElement> forms;
-  element_.GetDocument().Forms(forms);
-  for (const WebFormElement& form : forms) {
-    if (original_form.name == form.GetName().Utf16() ||
-        original_form.name == form.GetAttribute("id").Utf16()) {
-      form_element = form;
-      break;
+  if (!original_form.name.empty()) {
+    // Try to find the new version of the form.
+    element_.GetDocument().Forms(forms);
+    for (const WebFormElement& form : forms) {
+      if (original_form.name == form.GetName().Utf16() ||
+          original_form.name == form.GetAttribute("id").Utf16()) {
+        form_element = form;
+        break;
+      }
     }
   }
 
-  WebVector<WebFormControlElement> elements;
   if (form_element.IsNull()) {
     // Could not find the new version of the form, get all the unowned elements.
     std::vector<WebElement> fieldsets;
     elements = form_util::GetUnownedAutofillableFormFieldElements(
         element_.GetDocument().All(), &fieldsets);
-  } else {
-    // Get all the elements of the new version of the form.
-    form_element.GetFormControlElements(elements);
+    bool element_found = false;
+    FindTheUniqueNewVersionOfOldElement(elements, element_found,
+                                        element_.AutofillSection(), element_);
+    return;
   }
-
+  // This is the case for owned fields that belong to the right named form.
+  // Get all the elements of the new version of the form.
+  form_element.GetFormControlElements(elements);
   // Try to find the new version of the last interacted element.
   for (const WebFormControlElement& element : elements) {
     if (element_.NameForAutofill() == element.NameForAutofill()) {
@@ -1065,7 +1139,7 @@ const mojom::AutofillDriverPtr& AutofillAgent::GetAutofillDriver() {
   return autofill_driver_;
 }
 
-const mojom::PasswordManagerDriverPtr&
+const mojom::PasswordManagerDriverAssociatedPtr&
 AutofillAgent::GetPasswordManagerDriver() {
   DCHECK(password_autofill_agent_);
   return password_autofill_agent_->GetPasswordManagerDriver();

@@ -68,12 +68,12 @@ GraphicsContext::GraphicsContext(PaintController& paint_controller,
 #if DCHECK_IS_ON()
       layer_count_(0),
       disable_destruction_checks_(false),
-      in_drawing_recorder_(false),
 #endif
       disabled_state_(disable_context_or_painting),
       device_scale_factor_(1.0f),
       printing_(false),
-      has_meta_data_(!!meta_data) {
+      has_meta_data_(!!meta_data),
+      in_drawing_recorder_(false) {
   if (meta_data)
     meta_data_ = *meta_data;
 
@@ -193,13 +193,11 @@ void GraphicsContext::RestoreLayer() {
   canvas_->restore();
 }
 
-#if DCHECK_IS_ON()
 void GraphicsContext::SetInDrawingRecorder(bool val) {
   // Nested drawing recorers are not allowed.
   DCHECK(!val || !in_drawing_recorder_);
   in_drawing_recorder_ = val;
 }
-#endif
 
 void GraphicsContext::SetShadow(
     const FloatSize& offset,
@@ -629,8 +627,8 @@ void GraphicsContext::DrawLine(const IntPoint& point1, const IntPoint& point2) {
   if (pen_style == kNoStroke)
     return;
 
-  FloatPoint p1 = point1;
-  FloatPoint p2 = point2;
+  FloatPoint p1 = FloatPoint(point1);
+  FloatPoint p2 = FloatPoint(point2);
   bool is_vertical_line = (p1.X() == p2.X());
   int width = roundf(StrokeThickness());
 
@@ -878,7 +876,7 @@ void GraphicsContext::DrawImage(
   if (ContextDisabled() || !image)
     return;
 
-  const FloatRect src = src_ptr ? *src_ptr : image->Rect();
+  const FloatRect src = src_ptr ? *src_ptr : FloatRect(image->Rect());
 
   PaintFlags image_flags = ImmutableState()->FillFlags();
   image_flags.setBlendMode(op);
@@ -910,7 +908,8 @@ void GraphicsContext::DrawImageRRect(
 
   DCHECK(dest.IsRenderable());
 
-  const FloatRect visible_src = Intersection(src_rect, image->Rect());
+  const FloatRect visible_src =
+      Intersection(src_rect, FloatRect(image->Rect()));
   if (dest.IsEmpty() || visible_src.IsEmpty())
     return;
 
@@ -1046,6 +1045,16 @@ void GraphicsContext::FillPath(const Path& path_to_fill) {
   DrawPath(path_to_fill.GetSkPath(), ImmutableState()->FillFlags());
 }
 
+void GraphicsContext::FillRect(const IntRect& rect) {
+  FillRect(FloatRect(rect));
+}
+
+void GraphicsContext::FillRect(const IntRect& rect,
+                               const Color& color,
+                               SkBlendMode xfer_mode) {
+  FillRect(FloatRect(rect), color, xfer_mode);
+}
+
 void GraphicsContext::FillRect(const FloatRect& rect) {
   if (ContextDisabled())
     return;
@@ -1105,14 +1114,9 @@ bool IsSimpleDRRect(const FloatRoundedRect& outer,
 
   const auto& is_simple_corner = [&stroke_size](const FloatSize& outer,
                                                 const FloatSize& inner) {
-    DCHECK(outer.Width() >= inner.Width());
-    DCHECK(outer.Height() >= inner.Height());
-
     // trivial/zero-radius corner
-    if (outer.IsZero()) {
-      DCHECK(inner.IsZero());
+    if (outer.IsZero() && inner.IsZero())
       return true;
-    }
 
     // and
     //   2) all corners are isotropic

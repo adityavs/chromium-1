@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "base/bind.h"
+#include "base/bind_helpers.h"
 #include "base/command_line.h"
 #include "base/files/scoped_temp_dir.h"
 #include "base/message_loop/message_loop.h"
@@ -52,8 +53,8 @@
 #include "ipc/ipc.mojom.h"
 #include "ipc/ipc_channel_mojo.h"
 #include "ipc/ipc_channel_proxy.h"
-#include "mojo/edk/embedder/embedder.h"
-#include "mojo/edk/embedder/scoped_ipc_support.h"
+#include "mojo/core/embedder/embedder.h"
+#include "mojo/core/embedder/scoped_ipc_support.h"
 #include "mojo/public/cpp/platform/named_platform_channel.h"
 #include "mojo/public/cpp/system/isolated_connection.h"
 #include "testing/gmock/include/gmock/gmock.h"
@@ -122,15 +123,15 @@ class TestServiceProcess : public ServiceProcess {
   TestServiceProcess() { }
   ~TestServiceProcess() override {}
 
-  bool Initialize(base::MessageLoopForUI* message_loop,
-                  ServiceProcessState* state);
+  bool Initialize(base::OnceClosure quit_closure,
+                  std::unique_ptr<ServiceProcessState> state);
 };
 
-bool TestServiceProcess::Initialize(base::MessageLoopForUI* message_loop,
-                                    ServiceProcessState* state) {
-  main_message_loop_ = message_loop;
-
-  service_process_state_.reset(state);
+bool TestServiceProcess::Initialize(
+    base::OnceClosure quit_closure,
+    std::unique_ptr<ServiceProcessState> state) {
+  quit_closure_ = std::move(quit_closure);
+  service_process_state_ = std::move(state);
 
   base::Thread::Options options(base::MessageLoop::TYPE_IO, 0);
   io_thread_.reset(new base::Thread("TestServiceProcess_IO"));
@@ -190,6 +191,7 @@ int CloudPrintMockService_Main(SetExpectationsCallback set_expectations) {
   CHECK(!user_data_dir.empty());
   CHECK(test_launcher_utils::OverrideUserDataDir(user_data_dir));
 
+  base::RunLoop run_loop;
 #if defined(OS_MACOSX)
   if (!command_line->HasSwitch(kTestExecutablePath))
     return kMissingSwitch;
@@ -197,10 +199,9 @@ int CloudPrintMockService_Main(SetExpectationsCallback set_expectations) {
       command_line->GetSwitchValuePath(kTestExecutablePath);
   EXPECT_FALSE(executable_path.empty());
   MockLaunchd mock_launchd(executable_path, main_message_loop.task_runner(),
-                           true, true);
+                           run_loop.QuitClosure(), true, true);
   Launchd::ScopedInstance use_mock(&mock_launchd);
 #endif
-
 
   ServiceProcessState* state(new ServiceProcessState);
   bool service_process_state_initialized = state->Initialize();
@@ -213,13 +214,14 @@ int CloudPrintMockService_Main(SetExpectationsCallback set_expectations) {
 
   // Takes ownership of the pointer, but we can use it since we have the same
   // lifetime.
-  EXPECT_TRUE(service_process.Initialize(&main_message_loop, state));
+  EXPECT_TRUE(service_process.Initialize(run_loop.QuitClosure(),
+                                         base::WrapUnique(state)));
 
   // Needed for IPC.
-  mojo::edk::Init();
-  mojo::edk::ScopedIPCSupport ipc_support(
+  mojo::core::Init();
+  mojo::core::ScopedIPCSupport ipc_support(
       service_process.io_task_runner(),
-      mojo::edk::ScopedIPCSupport::ShutdownPolicy::FAST);
+      mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
 
   MockServiceIPCServer server(&service_process,
                               service_process.io_task_runner(),
@@ -255,7 +257,7 @@ int CloudPrintMockService_Main(SetExpectationsCallback set_expectations) {
           service_process.io_task_runner(),
           base::ThreadTaskRunnerHandle::Get());
 
-  base::RunLoop().Run();
+  run_loop.Run();
   if (!Mock::VerifyAndClearExpectations(&server))
     return kExpectationsNotMet;
   if (!g_good_shutdown)
@@ -388,8 +390,9 @@ void CloudPrintProxyPolicyStartupTest::SetUp() {
   EXPECT_TRUE(MockLaunchd::MakeABundle(temp_dir_.GetPath(),
                                        "CloudPrintProxyTest", &bundle_path_,
                                        &executable_path_));
-  mock_launchd_.reset(new MockLaunchd(
-      executable_path_, base::ThreadTaskRunnerHandle::Get(), true, false));
+  mock_launchd_.reset(new MockLaunchd(executable_path_,
+                                      base::ThreadTaskRunnerHandle::Get(),
+                                      base::DoNothing(), true, false));
   scoped_launchd_instance_.reset(
       new Launchd::ScopedInstance(mock_launchd_.get()));
 #endif
@@ -469,10 +472,10 @@ base::CommandLine CloudPrintProxyPolicyStartupTest::MakeCmdLine(
 }
 
 TEST_F(CloudPrintProxyPolicyStartupTest, StartAndShutdown) {
-  mojo::edk::Init();
-  mojo::edk::ScopedIPCSupport ipc_support(
+  mojo::core::Init();
+  mojo::core::ScopedIPCSupport ipc_support(
       BrowserThread::GetTaskRunnerForThread(BrowserThread::IO),
-      mojo::edk::ScopedIPCSupport::ShutdownPolicy::FAST);
+      mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
 
   base::Process process =
       Launch("CloudPrintMockService_StartEnabledWaitForQuit");

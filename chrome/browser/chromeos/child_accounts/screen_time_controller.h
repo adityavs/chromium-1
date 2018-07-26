@@ -26,7 +26,8 @@ namespace chromeos {
 // usage) when necessary to determine the current lock screen state.
 // Schedule notifications and lock/unlock screen based on the processor output.
 class ScreenTimeController : public KeyedService,
-                             public session_manager::SessionManagerObserver {
+                             public session_manager::SessionManagerObserver,
+                             public system::TimezoneSettings::Observer {
  public:
   // Registers preferences.
   static void RegisterProfilePrefs(PrefRegistrySimple* registry);
@@ -47,11 +48,19 @@ class ScreenTimeController : public KeyedService,
   // the bed time is approaching.
   enum TimeLimitNotificationType { kScreenTime, kBedTime };
 
-  // Show and update the lock screen when necessary.
-  // |force_lock_by_policy|: If true, force to lock the screen based on the
-  //                         screen time policy.
-  // |next_unlock_time|:     When the screen is available again.
-  void LockScreen(bool force_lock_by_policy, base::Time next_unlock_time);
+  // Request to lock the screen and show the time limits message when the screen
+  // is locked.
+  void ForceScreenLockByPolicy(base::Time next_unlock_time);
+
+  // Update visibility and content of the time limits message in the lock
+  // screen.
+  // |visible|: If true, user authentication is disabled and a message is shown
+  //            to indicate when user will be able to unlock the screen.
+  //            If false, message is dismissed and user is able to unlock
+  //            immediately.
+  // |next_unlock_time|: When user will be able to unlock the screen, only valid
+  //                     when |visible| is true.
+  void UpdateTimeLimitsMessage(bool visible, base::Time next_unlock_time);
 
   // Show a notification indicating the remaining screen time.
   void ShowNotification(ScreenTimeController::TimeLimitNotificationType type,
@@ -84,6 +93,9 @@ class ScreenTimeController : public KeyedService,
   // session_manager::SessionManagerObserver:
   void OnSessionStateChanged() override;
 
+  // system::TimezoneSettings::Observer:
+  void TimezoneChanged(const icu::TimeZone& timezone) override;
+
   content::BrowserContext* context_;
   PrefService* pref_service_;
   base::OneShotTimer warning_notification_timer_;
@@ -105,6 +117,9 @@ class ScreenTimeController : public KeyedService,
   base::Time first_screen_start_time_;
 
   PrefChangeRegistrar pref_change_registrar_;
+
+  // Used to update the time limits message, if any, when screen is locked.
+  base::Optional<base::Time> next_unlock_time_;
 
   DISALLOW_COPY_AND_ASSIGN(ScreenTimeController);
 };

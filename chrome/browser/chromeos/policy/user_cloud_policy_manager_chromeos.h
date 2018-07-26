@@ -163,8 +163,10 @@ class UserCloudPolicyManagerChromeOS : public CloudPolicyManager,
   // Helper function to force a policy fetch timeout.
   void ForceTimeoutForTest();
 
-  // Sets a SharedURLLoaderFactory that should be used for tests instead of
+  // Sets the SharedURLLoaderFactory's that should be used for tests instead of
   // retrieving one from the BrowserProcess object in FetchPolicyOAuthToken().
+  void SetSignInURLLoaderFactoryForTests(
+      scoped_refptr<network::SharedURLLoaderFactory> signin_url_loader_factory);
   void SetSystemURLLoaderFactoryForTests(
       scoped_refptr<network::SharedURLLoaderFactory> system_url_loader_factory);
 
@@ -247,8 +249,7 @@ class UserCloudPolicyManagerChromeOS : public CloudPolicyManager,
 
   // A timer that puts a hard limit on the maximum time to wait for a policy
   // refresh.
-  base::Timer policy_refresh_timeout_{false /* retain_user_task */,
-                                      false /* is_repeating */};
+  base::OneShotTimer policy_refresh_timeout_;
 
   // The pref service to pass to the refresh scheduler on initialization.
   PrefService* local_state_;
@@ -295,6 +296,8 @@ class UserCloudPolicyManagerChromeOS : public CloudPolicyManager,
   // The SharedURLLoaderFactory used in some tests to simulate network requests.
   scoped_refptr<network::SharedURLLoaderFactory>
       system_url_loader_factory_for_tests_;
+  scoped_refptr<network::SharedURLLoaderFactory>
+      signin_url_loader_factory_for_tests_;
 
   DISALLOW_COPY_AND_ASSIGN(UserCloudPolicyManagerChromeOS);
 };

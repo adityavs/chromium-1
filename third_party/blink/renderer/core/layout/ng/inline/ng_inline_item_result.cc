@@ -15,8 +15,13 @@ NGInlineItemResult::NGInlineItemResult()
 NGInlineItemResult::NGInlineItemResult(const NGInlineItem* item,
                                        unsigned index,
                                        unsigned start,
-                                       unsigned end)
-    : item(item), item_index(index), start_offset(start), end_offset(end) {}
+                                       unsigned end,
+                                       bool should_create_line_box)
+    : item(item),
+      item_index(index),
+      start_offset(start),
+      end_offset(end),
+      should_create_line_box(should_create_line_box) {}
 
 void NGLineInfo::SetLineStyle(const NGInlineNode& node,
                               const NGInlineItemsData& items_data,
@@ -73,14 +78,6 @@ LayoutUnit NGLineInfo::ComputeWidth() const {
   }
 
   return inline_size;
-}
-
-void NGLineInfo::SetLineBfcOffset(NGBfcOffset line_bfc_offset,
-                                  LayoutUnit available_width,
-                                  LayoutUnit width) {
-  line_bfc_offset_ = line_bfc_offset;
-  available_width_ = available_width;
-  width_ = width;
 }
 
 void NGLineInfo::SetLineEndFragment(

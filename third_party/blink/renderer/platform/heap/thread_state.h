@@ -35,6 +35,7 @@
 
 #include "base/atomicops.h"
 #include "base/macros.h"
+#include "third_party/blink/public/platform/scheduler/web_rail_mode_observer.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/heap/blink_gc.h"
 #include "third_party/blink/renderer/platform/heap/threading_traits.h"
@@ -42,7 +43,6 @@
 #include "third_party/blink/renderer/platform/wtf/address_sanitizer.h"
 #include "third_party/blink/renderer/platform/wtf/allocator.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
-#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
 #include "third_party/blink/renderer/platform/wtf/linked_hash_set.h"
@@ -138,7 +138,8 @@ class PLATFORM_EXPORT BlinkGCObserver {
   ThreadState* thread_state_;
 };
 
-class PLATFORM_EXPORT ThreadState {
+class PLATFORM_EXPORT ThreadState final
+    : private scheduler::WebRAILModeObserver {
   USING_FAST_MALLOC(ThreadState);
 
  public:
@@ -568,6 +569,11 @@ class PLATFORM_EXPORT ThreadState {
 
   MarkingVisitor* CurrentVisitor() { return current_gc_data_.visitor.get(); }
 
+  // Implementation for WebRAILModeObserver
+  void OnRAILModeChanged(v8::RAILMode new_mode) override {
+    should_optimize_for_load_time_ = new_mode == v8::RAILMode::PERFORMANCE_LOAD;
+  }
+
  private:
   // Needs to set up visitor for testing purposes.
   friend class incremental_marking_test::IncrementalMarkingScope;
@@ -586,7 +592,7 @@ class PLATFORM_EXPORT ThreadState {
   static base::subtle::AtomicWord wrapper_tracing_counter_;
 
   ThreadState();
-  ~ThreadState();
+  ~ThreadState() override;
 
   // The version is needed to be able to start incremental marking.
   void MarkPhasePrologue(BlinkGC::StackState,
@@ -655,6 +661,8 @@ class PLATFORM_EXPORT ThreadState {
 
   void RunScheduledGC(BlinkGC::StackState);
 
+  void UpdateIncrementalMarkingStepDuration();
+
   void EagerSweep();
 
   void InvokePreFinalizers();
@@ -703,11 +711,16 @@ class PLATFORM_EXPORT ThreadState {
   bool object_resurrection_forbidden_;
   bool in_atomic_pause_;
 
+  TimeDelta next_incremental_marking_step_duration_;
+  TimeDelta previous_incremental_marking_time_left_;
+
   GarbageCollectedMixinConstructorMarkerBase* gc_mixin_marker_;
 
   GCState gc_state_;
   GCPhase gc_phase_;
   BlinkGC::GCReason reason_for_scheduled_gc_;
+
+  bool should_optimize_for_load_time_;
 
   using PreFinalizerCallback = bool (*)(void*);
   using PreFinalizer = std::pair<void*, PreFinalizerCallback>;

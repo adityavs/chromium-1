@@ -8,17 +8,24 @@
 #include <memory>
 #include <string>
 
+#include "chrome/browser/signin/account_fetcher_service_factory.h"
+#include "chrome/browser/signin/account_tracker_service_factory.h"
+#include "chrome/browser/signin/fake_account_fetcher_service_builder.h"
+#include "chrome/browser/signin/fake_signin_manager_builder.h"
+#include "chrome/browser/signin/signin_manager_factory.h"
 #include "chrome/browser/ui/autofill/chrome_autofill_client.h"
 #include "chrome/browser/ui/autofill/save_card_bubble_controller_impl.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/ui/views/autofill/dialog_event_waiter.h"
 #include "chrome/browser/ui/views/autofill/dialog_view_ids.h"
 #include "chrome/browser/ui/views/autofill/save_card_bubble_views.h"
 #include "chrome/test/base/ui_test_utils.h"
 #include "components/autofill/content/browser/content_autofill_driver.h"
 #include "components/autofill/core/browser/credit_card_save_manager.h"
+#include "components/keyed_service/content/browser_context_dependency_manager.h"
 #include "components/network_session_configurator/common/network_switches.h"
+#include "components/signin/core/browser/account_tracker_service.h"
+#include "components/signin/core/browser/fake_account_fetcher_service.h"
 #include "content/public/test/browser_test_utils.h"
 #include "content/public/test/test_navigation_observer.h"
 #include "net/url_request/test_url_fetcher_factory.h"
@@ -67,6 +74,17 @@ void SaveCardBubbleViewsBrowserTestBase::SetUpOnMainThread() {
   url_fetcher_factory_ = std::make_unique<net::FakeURLFetcherFactory>(
       new net::URLFetcherImplFactory());
 
+  // Set up the URL loader factory for the payments client so we can intercept
+  // those network requests too.
+  test_shared_loader_factory_ =
+      base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
+          &test_url_loader_factory_);
+  ContentAutofillDriver::GetForRenderFrameHost(
+      GetActiveWebContents()->GetMainFrame())
+      ->autofill_manager()
+      ->payments_client()
+      ->set_url_loader_factory_for_testing(test_shared_loader_factory_);
+
   // Set up this class as the ObserverForTest implementation.
   CreditCardSaveManager* credit_card_save_manager =
       ContentAutofillDriver::GetForRenderFrameHost(
@@ -111,6 +129,55 @@ void SaveCardBubbleViewsBrowserTestBase::OnReceivedGetUploadDetailsResponse() {
 void SaveCardBubbleViewsBrowserTestBase::OnSentUploadCardRequest() {
   if (event_waiter_)
     event_waiter_->OnEvent(DialogEvent::SENT_UPLOAD_CARD_REQUEST);
+}
+
+void SaveCardBubbleViewsBrowserTestBase::SetUpInProcessBrowserTestFixture() {
+  will_create_browser_context_services_subscription_ =
+      BrowserContextDependencyManager::GetInstance()
+          ->RegisterWillCreateBrowserContextServicesCallbackForTesting(
+              base::BindRepeating(&SaveCardBubbleViewsBrowserTestBase::
+                                      OnWillCreateBrowserContextServices,
+                                  base::Unretained(this)));
+}
+
+void SaveCardBubbleViewsBrowserTestBase::OnWillCreateBrowserContextServices(
+    content::BrowserContext* context) {
+  // Replace the signin manager and account fetcher service with fakes.
+  SigninManagerFactory::GetInstance()->SetTestingFactory(
+      context, &BuildFakeSigninManagerBase);
+  AccountFetcherServiceFactory::GetInstance()->SetTestingFactory(
+      context, &FakeAccountFetcherServiceBuilder::BuildForTests);
+}
+
+void SaveCardBubbleViewsBrowserTestBase::SignInWithFullName(
+    const std::string& full_name) {
+  // TODO(crbug.com/859761): Can this function be used to remove the
+  // observer_for_testing_ hack in
+  // CreditCardSaveManager::IsCreditCardUploadEnabled()?
+  FakeSigninManagerForTesting* signin_manager =
+      static_cast<FakeSigninManagerForTesting*>(
+          SigninManagerFactory::GetInstance()->GetForProfile(
+              browser()->profile()));
+
+  // Note: Chrome OS tests seem to rely on these specific login values, so
+  //       changing them is probably not recommended.
+  constexpr char kTestEmail[] = "stub-user@example.com";
+  constexpr char kTestGaiaId[] = "stub-user@example.com";
+#if !defined(OS_CHROMEOS)
+  signin_manager->SignIn(kTestGaiaId, kTestEmail, "password");
+#else
+  AccountTrackerService* account_tracker_service =
+      AccountTrackerServiceFactory::GetForProfile(browser()->profile());
+  signin_manager->SignIn(account_tracker_service->PickAccountIdForAccount(
+      kTestGaiaId, kTestEmail));
+#endif
+  FakeAccountFetcherService* account_fetcher_service =
+      static_cast<FakeAccountFetcherService*>(
+          AccountFetcherServiceFactory::GetForProfile(browser()->profile()));
+  account_fetcher_service->FakeUserInfoFetchSuccess(
+      signin_manager->GetAuthenticatedAccountId(), kTestEmail, kTestGaiaId,
+      AccountTrackerService::kNoHostedDomainFound, full_name,
+      /*given_name=*/std::string(), "locale", "avatar.jpg");
 }
 
 void SaveCardBubbleViewsBrowserTestBase::SubmitForm() {
@@ -251,21 +318,19 @@ void SaveCardBubbleViewsBrowserTestBase::
 }
 
 void SaveCardBubbleViewsBrowserTestBase::SetUploadDetailsRpcPaymentsAccepts() {
-  url_fetcher_factory_->SetFakeResponse(
-      GURL(kURLGetUploadDetailsRequest), kResponseGetUploadDetailsSuccess,
-      net::HTTP_OK, net::URLRequestStatus::SUCCESS);
+  test_url_loader_factory()->AddResponse(kURLGetUploadDetailsRequest,
+                                         kResponseGetUploadDetailsSuccess);
 }
 
 void SaveCardBubbleViewsBrowserTestBase::SetUploadDetailsRpcPaymentsDeclines() {
-  url_fetcher_factory_->SetFakeResponse(
-      GURL(kURLGetUploadDetailsRequest), kResponseGetUploadDetailsFailure,
-      net::HTTP_OK, net::URLRequestStatus::SUCCESS);
+  test_url_loader_factory()->AddResponse(kURLGetUploadDetailsRequest,
+                                         kResponseGetUploadDetailsFailure);
 }
 
 void SaveCardBubbleViewsBrowserTestBase::SetUploadDetailsRpcServerError() {
-  url_fetcher_factory_->SetFakeResponse(
-      GURL(kURLGetUploadDetailsRequest), kResponseGetUploadDetailsSuccess,
-      net::HTTP_INTERNAL_SERVER_ERROR, net::URLRequestStatus::FAILED);
+  test_url_loader_factory()->AddResponse(kURLGetUploadDetailsRequest,
+                                         kResponseGetUploadDetailsSuccess,
+                                         net::HTTP_INTERNAL_SERVER_ERROR);
 }
 
 void SaveCardBubbleViewsBrowserTestBase::ClickOnDialogView(views::View* view) {
@@ -347,12 +412,17 @@ SaveCardBubbleViewsBrowserTestBase::GetActiveWebContents() {
 
 void SaveCardBubbleViewsBrowserTestBase::ResetEventWaiterForSequence(
     std::list<DialogEvent> event_sequence) {
-  event_waiter_ = std::make_unique<DialogEventWaiter<DialogEvent>>(
-      std::move(event_sequence));
+  event_waiter_ =
+      std::make_unique<EventWaiter<DialogEvent>>(std::move(event_sequence));
 }
 
 void SaveCardBubbleViewsBrowserTestBase::WaitForObservedEvent() {
   event_waiter_->Wait();
+}
+
+network::TestURLLoaderFactory*
+SaveCardBubbleViewsBrowserTestBase::test_url_loader_factory() {
+  return &test_url_loader_factory_;
 }
 
 }  // namespace autofill

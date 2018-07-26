@@ -163,8 +163,13 @@ void WebContentsViewGuest::RenderViewCreated(RenderViewHost* host) {
   platform_view_->RenderViewCreated(host);
 }
 
-void WebContentsViewGuest::RenderViewSwappedIn(RenderViewHost* host) {
-  platform_view_->RenderViewSwappedIn(host);
+void WebContentsViewGuest::RenderViewReady() {
+  platform_view_->RenderViewReady();
+}
+
+void WebContentsViewGuest::RenderViewHostChanged(RenderViewHost* old_host,
+                                                 RenderViewHost* new_host) {
+  platform_view_->RenderViewHostChanged(old_host, new_host);
 }
 
 void WebContentsViewGuest::SetOverscrollControllerEnabled(bool enabled) {

@@ -189,6 +189,7 @@ ResourceRequestInfoImpl::ResourceRequestInfoImpl(
       previews_state_(previews_state),
       body_(body),
       initiated_in_secure_context_(initiated_in_secure_context),
+      blocked_response_from_reaching_renderer_(false),
       should_report_corb_blocking_(false),
       first_auth_attempt_(true) {}
 
@@ -311,6 +312,10 @@ bool ResourceRequestInfoImpl::IsDownload() const {
 
 PreviewsState ResourceRequestInfoImpl::GetPreviewsState() const {
   return previews_state_;
+}
+
+void ResourceRequestInfoImpl::SetPreviewsState(PreviewsState previews_state) {
+  previews_state_ = previews_state;
 }
 
 NavigationUIData* ResourceRequestInfoImpl::GetNavigationUIData() const {

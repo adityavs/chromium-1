@@ -207,7 +207,6 @@ std::string GetDisplayEmail(Profile* profile, const std::string& account_id) {
   return email;
 }
 
-// TODO(tangltom): Add a unit test for this function.
 std::vector<AccountInfo> GetAccountsForDicePromos(Profile* profile) {
   // Fetch account ids for accounts that have a token.
   ProfileOAuth2TokenService* token_service =
@@ -224,11 +223,11 @@ std::vector<AccountInfo> GetAccountsForDicePromos(Profile* profile) {
     GaiaCookieManagerService* cookie_manager_service =
         GaiaCookieManagerServiceFactory::GetForProfile(profile);
     std::vector<gaia::ListedAccount> cookie_accounts;
-    bool gaia_accounts_stale = !cookie_manager_service->ListAccounts(
+    bool cookie_accounts_valid = cookie_manager_service->ListAccounts(
         &cookie_accounts, nullptr, "ProfileChooserView");
     UMA_HISTOGRAM_BOOLEAN("Profile.DiceUI.GaiaAccountsStale",
-                          gaia_accounts_stale);
-    if (!cookie_accounts.empty())
+                          !cookie_accounts_valid);
+    if (cookie_accounts_valid && !cookie_accounts.empty())
       default_account_id = cookie_accounts[0].id;
   }
 

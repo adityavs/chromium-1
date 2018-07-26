@@ -157,7 +157,7 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   base::Optional<SkColor> GetBackgroundColor() const override;
 
   void SetParentUiLayer(ui::Layer* parent_ui_layer) override;
-  gfx::Vector2d GetOffsetFromRootSurface() override;
+  void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
   viz::ScopedSurfaceIdAllocator DidUpdateVisualProperties(
       const cc::RenderFrameMetadata& metadata) override;
@@ -179,8 +179,8 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   std::unique_ptr<SyntheticGestureTarget> CreateSyntheticGestureTarget()
       override;
 
-  viz::FrameSinkId GetFrameSinkId() override;
-  viz::LocalSurfaceId GetLocalSurfaceId() const override;
+  const viz::FrameSinkId& GetFrameSinkId() const override;
+  const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   // Returns true when we can do SurfaceHitTesting for the event type.
   bool ShouldRouteEvent(const blink::WebInputEvent& event) const;
   // This method checks |event| to see if a GesturePinch event can be routed
@@ -394,10 +394,11 @@ class CONTENT_EXPORT RenderWidgetHostViewMac
   void OnFrameTokenChanged(uint32_t frame_token) override;
   void DidReceiveFirstFrameAfterNavigation() override;
   void DestroyCompositorForShutdown() override;
-  bool SynchronizeVisualProperties() override;
+  bool SynchronizeVisualProperties(
+      const base::Optional<viz::LocalSurfaceId>&
+          child_allocated_local_surface_id) override;
 
   // AcceleratedWidgetMacNSView implementation.
-  NSView* AcceleratedWidgetGetNSView() const override;
   void AcceleratedWidgetCALayerParamsUpdated() override;
 
   void SetShowingContextMenu(bool showing) override;

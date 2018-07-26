@@ -51,6 +51,21 @@ class RecommendAppsScreen : public BaseScreen,
   // Callback function called when SimpleURLLoader completes.
   void OnDownloaded(std::unique_ptr<std::string> response_body);
 
+  // If the response is not a valid JSON, return false.
+  // If the response contains no app, return false;
+  // Value output, in true, is a list containing:
+  // 1. name: the title of the app.
+  // 2. package_name
+  // 3. Possibly an Icon URL.
+  // Parses an input string that looks somewhat like this:
+  // [{"title_" : "title of app",
+  //   "packageName_" : "com.package.name",
+  //  "icon_": {"url_": {"privateDoNotAccessOrElseSafeUrlWrappedValue_": "http://icon_url.com/url"}}},
+  //  {"title_" : "title of second app",
+  //   "packageName_": "second package name.",
+  //  }]
+  bool ParseResponse(const std::string& response, base::Value* output);
+
   RecommendAppsScreenView* view_;
 
   std::unique_ptr<network::SimpleURLLoader> app_list_loader_;

@@ -5,12 +5,14 @@
 #ifndef CONTENT_RENDERER_DOM_STORAGE_LOCAL_STORAGE_CACHED_AREAS_H_
 #define CONTENT_RENDERER_DOM_STORAGE_LOCAL_STORAGE_CACHED_AREAS_H_
 
+#include <array>
 #include <map>
 #include <string>
 
 #include "base/containers/flat_map.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "base/sequence_checker.h"
 #include "content/common/content_export.h"
 #include "third_party/blink/public/mojom/dom_storage/session_storage_namespace.mojom.h"
 #include "url/origin.h"
@@ -53,7 +55,10 @@ class CONTENT_EXPORT LocalStorageCachedAreas {
 
   size_t TotalCacheSize() const;
 
-  void set_cache_limit_for_testing(size_t limit) { total_cache_limit_ = limit; }
+  void set_cache_limit_for_testing(size_t limit) {
+    CHECK(sequence_checker_.CalledOnValidSequence());
+    total_cache_limit_ = limit;
+  }
 
  private:
   void ClearAreasIfNeeded();
@@ -62,6 +67,10 @@ class CONTENT_EXPORT LocalStorageCachedAreas {
       const std::string& namespace_id,
       const url::Origin& origin,
       blink::scheduler::WebThreadScheduler* scheduler);
+
+  // TODO(dmurph): Remove release check when crashing has stopped.
+  // http://crbug.com/857464
+  base::SequenceCheckerImpl sequence_checker_;
 
   blink::mojom::StoragePartitionService* const storage_partition_service_;
 
@@ -72,18 +81,24 @@ class CONTENT_EXPORT LocalStorageCachedAreas {
     DOMStorageNamespace(DOMStorageNamespace&& other);
     DOMStorageNamespace& operator=(DOMStorageNamespace&&) = default;
 
+    void CheckPrefixes() const;
+
     size_t TotalCacheSize() const;
     // Returns true if this namespace is totally unused and can be deleted.
     bool CleanUpUnusedAreas();
 
+    // TODO(dmurph): Remove the prefix & postfix after memory corruption is
+    // solved.
+    int64_t prefix;
     blink::mojom::SessionStorageNamespacePtr session_storage_namespace;
     base::flat_map<url::Origin, scoped_refptr<LocalStorageCachedArea>>
         cached_areas;
+    int64_t postfix;
 
     DISALLOW_COPY_AND_ASSIGN(DOMStorageNamespace);
   };
 
-  base::flat_map<std::string, DOMStorageNamespace> cached_namespaces_;
+  std::map<std::string, DOMStorageNamespace> cached_namespaces_;
   size_t total_cache_limit_;
 
   // Not owned.

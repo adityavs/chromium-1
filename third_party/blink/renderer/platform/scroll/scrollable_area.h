@@ -113,11 +113,11 @@ class PLATFORM_EXPORT ScrollableArea : public GarbageCollectedMixin {
   void MouseEnteredScrollbar(Scrollbar&);
   void MouseExitedScrollbar(Scrollbar&);
   void MouseCapturedScrollbar();
-  void MouseReleasedScrollbar(ScrollbarOrientation);
+  void MouseReleasedScrollbar();
   void ContentAreaDidShow() const;
   void ContentAreaDidHide() const;
 
-  virtual void SnapAfterScrollbarDragging(ScrollbarOrientation) {}
+  virtual void SnapAfterScrollbarScrolling(ScrollbarOrientation) {}
 
   void FinishCurrentScrollAnimations() const;
 
@@ -172,6 +172,10 @@ class PLATFORM_EXPORT ScrollableArea : public GarbageCollectedMixin {
   }
 
   virtual bool IsActive() const = 0;
+  // Returns true if the frame this ScrollableArea is attached to is being
+  // throttled for lifecycle updates. In this case it should also not be
+  // painted.
+  virtual bool IsThrottled() const = 0;
   virtual int ScrollSize(ScrollbarOrientation) const = 0;
   void SetScrollbarNeedsPaintInvalidation(ScrollbarOrientation);
   virtual bool IsScrollCornerVisible() const = 0;
@@ -267,6 +271,10 @@ class PLATFORM_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual IntRect ScrollableAreaBoundingBox() const = 0;
 
   virtual CompositorElementId GetCompositorElementId() const = 0;
+
+  virtual CompositorElementId GetScrollbarElementId(
+      ScrollbarOrientation orientation);
+
   virtual bool ScrollAnimatorEnabled() const { return false; }
 
   // NOTE: Only called from Internals for testing.
@@ -361,6 +369,8 @@ class PLATFORM_EXPORT ScrollableArea : public GarbageCollectedMixin {
   virtual bool IsLocalFrameView() const { return false; }
   virtual bool IsPaintLayerScrollableArea() const { return false; }
   virtual bool IsRootFrameViewport() const { return false; }
+
+  virtual bool VisualViewportSuppliesScrollbars() const { return false; }
 
   // Returns true if the scroller adjusts the scroll offset to compensate
   // for layout movements (bit.ly/scroll-anchoring).

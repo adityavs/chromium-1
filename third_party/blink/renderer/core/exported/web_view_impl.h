@@ -37,7 +37,6 @@
 #include "build/build_config.h"
 #include "third_party/blink/public/common/manifest/web_display_mode.h"
 #include "third_party/blink/public/platform/web_float_size.h"
-#include "third_party/blink/public/platform/web_gesture_curve_target.h"
 #include "third_party/blink/public/platform/web_gesture_event.h"
 #include "third_party/blink/public/platform/web_input_event.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
@@ -57,7 +56,6 @@
 #include "third_party/blink/renderer/core/page/event_with_hit_test_results.h"
 #include "third_party/blink/renderer/core/page/page_widget_delegate.h"
 #include "third_party/blink/renderer/core/page/scoped_page_pauser.h"
-#include "third_party/blink/renderer/platform/animation/compositor_animation_timeline.h"
 #include "third_party/blink/renderer/platform/geometry/int_point.h"
 #include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
@@ -79,7 +77,6 @@ class CompositorAnimationHost;
 class DevToolsEmulator;
 class Frame;
 class FullscreenController;
-class LinkHighlightImpl;
 class PageOverlay;
 class PageScaleConstraintsSet;
 class PaintLayerCompositor;
@@ -94,12 +91,15 @@ class WebLocalFrameImpl;
 class CompositorMutatorImpl;
 class WebRemoteFrame;
 class WebSettingsImpl;
+class WebViewClient;
+class WebWidgetClient;
 
 class CORE_EXPORT WebViewImpl final : public WebView,
                                       public RefCounted<WebViewImpl>,
                                       public PageWidgetEventHandler {
  public:
   static WebViewImpl* Create(WebViewClient*,
+                             WebWidgetClient*,
                              mojom::PageVisibilityState,
                              WebViewImpl* opener);
   static HashSet<WebViewImpl*>& AllInstances();
@@ -121,10 +121,9 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   void UpdateLifecycle(LifecycleUpdate requested_update) override;
   void UpdateAllLifecyclePhasesAndCompositeForTesting() override;
   void CompositeWithRasterForTesting() override;
-  void Paint(cc::PaintCanvas*, const WebRect&) override;
-#if defined(OS_ANDROID)
-  void PaintIgnoringCompositing(cc::PaintCanvas*, const WebRect&) override;
-#endif
+  void PaintContent(cc::PaintCanvas*, const WebRect&) override;
+  void PaintContentIgnoringCompositing(cc::PaintCanvas*,
+                                       const WebRect&) override;
   void LayoutAndPaintAsync(base::OnceClosure callback) override;
   void CompositeAndReadbackAsync(
       base::OnceCallback<void(const SkBitmap&)> callback) override;
@@ -270,6 +269,9 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   Element* FocusedElement() const;
 
   WebViewClient* Client() { return client_; }
+  // TODO(dcheng): This client should be acquirable from the MainFrameImpl
+  // in some cases? We need to know how to get it in all cases.
+  WebWidgetClient* WidgetClient() { return widget_client_; }
 
   // Returns the page object associated with this view. This may be null when
   // the page is shutting down, but will be valid at all other times.
@@ -341,9 +343,6 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   GraphicsLayer* RootGraphicsLayer();
   void RegisterViewportLayersWithCompositor();
   PaintLayerCompositor* Compositor() const;
-  CompositorAnimationTimeline* LinkHighlightsTimeline() const {
-    return link_highlights_timeline_.get();
-  }
 
   PageScheduler* Scheduler() const override;
   void SetVisibilityState(mojom::PageVisibilityState, bool) override;
@@ -398,12 +397,6 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   bool HasHorizontalScrollbar();
   bool HasVerticalScrollbar();
 
-  // Exposed for tests.
-  unsigned NumLinkHighlights() { return link_highlights_.size(); }
-  LinkHighlightImpl* GetLinkHighlight(int i) {
-    return link_highlights_[i].get();
-  }
-
   WebSettingsImpl* SettingsImpl();
 
   // Returns the bounding box of the block type node touched by the WebPoint.
@@ -418,8 +411,8 @@ class CORE_EXPORT WebViewImpl final : public WebView,
     return matches_heuristics_for_gpu_rasterization_;
   }
 
-  void UpdateBrowserControlsState(WebBrowserControlsState constraint,
-                                  WebBrowserControlsState current,
+  void UpdateBrowserControlsState(cc::BrowserControlsState constraint,
+                                  cc::BrowserControlsState current,
                                   bool animate) override;
 
   BrowserControls& GetBrowserControls();
@@ -497,7 +490,10 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   friend class WebViewFrameWidget;
   friend class WTF::RefCounted<WebViewImpl>;
 
-  WebViewImpl(WebViewClient*, mojom::PageVisibilityState, WebViewImpl* opener);
+  WebViewImpl(WebViewClient*,
+              WebWidgetClient*,
+              mojom::PageVisibilityState,
+              WebViewImpl* opener);
   ~WebViewImpl() override;
 
   void HideSelectPopup();
@@ -541,8 +537,6 @@ class CORE_EXPORT WebViewImpl final : public WebView,
 
   void SetRootGraphicsLayer(GraphicsLayer*);
   void SetRootLayer(scoped_refptr<cc::Layer>);
-  void AttachCompositorAnimationTimeline(CompositorAnimationTimeline*);
-  void DetachCompositorAnimationTimeline(CompositorAnimationTimeline*);
 
   LocalFrame* FocusedLocalFrameInWidget() const;
   LocalFrame* FocusedLocalFrameAvailableForIme() const;
@@ -568,7 +562,8 @@ class CORE_EXPORT WebViewImpl final : public WebView,
       IntPoint& scroll,
       bool& need_animation);
 
-  WebViewClient* client_;  // Can be 0 (e.g. unittests, shared workers, etc.)
+  WebViewClient* client_;  // Can be null (e.g. unittests, shared workers, etc.)
+  WebWidgetClient* widget_client_;  // Can also be null.
 
   Persistent<ChromeClient> chrome_client_;
 
@@ -653,8 +648,6 @@ class CORE_EXPORT WebViewImpl final : public WebView,
   GraphicsLayer* visual_viewport_container_layer_;
   bool matches_heuristics_for_gpu_rasterization_;
 
-  Vector<std::unique_ptr<LinkHighlightImpl>> link_highlights_;
-  std::unique_ptr<CompositorAnimationTimeline> link_highlights_timeline_;
   std::unique_ptr<FullscreenController> fullscreen_controller_;
 
   WebPoint last_tap_disambiguation_best_candidate_position_;

@@ -28,9 +28,9 @@ class FakeDeviceSyncClient : public DeviceSyncClient {
   ~FakeDeviceSyncClient() override;
 
   void InvokePendingSetSoftwareFeatureStateCallback(
-      const base::Optional<std::string>& error_code);
+      mojom::NetworkRequestResult result_code);
   void InvokePendingFindEligibleDevicesCallback(
-      const base::Optional<std::string>& error_code,
+      mojom::NetworkRequestResult result_code,
       cryptauth::RemoteDeviceRefList eligible_devices,
       cryptauth::RemoteDeviceRefList ineligible_devices);
   void InvokePendingGetDebugInfoCallback(mojom::DebugInfoPtr debug_info_ptr);
@@ -52,6 +52,7 @@ class FakeDeviceSyncClient : public DeviceSyncClient {
     local_device_metadata_ = local_device_metadata;
   }
 
+  using DeviceSyncClient::NotifyReady;
   using DeviceSyncClient::NotifyEnrollmentFinished;
   using DeviceSyncClient::NotifyNewDevicesSynced;
 

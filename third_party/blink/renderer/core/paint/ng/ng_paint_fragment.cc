@@ -26,6 +26,7 @@
 #include "third_party/blink/renderer/core/layout/ng/ng_physical_container_fragment.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_physical_fragment.h"
 #include "third_party/blink/renderer/core/paint/ng/ng_box_fragment_painter.h"
+#include "third_party/blink/renderer/core/paint/ng/ng_inline_box_fragment_painter.h"
 
 namespace blink {
 
@@ -66,7 +67,7 @@ NGLogicalRect ExpandedSelectionRectForSoftLineBreakIfNeeded(
     const LayoutSelectionStatus& selection_status) {
   // Expand paint rect if selection covers multiple lines and
   // this fragment is at the end of line.
-  if (selection_status.line_break == SelectLineBreak::kNotSelected)
+  if (selection_status.line_break == SelectSoftLineBreak::kNotSelected)
     return rect;
   if (paint_fragment.GetLayoutObject()
           ->EnclosingNGBlockFlow()
@@ -163,6 +164,8 @@ NGPaintFragment::~NGPaintFragment() {
 
 std::unique_ptr<NGPaintFragment> NGPaintFragment::Create(
     scoped_refptr<const NGPhysicalFragment> fragment) {
+  DCHECK(fragment);
+
   std::unique_ptr<NGPaintFragment> paint_fragment =
       std::make_unique<NGPaintFragment>(std::move(fragment), nullptr);
 
@@ -172,6 +175,25 @@ std::unique_ptr<NGPaintFragment> NGPaintFragment::Create(
                                       &last_fragment_map);
 
   return paint_fragment;
+}
+
+void NGPaintFragment::UpdatePhysicalFragmentFromCachedLayoutResult(
+    scoped_refptr<const NGPhysicalFragment> fragment) {
+  DCHECK(fragment);
+
+#if DCHECK_IS_ON()
+  // When updating to a cached layout result, only offset can change. Check
+  // children do not change.
+  const NGPhysicalContainerFragment& container_fragment =
+      ToNGPhysicalContainerFragment(*fragment);
+  DCHECK_EQ(Children().size(), container_fragment.Children().size());
+  for (unsigned i = 0; i < container_fragment.Children().size(); i++) {
+    DCHECK_EQ(Children()[i]->physical_fragment_.get(),
+              container_fragment.Children()[i].get());
+  }
+#endif
+
+  physical_fragment_ = fragment;
 }
 
 bool NGPaintFragment::IsDescendantOfNotSelf(
@@ -345,7 +367,7 @@ void NGPaintFragment::PaintInlineBoxForDescendants(
   DCHECK(layout_object);
   for (const auto& child : Children()) {
     if (child->GetLayoutObject() == layout_object) {
-      NGBoxFragmentPainter(*child).PaintInlineBox(
+      NGInlineBoxFragmentPainter(*child).Paint(
           paint_info, paint_offset + offset.ToLayoutPoint() /*, paint_offset*/);
       continue;
     }
@@ -456,7 +478,9 @@ PositionWithAffinity NGPaintFragment::PositionForPointInInlineLevelBox(
   DCHECK(!PhysicalFragment().IsBlockFlow());
 
   const NGLogicalOffset logical_point = point.ConvertToLogical(
-      Style().GetWritingMode(), Style().Direction(), Size(), NGPhysicalSize());
+      Style().GetWritingMode(), Style().Direction(), Size(),
+      // |point| is actually a pixel with size 1x1.
+      NGPhysicalSize(LayoutUnit(1), LayoutUnit(1)));
   const LayoutUnit inline_point = logical_point.inline_offset;
 
   // Stores the closest child before |point| in the inline direction. Used if we
@@ -519,7 +543,9 @@ PositionWithAffinity NGPaintFragment::PositionForPointInInlineFormattingContext(
   DCHECK(ToNGPhysicalBoxFragment(PhysicalFragment()).ChildrenInline());
 
   const NGLogicalOffset logical_point = point.ConvertToLogical(
-      Style().GetWritingMode(), Style().Direction(), Size(), NGPhysicalSize());
+      Style().GetWritingMode(), Style().Direction(), Size(),
+      // |point| is actually a pixel with size 1x1.
+      NGPhysicalSize(LayoutUnit(1), LayoutUnit(1)));
   const LayoutUnit block_point = logical_point.block_offset;
 
   // Stores the closest line box child above |point| in the block direction.
@@ -657,6 +683,31 @@ NGPaintFragment& NGPaintFragment::FragmentRange::back() const {
   for (NGPaintFragment* fragment : *this)
     last = fragment;
   return *last;
+}
+
+String NGPaintFragment::DebugName() const {
+  StringBuilder name;
+
+  DCHECK(physical_fragment_);
+  const NGPhysicalFragment& physical_fragment = *physical_fragment_;
+  if (physical_fragment.IsBox()) {
+    name.Append("NGPhysicalBoxFragment");
+    if (LayoutObject* layout_object = physical_fragment.GetLayoutObject()) {
+      DCHECK(physical_fragment.IsBox());
+      name.Append(' ');
+      name.Append(layout_object->DebugName());
+    }
+  } else if (physical_fragment.IsText()) {
+    name.Append("NGPhysicalTextFragment '");
+    name.Append(ToNGPhysicalTextFragment(physical_fragment).Text());
+    name.Append('\'');
+  } else if (physical_fragment.IsLineBox()) {
+    name.Append("NGPhysicalLineBoxFragment");
+  } else {
+    NOTREACHED();
+  }
+
+  return name.ToString();
 }
 
 }  // namespace blink

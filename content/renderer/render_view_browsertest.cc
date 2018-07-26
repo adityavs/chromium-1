@@ -46,7 +46,7 @@
 #include "content/public/test/render_view_test.h"
 #include "content/public/test/test_utils.h"
 #include "content/renderer/accessibility/render_accessibility_impl.h"
-#include "content/renderer/gpu/render_widget_compositor.h"
+#include "content/renderer/gpu/layer_tree_view.h"
 #include "content/renderer/history_entry.h"
 #include "content/renderer/history_serialization.h"
 #include "content/renderer/loader/request_extra_data.h"
@@ -57,6 +57,7 @@
 #include "content/renderer/service_worker/service_worker_network_provider.h"
 #include "content/shell/browser/shell.h"
 #include "content/shell/browser/shell_browser_context.h"
+#include "content/test/fake_compositor_dependencies.h"
 #include "content/test/mock_keyboard.h"
 #include "content/test/test_render_frame.h"
 #include "net/base/net_errors.h"
@@ -66,7 +67,7 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/origin_trials/origin_trial_policy.h"
 #include "third_party/blink/public/common/origin_trials/trial_token_validator.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_network_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/platform/web_http_body.h"
@@ -248,6 +249,24 @@ class RenderViewImplTest : public RenderViewTest {
     return static_cast<TestRenderFrame*>(view()->GetMainRenderFrame());
   }
 
+  void ReceiveDisableDeviceEmulation(RenderViewImpl* view) {
+    // Emulates receiving an IPC message.
+    view->GetWidget()->OnDisableDeviceEmulation();
+  }
+
+  void ReceiveEnableDeviceEmulation(
+      RenderViewImpl* view,
+      const blink::WebDeviceEmulationParams& params) {
+    // Emulates receiving an IPC message.
+    view->GetWidget()->OnEnableDeviceEmulation(params);
+  }
+
+  void ReceiveSetTextDirection(RenderViewImpl* view,
+                               blink::WebTextDirection direction) {
+    // Emulates receiving an IPC message.
+    view->OnSetTextDirection(direction);
+  }
+
   void GoToOffsetWithParams(int offset,
                             const PageState& state,
                             const CommonNavigationParams common_params,
@@ -399,9 +418,9 @@ class RenderViewImplTest : public RenderViewTest {
     return view()->preferred_size_;
   }
 
-  void SetZoomLevel(double level) {
-    view()->UpdateZoomLevel(view()->uses_temporary_zoom_level(), level);
-  }
+  void SetZoomLevel(double level) { view()->UpdateZoomLevel(level); }
+
+  double GetZoomLevel() { return view()->page_zoom_level(); }
 
   int GetScrollbarWidth() {
     blink::WebView* webview = view()->webview();
@@ -441,8 +460,16 @@ class RenderViewImplBlinkSettingsTest : public RenderViewImplTest {
   void SetUp() override {}
 };
 
-class RenderViewImplScaleFactorTest : public RenderViewImplBlinkSettingsTest {
+// This test class enables UseZoomForDSF based on the platform default value.
+class RenderViewImplScaleFactorTest : public RenderViewImplTest {
  protected:
+  std::unique_ptr<CompositorDependencies> CreateCompositorDependencies()
+      override {
+    auto deps = std::make_unique<FakeCompositorDependencies>();
+    deps->set_use_zoom_for_dsf_enabled(content::IsUseZoomForDSFEnabled());
+    return deps;
+  }
+
   void SetDeviceScaleFactor(float dsf) {
     VisualProperties visual_properties;
     visual_properties.screen_info.device_scale_factor = dsf;
@@ -478,7 +505,7 @@ class RenderViewImplScaleFactorTest : public RenderViewImplBlinkSettingsTest {
     params.view_size.width = width;
     params.view_size.height = height;
     params.device_scale_factor = dpr;
-    view()->OnEnableDeviceEmulation(params);
+    ReceiveEnableDeviceEmulation(view(), params);
     EXPECT_TRUE(ExecuteJavaScriptAndReturnIntValue(get_width, &emulated_width));
     EXPECT_EQ(width, emulated_width);
     EXPECT_TRUE(ExecuteJavaScriptAndReturnIntValue(get_height,
@@ -486,22 +513,33 @@ class RenderViewImplScaleFactorTest : public RenderViewImplBlinkSettingsTest {
     EXPECT_EQ(height, emulated_height);
     EXPECT_TRUE(ExecuteJavaScriptAndReturnIntValue(get_dpr, &emulated_dpr));
     EXPECT_EQ(static_cast<int>(dpr * 10), emulated_dpr);
-    EXPECT_EQ(compositor_dsf, view()
-                                  ->compositor()
-                                  ->layer_tree_host()
-                                  ->device_scale_factor());
+    cc::LayerTreeHost* host = view()->layer_tree_view()->layer_tree_host();
+    EXPECT_EQ(compositor_dsf, host->device_scale_factor());
   }
 };
 
-class RenderViewImplZoomTest : public RenderViewImplTest {
+// This test class forces UseZoomForDSF to be on for all platforms.
+class RenderViewImplEnableZoomForDSFTest
+    : public RenderViewImplScaleFactorTest {
  protected:
-  void SetZoomLevel(bool uses_temporary_zoom, double zoom_level) {
-    view()->SetZoomLevelForTesting(uses_temporary_zoom, zoom_level);
+  std::unique_ptr<CompositorDependencies> CreateCompositorDependencies()
+      override {
+    auto deps = std::make_unique<FakeCompositorDependencies>();
+    deps->set_use_zoom_for_dsf_enabled(true);
+    return deps;
   }
+};
 
-  bool UsesTemporaryZoom() { return view()->uses_temporary_zoom_level(); }
-
-  double GetZoomLevel() { return view()->GetZoomLevel(); }
+// This test class forces UseZoomForDSF to be off for all platforms.
+class RenderViewImplDisableZoomForDSFTest
+    : public RenderViewImplScaleFactorTest {
+ protected:
+  std::unique_ptr<CompositorDependencies> CreateCompositorDependencies()
+      override {
+    auto deps = std::make_unique<FakeCompositorDependencies>();
+    deps->set_use_zoom_for_dsf_enabled(false);
+    return deps;
+  }
 };
 
 #if defined(OS_ANDROID)
@@ -547,9 +585,8 @@ static blink::WebCoalescedInputEvent FatTap(int x,
 }
 
 TEST_F(RenderViewImplScaleFactorTest, TapDisambiguatorSize) {
-  DoSetUp();
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
+  // TODO(oshima): This test tried in the past to enable UseZoomForDSF but
+  // didn't actually do so for the compositor, and fails with it enabled.
   const float device_scale = 2.625f;
   SetDeviceScaleFactor(device_scale);
   EXPECT_EQ(device_scale, view()->GetDeviceScaleFactor());
@@ -831,14 +868,13 @@ TEST_F(RenderViewImplTest, DecideNavigationPolicyForWebUI) {
 // continues to receive the original ScreenInfo and not the emualted
 // ScreenInfo.
 TEST_F(RenderViewImplScaleFactorTest, DeviceEmulationWithOOPIF) {
-  DoSetUp();
-
   // This test should only run with --site-per-process.
   if (!AreAllSitesIsolatedForTesting())
     return;
 
   const float device_scale = 2.0f;
-  float compositor_dsf = IsUseZoomForDSFEnabled() ? 1.f : device_scale;
+  float compositor_dsf =
+      compositor_deps_->IsUseZoomForDSFEnabled() ? 1.f : device_scale;
   SetDeviceScaleFactor(device_scale);
 
   LoadHTML(
@@ -875,10 +911,10 @@ TEST_F(RenderViewImplScaleFactorTest, DeviceEmulationWithOOPIF) {
             view()->GetWidget()->GetOriginalScreenInfo().device_scale_factor);
   EXPECT_EQ(device_scale, child_proxy->screen_info().device_scale_factor);
 
-  view()->OnDisableDeviceEmulation();
+  ReceiveDisableDeviceEmulation(view());
 
   blink::WebDeviceEmulationParams params;
-  view()->OnEnableDeviceEmulation(params);
+  ReceiveEnableDeviceEmulation(view(), params);
   // Don't disable here to test that emulation is being shutdown properly.
 }
 
@@ -929,11 +965,7 @@ TEST_F(RenderViewImplTest, OriginReplicationForSwapOut) {
 // a new tab looks fine, but visiting the second web page renders smaller DOM
 // elements. We can solve this by updating DSF after swapping in the main frame.
 // See crbug.com/737777#c37.
-TEST_F(RenderViewImplScaleFactorTest, UpdateDSFAfterSwapIn) {
-  DoSetUp();
-  // The bug reproduces if zoom is used for devices scale factor.
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
+TEST_F(RenderViewImplEnableZoomForDSFTest, UpdateDSFAfterSwapIn) {
   const float device_scale = 3.0f;
   SetDeviceScaleFactor(device_scale);
   EXPECT_EQ(device_scale, view()->GetDeviceScaleFactor());
@@ -1050,11 +1082,8 @@ TEST_F(RenderViewImplTest, DetachingProxyAlsoDestroysProvisionalFrame) {
 // Verify that the renderer process doesn't crash when device scale factor
 // changes after a cross-process navigation has commited.
 // See https://crbug.com/571603.
-TEST_F(RenderViewImplTest, SetZoomLevelAfterCrossProcessNavigation) {
-  // The bug reproduces if zoom is used for devices scale factor.
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
-
+TEST_F(RenderViewImplEnableZoomForDSFTest,
+       SetZoomLevelAfterCrossProcessNavigation) {
   LoadHTML("Hello world!");
 
   // Swap the main frame out after which it should become a WebRemoteFrame.
@@ -1447,7 +1476,7 @@ TEST_F(RenderViewImplTest, OnSetTextDirection) {
   for (size_t i = 0; i < arraysize(kTextDirection); ++i) {
     // Set the text direction of the <textarea> element.
     ExecuteJavaScriptForTests("document.getElementById('test').focus();");
-    view()->OnSetTextDirection(kTextDirection[i].direction);
+    ReceiveSetTextDirection(view(), kTextDirection[i].direction);
 
     // Write the values of its DOM 'dir' attribute and its CSS 'direction'
     // property to the <div> element.
@@ -1900,7 +1929,7 @@ TEST_F(RenderViewImplTest, BasicRenderFrame) {
 TEST_F(RenderViewImplTest, MessageOrderInDidChangeSelection) {
   LoadHTML("<textarea id=\"test\"></textarea>");
 
-  view()->SetHandlingInputEventForTesting(true);
+  view()->GetWidget()->SetHandlingInputEvent(true);
   ExecuteJavaScriptForTests("document.getElementById('test').focus();");
 
   bool is_input_type_called = false;
@@ -2346,7 +2375,6 @@ TEST_F(RenderViewImplTest, PreferredSizeZoomed) {
 }
 
 TEST_F(RenderViewImplScaleFactorTest, PreferredSizeWithScaleFactor) {
-  DoSetUp();
   LoadHTML(
       "<body style='margin:0;'><div style='display:inline-block; "
       "width:400px; height:400px;'/></body>");
@@ -2557,13 +2585,11 @@ TEST_F(RenderViewImplBlinkSettingsTest, Negative) {
   EXPECT_TRUE(settings()->ViewportEnabled());
 }
 
-TEST_F(RenderViewImplScaleFactorTest, ConverViewportToWindowWithoutZoomForDSF) {
-  DoSetUp();
-  if (IsUseZoomForDSFEnabled())
-    return;
+TEST_F(RenderViewImplDisableZoomForDSFTest,
+       ConverViewportToWindowWithoutZoomForDSF) {
   SetDeviceScaleFactor(2.f);
   blink::WebRect rect(20, 10, 200, 100);
-  view()->ConvertViewportToWindow(&rect);
+  view()->WidgetClient()->ConvertViewportToWindow(&rect);
   EXPECT_EQ(20, rect.x);
   EXPECT_EQ(10, rect.y);
   EXPECT_EQ(200, rect.width);
@@ -2571,7 +2597,6 @@ TEST_F(RenderViewImplScaleFactorTest, ConverViewportToWindowWithoutZoomForDSF) {
 }
 
 TEST_F(RenderViewImplScaleFactorTest, ScreenMetricsEmulationWithOriginalDSF1) {
-  DoSetUp();
   SetDeviceScaleFactor(1.f);
 
   LoadHTML("<body style='min-height:1000px;'></body>");
@@ -2592,18 +2617,16 @@ TEST_F(RenderViewImplScaleFactorTest, ScreenMetricsEmulationWithOriginalDSF1) {
     TestEmulatedSizeDprDsf(1005, 1102, 3.f, 1.f);
   }
 
-  view()->OnDisableDeviceEmulation();
+  ReceiveDisableDeviceEmulation(view());
 
   blink::WebDeviceEmulationParams params;
-  view()->OnEnableDeviceEmulation(params);
+  ReceiveEnableDeviceEmulation(view(), params);
   // Don't disable here to test that emulation is being shutdown properly.
 }
 
 TEST_F(RenderViewImplScaleFactorTest, ScreenMetricsEmulationWithOriginalDSF2) {
-  DoSetUp();
   SetDeviceScaleFactor(2.f);
-  float compositor_dsf =
-      IsUseZoomForDSFEnabled() ? 1.f : 2.f;
+  float compositor_dsf = compositor_deps_->IsUseZoomForDSFEnabled() ? 1.f : 2.f;
 
   LoadHTML("<body style='min-height:1000px;'></body>");
   {
@@ -2623,21 +2646,19 @@ TEST_F(RenderViewImplScaleFactorTest, ScreenMetricsEmulationWithOriginalDSF2) {
     TestEmulatedSizeDprDsf(1005, 1102, 3.f, compositor_dsf);
   }
 
-  view()->OnDisableDeviceEmulation();
+  ReceiveDisableDeviceEmulation(view());
 
   blink::WebDeviceEmulationParams params;
-  view()->OnEnableDeviceEmulation(params);
+  ReceiveEnableDeviceEmulation(view(), params);
   // Don't disable here to test that emulation is being shutdown properly.
 }
 
-TEST_F(RenderViewImplScaleFactorTest, ConverViewportToWindowWithZoomForDSF) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
-  DoSetUp();
+TEST_F(RenderViewImplEnableZoomForDSFTest,
+       ConverViewportToWindowWithZoomForDSF) {
   SetDeviceScaleFactor(1.f);
   {
     blink::WebRect rect(20, 10, 200, 100);
-    view()->ConvertViewportToWindow(&rect);
+    view()->WidgetClient()->ConvertViewportToWindow(&rect);
     EXPECT_EQ(20, rect.x);
     EXPECT_EQ(10, rect.y);
     EXPECT_EQ(200, rect.width);
@@ -2647,7 +2668,7 @@ TEST_F(RenderViewImplScaleFactorTest, ConverViewportToWindowWithZoomForDSF) {
   SetDeviceScaleFactor(2.f);
   {
     blink::WebRect rect(20, 10, 200, 100);
-    view()->ConvertViewportToWindow(&rect);
+    view()->WidgetClient()->ConvertViewportToWindow(&rect);
     EXPECT_EQ(10, rect.x);
     EXPECT_EQ(5, rect.y);
     EXPECT_EQ(100, rect.width);
@@ -2656,11 +2677,8 @@ TEST_F(RenderViewImplScaleFactorTest, ConverViewportToWindowWithZoomForDSF) {
 }
 
 #if defined(OS_MACOSX) || defined(USE_AURA)
-TEST_F(RenderViewImplScaleFactorTest,
+TEST_F(RenderViewImplEnableZoomForDSFTest,
        DISABLED_GetCompositionCharacterBoundsTest) {  // http://crbug.com/582016
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
-  DoSetUp();
   SetDeviceScaleFactor(1.f);
 #if defined(OS_WIN)
   // http://crbug.com/508747
@@ -2713,11 +2731,9 @@ const char kAutoResizeTestPage[] =
 
 }  // namespace
 
-TEST_F(RenderViewImplScaleFactorTest, AutoResizeWithZoomForDSF) {
-  base::CommandLine::ForCurrentProcess()->AppendSwitch(
-      switches::kEnableUseZoomForDSF);
-  DoSetUp();
-  view()->EnableAutoResizeForTesting(gfx::Size(5, 5), gfx::Size(1000, 1000));
+TEST_F(RenderViewImplEnableZoomForDSFTest, AutoResizeWithZoomForDSF) {
+  view()->GetWidget()->EnableAutoResizeForTesting(gfx::Size(5, 5),
+                                                  gfx::Size(1000, 1000));
   LoadHTML(kAutoResizeTestPage);
   gfx::Size size_at_1x = view()->GetWidget()->size();
   ASSERT_FALSE(size_at_1x.IsEmpty());
@@ -2729,8 +2745,8 @@ TEST_F(RenderViewImplScaleFactorTest, AutoResizeWithZoomForDSF) {
 }
 
 TEST_F(RenderViewImplScaleFactorTest, AutoResizeWithoutZoomForDSF) {
-  DoSetUp();
-  view()->EnableAutoResizeForTesting(gfx::Size(5, 5), gfx::Size(1000, 1000));
+  view()->GetWidget()->EnableAutoResizeForTesting(gfx::Size(5, 5),
+                                                  gfx::Size(1000, 1000));
   LoadHTML(kAutoResizeTestPage);
   gfx::Size size_at_1x = view()->GetWidget()->size();
   ASSERT_FALSE(size_at_1x.IsEmpty());
@@ -2741,40 +2757,16 @@ TEST_F(RenderViewImplScaleFactorTest, AutoResizeWithoutZoomForDSF) {
   EXPECT_EQ(size_at_1x, size_at_2x);
 }
 
-TEST_F(RenderViewImplZoomTest, ZoomLevelChangeWithTemporaryZoomDisabled) {
-  // 0 is the default zoom level and false is the default value
-  // for temporary zoom, so nothing will change.
-  SetZoomLevel(false, 0);
+TEST_F(RenderViewImplScaleFactorTest, ZoomLevelUpdate) {
+  // 0 is the default zoom level, nothing will change.
+  SetZoomLevel(0);
   EXPECT_NEAR(0.0, GetZoomLevel(), 0.01);
-  EXPECT_EQ(false, UsesTemporaryZoom());
 
   // Change the zoom level to 25% and check if the view gets the change.
-  SetZoomLevel(false, content::ZoomFactorToZoomLevel(0.25));
+  SetZoomLevel(content::ZoomFactorToZoomLevel(0.25));
   EXPECT_NEAR(content::ZoomFactorToZoomLevel(0.25), GetZoomLevel(), 0.01);
-  EXPECT_EQ(false, UsesTemporaryZoom());
 }
 
-TEST_F(RenderViewImplZoomTest, ZoomLevelChangeWithTemporaryZoomEnabled) {
-  double new_level = content::ZoomFactorToZoomLevel(0.25);
-
-  // 0 is the default zoom level and false is the default value
-  // for temporary zoom, so nothing will change.
-  SetZoomLevel(true, 0);
-  EXPECT_NEAR(0.0, GetZoomLevel(), 0.01);
-  EXPECT_EQ(true, UsesTemporaryZoom());
-
-  // Try to change the zoom level to 25%; should remain 100% since temporary
-  // zoom is enabled.
-  SetZoomLevel(true, new_level);
-  EXPECT_NEAR(0.0, GetZoomLevel(), 0.01);
-  EXPECT_EQ(true, UsesTemporaryZoom());
-
-  // Try to change the zoom level to 25% with temporary zoom disabled; zoom
-  // level should indeed change to 25%.
-  SetZoomLevel(false, new_level);
-  EXPECT_NEAR(new_level, GetZoomLevel(), 0.01);
-  EXPECT_EQ(false, UsesTemporaryZoom());
-}
 #endif
 
 // Origin Trial Policy which vends the test public key so that the token

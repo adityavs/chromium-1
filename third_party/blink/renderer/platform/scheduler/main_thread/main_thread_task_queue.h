@@ -5,9 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_MAIN_THREAD_TASK_QUEUE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_MAIN_THREAD_TASK_QUEUE_H_
 
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_impl_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
+#include "base/task/sequence_manager/task_queue.h"
+#include "base/task/sequence_manager/task_queue_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 
 namespace base {
@@ -19,6 +18,7 @@ class SequenceManager;
 namespace blink {
 namespace scheduler {
 
+class FrameSchedulerImpl;
 class MainThreadSchedulerImpl;
 
 class PLATFORM_EXPORT MainThreadTaskQueue
@@ -79,15 +79,71 @@ class PLATFORM_EXPORT MainThreadTaskQueue
 
   static QueueClass QueueClassForQueueType(QueueType type);
 
+  using QueueTraitsKeyType = int;
+
+  // QueueTraits represent the deferrable, throttleable, pausable, and freezable
+  // properties of a MainThreadTaskQueue. For non-loading task queues, there
+  // will be at most one task queue with a specific set of QueueTraits, and the
+  // the QueueTraits determine which queues should be used to run which task
+  // types.
+  struct QueueTraits {
+    QueueTraits()
+        : can_be_deferred(false),
+          can_be_throttled(false),
+          can_be_paused(false),
+          can_be_frozen(false) {}
+
+    QueueTraits(const QueueTraits&) = default;
+
+    QueueTraits SetCanBeDeferred(bool value) {
+      can_be_deferred = value;
+      return *this;
+    }
+
+    QueueTraits SetCanBeThrottled(bool value) {
+      can_be_throttled = value;
+      return *this;
+    }
+
+    QueueTraits SetCanBePaused(bool value) {
+      can_be_paused = value;
+      return *this;
+    }
+
+    QueueTraits SetCanBeFrozen(bool value) {
+      can_be_frozen = value;
+      return *this;
+    }
+
+    bool operator==(const QueueTraits& other) const {
+      return can_be_deferred == other.can_be_deferred &&
+             can_be_throttled == other.can_be_throttled &&
+             can_be_paused == other.can_be_paused &&
+             can_be_frozen == other.can_be_frozen;
+    }
+
+    // Return a key suitable for WTF::HashMap.
+    QueueTraitsKeyType Key() const {
+      // Start at 1; 0 and -1 are used for empty/deleted values.
+      int key = 1 << 0;
+      key |= can_be_deferred << 1;
+      key |= can_be_throttled << 2;
+      key |= can_be_paused << 3;
+      key |= can_be_frozen << 4;
+      return key;
+    }
+
+    bool can_be_deferred : 1;
+    bool can_be_throttled : 1;
+    bool can_be_paused : 1;
+    bool can_be_frozen : 1;
+  };
+
   struct QueueCreationParams {
     explicit QueueCreationParams(QueueType queue_type)
         : queue_type(queue_type),
           spec(NameForQueueType(queue_type)),
           frame_scheduler(nullptr),
-          can_be_deferred(false),
-          can_be_throttled(false),
-          can_be_paused(false),
-          can_be_frozen(false),
           freeze_when_keep_active(false) {}
 
     QueueCreationParams SetFixedPriority(
@@ -97,28 +153,35 @@ class PLATFORM_EXPORT MainThreadTaskQueue
       return *this;
     }
 
+    QueueCreationParams SetFreezeWhenKeepActive(bool value) {
+      freeze_when_keep_active = value;
+      return *this;
+    }
+
+    // Forwarded calls to |queue_traits|
+
     QueueCreationParams SetCanBeDeferred(bool value) {
-      can_be_deferred = value;
+      queue_traits = queue_traits.SetCanBeDeferred(value);
       return *this;
     }
 
     QueueCreationParams SetCanBeThrottled(bool value) {
-      can_be_throttled = value;
+      queue_traits = queue_traits.SetCanBeThrottled(value);
       return *this;
     }
 
     QueueCreationParams SetCanBePaused(bool value) {
-      can_be_paused = value;
+      queue_traits = queue_traits.SetCanBePaused(value);
       return *this;
     }
 
     QueueCreationParams SetCanBeFrozen(bool value) {
-      can_be_frozen = value;
+      queue_traits = queue_traits.SetCanBeFrozen(value);
       return *this;
     }
 
-    QueueCreationParams SetFreezeWhenKeepActive(bool value) {
-      freeze_when_keep_active = value;
+    QueueCreationParams SetQueueTraits(QueueTraits value) {
+      queue_traits = value;
       return *this;
     }
 
@@ -149,10 +212,7 @@ class PLATFORM_EXPORT MainThreadTaskQueue
     base::Optional<base::sequence_manager::TaskQueue::QueuePriority>
         fixed_priority;
     FrameSchedulerImpl* frame_scheduler;
-    bool can_be_deferred;
-    bool can_be_throttled;
-    bool can_be_paused;
-    bool can_be_frozen;
+    QueueTraits queue_traits;
     bool freeze_when_keep_active;
   };
 
@@ -167,23 +227,25 @@ class PLATFORM_EXPORT MainThreadTaskQueue
     return fixed_priority_;
   }
 
-  bool CanBeDeferred() const { return can_be_deferred_; }
+  bool CanBeDeferred() const { return queue_traits_.can_be_deferred; }
 
-  bool CanBeThrottled() const { return can_be_throttled_; }
+  bool CanBeThrottled() const { return queue_traits_.can_be_throttled; }
 
-  bool CanBePaused() const { return can_be_paused_; }
+  bool CanBePaused() const { return queue_traits_.can_be_paused; }
 
-  bool CanBeFrozen() const { return can_be_frozen_; }
+  bool CanBeFrozen() const { return queue_traits_.can_be_frozen; }
 
   bool FreezeWhenKeepActive() const { return freeze_when_keep_active_; }
 
-  void OnTaskStarted(const base::sequence_manager::TaskQueue::Task& task,
-                     base::TimeTicks start);
+  QueueTraits GetQueueTraits() const { return queue_traits_; }
 
-  void OnTaskCompleted(const base::sequence_manager::TaskQueue::Task& task,
-                       base::TimeTicks start,
-                       base::TimeTicks end,
-                       base::Optional<base::TimeDelta> thread_time);
+  void OnTaskStarted(
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
+
+  void OnTaskCompleted(
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
   void DetachFromMainThreadScheduler();
 
@@ -196,6 +258,7 @@ class PLATFORM_EXPORT MainThreadTaskQueue
  protected:
   void SetFrameSchedulerForTest(FrameSchedulerImpl* frame_scheduler);
 
+  // TODO(kraynov): Consider options to remove TaskQueueImpl reference here.
   MainThreadTaskQueue(
       std::unique_ptr<base::sequence_manager::internal::TaskQueueImpl> impl,
       const Spec& spec,
@@ -214,10 +277,7 @@ class PLATFORM_EXPORT MainThreadTaskQueue
   const QueueClass queue_class_;
   const base::Optional<base::sequence_manager::TaskQueue::QueuePriority>
       fixed_priority_;
-  const bool can_be_deferred_;
-  const bool can_be_throttled_;
-  const bool can_be_paused_;
-  const bool can_be_frozen_;
+  const QueueTraits queue_traits_;
   const bool freeze_when_keep_active_;
 
   // Needed to notify renderer scheduler about completed tasks.

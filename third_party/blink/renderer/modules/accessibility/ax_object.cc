@@ -30,9 +30,9 @@
 
 #include "SkMatrix44.h"
 #include "third_party/blink/public/platform/web_scroll_into_view_params.h"
+#include "third_party/blink/renderer/core/aom/accessible_node.h"
+#include "third_party/blink/renderer/core/aom/accessible_node_list.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
-#include "third_party/blink/renderer/core/dom/accessible_node.h"
-#include "third_party/blink/renderer/core/dom/accessible_node_list.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/user_gesture_indicator.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -879,6 +879,7 @@ void AXObject::UpdateCachedAttributeValuesIfNeeded() const {
       !!InheritsPresentationalRoleFrom();
   cached_is_ignored_ = ComputeAccessibilityIsIgnored();
   cached_is_editable_root_ = ComputeIsEditableRoot();
+  // TODO(dmazzoni): remove this const_cast.
   cached_live_region_root_ =
       IsLiveRegion()
           ? const_cast<AXObject*>(this)
@@ -886,11 +887,13 @@ void AXObject::UpdateCachedAttributeValuesIfNeeded() const {
                                     : nullptr);
   cached_aria_column_index_ = ComputeAriaColumnIndex();
   cached_aria_row_index_ = ComputeAriaRowIndex();
-  // TODO(dmazzoni): remove this const_cast.
   if (cached_is_ignored_ != LastKnownIsIgnoredValue()) {
-    const_cast<AXObject*>(this)->ChildrenChanged();
     last_known_is_ignored_value_ =
         cached_is_ignored_ ? kIgnoreObject : kIncludeObject;
+
+    AXObject* parent = ParentObjectIfExists();
+    if (parent)
+      parent->ChildrenChanged();
   }
 }
 
@@ -1115,6 +1118,26 @@ const AXObject* AXObject::DisabledAncestor() const {
 
   if (AXObject* parent = ParentObject())
     return parent->DisabledAncestor();
+
+  return nullptr;
+}
+
+const AXObject* AXObject::DatetimeAncestor(int max_levels_to_check) const {
+  switch (RoleValue()) {
+    case kDateTimeRole:
+    case kDateRole:
+    case kInputTimeRole:
+    case kTimeRole:
+      return this;
+    default:
+      break;
+  }
+
+  if (max_levels_to_check == 0)
+    return nullptr;
+
+  if (AXObject* parent = ParentObject())
+    return parent->DatetimeAncestor(max_levels_to_check - 1);
 
   return nullptr;
 }

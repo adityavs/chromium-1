@@ -11,6 +11,7 @@
 #include "base/command_line.h"
 #include "base/logging.h"
 #include "build/build_config.h"
+#include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/service/frame_sinks/frame_sink_manager_impl.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_hittest.h"
@@ -345,6 +346,14 @@ base::string16 RenderWidgetHostViewGuest::GetSelectedText() {
   return platform_view_->GetSelectedText();
 }
 
+base::string16 RenderWidgetHostViewGuest::GetSurroundingText() {
+  return platform_view_->GetSurroundingText();
+}
+
+gfx::Range RenderWidgetHostViewGuest::GetSelectedRange() {
+  return platform_view_->GetSelectedRange();
+}
+
 void RenderWidgetHostViewGuest::SetNeedsBeginFrames(bool needs_begin_frames) {
   if (platform_view_)
     platform_view_->SetNeedsBeginFrames(needs_begin_frames);
@@ -367,10 +376,10 @@ void RenderWidgetHostViewGuest::SetTooltipText(
     root_view->GetCursorManager()->SetTooltipTextForView(this, tooltip_text);
 }
 
-void RenderWidgetHostViewGuest::SendSurfaceInfoToEmbedderImpl(
+void RenderWidgetHostViewGuest::FirstSurfaceActivation(
     const viz::SurfaceInfo& surface_info) {
   if (guest_ && !guest_->is_in_destruction())
-    guest_->SetChildFrameSurface(surface_info);
+    guest_->FirstSurfaceActivation(surface_info);
 }
 
 void RenderWidgetHostViewGuest::OnDidUpdateVisualPropertiesComplete(
@@ -565,10 +574,11 @@ viz::FrameSinkId RenderWidgetHostViewGuest::GetRootFrameSinkId() {
   return viz::FrameSinkId();
 }
 
-viz::LocalSurfaceId RenderWidgetHostViewGuest::GetLocalSurfaceId() const {
+const viz::LocalSurfaceId& RenderWidgetHostViewGuest::GetLocalSurfaceId()
+    const {
   if (guest_)
     return guest_->local_surface_id();
-  return viz::LocalSurfaceId();
+  return viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
 }
 
 void RenderWidgetHostViewGuest::DidCreateNewRendererCompositorFrameSink(

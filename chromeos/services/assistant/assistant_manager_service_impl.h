@@ -43,6 +43,8 @@ class Connector;
 namespace chromeos {
 namespace assistant {
 
+class Service;
+
 // Implementation of AssistantManagerService based on LibAssistant.
 // This is the main class that ineracts with LibAssistant.
 // Since LibAssistant is a standalone library, all callbacks come from it
@@ -57,10 +59,11 @@ class AssistantManagerServiceImpl
       public ash::mojom::VoiceInteractionObserver,
       public assistant_client::DeviceStateListener {
  public:
+  // |service| owns this class and must outlive this class.
   AssistantManagerServiceImpl(service_manager::Connector* connector,
                               device::mojom::BatteryMonitorPtr battery_monitor,
-                              mojom::Client* client,
-                              mojom::DeviceActionsPtr device_actions);
+                              Service* service,
+                              bool enable_hotword);
 
   ~AssistantManagerServiceImpl() override;
 
@@ -77,30 +80,38 @@ class AssistantManagerServiceImpl
   void SendUpdateSettingsUiRequest(
       const std::string& update,
       UpdateSettingsUiResponseCallback callback) override;
-  void SetAssistantController(
-      ash::mojom::AssistantController* controller) override;
 
   // mojom::Assistant overrides:
   void StartVoiceInteraction() override;
   void StopActiveInteraction() override;
   void SendTextQuery(const std::string& query) override;
-  void AddAssistantEventSubscriber(
-      mojom::AssistantEventSubscriberPtr subscriber) override;
+  void AddAssistantInteractionSubscriber(
+      mojom::AssistantInteractionSubscriberPtr subscriber) override;
+  void AddAssistantNotificationSubscriber(
+      mojom::AssistantNotificationSubscriberPtr subscriber) override;
+  void AddAssistantScreenContextSubscriber(
+      mojom::AssistantScreenContextSubscriberPtr subscriber) override;
+  void RetrieveNotification(mojom::AssistantNotificationPtr notification,
+                            int action_index) override;
+  void DismissNotification(
+      mojom::AssistantNotificationPtr notification) override;
   void RequestScreenContext(const gfx::Rect& region,
                             RequestScreenContextCallback callback) override;
 
   // AssistantActionObserver overrides:
+  void OnShowContextualHtml(const std::string& html) override;
   void OnShowHtml(const std::string& html) override;
   void OnShowSuggestions(
       const std::vector<action::Suggestion>& suggestions) override;
   void OnShowText(const std::string& text) override;
   void OnOpenUrl(const std::string& url) override;
+  void OnShowNotification(const action::Notification& notification) override;
 
   // AssistantEventObserver overrides:
   void OnSpeechLevelUpdated(float speech_level) override;
 
   // assistant_client::ConversationStateListener overrides:
-  void OnConversationTurnStarted() override;
+  void OnConversationTurnStarted(bool is_mic_open) override;
   void OnConversationTurnFinished(
       assistant_client::ConversationStateListener::Resolution resolution)
       override;
@@ -114,12 +125,14 @@ class AssistantManagerServiceImpl
       const std::string& modify_setting_args_proto) override;
   bool IsSettingSupported(const std::string& setting_id) override;
   bool SupportsModifySettings() override;
+  void OnNotificationRemoved(const std::string& grouping_key) override;
 
   // ash::mojom::VoiceInteractionObserver:
   void OnVoiceInteractionStatusChanged(
       ash::mojom::VoiceInteractionState state) override {}
   void OnVoiceInteractionSettingsEnabled(bool enabled) override;
   void OnVoiceInteractionContextEnabled(bool enabled) override;
+  void OnVoiceInteractionHotwordEnabled(bool enabled) override {}
   void OnVoiceInteractionSetupCompleted(bool completed) override;
   void OnAssistantFeatureAllowedChanged(
       ash::mojom::AssistantAllowedState state) override {}
@@ -148,14 +161,18 @@ class AssistantManagerServiceImpl
       base::RepeatingCallback<void(const std::string&)> callback,
       const std::string& result);
 
-  void OnConversationTurnStartedOnMainThread();
+  void OnConversationTurnStartedOnMainThread(bool is_mic_open);
   void OnConversationTurnFinishedOnMainThread(
       assistant_client::ConversationStateListener::Resolution resolution);
+  void OnShowContextualHtmlOnMainThread(const std::string& html);
   void OnShowHtmlOnMainThread(const std::string& html);
   void OnShowSuggestionsOnMainThread(
       const std::vector<mojom::AssistantSuggestionPtr>& suggestions);
   void OnShowTextOnMainThread(const std::string& text);
   void OnOpenUrlOnMainThread(const std::string& url);
+  void OnShowNotificationOnMainThread(
+      const mojom::AssistantNotificationPtr& notification);
+  void OnNotificationRemovedOnMainThread(const std::string& grouping_id);
   void OnRecognitionStateChangedOnMainThread(
       assistant_client::ConversationStateListener::RecognitionState state,
       const assistant_client::ConversationStateListener::RecognitionResult&
@@ -179,20 +196,25 @@ class AssistantManagerServiceImpl
 
   State state_ = State::STOPPED;
   PlatformApiImpl platform_api_;
+  bool enable_hotword_;
   std::unique_ptr<action::CrosActionModule> action_module_;
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
   std::unique_ptr<assistant_client::AssistantManager> assistant_manager_;
   std::unique_ptr<AssistantSettingsManagerImpl> assistant_settings_manager_;
-  mojom::DeviceActionsPtr device_actions_;
+  // same ownership as assistant_manager_.
   assistant_client::AssistantManagerInternal* assistant_manager_internal_;
   std::unique_ptr<CrosDisplayConnection> display_connection_;
-  mojo::InterfacePtrSet<mojom::AssistantEventSubscriber> subscribers_;
+  mojo::InterfacePtrSet<mojom::AssistantInteractionSubscriber>
+      interaction_subscribers_;
+  mojo::InterfacePtrSet<mojom::AssistantNotificationSubscriber>
+      notification_subscribers_;
+  mojo::InterfacePtrSet<mojom::AssistantScreenContextSubscriber>
+      screen_context_subscribers_;
   ash::mojom::VoiceInteractionControllerPtr voice_interaction_controller_;
   mojo::Binding<ash::mojom::VoiceInteractionObserver>
       voice_interaction_observer_binding_;
 
-  ash::mojom::AssistantController* assistant_controller_;
-  mojom::Client* assistant_client_;
+  Service* service_;  // unowned.
 
   bool assistant_enabled_ = false;
   bool context_enabled_ = false;

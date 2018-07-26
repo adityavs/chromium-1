@@ -205,7 +205,7 @@ void RawResource::ResponseReceived(
   if (response.WasFallbackRequiredByServiceWorker()) {
     // The ServiceWorker asked us to re-fetch the request. This resource must
     // not be reused.
-    // Note: This logic is needed here because DocumentThreadableLoader handles
+    // Note: This logic is needed here because ThreadableLoader handles
     // CORS independently from ResourceLoader. Fix it.
     if (IsMainThread())
       GetMemoryCache()->Remove(this);
@@ -313,10 +313,8 @@ bool RawResource::MatchPreload(const FetchParameters& params,
       std::move(producer), task_runner);
 
   if (Data()) {
-    Data()->ForEachSegment(
-        [this](const char* segment, size_t size, size_t offset) -> bool {
-          return data_pipe_writer_->Write(segment, size);
-        });
+    for (const auto& span : *Data())
+      data_pipe_writer_->Write(span.data(), span.size());
   }
   SetDataBufferingPolicy(kDoNotBufferData);
 

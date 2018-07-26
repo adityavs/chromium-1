@@ -157,6 +157,7 @@ void OmniboxViewViews::Init() {
   set_controller(this);
   SetTextInputType(ui::TEXT_INPUT_TYPE_URL);
   GetRenderText()->SetElideBehavior(gfx::ELIDE_TAIL);
+  GetRenderText()->set_symmetric_selection_visual_bounds(true);
 
   if (popup_window_mode_)
     SetReadOnly(true);
@@ -227,7 +228,6 @@ void OmniboxViewViews::ResetTabState(content::WebContents* web_contents) {
 void OmniboxViewViews::InstallPlaceholderText() {
   set_placeholder_text_color(
       location_bar_view_->GetColor(OmniboxPart::LOCATION_BAR_TEXT_DIMMED));
-  set_placeholder_text_hidden_on_focus(true);
 
   const TemplateURL* const default_provider =
       model()->client()->GetTemplateURLService()->GetDefaultSearchProvider();
@@ -437,16 +437,24 @@ base::string16 OmniboxViewViews::GetSelectedText() const {
 
 void OmniboxViewViews::OnPaste() {
   const base::string16 text(GetClipboardText());
-  if (!text.empty()) {
-    OnBeforePossibleChange();
-    // Record this paste, so we can do different behavior.
-    model()->OnPaste();
-    // Force a Paste operation to trigger the text_changed code in
-    // OnAfterPossibleChange(), even if identical contents are pasted.
-    state_before_change_.text.clear();
-    InsertOrReplaceText(text);
-    OnAfterPossibleChange(true);
+
+  if (text.empty() ||
+      // When the fakebox is focused, ignore pasted whitespace because if the
+      // fakebox is hidden and there's only whitespace in the omnibox, it's
+      // difficult for the user to see that the focus moved to the omnibox.
+      (model()->focus_state() == OMNIBOX_FOCUS_INVISIBLE &&
+       std::all_of(text.begin(), text.end(), base::IsUnicodeWhitespace))) {
+    return;
   }
+
+  OnBeforePossibleChange();
+  // Record this paste, so we can do different behavior.
+  model()->OnPaste();
+  // Force a Paste operation to trigger the text_changed code in
+  // OnAfterPossibleChange(), even if identical contents are pasted.
+  state_before_change_.text.clear();
+  InsertOrReplaceText(text);
+  OnAfterPossibleChange(true);
 }
 
 bool OmniboxViewViews::HandleEarlyTabActions(const ui::KeyEvent& event) {
@@ -538,6 +546,13 @@ void OmniboxViewViews::UpdatePopup() {
 
 void OmniboxViewViews::ApplyCaretVisibility() {
   SetCursorEnabled(model()->is_caret_visible());
+
+  // TODO(tommycli): Because the LocationBarView has a somewhat different look
+  // depending on whether or not the caret is visible, we have to resend a
+  // "focused" notification. Remove this once we get rid of the concept of
+  // "invisible focus".
+  if (location_bar_view_)
+    location_bar_view_->OnOmniboxFocused();
 }
 
 void OmniboxViewViews::OnTemporaryTextMaybeChanged(
@@ -555,6 +570,11 @@ void OmniboxViewViews::OnTemporaryTextMaybeChanged(
 
   SetWindowTextAndCaretPos(display_text, display_text.length(), false,
                            notify_text_changed);
+#if defined(OS_MACOSX)
+  // On macOS, the text field value changed notification is not
+  // announced, so we need to explicitly announce the suggestion text.
+  GetViewAccessibility().AnnounceText(friendly_suggestion_text_);
+#endif
 }
 
 bool OmniboxViewViews::OnInlineAutocompleteTextMaybeChanged(
@@ -714,9 +734,9 @@ bool OmniboxViewViews::IsImeShowingPopup() const {
 #endif
 }
 
-void OmniboxViewViews::ShowImeIfNeeded() {
+void OmniboxViewViews::ShowVirtualKeyboardIfEnabled() {
   if (auto* input_method = GetInputMethod())
-    input_method->ShowImeIfNeeded();
+    input_method->ShowVirtualKeyboardIfEnabled();
 }
 
 void OmniboxViewViews::HideImeIfNeeded() {
@@ -944,7 +964,7 @@ bool OmniboxViewViews::HandleAccessibleAction(
     return Textfield::HandleAccessibleAction(action_data);
 
   if (action_data.action == ax::mojom::Action::kSetValue) {
-    SetUserText(action_data.value, true);
+    SetUserText(base::UTF8ToUTF16(action_data.value), true);
     return true;
   } else if (action_data.action == ax::mojom::Action::kReplaceSelectedText) {
     model()->SetInputInProgress(true);
@@ -952,7 +972,7 @@ bool OmniboxViewViews::HandleAccessibleAction(
       SelectRange(saved_selection_for_focus_change_);
       saved_selection_for_focus_change_ = gfx::Range::InvalidRange();
     }
-    InsertOrReplaceText(action_data.value);
+    InsertOrReplaceText(base::UTF8ToUTF16(action_data.value));
     TextChanged();
     return true;
   } else if (action_data.action == ax::mojom::Action::kSetSelection) {
@@ -1046,8 +1066,6 @@ void OmniboxViewViews::OnBlur() {
     CloseOmniboxPopup();
   }
 
-  OnShiftKeyChanged(false);
-
   // Tell the model to reset itself.
   model()->OnKillFocus();
 
@@ -1095,6 +1113,14 @@ base::string16 OmniboxViewViews::GetSelectionClipboardText() const {
 }
 
 void OmniboxViewViews::DoInsertChar(base::char16 ch) {
+  // When the fakebox is focused, ignore whitespace input because if the
+  // fakebox is hidden and there's only whitespace in the omnibox, it's
+  // difficult for the user to see that the focus moved to the omnibox.
+  if ((model()->focus_state() == OMNIBOX_FOCUS_INVISIBLE) &&
+      base::IsUnicodeWhitespace(ch)) {
+    return;
+  }
+
   // If |insert_char_time_| is not null, there's a pending insert char operation
   // that hasn't been painted yet. Keep the earlier time.
   if (insert_char_time_.is_null()) {
@@ -1143,6 +1169,10 @@ void OmniboxViewViews::ExecuteTextEditCommand(ui::TextEditCommand command) {
   }
 }
 
+bool OmniboxViewViews::ShouldShowPlaceholderText() const {
+  return Textfield::ShouldShowPlaceholderText() && !model()->is_caret_visible();
+}
+
 #if defined(OS_CHROMEOS)
 void OmniboxViewViews::CandidateWindowOpened(
       chromeos::input_method::InputMethodManager* manager) {
@@ -1165,8 +1195,6 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
     // The omnibox contents may change while the control key is pressed.
     if (event.key_code() == ui::VKEY_CONTROL)
       model()->OnControlKeyChanged(false);
-    else if (event.key_code() == ui::VKEY_SHIFT)
-      OnShiftKeyChanged(false);
 
     return false;
   }
@@ -1179,11 +1207,7 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
   const bool shift = event.IsShiftDown();
   const bool control = event.IsControlDown();
   const bool alt = event.IsAltDown() || event.IsAltGrDown();
-#if defined(OS_MACOSX)
   const bool command = event.IsCommandDown();
-#else
-  const bool command = false;
-#endif
   switch (event.key_code()) {
     case ui::VKEY_RETURN:
       if (model()->popup_model()->SelectedLineHasTabMatch() &&
@@ -1197,6 +1221,8 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
         } else if (command) {
           model()->AcceptInput(WindowOpenDisposition::NEW_BACKGROUND_TAB,
                                false);
+        } else if (shift) {
+          model()->AcceptInput(WindowOpenDisposition::NEW_WINDOW, false);
         } else {
           model()->AcceptInput(WindowOpenDisposition::CURRENT_TAB, false);
         }
@@ -1208,10 +1234,6 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
 
     case ui::VKEY_CONTROL:
       model()->OnControlKeyChanged(true);
-      break;
-
-    case ui::VKEY_SHIFT:
-      OnShiftKeyChanged(true);
       break;
 
     case ui::VKEY_DELETE:

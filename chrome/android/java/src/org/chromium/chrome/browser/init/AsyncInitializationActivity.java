@@ -488,7 +488,6 @@ public abstract class AsyncInitializationActivity extends AppCompatActivity impl
         mNativeInitializationController.onActivityResult(requestCode, resultCode, data);
     }
 
-    @CallSuper
     @Override
     public final void onCreateWithNative() {
         try {
@@ -673,13 +672,8 @@ public abstract class AsyncInitializationActivity extends AppCompatActivity impl
                     removeWindowBackground = false;
                 }
             }
-        } catch (SettingNotFoundException e) {
-            // Window background is removed if an exception occurs.
-        } catch (NoSuchFieldException e) {
-            // Window background is removed if an exception occurs.
-        } catch (IllegalAccessException e) {
-            // Window background is removed if an exception occurs.
-        } catch (IllegalArgumentException e) {
+        } catch (SettingNotFoundException | NoSuchFieldException | IllegalAccessException
+                | IllegalArgumentException ignore) {
             // Window background is removed if an exception occurs.
         }
         if (removeWindowBackground) getWindow().setBackgroundDrawable(null);

@@ -13,14 +13,13 @@ namespace scheduler {
 
 class PLATFORM_EXPORT CompositorMetricsHelper : public MetricsHelper {
  public:
-  CompositorMetricsHelper();
+  explicit CompositorMetricsHelper(bool has_cpu_timing_for_each_task);
   ~CompositorMetricsHelper();
 
-  void RecordTaskMetrics(NonMainThreadTaskQueue* queue,
-                         const base::sequence_manager::TaskQueue::Task& task,
-                         base::TimeTicks start_time,
-                         base::TimeTicks end_time,
-                         base::Optional<base::TimeDelta> thread_time);
+  void RecordTaskMetrics(
+      NonMainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
  private:
   DISALLOW_COPY_AND_ASSIGN(CompositorMetricsHelper);

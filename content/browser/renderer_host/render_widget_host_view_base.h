@@ -116,6 +116,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   void WasOccluded() override {}
   void SetIsInVR(bool is_in_vr) override;
   base::string16 GetSelectedText() override;
+  base::string16 GetSurroundingText() override;
+  gfx::Range GetSelectedRange() override;
   bool IsMouseLocked() override;
   bool LockKeyboard(base::Optional<base::flat_set<ui::DomCode>> codes) override;
   void SetBackgroundColor(SkColor color) override;
@@ -313,12 +315,11 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   virtual void DidStopFlinging() {}
 
   // Returns the ID associated with the CompositorFrameSink of this view.
-  // TODO(fsamuel): Return by const ref.
-  virtual viz::FrameSinkId GetFrameSinkId();
+  virtual const viz::FrameSinkId& GetFrameSinkId() const = 0;
 
   // Returns the LocalSurfaceId allocated by the parent client for this view.
   // TODO(fsamuel): Return by const ref.
-  virtual viz::LocalSurfaceId GetLocalSurfaceId() const;
+  virtual const viz::LocalSurfaceId& GetLocalSurfaceId() const = 0;
 
   // When there are multiple RenderWidgetHostViews for a single page, input
   // events need to be targeted to the correct one for handling. The following
@@ -487,9 +488,9 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   // Displays the requested tooltip on the screen.
   virtual void DisplayTooltipText(const base::string16& tooltip_text) {}
 
-  // Returns the offset of the view from the origin of the browser compositor's
+  // Transforms |point| to be in the coordinate space of browser compositor's
   // surface. This is in DIP.
-  virtual gfx::Vector2d GetOffsetFromRootSurface() = 0;
+  virtual void TransformPointToRootSurface(gfx::PointF* point);
 
   // Gets the bounds of the top-level window, in screen coordinates.
   virtual gfx::Rect GetBoundsInRootWindow() = 0;
@@ -535,10 +536,6 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   TextInputManager* GetTextInputManager();
 
   bool is_fullscreen() { return is_fullscreen_; }
-
-  bool wheel_scroll_latching_enabled() {
-    return wheel_scroll_latching_enabled_;
-  }
 
   void set_web_contents_accessibility(WebContentsAccessibility* wcax) {
     web_contents_accessibility_ = wcax;
@@ -647,8 +644,6 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   // |content_background_color|.
   base::Optional<SkColor> default_background_color_;
 
-  const bool wheel_scroll_latching_enabled_;
-
   WebContentsAccessibility* web_contents_accessibility_;
 
   bool is_currently_scrolling_viewport_;
@@ -704,6 +699,8 @@ class CONTENT_EXPORT RenderWidgetHostViewBase
   // too EmbedChildFrameRendererWindowTreeClient() did not come in.
   base::flat_map<int, int> pending_embeds_;
 #endif
+
+  base::Optional<blink::WebGestureEvent> pending_touchpad_pinch_begin_;
 
   base::WeakPtrFactory<RenderWidgetHostViewBase> weak_factory_;
 

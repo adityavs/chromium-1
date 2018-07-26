@@ -31,6 +31,10 @@ class SearchIPCRouterPolicyImpl : public SearchIPCRouter::Policy {
   bool ShouldProcessDeleteMostVisitedItem() override;
   bool ShouldProcessUndoMostVisitedDeletion() override;
   bool ShouldProcessUndoAllMostVisitedDeletions() override;
+  bool ShouldProcessAddCustomLink() override;
+  bool ShouldProcessDeleteCustomLink() override;
+  bool ShouldProcessUndoDeleteCustomLink() override;
+  bool ShouldProcessResetCustomLinks() override;
   bool ShouldProcessLogEvent() override;
   bool ShouldProcessPasteIntoOmnibox(bool is_active_tab) override;
   bool ShouldProcessChromeIdentityCheck() override;
@@ -40,6 +44,8 @@ class SearchIPCRouterPolicyImpl : public SearchIPCRouter::Policy {
   bool ShouldSendMostVisitedItems() override;
   bool ShouldSendThemeBackgroundInfo() override;
   bool ShouldProcessSetCustomBackgroundURL() override;
+  bool ShouldProcessSetCustomBackgroundURLWithAttributions() override;
+  bool ShouldProcessSelectLocalBackgroundImage() override;
 
   // Used by unit tests.
   void set_is_incognito(bool is_incognito) {

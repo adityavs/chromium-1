@@ -76,7 +76,9 @@ class LayoutGrid final : public LayoutBlock {
     return row_positions_;
   }
 
-  const GridCell& GetGridCell(int row, int column) const {
+  // TODO(svillar): rename this method as this does not return a
+  // GridCell but its contents.
+  const GridItemList& GetGridCell(int row, int column) const {
     SECURITY_DCHECK(!grid_->NeedsItemsPlacement());
     return grid_->Cell(row, column);
   }
@@ -121,6 +123,9 @@ class LayoutGrid final : public LayoutBlock {
   void UpdateGridAreaLogicalSize(LayoutBox&, LayoutSize) const;
 
   StyleContentAlignmentData ContentAlignment(GridTrackSizingDirection) const;
+
+  // Exposed for testing *ONLY*.
+  Grid* InternalGrid() const { return grid_.get(); }
 
  protected:
   ItemPosition SelfAlignmentNormalBehavior(
@@ -250,7 +255,8 @@ class LayoutGrid final : public LayoutBlock {
       const LayoutBox&,
       GridTrackSizingDirection) const;
 
-  void PaintChildren(const PaintInfo&, const LayoutPoint&) const override;
+  void PaintChildren(const PaintInfo&,
+                     const LayoutPoint& paint_offset) const override;
 
   LayoutUnit AvailableAlignmentSpaceForChildBeforeStretching(
       LayoutUnit grid_area_breadth_for_child,
@@ -332,6 +338,7 @@ class LayoutGrid final : public LayoutBlock {
   LayoutUnit min_content_height_{-1};
   LayoutUnit max_content_height_{-1};
 
+  bool has_any_orthogonal_item_{false};
   base::Optional<bool> has_definite_logical_height_;
 };
 

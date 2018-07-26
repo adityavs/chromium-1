@@ -4,9 +4,11 @@
 
 #include "third_party/blink/renderer/modules/picture_in_picture/picture_in_picture_controller_impl.h"
 
+#include "third_party/blink/public/platform/web_media_player.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/events/picture_in_picture_control_event.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/html/media/html_video_element.h"
 #include "third_party/blink/renderer/modules/picture_in_picture/picture_in_picture_window.h"
@@ -75,6 +77,10 @@ PictureInPictureControllerImpl::IsElementAllowed(
 
   if (element.FastHasAttribute(HTMLNames::disablepictureinpictureAttr))
     return Status::kDisabledByAttribute;
+
+  // TODO(crbug.com/806249): Remove this when MediaStreams are supported.
+  if (element.GetLoadType() == WebMediaPlayer::kLoadTypeMediaStream)
+    return Status::kMediaStreamsNotSupportedYet;
 
   return Status::kEnabled;
 }
@@ -161,16 +167,19 @@ void PictureInPictureControllerImpl::OnExitedPictureInPicture(
     resolver->Resolve();
 }
 
-void PictureInPictureControllerImpl::OnPictureInPictureControlClicked() {
+void PictureInPictureControllerImpl::OnPictureInPictureControlClicked(
+    const WebString& control_id) {
   DCHECK(GetSupplementable());
 
   // Bail out if document is not active.
   if (!GetSupplementable()->IsActive())
     return;
 
-  if (picture_in_picture_element_) {
+  if (RuntimeEnabledFeatures::PictureInPictureControlEnabled() &&
+      picture_in_picture_element_) {
     picture_in_picture_element_->DispatchEvent(
-        Event::CreateBubble(EventTypeNames::pictureinpicturecontrolclick));
+        PictureInPictureControlEvent::Create(
+            EventTypeNames::pictureinpicturecontrolclick, control_id));
   }
 }
 

@@ -31,7 +31,6 @@
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/path_service.h"
-#include "base/profiler/stack_sampling_profiler.h"
 #include "base/run_loop.h"
 #include "base/sequenced_task_runner.h"
 #include "base/single_thread_task_runner.h"
@@ -96,7 +95,6 @@
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/resource_coordinator/render_process_probe.h"
-#include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/sessions/chrome_serialized_navigation_driver.h"
 #include "chrome/browser/shell_integration.h"
 #include "chrome/browser/tracing/background_tracing_field_trial.h"
@@ -134,8 +132,10 @@
 #include "components/flags_ui/pref_service_flags_storage.h"
 #include "components/google/core/browser/google_util.h"
 #include "components/language/content/browser/geo_language_provider.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/language/core/common/language_experiments.h"
 #include "components/language_usage_metrics/language_usage_metrics.h"
+#include "components/metrics/call_stack_profile_builder.h"
 #include "components/metrics/call_stack_profile_metrics_provider.h"
 #include "components/metrics/call_stack_profile_params.h"
 #include "components/metrics/expired_histogram_util.h"
@@ -164,6 +164,7 @@
 #include "components/variations/variations_http_header_provider.h"
 #include "components/variations/variations_switches.h"
 #include "components/version_info/version_info.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_observer.h"
 #include "content/public/browser/notification_registrar.h"
@@ -188,6 +189,7 @@
 #include "printing/buildflags/buildflags.h"
 #include "rlz/buildflags/buildflags.h"
 #include "services/service_manager/embedder/main_delegate.h"
+#include "services/service_manager/public/cpp/connector.h"
 #include "third_party/blink/public/common/experiments/memory_ablation_experiment.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/layout.h"
@@ -227,6 +229,7 @@
 #include <Security/Security.h>
 
 #include "base/mac/scoped_nsautorelease_pool.h"
+#include "chrome/browser/app_controller_mac.h"
 #include "chrome/browser/mac/keystone_glue.h"
 #endif  // defined(OS_MACOSX)
 
@@ -298,6 +301,7 @@
 #endif  // BUILDFLAG(ENABLE_RLZ)
 
 #if BUILDFLAG(ENABLE_VR)
+#include "chrome/browser/component_updater/vr_assets_component_installer.h"
 #include "chrome/browser/vr/service/vr_service_impl.h"
 #endif
 
@@ -305,7 +309,15 @@
 #include "services/service_manager/runner/common/client_util.h"
 #include "ui/aura/env.h"
 #endif
-#include "services/service_manager/public/cpp/connector.h"
+
+#if BUILDFLAG(ENABLE_SIMPLE_BROWSER_SERVICE)
+#include "services/content/simple_browser/public/mojom/constants.mojom.h"
+#endif
+
+#if !defined(OS_ANDROID)
+#include "chrome/browser/component_updater/intervention_policy_database_component_installer.h"
+#include "chrome/browser/resource_coordinator/tab_manager.h"
+#endif
 
 using content::BrowserThread;
 
@@ -352,7 +364,7 @@ void InitializeLocalState(base::SequencedTaskRunner* local_state_task_runner) {
     // Other platforms obey the system locale.
     base::string16 install_lang;
     if (GoogleUpdateSettings::GetLanguage(&install_lang)) {
-      local_state->SetString(prefs::kApplicationLocale,
+      local_state->SetString(language::prefs::kApplicationLocale,
                              base::UTF16ToASCII(install_lang));
     }
     bool stats_default;
@@ -390,7 +402,8 @@ void InitializeLocalState(base::SequencedTaskRunner* local_state_task_runner) {
           command_line->GetSwitchValuePath(switches::kParentProfile);
       scoped_refptr<PrefRegistrySimple> registry =
           base::MakeRefCounted<PrefRegistrySimple>();
-      registry->RegisterStringPref(prefs::kApplicationLocale, std::string());
+      registry->RegisterStringPref(language::prefs::kApplicationLocale,
+                                   std::string());
       const std::unique_ptr<PrefService> parent_local_state =
           chrome_prefs::CreateLocalState(parent_profile,
                                          local_state_task_runner,
@@ -398,8 +411,8 @@ void InitializeLocalState(base::SequencedTaskRunner* local_state_task_runner) {
                                          std::move(registry), false, nullptr);
       // Right now, we only inherit the locale setting from the parent profile.
       local_state->SetString(
-          prefs::kApplicationLocale,
-          parent_local_state->GetString(prefs::kApplicationLocale));
+          language::prefs::kApplicationLocale,
+          parent_local_state->GetString(language::prefs::kApplicationLocale));
     }
   }
 
@@ -408,9 +421,11 @@ void InitializeLocalState(base::SequencedTaskRunner* local_state_task_runner) {
     std::string owner_locale = local_state->GetString(prefs::kOwnerLocale);
     // Ensure that we start with owner's locale.
     if (!owner_locale.empty() &&
-        local_state->GetString(prefs::kApplicationLocale) != owner_locale &&
-        !local_state->IsManagedPreference(prefs::kApplicationLocale)) {
-      local_state->SetString(prefs::kApplicationLocale, owner_locale);
+        local_state->GetString(language::prefs::kApplicationLocale) !=
+            owner_locale &&
+        !local_state->IsManagedPreference(
+            language::prefs::kApplicationLocale)) {
+      local_state->SetString(language::prefs::kApplicationLocale, owner_locale);
     }
   }
 #endif  // defined(OS_CHROMEOS)
@@ -594,6 +609,17 @@ void RegisterComponentsForUpdate(PrefService* profile_prefs) {
   RegisterThirdPartyModuleListComponent(cus);
 #endif  // defined(GOOGLE_CHROME_BUILD)
 #endif  // defined(OS_WIN)
+
+#if !defined(OS_ANDROID)
+  RegisterInterventionPolicyDatabaseComponent(
+      cus, g_browser_process->GetTabManager()->intervention_policy_database());
+#endif
+
+#if BUILDFLAG(ENABLE_VR)
+  if (component_updater::ShouldRegisterVrAssetsComponentOnStartup()) {
+    component_updater::RegisterVrAssetsComponent(cus);
+  }
+#endif
 }
 
 #if !defined(OS_ANDROID)
@@ -689,8 +715,8 @@ std::string InitResourceBundleAndDetermineLocale(
   // Tests always get en-US.
   std::string locale = params.ui_task ? "en-US" : std::string();
 #else
-  std::string locale =
-      g_browser_process->local_state()->GetString(prefs::kApplicationLocale);
+  std::string locale = g_browser_process->local_state()->GetString(
+      language::prefs::kApplicationLocale);
 #endif
 
   TRACE_EVENT0("startup",
@@ -731,7 +757,12 @@ bool WaitUntilMachineLevelUserCloudPolicyEnrollmentFinished(
   switch (connector->machine_level_user_cloud_policy_controller()
               ->WaitUntilPolicyEnrollmentFinished()) {
     case RegisterResult::kNoEnrollmentNeeded:
+    case RegisterResult::kEnrollmentSuccessBeforeDialogDisplayed:
+      return true;
     case RegisterResult::kEnrollmentSuccess:
+#if defined(OS_MACOSX)
+      app_controller_mac::EnterpriseStartupDialogClosed();
+#endif
       return true;
     case RegisterResult::kRestartDueToFailure:
       chrome::AttemptRestart();
@@ -1434,9 +1465,9 @@ void ChromeBrowserMainParts::PreBrowserStart() {
   for (size_t i = 0; i < chrome_extra_parts_.size(); ++i)
     chrome_extra_parts_[i]->PreBrowserStart();
 
-// Start the tab manager here so that we give the most amount of time for the
-// other services to start up before we start adjusting the oom priority.
-#if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
+#if !defined(OS_ANDROID)
+  // Start the tab manager here so that we give the most amount of time for the
+  // other services to start up before we start adjusting the oom priority.
   g_browser_process->GetTabManager()->Start();
 #endif
 
@@ -2017,6 +2048,14 @@ int ChromeBrowserMainParts::PreMainMessageLoopRunImpl() {
                       base::TimeTicks::Now() - start_time_step3);
 #endif  // !defined(OS_ANDROID)
 
+#if BUILDFLAG(ENABLE_SIMPLE_BROWSER_SERVICE)
+  const char kLaunchSimpleBrowserSwitch[] = "launch-simple-browser";
+  if (parsed_command_line().HasSwitch(kLaunchSimpleBrowserSwitch)) {
+    content::BrowserContext::GetConnectorFor(profile_)->StartService(
+        service_manager::Identity(simple_browser::mojom::kServiceName));
+  }
+#endif  // BUILDFLAG(ENABLE_SIMPLE_BROWSER_SERVICE)
+
   return result_code_;
 }
 
@@ -2097,7 +2136,7 @@ void ChromeBrowserMainParts::PostMainMessageLoopRun() {
 }
 
 void ChromeBrowserMainParts::PreShutdown() {
-  base::StackSamplingProfiler::SetProcessMilestone(
+  metrics::CallStackProfileBuilder::SetProcessMilestone(
       metrics::CallStackProfileMetricsProvider::SHUTDOWN_START);
 }
 

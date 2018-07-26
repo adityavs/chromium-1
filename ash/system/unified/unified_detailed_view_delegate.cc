@@ -13,6 +13,7 @@
 #include "ash/system/unified/collapse_button.h"
 #include "ash/system/unified/top_shortcut_button.h"
 #include "ash/system/unified/unified_system_tray_controller.h"
+#include "components/vector_icons/vector_icons.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/gfx/vector_icon_types.h"
@@ -24,9 +25,6 @@
 namespace ash {
 
 namespace {
-
-// TODO(tetsui): Remove when the asset is arrived.
-const int kBackIconSize = 20;
 
 void ConfigureTitleTriView(TriView* tri_view, TriView::Container container) {
   std::unique_ptr<views::BoxLayout> layout;
@@ -62,15 +60,15 @@ void ConfigureTitleTriView(TriView* tri_view, TriView::Container container) {
 class BackButton : public CustomShapeButton {
  public:
   BackButton(views::ButtonListener* listener) : CustomShapeButton(listener) {
-    SetImage(views::Button::STATE_NORMAL,
-             gfx::CreateVectorIcon(kSystemMenuArrowBackIcon, kBackIconSize,
-                                   kUnifiedMenuIconColor));
+    gfx::ImageSkia image =
+        gfx::CreateVectorIcon(kUnifiedMenuArrowBackIcon, kUnifiedMenuIconColor);
+    SetImage(views::Button::STATE_NORMAL, image);
     SetImageAlignment(HorizontalAlignment::ALIGN_RIGHT,
                       VerticalAlignment::ALIGN_MIDDLE);
     SetTooltipText(
         l10n_util::GetStringUTF16(IDS_ASH_STATUS_TRAY_PREVIOUS_MENU));
     SetBorder(views::CreateEmptyBorder(
-        gfx::Insets((kTrayItemSize - kBackIconSize) / 2)));
+        gfx::Insets((kTrayItemSize - image.width()) / 2)));
   }
 
   ~BackButton() override = default;
@@ -127,7 +125,8 @@ TriView* UnifiedDetailedViewDelegate::CreateTitleRow(int string_id) {
 
   auto* label = TrayPopupUtils::CreateDefaultLabel();
   label->SetText(l10n_util::GetStringUTF16(string_id));
-  TrayPopupItemStyle style(TrayPopupItemStyle::FontStyle::TITLE);
+  TrayPopupItemStyle style(TrayPopupItemStyle::FontStyle::TITLE,
+                           true /* use_unified_theme */);
   style.SetupLabel(label);
   tri_view->AddView(TriView::Container::CENTER, label);
 
@@ -192,14 +191,14 @@ views::Button* UnifiedDetailedViewDelegate::CreateBackButton(
 views::Button* UnifiedDetailedViewDelegate::CreateInfoButton(
     views::ButtonListener* listener,
     int info_accessible_name_id) {
-  return new TopShortcutButton(listener, kSystemMenuInfoIcon,
+  return new TopShortcutButton(listener, kUnifiedMenuInfoIcon,
                                info_accessible_name_id);
 }
 
 views::Button* UnifiedDetailedViewDelegate::CreateSettingsButton(
     views::ButtonListener* listener,
     int setting_accessible_name_id) {
-  auto* button = new TopShortcutButton(listener, kSystemMenuSettingsIcon,
+  auto* button = new TopShortcutButton(listener, kUnifiedMenuSettingsIcon,
                                        setting_accessible_name_id);
   if (!TrayPopupUtils::CanOpenWebUISettings())
     button->SetEnabled(false);
@@ -208,7 +207,7 @@ views::Button* UnifiedDetailedViewDelegate::CreateSettingsButton(
 
 views::Button* UnifiedDetailedViewDelegate::CreateHelpButton(
     views::ButtonListener* listener) {
-  auto* button = new TopShortcutButton(listener, kSystemMenuHelpIcon,
+  auto* button = new TopShortcutButton(listener, vector_icons::kHelpOutlineIcon,
                                        IDS_ASH_STATUS_TRAY_HELP);
   // Help opens a web page, so treat it like Web UI settings.
   if (!TrayPopupUtils::CanOpenWebUISettings())

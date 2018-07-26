@@ -48,9 +48,9 @@
 #include "net/third_party/quic/core/crypto/crypto_protocol.h"
 #include "net/third_party/quic/core/crypto/quic_decrypter.h"
 #include "net/third_party/quic/core/crypto/quic_encrypter.h"
+#include "net/third_party/quic/core/http/spdy_utils.h"
 #include "net/third_party/quic/core/quic_connection.h"
 #include "net/third_party/quic/core/quic_write_blocked_list.h"
-#include "net/third_party/quic/core/spdy_utils.h"
 #include "net/third_party/quic/core/tls_client_handshaker.h"
 #include "net/third_party/quic/platform/api/quic_string_piece.h"
 #include "net/third_party/quic/test_tools/crypto_test_utils.h"
@@ -713,14 +713,14 @@ TEST_P(QuicHttpStreamTest, CanReuseConnection) {
 }
 
 TEST_P(QuicHttpStreamTest, DisableConnectionMigrationForStream) {
-  request_.load_flags |= LOAD_DISABLE_CONNECTION_MIGRATION;
+  request_.load_flags |= LOAD_DISABLE_CONNECTION_MIGRATION_TO_CELLULAR;
   Initialize();
   EXPECT_EQ(OK,
             stream_->InitializeStream(&request_, false, DEFAULT_PRIORITY,
                                       net_log_.bound(), callback_.callback()));
   QuicChromiumClientStream::Handle* client_stream =
       QuicHttpStreamPeer::GetQuicChromiumClientStream(stream_.get());
-  EXPECT_FALSE(client_stream->can_migrate());
+  EXPECT_FALSE(client_stream->can_migrate_to_cellular_network());
 }
 
 TEST_P(QuicHttpStreamTest, GetRequest) {
@@ -2218,19 +2218,10 @@ TEST_P(QuicHttpStreamTest, ServerPushVaryCheckFail) {
         client_packet_number++, kIncludeVersion, promise_id_, 0,
         DEFAULT_PRIORITY, &header_stream_offset));
   }
-  if (FLAGS_quic_reloadable_flag_quic_deprecate_scoped_scheduler2) {
-    AddWrite(ConstructClientRstStreamVaryMismatchAndRequestHeadersPacket(
-        client_packet_number++, stream_id_ + 2, !kIncludeVersion, kFin,
-        DEFAULT_PRIORITY, promise_id_, &spdy_request_header_frame_length,
-        &header_stream_offset));
-  } else {
-    AddWrite(
-        ConstructClientRstStreamVaryMismatchPacket(client_packet_number++));
-    AddWrite(InnerConstructRequestHeadersPacket(
-        client_packet_number++, stream_id_ + 2, !kIncludeVersion, kFin,
-        DEFAULT_PRIORITY, promise_id_, &spdy_request_header_frame_length,
-        &header_stream_offset));
-  }
+  AddWrite(ConstructClientRstStreamVaryMismatchAndRequestHeadersPacket(
+      client_packet_number++, stream_id_ + 2, !kIncludeVersion, kFin,
+      DEFAULT_PRIORITY, promise_id_, &spdy_request_header_frame_length,
+      &header_stream_offset));
   AddWrite(ConstructClientAckPacket(client_packet_number++, 3, 1, 1));
   AddWrite(ConstructClientRstStreamCancelledPacket(client_packet_number++));
 

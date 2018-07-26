@@ -22,10 +22,17 @@ namespace network {
 class SharedURLLoaderFactory;
 }  // namespace network
 
+namespace base {
+struct Feature;
+}
+
 namespace safe_search_api {
 
 // The SafeSearch API classification of a URL.
 enum class Classification { SAFE, UNSAFE };
+
+// Visible for testing.
+extern const base::Feature kAllowAllGoogleUrls;
 
 // This class uses the SafeSearch API to check the SafeSearch classification
 // of the content on a given URL and returns the result asynchronously
@@ -36,10 +43,14 @@ class URLChecker {
   using CheckCallback = base::OnceCallback<
       void(const GURL&, Classification classification, bool /* uncertain */)>;
 
-  URLChecker(scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-             const net::NetworkTrafficAnnotationTag& traffic_annotation);
+  // |country| should be a two-letter country code (ISO 3166-1 alpha-2), e.g.,
+  // "us".
   URLChecker(scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
              const net::NetworkTrafficAnnotationTag& traffic_annotation,
+             const std::string& country);
+  URLChecker(scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+             const net::NetworkTrafficAnnotationTag& traffic_annotation,
+             const std::string& country,
              size_t cache_size);
   ~URLChecker();
 
@@ -65,6 +76,7 @@ class URLChecker {
 
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
   const net::NetworkTrafficAnnotationTag traffic_annotation_;
+  const std::string country_;
 
   CheckList checks_in_progress_;
 

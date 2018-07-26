@@ -19,12 +19,6 @@ class ToggleImageButton;
 // implemented in views, which will support all desktop platforms.
 class OverlayWindowViews : public content::OverlayWindow, public views::Widget {
  public:
-  // The list of control buttons that appear on the window.
-  enum ControlButton {
-    CONTROL_PLAY_PAUSE,
-    CONTROL_CLOSE,
-  };
-
   explicit OverlayWindowViews(
       content::PictureInPictureWindowController* controller);
   ~OverlayWindowViews() override;
@@ -39,14 +33,10 @@ class OverlayWindowViews : public content::OverlayWindow, public views::Widget {
   ui::Layer* GetLayer() override;
   gfx::Rect GetBounds() const override;
   void UpdateVideoSize(const gfx::Size& natural_size) override;
-  void UpdatePlayPauseControlsIcon(bool is_playing) override;
+  void SetPlaybackState(PlaybackState playback_state) override;
+  ui::Layer* GetWindowBackgroundLayer() override;
   ui::Layer* GetVideoLayer() override;
-  ui::Layer* GetControlsBackgroundLayer() override;
-  ui::Layer* GetCloseControlsLayer() override;
-  ui::Layer* GetPlayPauseControlsLayer() override;
   gfx::Rect GetVideoBounds() override;
-  gfx::Rect GetCloseControlsBounds() override;
-  gfx::Rect GetPlayPauseControlsBounds() override;
 
   // views::Widget:
   gfx::Size GetMinimumSize() const override;
@@ -59,9 +49,25 @@ class OverlayWindowViews : public content::OverlayWindow, public views::Widget {
   // views::internal::NativeWidgetDelegate:
   void OnNativeFocus() override;
   void OnNativeBlur() override;
+  void OnNativeWidgetMove() override;
   void OnNativeWidgetSizeChanged(const gfx::Size& new_size) override;
+  void OnNativeWidgetDestroyed() override;
+
+  // Gets the bounds of the controls.
+  gfx::Rect GetCloseControlsBounds();
+  gfx::Rect GetPlayPauseControlsBounds();
+
+  // Send the message that a custom control on |this| has been clicked.
+  void ClickCustomControl(const std::string& control_id);
+
+  views::View* play_pause_controls_view_for_testing() const;
 
  private:
+  // Gets the internal |ui::Layer| of the controls.
+  ui::Layer* GetControlsBackgroundLayer();
+  ui::Layer* GetCloseControlsLayer();
+  ui::Layer* GetPlayPauseControlsLayer();
+
   // Determine the intended bounds of |this|. This should be called when there
   // is reason for the bounds to change, such as switching primary displays or
   // playing a new video (i.e. different aspect ratio). This also updates
@@ -77,6 +83,9 @@ class OverlayWindowViews : public content::OverlayWindow, public views::Widget {
 
   // Updates the controls view::Views to reflect |is_visible|.
   void UpdateControlsVisibility(bool is_visible);
+
+  // Updates the bounds of the controls.
+  void UpdateControlsBounds();
 
   // Update the size of |close_controls_view_| as the size of the window
   // changes. This will scale to one of three sizes, based off the current width
@@ -125,11 +134,8 @@ class OverlayWindowViews : public content::OverlayWindow, public views::Widget {
   // ensuring factors such as aspect ratio is maintained.
   gfx::Size natural_size_;
 
-  // The currently focused button on the window. This is used for keeping
-  // track of focus on the window while tabbing.
-  ControlButton focused_control_button_;
-
   // Views to be shown.
+  std::unique_ptr<views::View> window_background_view_;
   std::unique_ptr<views::View> video_view_;
   std::unique_ptr<views::View> controls_background_view_;
   std::unique_ptr<views::ImageButton> close_controls_view_;

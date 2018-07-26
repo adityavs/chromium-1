@@ -21,12 +21,11 @@
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_state.h"
 #include "ash/wm/wm_event.h"
+#include "ash/ws/window_service_owner.h"
+#include "services/ui/ws2/window_service.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/focus_client.h"
-#include "ui/aura/mus/window_manager_delegate.h"
-#include "ui/aura/mus/window_port_mus.h"
-#include "ui/aura/mus/window_tree_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_delegate.h"
 #include "ui/aura/window_event_dispatcher.h"
@@ -40,6 +39,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/coordinate_conversion.h"
 #include "ui/wm/core/easy_resize_window_targeter.h"
+#include "ui/wm/core/window_properties.h"
 #include "ui/wm/core/window_util.h"
 #include "ui/wm/public/activation_client.h"
 
@@ -59,6 +59,14 @@ bool MoveWindowToRoot(aura::Window* window, aura::Window* root) {
     return false;
   container->AddChild(window);
   return true;
+}
+
+// Asks the remote client that owns |window| to close it. Returns true if there
+// was a remote client for |window|, false otherwise.
+bool AskRemoteClientToCloseWindow(aura::Window* window) {
+  ui::ws2::WindowService* window_service =
+      Shell::Get()->window_service_owner()->window_service();
+  return window_service && window_service->RequestClose(window);
 }
 
 }  // namespace
@@ -164,23 +172,10 @@ bool MoveWindowToEventRoot(aura::Window* window, const ui::Event& event) {
   return root && MoveWindowToRoot(window, root);
 }
 
-void SnapWindowToPixelBoundary(aura::Window* window) {
-  window->SetProperty(kSnapChildrenToPixelBoundary, true);
-  aura::Window* snapped_ancestor = window->parent();
-  while (snapped_ancestor) {
-    if (snapped_ancestor->GetProperty(kSnapChildrenToPixelBoundary)) {
-      ui::SnapLayerToPhysicalPixelBoundary(snapped_ancestor->layer(),
-                                           window->layer());
-      return;
-    }
-    snapped_ancestor = snapped_ancestor->parent();
-  }
-}
-
 void SetSnapsChildrenToPhysicalPixelBoundary(aura::Window* container) {
-  DCHECK(!container->GetProperty(kSnapChildrenToPixelBoundary))
+  DCHECK(!container->GetProperty(::wm::kSnapChildrenToPixelBoundary))
       << container->GetName();
-  container->SetProperty(kSnapChildrenToPixelBoundary, true);
+  container->SetProperty(::wm::kSnapChildrenToPixelBoundary, true);
 }
 
 int GetNonClientComponent(aura::Window* window, const gfx::Point& location) {
@@ -205,27 +200,17 @@ void SetChildrenUseExtendedHitRegionForWindow(aura::Window* window) {
 }
 
 void CloseWidgetForWindow(aura::Window* window) {
-  if (Shell::GetAshConfig() == Config::MASH &&
-      window->GetProperty(kWidgetCreationTypeKey) ==
-          WidgetCreationType::FOR_CLIENT) {
-    // NOTE: in the FOR_CLIENT case there is not necessarily a widget associated
-    // with the window. Mash only creates widgets for top level windows if mash
-    // renders the non-client frame.
-    DCHECK(Shell::window_manager_client());
-    Shell::window_manager_client()->RequestClose(window);
+  if (AskRemoteClientToCloseWindow(window))
     return;
-  }
+
   views::Widget* widget = GetInternalWidgetForWindow(window);
   DCHECK(widget);
   widget->Close();
 }
 
+// TODO(sky): investigate removing this entirely. https://crbug.com/842365
 void AddLimitedPreTargetHandlerForWindow(ui::EventHandler* handler,
                                          aura::Window* window) {
-  // In mus AddPreTargetHandler() only works for windows created by this client.
-  DCHECK(Shell::GetAshConfig() != Config::MASH ||
-         Shell::window_tree_client()->WasCreatedByThisClient(
-             aura::WindowMus::Get(window)));
   window->AddPreTargetHandler(handler);
 }
 

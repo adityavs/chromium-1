@@ -33,6 +33,7 @@
 #include "content/child/thread_safe_sender.h"
 #include "content/common/frame_messages.h"
 #include "content/common/gpu_stream_constants.h"
+#include "content/common/indexed_db/indexed_db.mojom.h"
 #include "content/common/render_message_filter.mojom.h"
 #include "content/public/common/content_features.h"
 #include "content/public/common/content_switches.h"
@@ -41,7 +42,6 @@
 #include "content/public/common/webplugininfo.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/media_stream_utils.h"
-#include "content/public/renderer/platform_event_observer.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/renderer/blob_storage/webblobregistry_impl.h"
 #include "content/renderer/dom_storage/local_storage_cached_areas.h"
@@ -50,7 +50,6 @@
 #include "content/renderer/dom_storage/webstoragenamespace_impl.h"
 #include "content/renderer/file_info_util.h"
 #include "content/renderer/fileapi/webfilesystem_impl.h"
-#include "content/renderer/gamepad_shared_memory_reader.h"
 #include "content/renderer/image_capture/image_capture_frame_grabber.h"
 #include "content/renderer/indexed_db/webidbfactory_impl.h"
 #include "content/renderer/loader/child_url_loader_factory_bundle.h"
@@ -76,8 +75,6 @@
 #include "gpu/command_buffer/client/gles2_interface.h"
 #include "gpu/config/gpu_info.h"
 #include "gpu/ipc/client/gpu_channel_host.h"
-#include "ipc/ipc_sync_channel.h"
-#include "ipc/ipc_sync_message_filter.h"
 #include "media/audio/audio_output_device.h"
 #include "media/blink/webcontentdecryptionmodule_impl.h"
 #include "media/filters/stream_parser_factory.h"
@@ -112,7 +109,6 @@
 #include "third_party/blink/public/platform/web_url_loader_factory.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/platform/web_vector.h"
-#include "third_party/blink/public/platform/websocket_handshake_throttle.h"
 #include "third_party/blink/public/web/web_local_frame.h"
 #include "third_party/sqlite/sqlite3.h"
 #include "url/gurl.h"
@@ -188,6 +184,8 @@ gpu::ContextType ToGpuContextType(blink::Platform::ContextType type) {
       return gpu::CONTEXT_TYPE_WEBGL1;
     case blink::Platform::kWebGL2ContextType:
       return gpu::CONTEXT_TYPE_WEBGL2;
+    case blink::Platform::kWebGL2ComputeContextType:
+      return gpu::CONTEXT_TYPE_WEBGL2_COMPUTE;
     case blink::Platform::kGLES2ContextType:
       return gpu::CONTEXT_TYPE_OPENGLES2;
     case blink::Platform::kGLES3ContextType:
@@ -205,13 +203,17 @@ gpu::ContextType ToGpuContextType(blink::Platform::ContextType type) {
 class RendererBlinkPlatformImpl::SandboxSupport
     : public blink::WebSandboxSupport {
  public:
+#if defined(OS_LINUX)
+  explicit SandboxSupport(sk_sp<font_service::FontLoader> font_loader)
+      : font_loader_(std::move(font_loader)) {}
+#endif
   ~SandboxSupport() override {}
 
 #if defined(OS_MACOSX)
   bool LoadFont(CTFontRef src_font,
                 CGFontRef* container,
                 uint32_t* font_id) override;
-#elif defined(OS_POSIX)
+#elif defined(OS_LINUX)
   void GetFallbackFontForCharacter(
       blink::WebUChar32 character,
       const char* preferred_locale,
@@ -229,6 +231,7 @@ class RendererBlinkPlatformImpl::SandboxSupport
   // here.
   base::Lock unicode_font_families_mutex_;
   std::map<int32_t, blink::WebFallbackFont> unicode_font_families_;
+  sk_sp<font_service::FontLoader> font_loader_;
 #endif
 };
 #endif  // !defined(OS_ANDROID) && !defined(OS_WIN)
@@ -247,13 +250,6 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
       is_locked_to_site_(false),
       default_task_runner_(main_thread_scheduler->DefaultTaskRunner()),
       main_thread_scheduler_(main_thread_scheduler) {
-#if !defined(OS_ANDROID) && !defined(OS_WIN) && !defined(OS_FUCHSIA)
-  if (g_sandbox_enabled && sandboxEnabled()) {
-    sandbox_support_.reset(new RendererBlinkPlatformImpl::SandboxSupport);
-  } else {
-    DVLOG(1) << "Disabling sandbox support for testing.";
-  }
-#endif
 
   // RenderThread may not exist in some tests.
   if (RenderThreadImpl::current()) {
@@ -261,16 +257,29 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
                      ->GetServiceManagerConnection()
                      ->GetConnector()
                      ->Clone();
-    sync_message_filter_ = RenderThreadImpl::current()->sync_message_filter();
     thread_safe_sender_ = RenderThreadImpl::current()->thread_safe_sender();
     blob_registry_.reset(new WebBlobRegistryImpl(thread_safe_sender_.get()));
-    web_idb_factory_.reset(new WebIDBFactoryImpl(
-        sync_message_filter_,
-        RenderThreadImpl::current()->GetIOTaskRunner().get()));
+#if defined(OS_LINUX)
+    font_loader_ = sk_make_sp<font_service::FontLoader>(connector_.get());
+    SkFontConfigInterface::SetGlobal(font_loader_);
+#endif
   } else {
     service_manager::mojom::ConnectorRequest request;
     connector_ = service_manager::Connector::Create(&request);
   }
+
+#if !defined(OS_ANDROID) && !defined(OS_WIN) && !defined(OS_FUCHSIA)
+  if (g_sandbox_enabled && sandboxEnabled()) {
+#if defined(OS_MACOSX)
+    sandbox_support_.reset(new RendererBlinkPlatformImpl::SandboxSupport());
+#else
+    sandbox_support_.reset(
+        new RendererBlinkPlatformImpl::SandboxSupport(font_loader_));
+#endif
+  } else {
+    DVLOG(1) << "Disabling sandbox support for testing.";
+  }
+#endif
 
   blink_interface_provider_.reset(
       new BlinkInterfaceProviderImpl(connector_.get()));
@@ -279,6 +288,16 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
 
   GetInterfaceProvider()->GetInterface(
       mojo::MakeRequest(&web_database_host_info_));
+
+  // RenderThread may not exist in some tests.
+  if (RenderThreadImpl::current()) {
+    indexed_db::mojom::FactoryPtrInfo web_idb_factory_host_info;
+    GetInterfaceProvider()->GetInterface(
+        mojo::MakeRequest(&web_idb_factory_host_info));
+    web_idb_factory_.reset(new WebIDBFactoryImpl(
+        std::move(web_idb_factory_host_info),
+        RenderThreadImpl::current()->GetIOTaskRunner()));
+  }
 }
 
 RendererBlinkPlatformImpl::~RendererBlinkPlatformImpl() {
@@ -572,7 +591,7 @@ bool RendererBlinkPlatformImpl::SandboxSupport::LoadFont(CTFontRef src_font,
   return content::LoadFont(src_font, out, font_id);
 }
 
-#elif defined(OS_POSIX) && !defined(OS_ANDROID) && !defined(OS_FUCHSIA)
+#elif defined(OS_POSIX) && !defined(OS_ANDROID)
 
 void RendererBlinkPlatformImpl::SandboxSupport::GetFallbackFontForCharacter(
     blink::WebUChar32 character,
@@ -592,8 +611,8 @@ void RendererBlinkPlatformImpl::SandboxSupport::GetFallbackFontForCharacter(
     return;
   }
 
-  content::GetFallbackFontForCharacter(character, preferred_locale,
-                                       fallbackFont);
+  content::GetFallbackFontForCharacter(font_loader_, character,
+                                       preferred_locale, fallbackFont);
   unicode_font_families_.insert(std::make_pair(character, *fallbackFont));
 }
 
@@ -604,8 +623,8 @@ void RendererBlinkPlatformImpl::SandboxSupport::GetWebFontRenderStyleForStrike(
     bool is_italic,
     float device_scale_factor,
     blink::WebFontRenderStyle* out) {
-  GetRenderStyleForStrike(family, size, is_bold, is_italic, device_scale_factor,
-                          out);
+  GetRenderStyleForStrike(font_loader_, family, size, is_bold, is_italic,
+                          device_scale_factor, out);
 }
 
 #endif
@@ -674,12 +693,6 @@ bool RendererBlinkPlatformImpl::IsLockedToSite() const {
 
 void RendererBlinkPlatformImpl::SetIsLockedToSite() {
   is_locked_to_site_ = true;
-}
-
-bool RendererBlinkPlatformImpl::IsThreadedCompositingEnabled() {
-  RenderThreadImpl* thread = RenderThreadImpl::current();
-  // thread can be NULL in tests.
-  return thread && thread->compositor_task_runner().get();
 }
 
 bool RendererBlinkPlatformImpl::IsGpuCompositingDisabled() {
@@ -764,13 +777,6 @@ RendererBlinkPlatformImpl::CreateMIDIAccessor(
 WebBlobRegistry* RendererBlinkPlatformImpl::GetBlobRegistry() {
   // blob_registry_ can be NULL when running some tests.
   return blob_registry_.get();
-}
-
-//------------------------------------------------------------------------------
-
-void RendererBlinkPlatformImpl::SampleGamepads(device::Gamepads& gamepads) {
-  if (gamepad_shared_memory_reader_)
-    gamepad_shared_memory_reader_->SampleGamepads(gamepads);
 }
 
 //------------------------------------------------------------------------------
@@ -891,16 +897,31 @@ RendererBlinkPlatformImpl::CreateImageCaptureFrameGrabber() {
   return std::make_unique<ImageCaptureFrameGrabber>();
 }
 
-void RendererBlinkPlatformImpl::UpdateWebRTCAPICount(
-    blink::WebRTCAPIName api_name) {
-  UpdateWebRTCMethodCount(api_name);
+//------------------------------------------------------------------------------
+
+std::unique_ptr<webrtc::RtpCapabilities>
+RendererBlinkPlatformImpl::GetRtpSenderCapabilities(
+    const blink::WebString& kind) {
+  PeerConnectionDependencyFactory* pc_dependency_factory =
+      RenderThreadImpl::current()->GetPeerConnectionDependencyFactory();
+  pc_dependency_factory->EnsureInitialized();
+  return pc_dependency_factory->GetSenderCapabilities(kind.Utf8());
+}
+
+std::unique_ptr<webrtc::RtpCapabilities>
+RendererBlinkPlatformImpl::GetRtpReceiverCapabilities(
+    const blink::WebString& kind) {
+  PeerConnectionDependencyFactory* pc_dependency_factory =
+      RenderThreadImpl::current()->GetPeerConnectionDependencyFactory();
+  pc_dependency_factory->EnsureInitialized();
+  return pc_dependency_factory->GetReceiverCapabilities(kind.Utf8());
 }
 
 //------------------------------------------------------------------------------
 
-std::unique_ptr<blink::WebSocketHandshakeThrottle>
-RendererBlinkPlatformImpl::CreateWebSocketHandshakeThrottle() {
-  return GetContentClient()->renderer()->CreateWebSocketHandshakeThrottle();
+void RendererBlinkPlatformImpl::UpdateWebRTCAPICount(
+    blink::WebRTCAPIName api_name) {
+  UpdateWebRTCMethodCount(api_name);
 }
 
 //------------------------------------------------------------------------------
@@ -987,7 +1008,7 @@ RendererBlinkPlatformImpl::CreateOffscreenGraphicsContext3DProvider(
           gpu::kNullSurfaceHandle, GURL(top_document_web_url),
           automatic_flushes, support_locking, web_attributes.support_grcontext,
           gpu::SharedMemoryLimits(), attributes,
-          ui::command_buffer_metrics::OFFSCREEN_CONTEXT_FOR_WEBGL));
+          ui::command_buffer_metrics::ContextType::WEBGL));
   return std::make_unique<WebGraphicsContext3DProviderImpl>(
       std::move(provider));
 }
@@ -1043,44 +1064,12 @@ void RendererBlinkPlatformImpl::RecordRapporURL(const char* metric,
   GetContentClient()->renderer()->RecordRapporURL(metric, url);
 }
 
-void RendererBlinkPlatformImpl::SetPlatformEventObserverForTesting(
-    blink::WebPlatformEventType type,
-    std::unique_ptr<PlatformEventObserverBase> observer) {
-  if (platform_event_observers_.Lookup(type))
-    platform_event_observers_.Remove(type);
-  platform_event_observers_.AddWithID(std::move(observer), type);
-}
-
 service_manager::Connector* RendererBlinkPlatformImpl::GetConnector() {
   return connector_.get();
 }
 
 blink::InterfaceProvider* RendererBlinkPlatformImpl::GetInterfaceProvider() {
   return blink_interface_provider_.get();
-}
-
-void RendererBlinkPlatformImpl::StartListening(
-    blink::WebPlatformEventType type,
-    blink::WebPlatformEventListener* listener) {
-  if (type == blink::kWebPlatformEventTypeGamepad) {
-    if (!gamepad_shared_memory_reader_) {
-      gamepad_shared_memory_reader_ =
-          std::make_unique<GamepadSharedMemoryReader>();
-    }
-    gamepad_shared_memory_reader_->Start(
-        static_cast<blink::WebGamepadListener*>(listener));
-  } else {
-    DVLOG(1) << "RendererBlinkPlatformImpl::startListening() with "
-                "unknown type.";
-  }
-}
-
-void RendererBlinkPlatformImpl::StopListening(
-    blink::WebPlatformEventType type) {
-  if (type == blink::kWebPlatformEventTypeGamepad) {
-    if (gamepad_shared_memory_reader_)
-      gamepad_shared_memory_reader_->Stop();
-  }
 }
 
 //------------------------------------------------------------------------------

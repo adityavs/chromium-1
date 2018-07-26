@@ -32,7 +32,9 @@
 #include "ios/chrome/browser/signin/identity_manager_factory.h"
 #include "ios/chrome/browser/signin/signin_client_factory.h"
 #include "ios/chrome/browser/signin/signin_manager_factory.h"
+#include "ios/chrome/browser/sync/consent_auditor_factory.h"
 #include "ios/chrome/browser/sync/ios_chrome_sync_client.h"
+#include "ios/chrome/browser/sync/model_type_store_service_factory.h"
 #include "ios/chrome/browser/undo/bookmark_undo_service_factory.h"
 #include "ios/chrome/browser/web_data_service_factory.h"
 #include "ios/chrome/common/channel_info.h"
@@ -97,11 +99,7 @@ ProfileSyncServiceFactory::ProfileSyncServiceFactory()
   // when it is shut down.  Specify those dependencies here to build the proper
   // destruction order.
   DependsOn(autofill::PersonalDataManagerFactory::GetInstance());
-  // TODO(crbug.com/850428): This should have
-  // DependsOn(ConsentAuditorFactory::GetInstance()), but it can't due to a
-  // BUILD.gn dependency cycle. Note that this can be added only after
-  // ConsentAuditorFactory does not depend on both UserEventService and
-  // SyncService.
+  DependsOn(ConsentAuditorFactory::GetInstance());
   DependsOn(ios::AboutSigninInternalsFactory::GetInstance());
   DependsOn(ios::BookmarkModelFactory::GetInstance());
   DependsOn(ios::BookmarkUndoServiceFactory::GetInstance());
@@ -114,6 +112,7 @@ ProfileSyncServiceFactory::ProfileSyncServiceFactory()
   DependsOn(IOSChromeGCMProfileServiceFactory::GetInstance());
   DependsOn(IOSChromePasswordStoreFactory::GetInstance());
   DependsOn(IOSChromeProfileInvalidationProviderFactory::GetInstance());
+  DependsOn(ModelTypeStoreServiceFactory::GetInstance());
   DependsOn(ReadingListModelFactory::GetInstance());
   DependsOn(SigninClientFactory::GetInstance());
 }
@@ -146,7 +145,6 @@ ProfileSyncServiceFactory::BuildServiceInstanceFor(
   init_params.sync_client =
       std::make_unique<IOSChromeSyncClient>(browser_state);
   init_params.network_time_update_callback = base::Bind(&UpdateNetworkTime);
-  init_params.base_directory = browser_state->GetStatePath();
   init_params.url_request_context = browser_state->GetRequestContext();
   init_params.url_loader_factory = browser_state->GetSharedURLLoaderFactory();
   init_params.debug_identifier = browser_state->GetDebugName();

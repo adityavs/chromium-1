@@ -17,8 +17,3 @@ interface ScreenProviderObserver {
                     int64 primary_display_id,
                     int64 internal_display_id);
 };
-
-interface ScreenProvider {
-  // Adding an observer triggers a notification with the initial values.
-  AddObserver(ScreenProviderObserver observer);
-};

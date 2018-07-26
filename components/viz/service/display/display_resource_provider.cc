@@ -31,17 +31,15 @@ base::AtomicSequenceNumber g_next_display_resource_provider_tracing_id;
 
 }  // namespace
 
-static GLint GetActiveTextureUnit(GLES2Interface* gl) {
-  GLint active_unit = 0;
-  gl->GetIntegerv(GL_ACTIVE_TEXTURE, &active_unit);
-  return active_unit;
-}
-
 class ScopedSetActiveTexture {
  public:
   ScopedSetActiveTexture(GLES2Interface* gl, GLenum unit)
       : gl_(gl), unit_(unit) {
-    DCHECK_EQ(GL_TEXTURE0, GetActiveTextureUnit(gl_));
+#if DCHECK_IS_ON()
+    GLint active_unit = 0;
+    gl->GetIntegerv(GL_ACTIVE_TEXTURE, &active_unit);
+    DCHECK_EQ(GL_TEXTURE0, active_unit);
+#endif
 
     if (unit_ != GL_TEXTURE0)
       gl_->ActiveTexture(unit_);
@@ -239,7 +237,7 @@ GLenum DisplayResourceProvider::GetResourceTextureTarget(ResourceId id) {
 
 gfx::BufferFormat DisplayResourceProvider::GetBufferFormat(ResourceId id) {
   ChildResource* resource = GetResource(id);
-  return resource->transferable.buffer_format;
+  return BufferFormat(resource->transferable.format);
 }
 
 void DisplayResourceProvider::WaitSyncToken(ResourceId id) {

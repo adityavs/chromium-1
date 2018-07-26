@@ -99,7 +99,7 @@ class ModuleMapTestModulator final : public DummyModulator {
   ScriptModuleResolver* GetScriptModuleResolver() override {
     return resolver_.Get();
   }
-  ScriptState* GetScriptState() override { return script_state_.get(); }
+  ScriptState* GetScriptState() override { return script_state_; }
 
   class TestModuleScriptFetcher final
       : public GarbageCollectedFinalized<TestModuleScriptFetcher>,
@@ -114,7 +114,7 @@ class ModuleMapTestModulator final : public DummyModulator {
                ModuleScriptFetcher::Client* client) override {
       TestRequest* test_request = new TestRequest(
           ModuleScriptCreationParams(
-              request.Url(), "",
+              request.Url(), MovableString(String("").ReleaseImpl()),
               request.GetResourceRequest().GetFetchCredentialsMode(),
               kSharableCrossOrigin),
           client);
@@ -159,7 +159,7 @@ class ModuleMapTestModulator final : public DummyModulator {
   };
   HeapVector<Member<TestRequest>> test_requests_;
 
-  scoped_refptr<ScriptState> script_state_;
+  Member<ScriptState> script_state_;
   Member<TestScriptModuleResolver> resolver_;
 };
 
@@ -168,6 +168,7 @@ ModuleMapTestModulator::ModuleMapTestModulator(ScriptState* script_state)
 
 void ModuleMapTestModulator::Trace(blink::Visitor* visitor) {
   visitor->Trace(test_requests_);
+  visitor->Trace(script_state_);
   visitor->Trace(resolver_);
   DummyModulator::Trace(visitor);
 }
@@ -208,7 +209,7 @@ TEST_F(ModuleMapTest, sequentialRequests) {
   platform->AdvanceClockSeconds(1.);  // For non-zero DocumentParserTimings
 
   KURL url(NullURL(), "https://example.com/foo.js");
-  FetchClientSettingsObjectSnapshot settings_object(GetDocument());
+  auto* settings_object = new FetchClientSettingsObjectSnapshot(GetDocument());
 
   // First request
   TestSingleModuleClient* client = new TestSingleModuleClient;
@@ -254,7 +255,7 @@ TEST_F(ModuleMapTest, concurrentRequestsShouldJoin) {
   platform->AdvanceClockSeconds(1.);  // For non-zero DocumentParserTimings
 
   KURL url(NullURL(), "https://example.com/foo.js");
-  FetchClientSettingsObjectSnapshot settings_object(GetDocument());
+  auto* settings_object = new FetchClientSettingsObjectSnapshot(GetDocument());
 
   // First request
   TestSingleModuleClient* client = new TestSingleModuleClient;

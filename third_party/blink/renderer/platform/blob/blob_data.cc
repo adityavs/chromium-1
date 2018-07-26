@@ -46,7 +46,6 @@
 #include "third_party/blink/renderer/platform/cross_thread_functional.h"
 #include "third_party/blink/renderer/platform/histogram.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
-#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/text/line_ending.h"
 #include "third_party/blink/renderer/platform/uuid.h"
 #include "third_party/blink/renderer/platform/web_task_runner.h"
@@ -360,6 +359,18 @@ BlobPtr BlobDataHandle::CloneBlobPtr() {
   blob->Clone(MakeRequest(&blob_clone));
   blob_info_ = blob.PassInterface();
   return blob_clone;
+}
+
+network::mojom::blink::DataPipeGetterPtr BlobDataHandle::AsDataPipeGetter() {
+  MutexLocker locker(blob_info_mutex_);
+  if (!blob_info_.is_valid())
+    return nullptr;
+  network::mojom::blink::DataPipeGetterPtr result;
+  BlobPtr blob;
+  blob.Bind(std::move(blob_info_));
+  blob->AsDataPipeGetter(MakeRequest(&result));
+  blob_info_ = blob.PassInterface();
+  return result;
 }
 
 void BlobDataHandle::ReadAll(mojo::ScopedDataPipeProducerHandle pipe,

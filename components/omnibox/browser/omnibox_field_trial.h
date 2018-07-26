@@ -27,6 +27,7 @@ namespace omnibox {
 
 extern const base::Feature kOmniboxRichEntitySuggestions;
 extern const base::Feature kOmniboxNewAnswerLayout;
+extern const base::Feature kOmniboxReverseAnswers;
 extern const base::Feature kOmniboxTailSuggestions;
 extern const base::Feature kOmniboxTabSwitchSuggestions;
 extern const base::Feature kEnableClipboardProvider;
@@ -42,6 +43,7 @@ extern const base::Feature kUIExperimentSwapTitleAndUrl;
 extern const base::Feature kUIExperimentVerticalMargin;
 extern const base::Feature kSpeculativeServiceWorkerStartOnQueryInput;
 extern const base::Feature kBreakWordsAtUnderscores;
+extern const base::Feature kDocumentProvider;
 
 }  // namespace omnibox
 
@@ -414,6 +416,10 @@ class OmniboxFieldTrial {
   // Returns true if either (the new answer layout flag and the refresh UI) or
   // the #upcoming-ui-features flag is enabled.
   static bool IsNewAnswerLayoutEnabled();
+
+  // Returns true if either (the reverse answers flag and the refresh UI) or
+  // the #upcoming-ui-features flag is enabled.
+  static bool IsReverseAnswersEnabled();
 
   // Returns true if either (the tab switch suggestions flag and the refresh UI)
   // or the #upcoming-ui-features flag is enabled.

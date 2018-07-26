@@ -76,22 +76,37 @@ class CORE_EXPORT ObjectPaintProperties {
   // The hierarchy of the effect subtree created by a LayoutObject is as
   // follows:
   // [ effect ]
-  // |   Isolated group to apply various CSS effects, including opacity,
-  // |   mix-blend-mode, and for isolation if a mask needs to be applied or
-  // |   backdrop-dependent children are present.
+  // |     Isolated group to apply various CSS effects, including opacity,
+  // |     mix-blend-mode, and for isolation if a mask needs to be applied or
+  // |     backdrop-dependent children are present.
   // +-[ filter ]
   // |     Isolated group for CSS filter.
+  // +-[ vertical/horizontal scrollbar effect ]
+  // |     Overlay Scrollbars on Aura and Android need effect node for fade
+  // |     animation.
   // +-[ mask ]
   // |     Isolated group for painting the CSS mask. This node will have
   // |     SkBlendMode::kDstIn and shall paint last, i.e. after masked contents.
   // +-[ clip path ]
-  //       Isolated group for painting the CSS clip-path. This node will have
-  //       SkBlendMode::kDstIn and shall paint last, i.e. after clipped
-  //       contents.
+  // |     Isolated group for painting the CSS clip-path. This node will have
+  // |     SkBlendMode::kDstIn and shall paint last, i.e. after clipped
+  // |     contents.
+  // +-[ link highlight effect ]
+  //       The link highlight effect is only used for link highlight animations
+  //       and should never have descendants.
   const EffectPaintPropertyNode* Effect() const { return effect_.get(); }
   const EffectPaintPropertyNode* Filter() const { return filter_.get(); }
+  const EffectPaintPropertyNode* VerticalScrollbarEffect() const {
+    return vertical_scrollbar_effect_.get();
+  }
+  const EffectPaintPropertyNode* HorizontalScrollbarEffect() const {
+    return horizontal_scrollbar_effect_.get();
+  }
   const EffectPaintPropertyNode* Mask() const { return mask_.get(); }
   const EffectPaintPropertyNode* ClipPath() const { return clip_path_.get(); }
+  const EffectPaintPropertyNode* LinkHighlightEffect() const {
+    return link_highlight_effect_.get();
+  }
 
   // The hierarchy of the clip subtree created by a LayoutObject is as follows:
   // [ fragment clip ]
@@ -157,8 +172,15 @@ class CORE_EXPORT ObjectPaintProperties {
   bool ClearTransform() { return Clear(transform_); }
   bool ClearEffect() { return Clear(effect_); }
   bool ClearFilter() { return Clear(filter_); }
+  bool ClearVerticalScrollbarEffect() {
+    return Clear(vertical_scrollbar_effect_);
+  }
+  bool ClearHorizontalScrollbarEffect() {
+    return Clear(horizontal_scrollbar_effect_);
+  }
   bool ClearMask() { return Clear(mask_); }
   bool ClearClipPath() { return Clear(clip_path_); }
+  bool ClearLinkHighlightEffect() { return Clear(link_highlight_effect_); }
   bool ClearFragmentClip() { return Clear(fragment_clip_); }
   bool ClearClipPathClip() { return Clear(clip_path_clip_); }
   bool ClearMaskClip() { return Clear(mask_clip_); }
@@ -227,6 +249,16 @@ class CORE_EXPORT ObjectPaintProperties {
                             EffectPaintPropertyNode::State&& state) {
     return Update(filter_, parent, std::move(state));
   }
+  UpdateResult UpdateVerticalScrollbarEffect(
+      const EffectPaintPropertyNode& parent,
+      EffectPaintPropertyNode::State&& state) {
+    return Update(vertical_scrollbar_effect_, parent, std::move(state));
+  }
+  UpdateResult UpdateHorizontalScrollbarEffect(
+      const EffectPaintPropertyNode& parent,
+      EffectPaintPropertyNode::State&& state) {
+    return Update(horizontal_scrollbar_effect_, parent, std::move(state));
+  }
   UpdateResult UpdateMask(const EffectPaintPropertyNode& parent,
                           EffectPaintPropertyNode::State&& state) {
     return Update(mask_, parent, std::move(state));
@@ -234,6 +266,11 @@ class CORE_EXPORT ObjectPaintProperties {
   UpdateResult UpdateClipPath(const EffectPaintPropertyNode& parent,
                               EffectPaintPropertyNode::State&& state) {
     return Update(clip_path_, parent, std::move(state));
+  }
+  UpdateResult UpdateLinkHighlightEffect(
+      const EffectPaintPropertyNode& parent,
+      EffectPaintPropertyNode::State&& state) {
+    return Update(link_highlight_effect_, parent, std::move(state));
   }
   UpdateResult UpdateFragmentClip(const ClipPaintPropertyNode& parent,
                                   ClipPaintPropertyNode::State&& state) {
@@ -283,10 +320,18 @@ class CORE_EXPORT ObjectPaintProperties {
       cloned->effect_ = effect_->Clone();
     if (filter_)
       cloned->filter_ = filter_->Clone();
+    if (vertical_scrollbar_effect_)
+      cloned->vertical_scrollbar_effect_ = vertical_scrollbar_effect_->Clone();
+    if (horizontal_scrollbar_effect_) {
+      cloned->horizontal_scrollbar_effect_ =
+          horizontal_scrollbar_effect_->Clone();
+    }
     if (mask_)
       cloned->mask_ = mask_->Clone();
     if (clip_path_)
       cloned->clip_path_ = clip_path_->Clone();
+    if (link_highlight_effect_)
+      cloned->link_highlight_effect_ = link_highlight_effect_->Clone();
     if (fragment_clip_)
       cloned->fragment_clip_ = fragment_clip_->Clone();
     if (clip_path_clip_)
@@ -354,8 +399,11 @@ class CORE_EXPORT ObjectPaintProperties {
   scoped_refptr<TransformPaintPropertyNode> transform_;
   scoped_refptr<EffectPaintPropertyNode> effect_;
   scoped_refptr<EffectPaintPropertyNode> filter_;
+  scoped_refptr<EffectPaintPropertyNode> vertical_scrollbar_effect_;
+  scoped_refptr<EffectPaintPropertyNode> horizontal_scrollbar_effect_;
   scoped_refptr<EffectPaintPropertyNode> mask_;
   scoped_refptr<EffectPaintPropertyNode> clip_path_;
+  scoped_refptr<EffectPaintPropertyNode> link_highlight_effect_;
   scoped_refptr<ClipPaintPropertyNode> fragment_clip_;
   scoped_refptr<ClipPaintPropertyNode> clip_path_clip_;
   scoped_refptr<ClipPaintPropertyNode> mask_clip_;

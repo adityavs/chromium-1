@@ -12,6 +12,7 @@
 <translation id="1206693055195146388">повзунок</translation>
 <translation id="1211441953136645838">кінцева виноска</translation>
 <translation id="1281252709823657822">діалогове вікно</translation>
+<translation id="1289247557029249093">Вийти з режиму "картинка в картинці"</translation>
 <translation id="1335095011850992622">подяки</translation>
 <translation id="1342835525016946179">стаття</translation>
 <translation id="1359897965706325498">банер</translation>
@@ -51,6 +52,7 @@
 <translation id="2653659639078652383">Надіслати</translation>
 <translation id="2657045182931379222">графічний об’єкт</translation>
 <translation id="2674318244760992338">нижній колонтитул</translation>
+<translation id="2706474812903655270">Це відео відтворюється в режимі "картинка в картинці"</translation>
 <translation id="2709516037105925701">Автозаповнення</translation>
 <translation id="2723001399770238859">аудіо</translation>
 <translation id="2746543609216772311">Має бути <ph name="MINIMUM_DATE_OR_TIME" /> або пізніша дата.</translation>
@@ -114,7 +116,6 @@
 <translation id="5117590920725113268">Показати наступний місяць</translation>
 <translation id="512758898067543763">заголовок рядка</translation>
 <translation id="5143125788380636750">епілог</translation>
-<translation id="5153163864850940242">Це відео відтворюється в режимі "Картинка в картинці"</translation>
 <translation id="5164977714490026579">Значення має бути більшим або дорівнювати <ph name="MINIMUM" />.</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> Пб</translation>
 <translation id="5307600278924710095">Введіть частину електронної адреси до знака "<ph name="ATSIGN" />". Електронна адреса "<ph name="INVALIDADDRESS" />" неповна.</translation>
@@ -146,7 +147,6 @@
 <translation id="6164829606128959761">вимірювач</translation>
 <translation id="6166809985690652833">післямова</translation>
 <translation id="6213469881011901533">глосарій</translation>
-<translation id="6310801910862476708">Вийти з режиму "Картинка в картинці"</translation>
 <translation id="6398862346408813489">Показати панель вибору місяців</translation>
 <translation id="6404546809543547843">повзунок часу відтворення аудіо</translation>
 <translation id="6453774872122745852">слова подяки</translation>
@@ -191,6 +191,7 @@
 <translation id="7720026100085573005">залишилось часу</translation>
 <translation id="7740016676195725605">сховати приховані субтитри</translation>
 <translation id="7740050170769002709">Вміст HTML</translation>
+<translation id="7750228210027921155">Картинка в картинці</translation>
 <translation id="7789962463072032349">призупинити</translation>
 <translation id="7802800022689234070">трикутник відкривання</translation>
 <translation id="7888071071722539607">Електронна адреса має містити знак "<ph name="ATSIGN" />". В електронній адресі "<ph name="INVALIDADDRESS" />" знака "<ph name="ATSIGN" />" немає.</translation>
@@ -220,7 +221,6 @@
 <translation id="860475260694818407">зміст</translation>
 <translation id="8613126697340063924">керувати віддаленим відтворенням</translation>
 <translation id="862370744433916922">підзаголовок</translation>
-<translation id="8741316211671074806">Картинка в картинці</translation>
 <translation id="8750798805984357768">Виберіть один із запропонованих варіантів.</translation>
 <translation id="8785498733064193001">розпочати відтворення</translation>
 <translation id="8808573423886751634">розділ</translation>
@@ -238,6 +238,7 @@
 <translation id="9132465097189459683">Інші...</translation>
 <translation id="9138385573473225930">сповіщення</translation>
 <translation id="9155987714137265666"><ph name="WEEK" />, починається <ph name="WEEK_START_DATE" /></translation>
+<translation id="916607977885256133">Картинка в картинці</translation>
 <translation id="9168329111483466115">виноска</translation>
 <translation id="954003015749068518">увімкнути режим "Картинка в картинці"</translation>
 <translation id="966787709310836684">меню</translation>

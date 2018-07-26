@@ -8,9 +8,13 @@
 #include "base/macros.h"
 #include "base/observer_list.h"
 #include "chrome/browser/resource_coordinator/lifecycle_unit.h"
+#include "chrome/browser/resource_coordinator/time.h"
 #include "content/public/browser/visibility.h"
 
 namespace resource_coordinator {
+
+class LifecycleUnitSourceBase;
+class UsageClock;
 
 using ::mojom::LifecycleUnitState;
 using ::mojom::LifecycleUnitStateChangeReason;
@@ -18,13 +22,18 @@ using ::mojom::LifecycleUnitStateChangeReason;
 // Base class for a LifecycleUnit.
 class LifecycleUnitBase : public LifecycleUnit {
  public:
-  explicit LifecycleUnitBase(content::Visibility visibility);
+  explicit LifecycleUnitBase(LifecycleUnitSourceBase* source,
+                             content::Visibility visibility,
+                             UsageClock* usage_clock);
   ~LifecycleUnitBase() override;
 
   // LifecycleUnit:
+  LifecycleUnitSource* GetSource() const override;
   int32_t GetID() const override;
-  base::TimeTicks GetLastActiveTime() const override;
+  base::TimeTicks GetWallTimeWhenHidden() const override;
+  base::TimeDelta GetChromeUsageTimeWhenHidden() const override;
   LifecycleUnitState GetState() const override;
+  base::TimeTicks GetStateChangeTime() const override;
   void AddObserver(LifecycleUnitObserver* observer) override;
   void RemoveObserver(LifecycleUnitObserver* observer) override;
   ukm::SourceId GetUkmSourceId() const override;
@@ -48,7 +57,9 @@ class LifecycleUnitBase : public LifecycleUnit {
 
   // Notifies observers that the LifecycleUnit is being destroyed. This is
   // invoked by derived classes rather than by the base class to avoid notifying
-  // observers when the LifecycleUnit has been partially destroyed.
+  // observers when the LifecycleUnit has been partially destroyed. This also
+  // forwards the notification to the lifecycle unit source via
+  // LifecycleUnitSourceBase.
   void OnLifecycleUnitDestroyed();
 
  private:
@@ -57,15 +68,26 @@ class LifecycleUnitBase : public LifecycleUnit {
   // A unique id representing this LifecycleUnit.
   const int32_t id_ = ++next_id_;
 
+  // The source that owns this lifecycle unit. This can be nullptr.
+  LifecycleUnitSourceBase* source_;
+
   // Current state of this LifecycleUnit.
   LifecycleUnitState state_ = LifecycleUnitState::ACTIVE;
 
-  // TODO(fdoray): Use WebContents::GetLastActiveTime() instead of tracking a
-  // separate last active time here. For this to work,
-  // WebContents::GetLastActiveTime() will have to be updated to return the last
-  // time at which the WebContents was active, rather than the last time at
-  // which it was activated.
-  base::TimeTicks last_active_time_;
+  // Time at which the state changed.
+  base::TimeTicks state_change_time_ = NowTicks();
+
+  // The wall time when this LifecycleUnit was last hidden, or TimeDelta::Max()
+  // if this LifecycleUnit is currently visible.
+  base::TimeTicks wall_time_when_hidden_;
+
+  // A clock that measures Chrome usage time.
+  UsageClock* const usage_clock_;
+
+  // The Chrome usage time measured by |usage_clock_| when this LifecycleUnit
+  // was last hidden, or TimeDelta::Max() if this LifecycleUnit is currently
+  // visible.
+  base::TimeDelta chrome_usage_time_when_hidden_;
 
   base::ObserverList<LifecycleUnitObserver> observers_;
 

@@ -28,8 +28,8 @@
 
 #include "third_party/blink/renderer/modules/accessibility/ax_layout_object.h"
 
+#include "third_party/blink/renderer/core/aom/accessible_node.h"
 #include "third_party/blink/renderer/core/css_property_names.h"
-#include "third_party/blink/renderer/core/dom/accessible_node.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/range.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -96,9 +96,9 @@
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_image_map_link.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_inline_text_box.h"
+#include "third_party/blink/renderer/modules/accessibility/ax_mock_object.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object_cache_impl.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_svg_root.h"
-#include "third_party/blink/renderer/modules/accessibility/ax_table_column.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/graphics/image_data_buffer.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
@@ -779,7 +779,7 @@ bool AXLayoutObject::ComputeAccessibilityIsIgnored(
   if (IsWebArea() || layout_object_->IsListMarkerIncludingNG())
     return false;
 
-  // Using the help text, title or accessibility description (so we
+  // Using the title or accessibility description (so we
   // check if there's some kind of accessible name for the element)
   // to decide an element's visibility is not as definitive as
   // previous checks, so this should remain as one of the last.
@@ -1449,13 +1449,19 @@ String AXLayoutObject::StringValue() const {
     return ToLayoutFileUploadControl(layout_object_)->FileTextValue();
 
   // Handle other HTML input elements that aren't text controls, like date and
-  // time controls, by returning the string value, with the exception of
-  // checkboxes and radio buttons (which would return "on").
-  if (GetNode() && IsHTMLInputElement(GetNode())) {
-    HTMLInputElement* input = ToHTMLInputElement(GetNode());
-    if (input->type() != InputTypeNames::checkbox &&
-        input->type() != InputTypeNames::radio)
+  // time controls, by returning their value converted to text, with the
+  // exception of checkboxes and radio buttons (which would return "on"), and
+  // buttons which will return their name.
+  // https://html.spec.whatwg.org/multipage/forms.html#dom-input-value
+  if (const auto* input = ToHTMLInputElementOrNull(GetNode())) {
+    if (input->type() != InputTypeNames::button &&
+        input->type() != InputTypeNames::checkbox &&
+        input->type() != InputTypeNames::image &&
+        input->type() != InputTypeNames::radio &&
+        input->type() != InputTypeNames::reset &&
+        input->type() != InputTypeNames::submit) {
       return input->value();
+    }
   }
 
   // FIXME: We might need to implement a value here for more types
@@ -1657,14 +1663,16 @@ AXObject* AXLayoutObject::AccessibilityHitTest(const IntPoint& point) const {
     return nullptr;
 
   auto* frame_view = DocumentFrameView();
-  if (!frame_view || !frame_view->UpdateLifecycleToPrePaintClean())
+  if (!frame_view || !frame_view->UpdateAllLifecyclePhasesExceptPaint())
     return nullptr;
 
   PaintLayer* layer = ToLayoutBox(layout_object_)->Layer();
 
   HitTestRequest request(HitTestRequest::kReadOnly | HitTestRequest::kActive);
-  HitTestResult hit_test_result = HitTestResult(request, point);
-  layer->HitTest(hit_test_result);
+  HitTestLocation location(point);
+  HitTestResult hit_test_result = HitTestResult(request, location);
+  layer->HitTest(location, hit_test_result,
+                 LayoutRect(LayoutRect::InfiniteIntRect()));
 
   Node* node = hit_test_result.InnerNode();
   if (!node)
@@ -1905,18 +1913,6 @@ bool AXLayoutObject::CanHaveChildren() const {
     return false;
 
   return AXNodeObject::CanHaveChildren();
-}
-
-void AXLayoutObject::UpdateChildrenIfNecessary() {
-  if (NeedsToUpdateChildren())
-    ClearChildren();
-
-  AXObject::UpdateChildrenIfNecessary();
-}
-
-void AXLayoutObject::ClearChildren() {
-  AXObject::ClearChildren();
-  children_dirty_ = false;
 }
 
 //
@@ -3099,18 +3095,6 @@ void AXLayoutObject::RowHeaders(AXObjectVector& headers) const {
     AXNodeObject::RowHeaders(headers);
 }
 
-AXObject* AXLayoutObject::HeaderContainer() {
-  for (const auto& child : Children()) {
-    if (child->RoleValue() == kTableHeaderContainerRole)
-      return child;
-  }
-
-  AXMockObject* header_container =
-      ToAXMockObject(AXObjectCache().GetOrCreate(kTableHeaderContainerRole));
-  header_container->SetParent(this);
-  return header_container;
-}
-
 AXObject* AXLayoutObject::HeaderObject() const {
   LayoutObject* layout_object = GetLayoutObject();
   if (!layout_object || !layout_object->IsTableRow())
@@ -3410,21 +3394,6 @@ void AXLayoutObject::AddTableChildren() {
           children_.push_front(caption_object);
       }
     }
-  }
-
-  for (unsigned i = 0; i < ColumnCount(); i++) {
-    AXTableColumn* column = ToAXTableColumn(ax_cache.GetOrCreate(kColumnRole));
-    column->SetColumnIndex(i);
-    column->SetParent(this);
-    if (!column->AccessibilityIsIgnored())
-      children_.push_back(column);
-  }
-
-  AXObject* header_container_object = HeaderContainer();
-  if (header_container_object &&
-      !header_container_object->AccessibilityIsIgnored()) {
-    children_.push_back(header_container_object);
-    header_container_object->SetParent(this);
   }
 }
 

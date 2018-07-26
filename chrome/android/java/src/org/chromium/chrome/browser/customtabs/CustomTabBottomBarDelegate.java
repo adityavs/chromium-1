@@ -21,6 +21,7 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.RemoteViews;
 
+import org.chromium.base.ContextUtils;
 import org.chromium.base.Log;
 import org.chromium.base.metrics.CachedMetrics;
 import org.chromium.chrome.R;
@@ -52,6 +53,13 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
     private CustomTabIntentDataProvider mDataProvider;
     private PendingIntent mClickPendingIntent;
     private int[] mClickableIDs;
+    private boolean mShowShadow = true;
+
+    /**
+     * The override height in pixels. A value of -1 is interpreted as "not set" and means it should
+     * not be used.
+     */
+    private int mBottomBarHeightOverride = -1;
 
     private OnClickListener mBottomBarClickListener = new OnClickListener() {
         @Override
@@ -77,6 +85,10 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
     public void showBottomBarIfNecessary() {
         if (!shouldShowBottomBar()) return;
 
+        getBottomBarView()
+                .findViewById(R.id.bottombar_shadow)
+                .setVisibility(mShowShadow ? View.VISIBLE : View.GONE);
+
         if (mBottomBarContentView != null) {
             getBottomBarView().addView(mBottomBarContentView);
             mBottomBarContentView.addOnLayoutChangeListener(new OnLayoutChangeListener() {
@@ -84,7 +96,7 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
                 public void onLayoutChange(View v, int left, int top, int right, int bottom,
                         int oldLeft, int oldTop, int oldRight, int oldBottom) {
                     mBottomBarContentView.removeOnLayoutChangeListener(this);
-                    mFullscreenManager.setBottomControlsHeight(v.getHeight());
+                    mFullscreenManager.setBottomControlsHeight(getBottomBarHeight());
                 }
             });
             return;
@@ -161,6 +173,13 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
     }
 
     /**
+     * Sets the visibility of the bottom bar shadow.
+     */
+    public void setShowShadow(boolean show) {
+        mShowShadow = show;
+    }
+
+    /**
      * @return The height of the bottom bar, excluding its top shadow.
      */
     public int getBottomBarHeight() {
@@ -168,7 +187,19 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
                 || mBottomBarView.getChildCount() < 2) {
             return 0;
         }
+        if (mBottomBarHeightOverride != -1) return mBottomBarHeightOverride;
         return mBottomBarView.getChildAt(1).getHeight();
+    }
+
+    /**
+     * Sets a height override for the bottom bar. If this value is not set, the height of the
+     * content is used instead.
+     *
+     * @param height The override height in pixels. A value of -1 is interpreted as "not set" and
+     *     means it will not be used.
+     */
+    public void setBottomBarHeight(int height) {
+        mBottomBarHeightOverride = height;
     }
 
     /**
@@ -228,7 +259,8 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
     private boolean showRemoteViews(RemoteViews remoteViews) {
         final View inflatedView;
         try {
-            inflatedView = remoteViews.apply(mActivity.getApplicationContext(), getBottomBarView());
+            inflatedView =
+                    remoteViews.apply(ContextUtils.getApplicationContext(), getBottomBarView());
         } catch (RemoteViews.ActionException | InflateException | Resources.NotFoundException e) {
             Log.e(TAG, "Failed to inflate the RemoteViews", e);
             return false;
@@ -247,7 +279,7 @@ class CustomTabBottomBarDelegate implements FullscreenListener {
             public void onLayoutChange(View v, int left, int top, int right, int bottom,
                     int oldLeft, int oldTop, int oldRight, int oldBottom) {
                 inflatedView.removeOnLayoutChangeListener(this);
-                mFullscreenManager.setBottomControlsHeight(v.getHeight());
+                mFullscreenManager.setBottomControlsHeight(getBottomBarHeight());
             }
         });
         return true;

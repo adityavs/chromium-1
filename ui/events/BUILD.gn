@@ -151,13 +151,6 @@ component("events_base") {
       "Carbon.framework",
     ]
   }
-
-  if (is_chromecast && !is_android) {
-    sources += [
-      "chromecast/scroller.cc",
-      "chromecast/scroller.h",
-    ]
-  }
 }
 
 component("events") {
@@ -448,6 +441,7 @@ if (!is_ios) {
       "blink/fling_booster_unittest.cc",
       "blink/input_handler_proxy_unittest.cc",
       "blink/input_scroll_elasticity_controller_unittest.cc",
+      "blink/prediction/kalman_predictor_unittest.cc",
       "blink/prediction/least_squares_predictor_unittest.cc",
       "blink/scroll_predictor_unittest.cc",
       "blink/web_input_event_traits_unittest.cc",
@@ -494,7 +488,7 @@ if (!is_ios) {
       "//base/test:test_support",
       "//cc",
       "//ipc:test_support",
-      "//mojo/edk/test:run_all_unittests",
+      "//mojo/core/test:run_all_unittests",
       "//mojo/public/cpp/bindings",
       "//skia",
       "//testing/gmock",

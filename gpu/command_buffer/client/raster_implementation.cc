@@ -103,8 +103,9 @@ class TransferCacheSerializeHelperImpl
   void CreateEntryInternal(const cc::ClientTransferCacheEntry& entry) final {
     size_t size = entry.SerializedSize();
     void* data = support_->MapTransferCacheEntry(size);
-    // TODO(piman): handle error (failed to allocate/map shm)
-    DCHECK(data);
+    if (!data)
+      return;
+
     bool succeeded = entry.Serialize(
         base::make_span(reinterpret_cast<uint8_t*>(data), size));
     DCHECK(succeeded);
@@ -1131,12 +1132,12 @@ GLuint RasterImplementation::CreateAndConsumeTexture(
 }
 
 void RasterImplementation::BeginRasterCHROMIUM(
-    GLuint texture_id,
     GLuint sk_color,
     GLuint msaa_sample_count,
     GLboolean can_use_lcd_text,
     GLint color_type,
-    const cc::RasterColorSpace& raster_color_space) {
+    const cc::RasterColorSpace& raster_color_space,
+    const GLbyte* mailbox) {
   DCHECK(!raster_properties_);
 
   TransferCacheSerializeHelperImpl transfer_cache_serialize_helper(this);
@@ -1150,9 +1151,9 @@ void RasterImplementation::BeginRasterCHROMIUM(
       cc::TransferCacheEntryType::kColorSpace,
       raster_color_space.color_space_id);
 
-  helper_->BeginRasterCHROMIUM(texture_id, sk_color, msaa_sample_count,
-                               can_use_lcd_text, color_type,
-                               raster_color_space.color_space_id);
+  helper_->BeginRasterCHROMIUMImmediate(
+      sk_color, msaa_sample_count, can_use_lcd_text, color_type,
+      raster_color_space.color_space_id, mailbox);
   transfer_cache_serialize_helper.FlushEntries();
 
   raster_properties_.emplace(sk_color, can_use_lcd_text,
@@ -1238,6 +1239,9 @@ void RasterImplementation::TraceBeginCHROMIUM(const char* category_name,
   GPU_CLIENT_SINGLE_THREAD_CHECK();
   GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glTraceBeginCHROMIUM("
                      << category_name << ", " << trace_name << ")");
+  static constexpr size_t kMaxStrLen = 256;
+  DCHECK_LE(strlen(category_name), kMaxStrLen);
+  DCHECK_LE(strlen(trace_name), kMaxStrLen);
   SetBucketAsCString(kResultBucketId, category_name);
   SetBucketAsCString(kResultBucketId + 1, trace_name);
   helper_->TraceBeginCHROMIUM(kResultBucketId, kResultBucketId + 1);
@@ -1257,6 +1261,28 @@ void RasterImplementation::TraceEndCHROMIUM() {
   }
   helper_->TraceEndCHROMIUM();
   current_trace_stack_--;
+}
+
+void RasterImplementation::SetActiveURLCHROMIUM(const char* url) {
+  DCHECK(url);
+  GPU_CLIENT_SINGLE_THREAD_CHECK();
+  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glSetActiveURLCHROMIUM(" << url);
+
+  static constexpr size_t kMaxStrLen = 1024;
+  size_t len = strlen(url);
+  if (len == 0)
+    return;
+
+  SetBucketContents(kResultBucketId, url, std::min(len, kMaxStrLen) + 1);
+  helper_->SetActiveURLCHROMIUM(kResultBucketId);
+  helper_->SetBucketSize(kResultBucketId, 0);
+}
+
+void RasterImplementation::ResetActiveURLCHROMIUM() {
+  GPU_CLIENT_SINGLE_THREAD_CHECK();
+  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glResetActiveURLCHROMIUM("
+                     << ")");
+  helper_->ResetActiveURLCHROMIUM();
 }
 
 RasterImplementation::RasterProperties::RasterProperties(

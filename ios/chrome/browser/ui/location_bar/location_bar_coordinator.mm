@@ -33,12 +33,13 @@
 #include "ios/chrome/browser/ui/omnibox/web_omnibox_edit_controller_impl.h"
 #import "ios/chrome/browser/ui/toolbar/clean/toolbar_coordinator_delegate.h"
 #import "ios/chrome/browser/ui/url_loader.h"
+#import "ios/chrome/browser/ui/util/pasteboard_util.h"
 #import "ios/chrome/browser/web_state_list/web_state_list.h"
 #include "ios/public/provider/chrome/browser/chrome_browser_provider.h"
 #include "ios/public/provider/chrome/browser/voice/voice_search_provider.h"
-#import "ios/third_party/material_components_ios/src/components/Typography/src/MaterialTypography.h"
 #import "ios/web/public/navigation_manager.h"
 #import "ios/web/public/referrer.h"
+#import "ios/web/public/web_state/web_state.h"
 #include "url/gurl.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -101,21 +102,12 @@ const int kLocationAuthorizationStatusCount = 4;
 
   BOOL isIncognito = self.browserState->IsOffTheRecord();
 
-  UIColor* textColor =
-      isIncognito
-          ? [UIColor whiteColor]
-          : [UIColor colorWithWhite:0 alpha:[MDCTypography body1FontOpacity]];
-  UIColor* tintColor = isIncognito ? textColor : nil;
-  self.viewController = [[LocationBarViewController alloc]
-      initWithFrame:CGRectZero
-               font:[MDCTypography subheadFont]
-          textColor:textColor
-          tintColor:tintColor];
+  self.viewController = [[LocationBarViewController alloc] init];
   self.viewController.incognito = isIncognito;
   self.viewController.delegate = self;
-  self.viewController.dispatcher = static_cast<
-      id<ActivityServiceCommands, BrowserCommands, ApplicationCommands>>(
-      self.dispatcher);
+  self.viewController.dispatcher =
+      static_cast<id<ActivityServiceCommands, BrowserCommands,
+                     ApplicationCommands, LoadQueryCommands>>(self.dispatcher);
   self.viewController.voiceSearchEnabled = ios::GetChromeBrowserProvider()
                                                ->GetVoiceSearchProvider()
                                                ->IsVoiceSearchEnabled();
@@ -137,6 +129,7 @@ const int kLocationAuthorizationStatusCount = 4;
       setEditView:self.omniboxCoordinator.managedViewController.view];
   [self.omniboxCoordinator.managedViewController
       didMoveToParentViewController:self.viewController];
+  self.viewController.offsetProvider = [self.omniboxCoordinator offsetProvider];
 
   self.omniboxPopupCoordinator =
       [self.omniboxCoordinator createPopupCoordinator:self.popupPositioner];
@@ -177,6 +170,10 @@ const int kLocationAuthorizationStatusCount = 4;
 
 - (BOOL)isOmniboxFirstResponder {
   return [self.omniboxCoordinator isOmniboxFirstResponder];
+}
+
+- (id<LocationBarAnimatee>)locationBarAnimatee {
+  return self.viewController;
 }
 
 #pragma mark - LoadQueryCommands
@@ -231,7 +228,6 @@ const int kLocationAuthorizationStatusCount = 4;
 }
 
 - (void)focusOmnibox {
-  [self.viewController switchToEditing:YES];
   [self.omniboxCoordinator focusOmnibox];
 }
 
@@ -247,7 +243,6 @@ const int kLocationAuthorizationStatusCount = 4;
 
 - (void)locationBarHasResignedFirstResponder {
   [self.delegate locationBarDidResignFirstResponder];
-  [self.viewController switchToEditing:NO];
 }
 
 - (void)locationBarBeganEdit {
@@ -277,6 +272,10 @@ const int kLocationAuthorizationStatusCount = 4;
   }
 }
 
+- (void)locationBarCopyTapped {
+  StoreURLInPasteboard(self.webState->GetVisibleURL());
+}
+
 #pragma mark - LocationBarConsumer
 
 - (void)updateLocationText:(NSString*)text {
@@ -298,18 +297,20 @@ const int kLocationAuthorizationStatusCount = 4;
   [self.viewController updateForNTP:YES];
 }
 
+- (void)updateLocationShareable:(BOOL)shareable {
+  [self.viewController setShareButtonEnabled:shareable];
+}
+
 #pragma mark - private
 
 // Returns a dictionary with variation headers for qualified URLs. Can be empty.
 - (NSDictionary*)variationHeadersForURL:(const GURL&)URL {
-  // Note: It's OK to pass SignedIn::kNo if it's unknown, as it does not
-  // affect transmission of experiments coming from the variations server.
   net::HttpRequestHeaders variation_headers;
-  variations::AppendVariationHeaders(
+  variations::AppendVariationHeadersUnknownSignedIn(
       URL,
       self.browserState->IsOffTheRecord() ? variations::InIncognito::kYes
                                           : variations::InIncognito::kNo,
-      variations::SignedIn::kNo, &variation_headers);
+      &variation_headers);
   NSMutableDictionary* result = [NSMutableDictionary dictionary];
   net::HttpRequestHeaders::Iterator header_iterator(variation_headers);
   while (header_iterator.GetNext()) {

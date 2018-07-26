@@ -13,6 +13,7 @@
 #include "base/macros.h"
 #include "base/observer_list.h"
 #include "components/arc/arc_stop_reason.h"
+#include "components/arc/arc_supervision_transition.h"
 
 namespace base {
 class FilePath;
@@ -57,15 +58,25 @@ class ArcSession {
     // Whether the account is a child.
     bool is_child;
 
+    // The supervision transition state for this account. Indicates whether
+    // child account should become regular, regular account should become child
+    // or neither.
+    ArcSupervisionTransition supervision_transition =
+        ArcSupervisionTransition::NO_TRANSITION;
+
     // Define language configuration set during Android container boot.
     // |preferred_languages| may be empty.
     std::string locale;
     std::vector<std::string> preferred_languages;
 
+    // Whether ARC is being upgraded in a demo session.
+    bool is_demo_session = false;
+
     // |demo_session_apps_path| is a file path to the image containing set of
-    // demo apps that should be added to the Android container for demo
-    // sessions. It might be empty, in which case no demo apps will be added to
-    // the container.
+    // demo apps that should be pre-installed into the Android container for
+    // demo sessions. It might be empty, in which case no demo apps will be
+    // pre-installed.
+    // Should be empty if |is_demo_session| is not set.
     base::FilePath demo_session_apps_path;
 
    private:

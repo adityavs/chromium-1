@@ -27,6 +27,7 @@
 #include "third_party/blink/renderer/core/editing/editor.h"
 
 #include "third_party/blink/public/platform/web_scroll_into_view_params.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/clipboard/data_object.h"
 #include "third_party/blink/renderer/core/clipboard/data_transfer.h"
 #include "third_party/blink/renderer/core/clipboard/data_transfer_access_policy.h"
@@ -34,7 +35,6 @@
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
 #include "third_party/blink/renderer/core/css_property_names.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/document_fragment.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
@@ -49,6 +49,7 @@
 #include "third_party/blink/renderer/core/editing/commands/simplify_markup_command.h"
 #include "third_party/blink/renderer/core/editing/commands/typing_command.h"
 #include "third_party/blink/renderer/core/editing/commands/undo_stack.h"
+#include "third_party/blink/renderer/core/editing/editing_behavior.h"
 #include "third_party/blink/renderer/core/editing/editing_style_utilities.h"
 #include "third_party/blink/renderer/core/editing/editing_tri_state.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
@@ -56,6 +57,7 @@
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
 #include "third_party/blink/renderer/core/editing/ime/input_method_controller.h"
 #include "third_party/blink/renderer/core/editing/iterators/search_buffer.h"
+#include "third_party/blink/renderer/core/editing/kill_ring.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker_controller.h"
 #include "third_party/blink/renderer/core/editing/selection_template.h"
@@ -86,7 +88,6 @@
 #include "third_party/blink/renderer/core/page/focus_controller.h"
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/kill_ring.h"
 #include "third_party/blink/renderer/platform/scroll/scroll_alignment.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
@@ -896,7 +897,7 @@ void Editor::SetMarkedTextMatchesAreHighlighted(bool flag) {
 
   are_marked_text_matches_highlighted_ = flag;
   GetFrame().GetDocument()->Markers().RepaintMarkers(
-      DocumentMarker::kTextMatch);
+      DocumentMarker::MarkerTypes::TextMatch());
 }
 
 void Editor::RespondToChangedSelection() {

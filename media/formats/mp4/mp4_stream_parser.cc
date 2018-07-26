@@ -41,6 +41,7 @@ namespace {
 
 const int kMaxEmptySampleLogs = 20;
 const int kMaxInvalidConversionLogs = 20;
+const int kMaxVideoKeyframeMismatchLogs = 10;
 
 // Caller should be prepared to handle return of Unencrypted() in case of
 // unsupported scheme.
@@ -90,8 +91,8 @@ MP4StreamParser::MP4StreamParser(const std::set<int>& audio_object_types,
       has_sbr_(has_sbr),
       has_flac_(has_flac),
       num_empty_samples_skipped_(0),
-      num_invalid_conversions_(0) {
-}
+      num_invalid_conversions_(0),
+      num_video_keyframe_mismatches_(0) {}
 
 MP4StreamParser::~MP4StreamParser() = default;
 
@@ -802,11 +803,30 @@ ParseResult MP4StreamParser::EnqueueSample(BufferQueueMap* buffers) {
             << "Failed to prepare video sample for decode";
         return ParseResult::kError;
       }
-      if (!runs_->video_description().frame_bitstream_converter->IsValid(
-              &frame_buf, &subsamples)) {
+      BitstreamConverter::AnalysisResult analysis =
+          runs_->video_description().frame_bitstream_converter->Analyze(
+              &frame_buf, &subsamples);
+      // If conformance analysis was not actually performed, assume the frame is
+      // conformant.  If it was performed and found to be non-conformant, log
+      // it.
+      if (!analysis.is_conformant.value_or(true)) {
         LIMITED_MEDIA_LOG(DEBUG, media_log_, num_invalid_conversions_,
                           kMaxInvalidConversionLogs)
             << "Prepared video sample is not conformant";
+      }
+
+      // Use |analysis.is_keyframe|, if it was actually determined, for logging
+      // if the analysis mismatches the container's keyframe metadata for
+      // |frame_buf|.
+      if (analysis.is_keyframe.has_value() &&
+          runs_->is_keyframe() != analysis.is_keyframe.value()) {
+        LIMITED_MEDIA_LOG(DEBUG, media_log_, num_video_keyframe_mismatches_,
+                          kMaxVideoKeyframeMismatchLogs)
+            << "ISO-BMFF container metadata for video frame indicates that the "
+               "frame is "
+            << (runs_->is_keyframe() ? "" : "not ")
+            << "a keyframe, but the video frame contents indicate the "
+               "opposite.";
       }
     }
   }

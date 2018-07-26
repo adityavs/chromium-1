@@ -9,9 +9,11 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "base/test/mock_callback.h"
 #include "base/test/scoped_feature_list.h"
 #include "build/build_config.h"
-#include "chrome/renderer/autofill/fake_content_password_manager_driver.h"
+#include "chrome/renderer/autofill/fake_mojo_password_manager_driver.h"
 #include "chrome/renderer/autofill/fake_password_manager_client.h"
 #include "chrome/renderer/autofill/password_generation_test_utils.h"
 #include "chrome/test/base/chrome_render_view_test.h"
@@ -39,6 +41,7 @@
 #include "third_party/blink/public/web/web_view.h"
 #include "ui/events/keycodes/keyboard_codes.h"
 
+using autofill::FillingStatus;
 using autofill::FormTracker;
 using autofill::PasswordForm;
 using base::ASCIIToUTF16;
@@ -289,6 +292,27 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
   void SetUp() override {
     ChromeRenderViewTest::SetUp();
 
+    // TODO(crbug/862989): Remove workaround preventing non-test classes to bind
+    // fake_driver_ or fake_pw_client_.
+    password_autofill_agent_->GetPasswordManagerDriver();
+    password_generation_->RequestPasswordManagerClientForTesting();
+    base::RunLoop().RunUntilIdle();  // Executes binding the interfaces.
+    // Reject all requests to bind driver/client to anything but the test class:
+    view_->GetMainRenderFrame()
+        ->GetRemoteAssociatedInterfaces()
+        ->OverrideBinderForTesting(
+            mojom::PasswordManagerClient::Name_,
+            base::BindRepeating([](mojo::ScopedInterfaceEndpointHandle handle) {
+              handle.reset();
+            }));
+    view_->GetMainRenderFrame()
+        ->GetRemoteAssociatedInterfaces()
+        ->OverrideBinderForTesting(
+            mojom::PasswordManagerDriver::Name_,
+            base::BindRepeating([](mojo::ScopedInterfaceEndpointHandle handle) {
+              handle.reset();
+            }));
+
     // Add a preferred login and an additional login to the FillData.
     username1_ = ASCIIToUTF16(kAliceUsername);
     password1_ = ASCIIToUTF16(kAlicePassword);
@@ -338,34 +362,25 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
   }
 
   void RegisterMainFrameRemoteInterfaces() override {
-    // We only use the fake driver for main frame
-    // because our test cases only involve the main frame.
-    service_manager::InterfaceProvider* remote_interfaces =
-        view_->GetMainRenderFrame()->GetRemoteInterfaces();
-    service_manager::InterfaceProvider::TestApi test_api(remote_interfaces);
-    test_api.SetBinderForName(
-        mojom::PasswordManagerDriver::Name_,
-        base::Bind(&PasswordAutofillAgentTest::BindPasswordManagerDriver,
-                   base::Unretained(this)));
-
     // Because the test cases only involve the main frame in this test,
-    // the fake password client is only used for the main frame.
+    // the fake password client and the fake driver is only used on main frame.
     blink::AssociatedInterfaceProvider* remote_associated_interfaces =
         view_->GetMainRenderFrame()->GetRemoteAssociatedInterfaces();
     remote_associated_interfaces->OverrideBinderForTesting(
         mojom::PasswordManagerClient::Name_,
-        base::Bind(&PasswordAutofillAgentTest::BindPasswordManagerClient,
-                   base::Unretained(this)));
+        base::BindRepeating(
+            &PasswordAutofillAgentTest::BindPasswordManagerClient,
+            base::Unretained(this)));
+    remote_associated_interfaces->OverrideBinderForTesting(
+        mojom::PasswordManagerDriver::Name_,
+        base::BindRepeating(
+            &PasswordAutofillAgentTest::BindPasswordManagerDriver,
+            base::Unretained(this)));
   }
 
   void SetFillOnAccountSelect() {
     scoped_feature_list_.InitAndEnableFeature(
         password_manager::features::kFillOnAccountSelect);
-  }
-
-  void SetManualFallbacksStandalone() {
-    scoped_feature_list_.InitAndEnableFeature(
-        password_manager::features::kManualFallbacksFillingStandalone);
   }
 
   void EnableShowAutofillSignatures() {
@@ -578,11 +593,6 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
     return fake_driver_.called_show_pw_suggestions();
   }
 
-  bool GetCalledShowManualFallbackSuggestion() {
-    base::RunLoop().RunUntilIdle();
-    return fake_driver_.called_manual_fallback_suggestion();
-  }
-
   void ExpectFormSubmittedWithUsernameAndPasswords(
       const std::string& username_value,
       const std::string& password_value,
@@ -662,9 +672,9 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
     return fake_pw_client_.called_automatic_generation_status_changed_true();
   }
 
-  void BindPasswordManagerDriver(mojo::ScopedMessagePipeHandle handle) {
+  void BindPasswordManagerDriver(mojo::ScopedInterfaceEndpointHandle handle) {
     fake_driver_.BindRequest(
-        mojom::PasswordManagerDriverRequest(std::move(handle)));
+        mojom::PasswordManagerDriverAssociatedRequest(std::move(handle)));
   }
 
   void BindPasswordManagerClient(mojo::ScopedInterfaceEndpointHandle handle) {
@@ -699,7 +709,7 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
         ->DidCommitProvisionalLoad(false, true);
   }
 
-  FakeContentPasswordManagerDriver fake_driver_;
+  FakeMojoPasswordManagerDriver fake_driver_;
   FakePasswordManagerClient fake_pw_client_;
 
   base::string16 username1_;
@@ -714,6 +724,9 @@ class PasswordAutofillAgentTest : public ChromeRenderViewTest {
   WebInputElement username_element_;
   WebInputElement password_element_;
   base::test::ScopedFeatureList scoped_feature_list_;
+
+ protected:
+  base::HistogramTester histogram_tester_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PasswordAutofillAgentTest);
@@ -830,6 +843,28 @@ TEST_F(PasswordAutofillAgentTest, MAYBE_AutocompleteForPrefilledUsernameValue) {
 
   // The username and password should have been autocompleted.
   CheckTextFieldsDOMState(kAliceUsername, true, kAlicePassword, true);
+
+  histogram_tester_.ExpectUniqueSample(
+      "PasswordManager.PrefilledUsernameFillOutcome",
+      PrefilledUsernameFillOutcome::kPrefilledPlaceholderUsernameOverridden, 1);
+}
+
+// Tests that if filling is invoked twice for the same autofill agent the
+// prefilled username metrics are only logged once.
+TEST_F(PasswordAutofillAgentTest, PrefilledUsernameMetricsOnlyLoggedOnce) {
+  // Set the username element to a value from the prefilled values list.
+  // Comparison should be insensitive to leading and trailing whitespaces.
+  username_element_.SetValue(
+      WebString::FromUTF16(base::UTF8ToUTF16(" User Name ")));
+
+  // Simulate the browser sending back the login info multiple tims.
+  // This triggers the autocomplete.
+  SimulateOnFillPasswordForm(fill_data_);
+  SimulateOnFillPasswordForm(fill_data_);
+
+  histogram_tester_.ExpectUniqueSample(
+      "PasswordManager.PrefilledUsernameFillOutcome",
+      PrefilledUsernameFillOutcome::kPrefilledPlaceholderUsernameOverridden, 1);
 }
 
 // Fill a password field if the stored username is a prefix of username in
@@ -914,6 +949,11 @@ TEST_F(PasswordAutofillAgentTest, NoPartialMatchForPrefilledUsername) {
   CheckTextFieldsSuggestedState("", false, std::string(), false);
   CheckUsernameDOMStatePasswordSuggestedState("ali", false, std::string(),
                                               false);
+
+  histogram_tester_.ExpectUniqueSample(
+      "PasswordManager.PrefilledUsernameFillOutcome",
+      autofill::PrefilledUsernameFillOutcome::kPrefilledUsernameNotOverridden,
+      1);
 }
 
 TEST_F(PasswordAutofillAgentTest, InputWithNoForms) {
@@ -1632,8 +1672,10 @@ TEST_F(PasswordAutofillAgentTest, FillIntoFocusedReadonlyTextField) {
   // If the field is readonly, it should not be affected.
   SetElementReadOnly(username_element_, true);
   SimulateElementClick(kUsernameName);
-  password_autofill_agent_->FillIntoFocusedField(/*is_password=*/false,
-                                                 ASCIIToUTF16(kAliceUsername));
+  base::MockCallback<base::OnceCallback<void(FillingStatus)>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(FillingStatus::ERROR_NO_VALID_FIELD));
+  password_autofill_agent_->FillIntoFocusedField(
+      /*is_password=*/false, ASCIIToUTF16(kAliceUsername), mock_callback.Get());
   CheckTextFieldsDOMState(std::string(), false, std::string(), false);
 }
 
@@ -1646,8 +1688,11 @@ TEST_F(PasswordAutofillAgentTest, FillIntoFocusedWritableTextField) {
   SetFocused(username_element_);
 
   SetElementReadOnly(username_element_, false);
-  password_autofill_agent_->FillIntoFocusedField(/*is_password=*/false,
-                                                 ASCIIToUTF16(kAliceUsername));
+
+  base::MockCallback<base::OnceCallback<void(FillingStatus)>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(FillingStatus::SUCCESS));
+  password_autofill_agent_->FillIntoFocusedField(
+      /*is_password=*/false, ASCIIToUTF16(kAliceUsername), mock_callback.Get());
   CheckTextFieldsDOMState(kAliceUsername, true, std::string(), false);
   CheckUsernameSelection(strlen(kAliceUsername), strlen(kAliceUsername));
 }
@@ -1659,14 +1704,19 @@ TEST_F(PasswordAutofillAgentTest, FillIntoFocusedFieldOnlyIntoPasswordFields) {
 
   // Filling a password into a username field doesn't work.
   SimulateElementClick(kUsernameName);
-  password_autofill_agent_->FillIntoFocusedField(/*is_password=*/true,
-                                                 ASCIIToUTF16(kAlicePassword));
+
+  base::MockCallback<base::OnceCallback<void(FillingStatus)>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(FillingStatus::ERROR_NOT_ALLOWED));
+  password_autofill_agent_->FillIntoFocusedField(
+      /*is_password=*/true, ASCIIToUTF16(kAlicePassword), mock_callback.Get());
   CheckTextFieldsDOMState(std::string(), false, std::string(), false);
 
   // When a password field is focus, the filling works.
   SimulateElementClick(kPasswordName);
-  password_autofill_agent_->FillIntoFocusedField(/*is_password=*/true,
-                                                 ASCIIToUTF16(kAlicePassword));
+
+  EXPECT_CALL(mock_callback, Run(FillingStatus::SUCCESS));
+  password_autofill_agent_->FillIntoFocusedField(
+      /*is_password=*/true, ASCIIToUTF16(kAlicePassword), mock_callback.Get());
   CheckTextFieldsDOMState(std::string(), false, kAlicePassword, true);
 }
 
@@ -1681,8 +1731,11 @@ TEST_F(PasswordAutofillAgentTest, FillIntoFocusedFieldForNonClickFocus) {
   // The completion should now affect ONLY the password field. Don't fill a
   // password so the error on failure shows where the filling happened.
   // (see FillIntoFocusedFieldOnlyIntoPasswordFields).
-  password_autofill_agent_->FillIntoFocusedField(/*is_password=*/false,
-                                                 ASCIIToUTF16("TextToFill"));
+
+  base::MockCallback<base::OnceCallback<void(FillingStatus)>> mock_callback;
+  EXPECT_CALL(mock_callback, Run(FillingStatus::SUCCESS)).Times(1);
+  password_autofill_agent_->FillIntoFocusedField(
+      /*is_password=*/false, ASCIIToUTF16("TextToFill"), mock_callback.Get());
   CheckTextFieldsDOMState(std::string(), false, "TextToFill", true);
 }
 
@@ -2498,7 +2551,6 @@ TEST_F(PasswordAutofillAgentTest, PasswordGenerationSupersedesAutofill) {
   SetFocused(password_element_);
   SimulateElementClick("new_password");
   EXPECT_FALSE(GetCalledShowPasswordSuggestions());
-  EXPECT_FALSE(GetCalledShowManualFallbackSuggestion());
   EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
 }
 
@@ -2850,6 +2902,28 @@ TEST_F(PasswordAutofillAgentTest,
   EXPECT_FALSE(fake_driver_.called_password_form_submitted());
 }
 
+TEST_F(PasswordAutofillAgentTest, DriverIsInformedAboutUnfillableField) {
+  EXPECT_FALSE(fake_driver_.last_focused_element_was_fillable());
+  SimulateElementClick(kPasswordName);
+  fake_driver_.Flush();
+  EXPECT_TRUE(fake_driver_.last_focused_element_was_fillable());
+
+  SetElementReadOnly(username_element_, true);
+  SetFocused(username_element_);
+  fake_driver_.Flush();
+  EXPECT_FALSE(fake_driver_.last_focused_element_was_fillable());
+}
+
+TEST_F(PasswordAutofillAgentTest, DriverIsInformedAboutPasswordFields) {
+  SimulateElementClick(kUsernameName);
+  fake_driver_.Flush();
+  EXPECT_FALSE(fake_driver_.last_focused_input_was_password());
+
+  SimulateElementClick(kPasswordName);
+  fake_driver_.Flush();
+  EXPECT_TRUE(fake_driver_.last_focused_input_was_password());
+}
+
 // Tests that credential suggestions are autofilled on a password (and change
 // password) forms having either ambiguous or empty name.
 TEST_F(PasswordAutofillAgentTest,
@@ -3195,6 +3269,7 @@ TEST_F(PasswordAutofillAgentTest, SuggestMultiplePasswordFields) {
 }
 
 TEST_F(PasswordAutofillAgentTest, ShowAutofillSignaturesFlag) {
+  // Tests that form signature is set iff the flag is enabled.
   const bool kFalseTrue[] = {false, true};
   for (bool show_signatures : kFalseTrue) {
     if (show_signatures)
@@ -3206,39 +3281,13 @@ TEST_F(PasswordAutofillAgentTest, ShowAutofillSignaturesFlag) {
         document.GetElementById(WebString::FromASCII("LoginTestForm"))
             .To<WebFormElement>();
     ASSERT_FALSE(form_element.IsNull());
-    FormData form_data;
-    ASSERT_TRUE(WebFormElementToFormData(
-        form_element, blink::WebFormControlElement(), nullptr,
-        form_util::EXTRACT_NONE, &form_data, nullptr));
 
-    // Check form signature.
+    // Check only form signature attribute. The full test is in
+    // "PasswordGenerationAgentTestForHtmlAnnotation.*".
     WebString form_signature_attribute =
         WebString::FromASCII(kDebugAttributeForFormSignature);
-    ASSERT_EQ(form_element.HasAttribute(form_signature_attribute),
+    EXPECT_EQ(form_element.HasAttribute(form_signature_attribute),
               show_signatures);
-    if (show_signatures) {
-      EXPECT_EQ(form_element.GetAttribute(form_signature_attribute),
-                blink::WebString::FromUTF8(
-                    base::NumberToString(CalculateFormSignature(form_data))));
-    }
-
-    // Check field signatures.
-    WebString field_signature_attribute =
-        WebString::FromASCII(kDebugAttributeForFieldSignature);
-    blink::WebVector<blink::WebFormControlElement> control_elements;
-    form_element.GetFormControlElements(control_elements);
-    for (size_t i = 0; i < control_elements.size(); ++i) {
-      const blink::WebFormControlElement field_element = control_elements[i];
-      bool expect_signature_for_field =
-          show_signatures && form_util::IsAutofillableElement(field_element);
-      ASSERT_EQ(field_element.HasAttribute(field_signature_attribute),
-                expect_signature_for_field);
-      if (expect_signature_for_field) {
-        EXPECT_EQ(field_element.GetAttribute(field_signature_attribute),
-                  blink::WebString::FromUTF8(base::NumberToString(
-                      CalculateFieldSignatureForField(form_data.fields[i]))));
-      }
-    }
   }
 }
 
@@ -3424,11 +3473,12 @@ TEST_F(PasswordAutofillAgentTest, ManualFallbackForSaving_PasswordChangeForm) {
   SimulateUserInputChangeForElement(&confirmation_password, "");
   EXPECT_EQ(0, fake_driver_.called_show_manual_fallback_for_saving_count());
 }
-// Tests that information about Gaia reauthentication form is not sent to the
-// browser, nor on load nor on user click.
+
+// Tests that information about Gaia reauthentication form is sent to the
+// browser with information that the password should not be saved.
 TEST_F(PasswordAutofillAgentTest, GaiaReauthenticationFormIgnored) {
   // HTML is already loaded in test SetUp method, so information about password
-  // forms was already sent to the |fake_drive_|. Hence it should be reset.
+  // forms was already sent to the |fake_driver_|. Hence it should be reset.
   fake_driver_.reset_password_forms_calls();
 
   const char kGaiaReauthenticationFormHTML[] =
@@ -3447,56 +3497,13 @@ TEST_F(PasswordAutofillAgentTest, GaiaReauthenticationFormIgnored) {
   // Simulate a user clicking on the password element.
   autofill_agent_->FormControlElementClicked(password_element_, false);
 
-  // Check that no information about Gaia reauthentication is not sent.
-  EXPECT_FALSE(fake_driver_.called_password_forms_parsed());
-  EXPECT_FALSE(fake_driver_.called_password_forms_rendered());
-}
-
-// Tests that "Show all saved passwords" option is shown on a password field.
-TEST_F(PasswordAutofillAgentTest, ShowAllSavedPasswordsTest) {
-  SetManualFallbacksStandalone();
-  LoadHTML(kFormHTML);
-  SetFocused(username_element_);
-  SimulateElementClick("username");
-  EXPECT_FALSE(GetCalledShowManualFallbackSuggestion());
-  SetFocused(password_element_);
-  SimulateElementClick("password");
-  EXPECT_TRUE(GetCalledShowManualFallbackSuggestion());
-}
-
-// Tests that "Show all saved passwords" option isn't shown on credit card
-// field.
-TEST_F(PasswordAutofillAgentTest,
-       NotShowAllSavedPasswordsOnCreditCardFormTest) {
-  SetManualFallbacksStandalone();
-  LoadHTML(kCreditCardFormHTML);
-  SetFocused(username_element_);
-  SimulateElementClick("username");
-  EXPECT_FALSE(GetCalledShowManualFallbackSuggestion());
-  SetFocused(password_element_);
-  SimulateElementClick("password");
-  EXPECT_FALSE(GetCalledShowManualFallbackSuggestion());
-}
-
-TEST_F(PasswordAutofillAgentTest, NotShowShowAllSavedPasswordsTest) {
-  SetManualFallbacksStandalone();
-  LoadHTML(kFormHTML);
-  SetFocused(password_element_);
-  SimulateElementClick("password");
-  EXPECT_TRUE(GetCalledShowManualFallbackSuggestion());
-  fake_driver_.reset_called_manual_fallback_suggestion();
-  password_element_.SetValue("123");
-  password_element_.SetAutofillState(WebAutofillState::kNotFilled);
-  ASSERT_FALSE(GetCalledShowManualFallbackSuggestion());
-}
-
-TEST_F(PasswordAutofillAgentTest, NotShowShowAllSavedPasswordsTestBlacklisted) {
-  SetManualFallbacksStandalone();
-  LoadHTML(kFormHTML);
-  password_autofill_agent_->BlacklistedFormFound();
-  SetFocused(password_element_);
-  SimulateElementClick("password");
-  EXPECT_FALSE(GetCalledShowManualFallbackSuggestion());
+  fake_driver_.Flush();
+  // Check that information about Gaia reauthentication is sent to the browser.
+  ASSERT_TRUE(fake_driver_.called_password_forms_parsed());
+  const std::vector<autofill::PasswordForm>& parsed_forms =
+      fake_driver_.password_forms_parsed().value();
+  ASSERT_EQ(1u, parsed_forms.size());
+  EXPECT_TRUE(parsed_forms[0].is_gaia_with_skip_save_password_form);
 }
 
 TEST_F(PasswordAutofillAgentTest,
@@ -3632,6 +3639,33 @@ TEST_F(PasswordAutofillAgentTest, FillDataWithNoPasswordId) {
   fake_driver_.reset_show_pw_suggestions();
 
   CheckTextFieldsDOMState(kAliceUsername, true, kAlicePassword, true);
+}
+
+TEST_F(PasswordAutofillAgentTest, MayUsePlaceholderNoPlaceholder) {
+  fill_data_.username_may_use_prefilled_placeholder = true;
+  UpdateRendererIDs();
+  SimulateOnFillPasswordForm(fill_data_);
+
+  CheckTextFieldsSuggestedState(kAliceUsername, true, kAlicePassword, true);
+}
+
+TEST_F(PasswordAutofillAgentTest, MayUsePlaceholderAndPlaceholderOnForm) {
+  username_element_.SetValue(WebString::FromUTF8("placeholder"));
+  UpdateRendererIDs();
+  fill_data_.username_may_use_prefilled_placeholder = true;
+  SimulateOnFillPasswordForm(fill_data_);
+
+  CheckTextFieldsSuggestedState(kAliceUsername, true, kAlicePassword, true);
+}
+
+TEST_F(PasswordAutofillAgentTest, NoMayUsePlaceholderAndPlaceholderOnForm) {
+  username_element_.SetValue(WebString::FromUTF8("placeholder"));
+  UpdateRendererIDs();
+  fill_data_.username_may_use_prefilled_placeholder = false;
+
+  SimulateOnFillPasswordForm(fill_data_);
+
+  CheckTextFieldsDOMState("placeholder", false, "", false);
 }
 
 }  // namespace autofill

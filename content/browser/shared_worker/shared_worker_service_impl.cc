@@ -13,6 +13,7 @@
 #include "base/logging.h"
 #include "base/macros.h"
 #include "base/task_scheduler/post_task.h"
+#include "content/browser/appcache/appcache_navigation_handle.h"
 #include "content/browser/file_url_loader_factory.h"
 #include "content/browser/shared_worker/shared_worker_host.h"
 #include "content/browser/shared_worker/shared_worker_instance.h"
@@ -21,7 +22,6 @@
 #include "content/browser/url_loader_factory_getter.h"
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/service_worker/service_worker_provider.mojom.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/common/shared_worker/shared_worker_client.mojom.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
@@ -32,6 +32,7 @@
 #include "mojo/public/cpp/bindings/strong_associated_binding.h"
 #include "mojo/public/cpp/bindings/strong_binding.h"
 #include "third_party/blink/public/common/message_port/message_port_channel.h"
+#include "third_party/blink/public/common/service_worker/service_worker_utils.h"
 #include "url/origin.h"
 
 namespace content {
@@ -147,12 +148,18 @@ void CreateScriptLoaderOnIO(
 
 SharedWorkerServiceImpl::SharedWorkerServiceImpl(
     StoragePartition* storage_partition,
-    scoped_refptr<ServiceWorkerContextWrapper> service_worker_context)
+    scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
+    scoped_refptr<ChromeAppCacheService> appcache_service)
     : storage_partition_(storage_partition),
       service_worker_context_(std::move(service_worker_context)),
-      weak_factory_(this) {}
+      appcache_service_(std::move(appcache_service)),
+      weak_factory_(this) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+}
 
-SharedWorkerServiceImpl::~SharedWorkerServiceImpl() {}
+SharedWorkerServiceImpl::~SharedWorkerServiceImpl() {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+}
 
 bool SharedWorkerServiceImpl::TerminateWorker(
     const GURL& url,
@@ -289,7 +296,7 @@ void SharedWorkerServiceImpl::CreateWorker(
       service_worker_context_->storage_partition();
   // Bounce to the IO thread to setup service worker support in case the request
   // for the worker script will need to be intercepted by service workers.
-  if (ServiceWorkerUtils::IsServicificationEnabled()) {
+  if (blink::ServiceWorkerUtils::IsServicificationEnabled()) {
     if (!storage_partition) {
       // The context is shutting down. Just drop the request.
       return;
@@ -304,6 +311,10 @@ void SharedWorkerServiceImpl::CreateWorker(
     std::unique_ptr<URLLoaderFactoryBundleInfo> factory_bundle_for_renderer =
         CreateFactoryBundle(process_id, storage_partition,
                             constructor_uses_file_url);
+
+    // TODO(nhiroki): Create an instance of AppCacheNavigationHandle from
+    // |appcache_service_| and pass its core() to the IO thread in order to set
+    // up an interceptor for AppCache.
 
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,

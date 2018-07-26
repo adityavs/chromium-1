@@ -33,7 +33,7 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_provider_type.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider_client.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_client.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_feature.mojom.h"
 
@@ -306,6 +306,7 @@ class FakeServiceWorkerContainerHost
     bindings_.AddBinding(this, std::move(request));
   }
   void Ping(PingCallback callback) override { NOTIMPLEMENTED(); }
+  void HintToUpdateServiceWorker() override { NOTIMPLEMENTED(); }
 
  private:
   mojo::BindingSet<mojom::ServiceWorkerContainerHost> bindings_;

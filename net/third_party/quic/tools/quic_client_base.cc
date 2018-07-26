@@ -5,8 +5,8 @@
 #include "net/third_party/quic/tools/quic_client_base.h"
 
 #include "net/third_party/quic/core/crypto/quic_random.h"
+#include "net/third_party/quic/core/http/spdy_utils.h"
 #include "net/third_party/quic/core/quic_server_id.h"
-#include "net/third_party/quic/core/spdy_utils.h"
 #include "net/third_party/quic/core/tls_client_handshaker.h"
 #include "net/third_party/quic/platform/api/quic_flags.h"
 #include "net/third_party/quic/platform/api/quic_logging.h"
@@ -180,6 +180,12 @@ bool QuicClientBase::WaitForEvents() {
 }
 
 bool QuicClientBase::MigrateSocket(const QuicIpAddress& new_host) {
+  return MigrateSocketWithSpecifiedPort(new_host, local_port_);
+}
+
+bool QuicClientBase::MigrateSocketWithSpecifiedPort(
+    const QuicIpAddress& new_host,
+    int port) {
   if (!connected()) {
     return false;
   }
@@ -188,7 +194,7 @@ bool QuicClientBase::MigrateSocket(const QuicIpAddress& new_host) {
 
   set_bind_to_address(new_host);
   if (!network_helper_->CreateUDPSocketAndBind(server_address_,
-                                               bind_to_address_, local_port_)) {
+                                               bind_to_address_, port)) {
     return false;
   }
 

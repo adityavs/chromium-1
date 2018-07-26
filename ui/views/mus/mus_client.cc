@@ -14,12 +14,12 @@
 #include "services/ui/public/cpp/input_devices/input_device_client.h"
 #include "services/ui/public/cpp/property_type_converters.h"
 #include "services/ui/public/interfaces/constants.mojom.h"
-#include "services/ui/public/interfaces/event_matcher.mojom.h"
 #include "services/ui/public/interfaces/window_manager.mojom.h"
 #include "ui/aura/env.h"
 #include "ui/aura/mus/capture_synchronizer.h"
 #include "ui/aura/mus/mus_context_factory.h"
 #include "ui/aura/mus/property_converter.h"
+#include "ui/aura/mus/window_tree_client.h"
 #include "ui/aura/mus/window_tree_host_mus.h"
 #include "ui/aura/mus/window_tree_host_mus_init_params.h"
 #include "ui/aura/window.h"
@@ -105,15 +105,12 @@ MusClient::MusClient(const InitParams& params) : identity_(params.identity) {
     wm_state_ = std::make_unique<wm::WMState>();
 
   service_manager::Connector* connector = params.connector;
-  if (params.bind_test_ws_interfaces)
-    connector->BindInterface(ui::mojom::kServiceName, &event_injector_);
 
   if (!params.window_tree_client) {
     DCHECK(io_task_runner);
     owned_window_tree_client_ =
         aura::WindowTreeClient::CreateForWindowTreeFactory(
-            connector, this, true, std::move(io_task_runner),
-            params.wtc_config);
+            connector, this, true, std::move(io_task_runner));
     window_tree_client_ = owned_window_tree_client_.get();
     aura::Env::GetInstance()->SetWindowTreeClient(window_tree_client_);
   } else {
@@ -130,7 +127,7 @@ MusClient::MusClient(const InitParams& params) : identity_(params.identity) {
     input_device_client_->Connect(std::move(input_device_server));
 
     screen_ = std::make_unique<ScreenMus>(this);
-    screen_->Init(connector);
+    window_tree_client_->WaitForDisplays();
 
     ui::mojom::ClipboardHostPtr clipboard_host_ptr;
     connector->BindInterface(ui::mojom::kServiceName, &clipboard_host_ptr);
@@ -334,11 +331,6 @@ void MusClient::CloseAllWidgets() {
   }
 }
 
-ui::mojom::EventInjector* MusClient::GetTestingEventInjector() const {
-  CHECK(event_injector_);
-  return event_injector_.get();
-}
-
 std::unique_ptr<DesktopWindowTreeHost> MusClient::CreateDesktopWindowTreeHost(
     const Widget::InitParams& init_params,
     internal::NativeWidgetDelegate* delegate,
@@ -371,6 +363,14 @@ void MusClient::OnPointerEventObserved(const ui::PointerEvent& event,
                                        aura::Window* target) {
   pointer_watcher_event_router_->OnPointerEventObserved(event, display_id,
                                                         target);
+}
+
+void MusClient::OnDisplaysChanged(
+    std::vector<ui::mojom::WsDisplayPtr> ws_displays,
+    int64_t primary_display_id,
+    int64_t internal_display_id) {
+  screen_->OnDisplaysChanged(std::move(ws_displays), primary_display_id,
+                             internal_display_id);
 }
 
 void MusClient::OnWindowManagerFrameValuesChanged() {

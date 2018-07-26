@@ -24,13 +24,15 @@ class DetailedViewController;
 class FeaturePodControllerBase;
 class UnifiedBrightnessSliderController;
 class UnifiedVolumeSliderController;
+class UnifiedSystemTrayBubble;
 class UnifiedSystemTrayModel;
 class UnifiedSystemTrayView;
 
 // Controller class of UnifiedSystemTrayView. Handles events of the view.
 class ASH_EXPORT UnifiedSystemTrayController : public gfx::AnimationDelegate {
  public:
-  explicit UnifiedSystemTrayController(UnifiedSystemTrayModel* model);
+  UnifiedSystemTrayController(UnifiedSystemTrayModel* model,
+                              UnifiedSystemTrayBubble* bubble = nullptr);
   ~UnifiedSystemTrayController() override;
 
   // Create the view. The created view is unowned.
@@ -65,12 +67,15 @@ class ASH_EXPORT UnifiedSystemTrayController : public gfx::AnimationDelegate {
   void BeginDrag(const gfx::Point& location);
   void UpdateDrag(const gfx::Point& location);
   void EndDrag(const gfx::Point& location);
+  void Fling(int velocity);
 
   // Show user selector popup widget. Called from the view.
   void ShowUserChooserWidget();
-  // Show the detailed view of network. Called from the view.
-  void ShowNetworkDetailedView();
-  // Show the detailed view of bluetooth. Called from the view.
+  // Show the detailed view of network. If |force| is true, it shows the
+  // detailed view even if it's collapsed. Called from the view.
+  void ShowNetworkDetailedView(bool force);
+  // Show the detailed view of bluetooth. If collapsed, it doesn't show the
+  // detailed view. Called from the view.
   void ShowBluetoothDetailedView();
   // Show the detailed view of cast. Called from the view.
   void ShowCastDetailedView();
@@ -139,11 +144,17 @@ class ASH_EXPORT UnifiedSystemTrayController : public gfx::AnimationDelegate {
   // Return true if UnifiedSystemTray is expanded.
   bool IsExpanded() const;
 
+  // Starts animation to expand or collapse the bubble.
+  void StartAnimation(bool expand);
+
   // Model that stores UI specific variables. Unowned.
   UnifiedSystemTrayModel* const model_;
 
   // Unowned. Owned by Views hierarchy.
   UnifiedSystemTrayView* unified_view_ = nullptr;
+
+  // Unowned.
+  UnifiedSystemTrayBubble* bubble_ = nullptr;
 
   // The controller of the current detailed view. If the main view is shown,
   // it's null. Owned.

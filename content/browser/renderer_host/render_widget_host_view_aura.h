@@ -143,7 +143,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
       const gfx::Size& output_size,
       base::OnceCallback<void(const SkBitmap&)> callback) override;
   void EnsureSurfaceSynchronizedForLayoutTest() override;
-  gfx::Vector2d GetOffsetFromRootSurface() override;
+  void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
   void WheelEventAck(const blink::WebMouseWheelEvent& event,
                      InputEventAckState ack_result) override;
@@ -181,8 +181,8 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   bool RequestRepaintForTesting() override;
   void DidStopFlinging() override;
   void OnDidNavigateMainFrameToNewPage() override;
-  viz::FrameSinkId GetFrameSinkId() override;
-  viz::LocalSurfaceId GetLocalSurfaceId() const override;
+  const viz::FrameSinkId& GetFrameSinkId() const override;
+  const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   bool TransformPointToLocalCoordSpaceLegacy(
       const gfx::PointF& point,
       const viz::SurfaceId& original_surface,
@@ -239,7 +239,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAura
   void EnsureCaretNotInRect(const gfx::Rect& rect) override;
   bool IsTextEditCommandEnabled(ui::TextEditCommand command) const override;
   void SetTextEditCommandForNextKeyEvent(ui::TextEditCommand command) override;
-  const std::string& GetClientSourceInfo() const override;
+  ukm::SourceId GetClientSourceForMetrics() const override;
   bool ShouldDoLearning() override;
 
   // Overridden from display::DisplayObserver:

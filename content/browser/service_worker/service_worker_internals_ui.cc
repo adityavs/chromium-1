@@ -268,15 +268,11 @@ class ServiceWorkerInternalsUI::PartitionObserver
         Value(base::Int64ToString(version_id)));
   }
   void OnErrorReported(int64_t version_id,
-                       int process_id,
-                       int thread_id,
                        const ErrorInfo& info) override {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     std::vector<std::unique_ptr<const Value>> args;
     args.push_back(std::make_unique<Value>(partition_id_));
     args.push_back(std::make_unique<Value>(base::Int64ToString(version_id)));
-    args.push_back(std::make_unique<Value>(process_id));
-    args.push_back(std::make_unique<Value>(thread_id));
     auto value = std::make_unique<DictionaryValue>();
     value->SetString("message", info.error_message);
     value->SetInteger("lineNumber", info.line_number);
@@ -287,15 +283,11 @@ class ServiceWorkerInternalsUI::PartitionObserver
                                           ConvertToRawPtrVector(args));
   }
   void OnReportConsoleMessage(int64_t version_id,
-                              int process_id,
-                              int thread_id,
                               const ConsoleMessage& message) override {
     DCHECK_CURRENTLY_ON(BrowserThread::UI);
     std::vector<std::unique_ptr<const Value>> args;
     args.push_back(std::make_unique<Value>(partition_id_));
     args.push_back(std::make_unique<Value>(base::Int64ToString(version_id)));
-    args.push_back(std::make_unique<Value>(process_id));
-    args.push_back(std::make_unique<Value>(thread_id));
     auto value = std::make_unique<DictionaryValue>();
     value->SetInteger("sourceIdentifier", message.source_identifier);
     value->SetInteger("message_level", message.message_level);
@@ -523,11 +515,11 @@ void ServiceWorkerInternalsUI::InspectWorker(const ListValue* args) {
           ->GetDevToolsAgentHostForWorker(process_host_id,
                                           devtools_agent_route_id));
   if (!agent_host.get()) {
-    std::move(callback).Run(blink::SERVICE_WORKER_ERROR_NOT_FOUND);
+    std::move(callback).Run(blink::ServiceWorkerStatusCode::kErrorNotFound);
     return;
   }
   agent_host->Inspect();
-  std::move(callback).Run(blink::SERVICE_WORKER_OK);
+  std::move(callback).Run(blink::ServiceWorkerStatusCode::kOk);
 }
 
 void ServiceWorkerInternalsUI::Unregister(const ListValue* args) {
@@ -585,14 +577,14 @@ void ServiceWorkerInternalsUI::StopWorkerWithId(
   scoped_refptr<ServiceWorkerVersion> version =
       context->GetLiveVersion(version_id);
   if (!version.get()) {
-    std::move(callback).Run(blink::SERVICE_WORKER_ERROR_NOT_FOUND);
+    std::move(callback).Run(blink::ServiceWorkerStatusCode::kErrorNotFound);
     return;
   }
 
   // ServiceWorkerVersion::StopWorker() takes a base::OnceClosure for argument,
-  // so bind blink::SERVICE_WORKER_OK to callback here.
+  // so bind blink::ServiceWorkerStatusCode::kOk to callback here.
   version->StopWorker(
-      base::BindOnce(std::move(callback), blink::SERVICE_WORKER_OK));
+      base::BindOnce(std::move(callback), blink::ServiceWorkerStatusCode::kOk));
 }
 
 void ServiceWorkerInternalsUI::UnregisterWithScope(
@@ -609,7 +601,7 @@ void ServiceWorkerInternalsUI::UnregisterWithScope(
   }
 
   if (!context->context()) {
-    std::move(callback).Run(blink::SERVICE_WORKER_ERROR_ABORT);
+    std::move(callback).Run(blink::ServiceWorkerStatusCode::kErrorAbort);
     return;
   }
 

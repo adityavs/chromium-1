@@ -18,39 +18,9 @@
       "backgroundColor": "#FFFFFF",
       "paintInvalidations": [
         {
-          "object": "NGPaintFragment",
-          "rect": [8, 8, 763, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 8, 763, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 28, 543, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 28, 543, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 48, 328, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 48, 328, 19],
-          "reason": "disappeared"
-        },
-        {
           "object": "LayoutView #document",
           "rect": [8, 108, 300, 300],
-          "reason": "geometry"
+          "reason": "subtree"
         },
         {
           "object": "HorizontalScrollbar",
@@ -77,23 +47,7 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
+      "object": "NGPhysicalBoxFragment LayoutNGBlockFlow (anonymous)",
       "reason": "subtree"
     },
     {

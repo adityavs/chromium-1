@@ -16,9 +16,9 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/mus/property_converter.h"
 #include "ui/aura/window.h"
+#include "ui/gfx/color_palette.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/gfx/image/image_skia.h"
-#include "ui/wm/core/shadow_types.h"
 
 DEFINE_EXPORTED_UI_CLASS_PROPERTY_TYPE(ASH_PUBLIC_EXPORT,
                                        ash::mojom::WindowPinType)
@@ -39,6 +39,8 @@ void RegisterWindowProperties(aura::PropertyConverter* property_converter) {
   property_converter->RegisterPrimitiveProperty(
       kCanConsumeSystemKeysKey, mojom::kCanConsumeSystemKeys_Property,
       aura::PropertyConverter::CreateAcceptAnyValueCallback());
+  property_converter->RegisterRectProperty(
+      kCaptionButtonBoundsKey, mojom::kCaptionButtonBounds_Property);
   property_converter->RegisterPrimitiveProperty(
       kFrameBackButtonStateKey,
       ui::mojom::WindowManager::kFrameBackButtonState_Property,
@@ -60,6 +62,12 @@ void RegisterWindowProperties(aura::PropertyConverter* property_converter) {
       ui::mojom::WindowManager::kFrameInactiveColor_Property,
       aura::PropertyConverter::CreateAcceptAnyValueCallback());
   property_converter->RegisterPrimitiveProperty(
+      kFrameIsThemedByHostedAppKey, mojom::kFrameIsThemedByHostedApp_Property,
+      aura::PropertyConverter::CreateAcceptAnyValueCallback());
+  property_converter->RegisterPrimitiveProperty(
+      kFrameTextColorKey, mojom::kFrameTextColor_Property,
+      aura::PropertyConverter::CreateAcceptAnyValueCallback());
+  property_converter->RegisterPrimitiveProperty(
       kHideShelfWhenFullscreenKey, mojom::kHideShelfWhenFullscreen_Property,
       aura::PropertyConverter::CreateAcceptAnyValueCallback());
   property_converter->RegisterPrimitiveProperty(
@@ -69,14 +77,6 @@ void RegisterWindowProperties(aura::PropertyConverter* property_converter) {
       kRenderTitleAreaProperty,
       ui::mojom::WindowManager::kRenderParentTitleArea_Property,
       aura::PropertyConverter::CreateAcceptAnyValueCallback());
-  // This property is already registered by MusClient in Chrome, but not in Ash.
-  if (!property_converter->IsTransportNameRegistered(
-          ui::mojom::WindowManager::kShadowElevation_Property)) {
-    property_converter->RegisterPrimitiveProperty(
-        ::wm::kShadowElevationKey,
-        ui::mojom::WindowManager::kShadowElevation_Property,
-        aura::PropertyConverter::CreateAcceptAnyValueCallback());
-  }
   property_converter->RegisterPrimitiveProperty(
       kShelfItemTypeKey, ui::mojom::WindowManager::kShelfItemType_Property,
       base::BindRepeating(&IsValidShelfItemType));
@@ -91,9 +91,8 @@ void RegisterWindowProperties(aura::PropertyConverter* property_converter) {
       aura::PropertyConverter::CreateAcceptAnyValueCallback());
   property_converter->RegisterStringProperty(
       kShelfIDKey, ui::mojom::WindowManager::kShelfID_Property);
-  property_converter->RegisterPrimitiveProperty(
-      kRestoreBoundsOverrideKey, mojom::kRestoreBoundsOverride_Property,
-      aura::PropertyConverter::CreateAcceptAnyValueCallback());
+  property_converter->RegisterRectProperty(
+      kRestoreBoundsOverrideKey, mojom::kRestoreBoundsOverride_Property);
   property_converter->RegisterPrimitiveProperty(
       kRestoreWindowStateTypeOverrideKey,
       mojom::kRestoreWindowStateTypeOverride_Property,
@@ -108,7 +107,9 @@ DEFINE_UI_CLASS_PROPERTY_KEY(BackdropWindowMode,
                              kBackdropWindowMode,
                              BackdropWindowMode::kAuto);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kBlockedForAssistantSnapshotKey, false);
+DEFINE_UI_CLASS_PROPERTY_KEY(bool, kCanAttachToAnotherWindowKey, true);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kCanConsumeSystemKeysKey, false);
+DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Rect, kCaptionButtonBoundsKey, nullptr);
 DEFINE_UI_CLASS_PROPERTY_KEY(FrameBackButtonState,
                              kFrameBackButtonStateKey,
                              FrameBackButtonState::kNone);
@@ -150,6 +151,10 @@ DEFINE_UI_CLASS_PROPERTY_KEY(SkColor, kFrameActiveColorKey, kDefaultFrameColor);
 DEFINE_UI_CLASS_PROPERTY_KEY(SkColor,
                              kFrameInactiveColorKey,
                              kDefaultFrameColor);
+DEFINE_UI_CLASS_PROPERTY_KEY(bool, kFrameIsThemedByHostedAppKey, false);
+DEFINE_UI_CLASS_PROPERTY_KEY(SkColor,
+                             kFrameTextColorKey,
+                             gfx::kPlaceholderColor);
 DEFINE_UI_CLASS_PROPERTY_KEY(mojom::WindowPinType,
                              kWindowPinTypeKey,
                              mojom::WindowPinType::NONE);

@@ -33,7 +33,7 @@
 #include <memory>
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_network_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
 #include "third_party/blink/public/platform/web_string.h"
@@ -318,7 +318,7 @@ void WebSharedWorkerImpl::ContinueOnScriptLoaderFinished() {
                                     std::move(web_worker_fetch_context));
 
   ContentSecurityPolicy* content_security_policy =
-      main_script_loader_->ReleaseContentSecurityPolicy();
+      main_script_loader_->GetContentSecurityPolicy();
   ReferrerPolicy referrer_policy = kReferrerPolicyDefault;
   if (!main_script_loader_->GetReferrerPolicy().IsNull()) {
     SecurityPolicy::ReferrerPolicyFromHeaderValue(

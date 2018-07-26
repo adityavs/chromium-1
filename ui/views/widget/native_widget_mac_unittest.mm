@@ -23,6 +23,7 @@
 #import "ui/base/cocoa/constrained_window/constrained_window_animation.h"
 #import "ui/base/cocoa/window_size_constants.h"
 #import "ui/base/test/scoped_fake_full_keyboard_access.h"
+#include "ui/compositor/recyclable_compositor_mac.h"
 #import "ui/events/test/cocoa_test_event_utils.h"
 #include "ui/events/test/event_generator.h"
 #import "ui/gfx/mac/coordinate_conversion.h"
@@ -102,7 +103,7 @@ class BridgedNativeWidgetTestApi {
     const float kScaleFactor = 1.0f;
     ui::CALayerFrameSink* ca_layer_frame_sink =
         ui::CALayerFrameSink::FromAcceleratedWidget(
-            bridge_->compositor_widget_->accelerated_widget());
+            bridge_->compositor_->widget()->accelerated_widget());
     gfx::CALayerParams ca_layer_params;
     ca_layer_params.is_empty = false;
     ca_layer_params.pixel_size = size;
@@ -1217,12 +1218,24 @@ TEST_F(NativeWidgetMacTest, ShowAnimationControl) {
   retained_animation.reset();
 
   // Disable animations and show again.
-  modal_dialog_widget->SetVisibilityChangedAnimationsEnabled(false);
+  modal_dialog_widget->SetVisibilityAnimationTransition(Widget::ANIMATE_NONE);
   modal_dialog_widget->Show();
   EXPECT_FALSE(test_api.show_animation());  // No animation this time.
   modal_dialog_widget->Hide();
 
   // Test after re-enabling.
+  modal_dialog_widget->SetVisibilityAnimationTransition(Widget::ANIMATE_BOTH);
+  modal_dialog_widget->Show();
+  EXPECT_TRUE(test_api.show_animation());
+  retained_animation.reset(test_api.show_animation(),
+                           base::scoped_policy::RETAIN);
+
+  // Test whether disabling native animations also disables custom modal ones.
+  modal_dialog_widget->SetVisibilityChangedAnimationsEnabled(false);
+  modal_dialog_widget->Show();
+  EXPECT_FALSE(test_api.show_animation());  // No animation this time.
+  modal_dialog_widget->Hide();
+  // Renable.
   modal_dialog_widget->SetVisibilityChangedAnimationsEnabled(true);
   modal_dialog_widget->Show();
   EXPECT_TRUE(test_api.show_animation());

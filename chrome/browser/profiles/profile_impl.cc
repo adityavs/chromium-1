@@ -55,6 +55,7 @@
 #include "chrome/browser/gcm/gcm_profile_service_factory.h"
 #include "chrome/browser/media/media_device_id_salt.h"
 #include "chrome/browser/net/predictor.h"
+#include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/permissions/permission_manager.h"
 #include "chrome/browser/permissions/permission_manager_factory.h"
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
@@ -108,6 +109,7 @@
 #include "components/domain_reliability/service.h"
 #include "components/gcm_driver/gcm_profile_service.h"
 #include "components/keyed_service/content/browser_context_dependency_manager.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/language/core/common/locale_util.h"
 #include "components/metrics/metrics_service.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
@@ -172,7 +174,11 @@
 
 #endif
 
-#if !defined(OS_ANDROID)
+#if defined(OS_ANDROID)
+#include "chrome/browser/android/download/download_manager_service.h"
+#else
+#include "chrome/browser/apps/foundation/app_service/app_service.h"
+#include "chrome/browser/apps/foundation/app_service/public/mojom/constants.mojom.h"
 #include "components/zoom/zoom_event_manager.h"
 #include "content/public/common/page_zoom.h"
 #endif
@@ -294,6 +300,13 @@ std::string ExitTypeToSessionTypePrefValue(Profile::ExitType type) {
   return std::string();
 }
 
+#if !defined(OS_ANDROID)
+std::unique_ptr<service_manager::Service> CreateAppService(Profile* profile) {
+  // TODO(crbug.com/826982): use |profile| to fetch existing registries.
+  return std::make_unique<apps::AppService>();
+}
+#endif
+
 }  // namespace
 
 // static
@@ -326,7 +339,14 @@ Profile* Profile::CreateProfile(const base::FilePath& path,
     NOTREACHED();
   }
 
-  return new ProfileImpl(path, delegate, create_mode, io_task_runner);
+  auto profile = base::WrapUnique(
+      new ProfileImpl(path, delegate, create_mode, io_task_runner));
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && !defined(OS_ANDROID) && \
+    !defined(OS_CHROMEOS)
+  if (create_mode == CREATE_MODE_SYNCHRONOUS && profile->IsLegacySupervised())
+    return nullptr;
+#endif
+  return profile.release();
 }
 
 // static
@@ -439,7 +459,9 @@ ProfileImpl::ProfileImpl(
     chromeos::AccountManager* account_manager =
         factory->GetAccountManager(path.value());
     account_manager->Initialize(
-        path, g_browser_process->system_request_context(),
+        path,
+        g_browser_process->system_network_context_manager()
+            ->GetSharedURLLoaderFactory(),
         base::BindRepeating(&chromeos::DelayNetworkCall,
                             base::TimeDelta::FromMilliseconds(
                                 chromeos::kDefaultNetworkRetryDelayMS)));
@@ -1030,6 +1052,12 @@ net::URLRequestContextGetter* ProfileImpl::GetRequestContextForExtensions() {
   return io_data_.GetExtensionsRequestContextGetter().get();
 }
 
+scoped_refptr<network::SharedURLLoaderFactory>
+ProfileImpl::GetURLLoaderFactory() {
+  return GetDefaultStoragePartition(this)
+      ->GetURLLoaderFactoryForBrowserProcess();
+}
+
 content::BrowserPluginGuestManager* ProfileImpl::GetGuestManager() {
 #if BUILDFLAG(ENABLE_EXTENSIONS)
   return guest_view::GuestViewManager::FromBrowserContext(this);
@@ -1066,7 +1094,8 @@ ProfileImpl::GetBrowsingDataRemoverDelegate() {
 
 // TODO(mlamouri): we should all these BrowserContext implementation to Profile
 // instead of repeating them inside all Profile implementations.
-content::PermissionManager* ProfileImpl::GetPermissionManager() {
+content::PermissionControllerDelegate*
+ProfileImpl::GetPermissionControllerDelegate() {
   return PermissionManagerFactory::GetForProfile(this);
 }
 
@@ -1161,6 +1190,18 @@ void ProfileImpl::RegisterInProcessServices(StaticServiceMap* services) {
   }
 #endif
 
+#if !defined(OS_ANDROID)
+  {
+    // Binding the App Service here means that its preferences will be stored in
+    // the primary Preferences file for this profile.
+    service_manager::EmbeddedServiceInfo info;
+    info.task_runner = base::ThreadTaskRunnerHandle::Get();
+    info.factory =
+        base::BindRepeating(&CreateAppService, base::Unretained(this));
+    services->emplace(apps::mojom::kServiceName, info);
+  }
+#endif
+
   service_manager::EmbeddedServiceInfo identity_service_info;
 
   // The Identity Service must run on the UI thread.
@@ -1177,6 +1218,16 @@ void ProfileImpl::RegisterInProcessServices(StaticServiceMap* services) {
 
 std::string ProfileImpl::GetMediaDeviceIDSalt() {
   return media_device_id_salt_->GetSalt();
+}
+
+download::InProgressDownloadManager*
+ProfileImpl::RetriveInProgressDownloadManager() {
+#if defined(OS_ANDROID)
+  return DownloadManagerService::GetInstance()
+      ->RetriveInProgressDownloadManager(this);
+#else
+  return nullptr;
+#endif
 }
 
 bool ProfileImpl::IsSameProfile(Profile* profile) {
@@ -1209,9 +1260,10 @@ void ProfileImpl::ChangeAppLocale(const std::string& new_locale,
   }
   PrefService* local_state = g_browser_process->local_state();
   DCHECK(local_state);
-  if (local_state->IsManagedPreference(prefs::kApplicationLocale))
+  if (local_state->IsManagedPreference(language::prefs::kApplicationLocale))
     return;
-  std::string pref_locale = GetPrefs()->GetString(prefs::kApplicationLocale);
+  std::string pref_locale =
+      GetPrefs()->GetString(language::prefs::kApplicationLocale);
   language::ConvertToActualUILocale(&pref_locale);
   bool do_update_pref = true;
   switch (via) {
@@ -1259,9 +1311,11 @@ void ProfileImpl::ChangeAppLocale(const std::string& new_locale,
         //     and we may finalize initialization.
         GetPrefs()->SetString(prefs::kApplicationLocaleBackup, cur_locale);
         if (!new_locale.empty())
-          GetPrefs()->SetString(prefs::kApplicationLocale, new_locale);
+          GetPrefs()->SetString(language::prefs::kApplicationLocale,
+                                new_locale);
         else if (!backup_locale.empty())
-          GetPrefs()->SetString(prefs::kApplicationLocale, backup_locale);
+          GetPrefs()->SetString(language::prefs::kApplicationLocale,
+                                backup_locale);
         do_update_pref = false;
       }
       break;
@@ -1279,9 +1333,9 @@ void ProfileImpl::ChangeAppLocale(const std::string& new_locale,
     }
   }
   if (do_update_pref)
-    GetPrefs()->SetString(prefs::kApplicationLocale, new_locale);
+    GetPrefs()->SetString(language::prefs::kApplicationLocale, new_locale);
   if (via != APP_LOCALE_CHANGED_VIA_PUBLIC_SESSION_LOGIN)
-    local_state->SetString(prefs::kApplicationLocale, new_locale);
+    local_state->SetString(language::prefs::kApplicationLocale, new_locale);
 
   if (user_manager::UserManager::Get()->GetOwnerAccountId() ==
       chromeos::ProfileHelper::Get()->GetUserByProfile(this)->GetAccountId())

@@ -12,6 +12,7 @@
 <translation id="1206693055195146388">csúszka</translation>
 <translation id="1211441953136645838">záró jegyzet</translation>
 <translation id="1281252709823657822">párbeszédpanel</translation>
+<translation id="1289247557029249093">Kilépés a kép a képben módból</translation>
 <translation id="1335095011850992622">készítők</translation>
 <translation id="1342835525016946179">cikk</translation>
 <translation id="1359897965706325498">szalaghirdetés</translation>
@@ -51,6 +52,7 @@
 <translation id="2653659639078652383">Elküldés</translation>
 <translation id="2657045182931379222">grafikus objektum</translation>
 <translation id="2674318244760992338">lábléc</translation>
+<translation id="2706474812903655270">A videó lejátszása kép a képben módban történik</translation>
 <translation id="2709516037105925701">Automatikus kitöltés</translation>
 <translation id="2723001399770238859">audio</translation>
 <translation id="2746543609216772311">Az érték <ph name="MINIMUM_DATE_OR_TIME" /> vagy azt követő kell, hogy legyen.</translation>
@@ -114,7 +116,6 @@
 <translation id="5117590920725113268">A következő hónap megjelenítése</translation>
 <translation id="512758898067543763">sorfejléc</translation>
 <translation id="5143125788380636750">végszó</translation>
-<translation id="5153163864850940242">A videó lejátszása kép a képben módban történik</translation>
 <translation id="5164977714490026579">Az érték legyen nagyobb vagy egyenlő, mint <ph name="MINIMUM" />.</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5307600278924710095">Kérjük, adja meg a „<ph name="ATSIGN" />” előtti részt is. A „<ph name="INVALIDADDRESS" />” cím nem teljes.</translation>
@@ -146,7 +147,6 @@
 <translation id="6164829606128959761">mérő</translation>
 <translation id="6166809985690652833">utószó</translation>
 <translation id="6213469881011901533">szószedet</translation>
-<translation id="6310801910862476708">Kilépés a kép a képben funkcióból</translation>
 <translation id="6398862346408813489">A hónapválasztási panel megjelenítése</translation>
 <translation id="6404546809543547843">hang idővonalának vezérlője</translation>
 <translation id="6453774872122745852">köszönetnyilvánítás</translation>
@@ -191,6 +191,7 @@
 <translation id="7720026100085573005">hátralévő idő</translation>
 <translation id="7740016676195725605">feliratok elrejtése</translation>
 <translation id="7740050170769002709">HTML-tartalom</translation>
+<translation id="7750228210027921155">Kép a képben</translation>
 <translation id="7789962463072032349">szüneteltetés</translation>
 <translation id="7802800022689234070">plusz tartalom kibontására szolgáló háromszög</translation>
 <translation id="7888071071722539607">Kérjük, írjon egy „<ph name="ATSIGN" />” karaktert az e-mail címbe. A(z) „<ph name="INVALIDADDRESS" />” címből hiányzik a „<ph name="ATSIGN" />” jel.</translation>
@@ -220,7 +221,6 @@
 <translation id="860475260694818407">tartalomjegyzék</translation>
 <translation id="8613126697340063924">távoli lejátszás kezelése</translation>
 <translation id="862370744433916922">felirat</translation>
-<translation id="8741316211671074806">Kép a képben</translation>
 <translation id="8750798805984357768">Kérjük, válassza ki az egyik opciót.</translation>
 <translation id="8785498733064193001">lejátszás indítása</translation>
 <translation id="8808573423886751634">fejezet</translation>
@@ -238,6 +238,7 @@
 <translation id="9132465097189459683">Más...</translation>
 <translation id="9138385573473225930">értesítés</translation>
 <translation id="9155987714137265666"><ph name="WEEK" />. hét (<ph name="WEEK_START_DATE" />-i dátummal kezdődik)</translation>
+<translation id="916607977885256133">Kép a képben</translation>
 <translation id="9168329111483466115">lábjegyzet</translation>
 <translation id="954003015749068518">belépés a kép a képben funkcióba</translation>
 <translation id="966787709310836684">menü</translation>

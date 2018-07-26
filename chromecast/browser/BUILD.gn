@@ -17,6 +17,8 @@ cast_source_set("browser") {
   sources = [
     "application_media_capabilities.cc",
     "application_media_capabilities.h",
+    "application_session_id_manager.cc",
+    "application_session_id_manager.h",
     "bluetooth/cast_bluetooth_chooser.cc",
     "bluetooth/cast_bluetooth_chooser.h",
     "cast_browser_context.cc",
@@ -165,8 +167,6 @@ cast_source_set("browser") {
       "android/cast_content_window_android.cc",
       "android/cast_content_window_android.h",
       "android/cast_metrics_helper_android.cc",
-      "android/cast_web_contents_surface_helper.cc",
-      "android/cast_web_contents_surface_helper.h",
     ]
     deps += [
       ":jni_headers",
@@ -460,6 +460,10 @@ cast_source_set("browsertests") {
     "//components/prefs",
     "//media:test_support",
   ]
+
+  data = [
+    "//media/test/data/",
+  ]
 }
 
 cast_source_set("unittests") {
@@ -504,7 +508,6 @@ if (is_android) {
       "android/apk/src/org/chromium/chromecast/shell/CastCrashHandler.java",
       "android/apk/src/org/chromium/chromecast/shell/CastMetricsHelper.java",
       "android/apk/src/org/chromium/chromecast/shell/CastSysInfoAndroid.java",
-      "android/apk/src/org/chromium/chromecast/shell/CastWebContentsSurfaceHelper.java",
     ]
 
     if (is_android_things_non_public) {

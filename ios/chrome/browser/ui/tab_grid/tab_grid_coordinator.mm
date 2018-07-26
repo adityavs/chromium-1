@@ -4,6 +4,8 @@
 
 #import "ios/chrome/browser/ui/tab_grid/tab_grid_coordinator.h"
 
+#include "base/mac/bundle_locations.h"
+#include "base/mac/foundation_util.h"
 #include "base/metrics/user_metrics.h"
 #include "base/metrics/user_metrics_action.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
@@ -33,6 +35,9 @@
                                  RecentTabsHandsetViewControllerCommand>
 // Superclass property specialized for the class that this coordinator uses.
 @property(nonatomic, weak) TabGridViewController* mainViewController;
+// Pointer to the masking view used to prevent the main view controller from
+// being shown at launch.
+@property(nonatomic, strong) UIView* launchMaskView;
 // Commad dispatcher used while this coordinator's view controller is active.
 // (for compatibility with the TabSwitcher protocol).
 @property(nonatomic, strong) CommandDispatcher* dispatcher;
@@ -64,6 +69,7 @@
 @synthesize regularTabModel = _regularTabModel;
 @synthesize incognitoTabModel = _incognitoTabModel;
 // Private properties.
+@synthesize launchMaskView = _launchMaskView;
 @synthesize dispatcher = _dispatcher;
 @synthesize adaptor = _adaptor;
 @synthesize bvcContainer = _bvcContainer;
@@ -151,6 +157,8 @@
 - (void)start {
   TabGridViewController* mainViewController =
       [[TabGridViewController alloc] init];
+  mainViewController.dispatcher =
+      static_cast<id<ApplicationCommands>>(self.dispatcher);
   self.transitionHandler = [[TabGridTransitionHandler alloc] init];
   self.transitionHandler.provider = mainViewController;
   mainViewController.modalPresentationStyle = UIModalPresentationCustom;
@@ -200,6 +208,17 @@
             incognitoBrowserState:self.incognitoTabModel.browserState];
   mainViewController.remoteTabsViewController.loader = self.URLLoader;
   mainViewController.remoteTabsViewController.presentationDelegate = self;
+
+  // Insert the launch screen view in front of this view to hide it until after
+  // launch. This should happen before |mainViewController| is made the window's
+  // root view controller.
+  NSBundle* mainBundle = base::mac::FrameworkBundle();
+  NSArray* topObjects =
+      [mainBundle loadNibNamed:@"LaunchScreen" owner:self options:nil];
+  UIViewController* launchScreenController =
+      base::mac::ObjCCastStrict<UIViewController>([topObjects lastObject]);
+  self.launchMaskView = launchScreenController.view;
+  [mainViewController.view addSubview:self.launchMaskView];
 
   // TODO(crbug.com/850387) : Currently, consumer calls from the mediator
   // prematurely loads the view in |RecentTabsTableViewController|. Fix this so
@@ -294,16 +313,22 @@
   self.bvcContainer.currentBVC = viewController;
   self.bvcContainer.transitioningDelegate = self.transitionHandler;
   BOOL animated = !self.animationsDisabledForTesting;
+  // Never animate if the launch mask is in place.
+  if (self.launchMaskView)
+    animated = NO;
 
-  // Extened |completion| to also signal the tab switcher delegate
+  // Extened |completion| to signal the tab switcher delegate
   // that the animated "tab switcher dismissal" (that is, presenting something
   // on top of the tab switcher) transition has completed.
+  // Finally, the launch mask view should be removed.
   ProceduralBlock extendedCompletion = ^{
     [self.tabSwitcher.delegate
         tabSwitcherDismissTransitionDidEnd:self.tabSwitcher];
     if (completion) {
       completion();
     }
+    [self.launchMaskView removeFromSuperview];
+    self.launchMaskView = nil;
   };
 
   [self.mainViewController presentViewController:self.bvcContainer
@@ -313,7 +338,7 @@
 
 #pragma mark - TabPresentationDelegate
 
-- (void)showActiveTabInPage:(TabGridPage)page {
+- (void)showActiveTabInPage:(TabGridPage)page focusOmnibox:(BOOL)focusOmnibox {
   DCHECK(self.regularTabModel && self.incognitoTabModel);
   TabModel* activeTabModel;
   switch (page) {
@@ -332,7 +357,8 @@
   // Trigger the transition through the TabSwitcher delegate. This will in turn
   // call back into this coordinator via the ViewControllerSwapping protocol.
   [self.tabSwitcher.delegate tabSwitcher:self.tabSwitcher
-             shouldFinishWithActiveModel:activeTabModel];
+             shouldFinishWithActiveModel:activeTabModel
+                            focusOmnibox:focusOmnibox];
 }
 
 #pragma mark - BrowserCommands
@@ -340,7 +366,7 @@
 - (void)openNewTab:(OpenNewTabCommand*)command {
   DCHECK(self.regularTabModel && self.incognitoTabModel);
   TabModel* activeTabModel =
-      command.incognito ? self.incognitoTabModel : self.regularTabModel;
+      command.inIncognito ? self.incognitoTabModel : self.regularTabModel;
   // TODO(crbug.com/804587) : It is better to use the mediator to insert a
   // webState and show the active tab.
   DCHECK(self.tabSwitcher);
@@ -374,19 +400,22 @@
 
 - (void)showActiveRegularTabFromRecentTabs {
   [self.tabSwitcher.delegate tabSwitcher:self.tabSwitcher
-             shouldFinishWithActiveModel:self.regularTabModel];
+             shouldFinishWithActiveModel:self.regularTabModel
+                            focusOmnibox:NO];
 }
 
 #pragma mark - HistoryPresentationDelegate
 
 - (void)showActiveRegularTabFromHistory {
   [self.tabSwitcher.delegate tabSwitcher:self.tabSwitcher
-             shouldFinishWithActiveModel:self.regularTabModel];
+             shouldFinishWithActiveModel:self.regularTabModel
+                            focusOmnibox:NO];
 }
 
 - (void)showActiveIncognitoTabFromHistory {
   [self.tabSwitcher.delegate tabSwitcher:self.tabSwitcher
-             shouldFinishWithActiveModel:self.incognitoTabModel];
+             shouldFinishWithActiveModel:self.incognitoTabModel
+                            focusOmnibox:NO];
 }
 
 @end

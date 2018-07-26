@@ -11,6 +11,7 @@
 
 #include "third_party/blink/renderer/bindings/tests/results/core/v8_any_callback_function_optional_any_arg.h"
 
+#include "base/stl_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
@@ -105,7 +106,6 @@ v8::Maybe<ScriptValue> V8AnyCallbackFunctionOptionalAnyArg::Invoke(ScriptWrappab
   }
 }
 
-CORE_TEMPLATE_EXPORT
 v8::Maybe<ScriptValue> V8PersistentCallbackFunction<V8AnyCallbackFunctionOptionalAnyArg>::Invoke(ScriptWrappable* callback_this_value, ScriptValue optionalAnyArg) {
   return Proxy()->Invoke(
       callback_this_value, optionalAnyArg);

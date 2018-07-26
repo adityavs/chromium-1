@@ -13,7 +13,7 @@
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/storage_partition_impl.h"
-#include "content/common/service_worker/service_worker_event_dispatcher.mojom.h"
+#include "content/common/service_worker/service_worker.mojom.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_browser_thread_bundle.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -116,7 +116,7 @@ class CookieStoreWorkerTestHelper : public EmbeddedWorkerTestHelper {
       const GURL& scope,
       const GURL& script_url,
       bool pause_after_download,
-      mojom::ServiceWorkerEventDispatcherRequest dispatcher_request,
+      mojom::ServiceWorkerRequest service_worker_request,
       mojom::ControllerServiceWorkerRequest controller_request,
       mojom::EmbeddedWorkerInstanceHostAssociatedPtrInfo instance_host,
       mojom::ServiceWorkerProviderInfoForStartWorkerPtr provider_info,
@@ -129,15 +129,14 @@ class CookieStoreWorkerTestHelper : public EmbeddedWorkerTestHelper {
 
     EmbeddedWorkerTestHelper::OnStartWorker(
         embedded_worker_id, service_worker_version_id, scope, script_url,
-        pause_after_download, std::move(dispatcher_request),
+        pause_after_download, std::move(service_worker_request),
         std::move(controller_request), std::move(instance_host),
         std::move(provider_info), std::move(installed_scripts_info));
   }
 
   // Cookie change subscriptions can only be created in this event handler.
   void OnInstallEvent(
-      mojom::ServiceWorkerEventDispatcher::DispatchInstallEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchInstallEventCallback callback) override {
     for (auto& subscriptions : install_subscription_batches_) {
       cookie_store_service_->AppendSubscriptions(
           service_worker_registration_id_, std::move(subscriptions),
@@ -152,8 +151,7 @@ class CookieStoreWorkerTestHelper : public EmbeddedWorkerTestHelper {
 
   // Used to implement WaitForActivateEvent().
   void OnActivateEvent(
-      mojom::ServiceWorkerEventDispatcher::DispatchActivateEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchActivateEventCallback callback) override {
     if (quit_on_activate_) {
       quit_on_activate_->Quit();
       quit_on_activate_ = nullptr;
@@ -165,8 +163,8 @@ class CookieStoreWorkerTestHelper : public EmbeddedWorkerTestHelper {
   void OnCookieChangeEvent(
       const net::CanonicalCookie& cookie,
       ::network::mojom::CookieChangeCause cause,
-      mojom::ServiceWorkerEventDispatcher::DispatchCookieChangeEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchCookieChangeEventCallback callback)
+      override {
     changes_.emplace_back(cookie, cause);
     std::move(callback).Run(blink::mojom::ServiceWorkerEventStatus::COMPLETED,
                             base::Time::Now());
@@ -273,10 +271,10 @@ class CookieStoreManagerTest
                blink::ServiceWorkerStatusCode status,
                const std::string& status_message,
                int64_t service_worker_registration_id) {
-              *success = (status == blink::SERVICE_WORKER_OK);
+              *success = (status == blink::ServiceWorkerStatusCode::kOk);
               *registration_id = service_worker_registration_id;
-              EXPECT_EQ(blink::SERVICE_WORKER_OK, status)
-                  << ServiceWorkerStatusToString(status);
+              EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status)
+                  << blink::ServiceWorkerStatusToString(status);
               run_loop->Quit();
             },
             &run_loop, &success, &registration_id));

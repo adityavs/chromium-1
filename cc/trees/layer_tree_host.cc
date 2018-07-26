@@ -267,10 +267,6 @@ void LayerTreeHost::BeginMainFrame(const viz::BeginFrameArgs& args) {
   client_->BeginMainFrame(args);
 }
 
-void LayerTreeHost::DidStopFlinging() {
-  proxy_->MainThreadHasStoppedFlinging();
-}
-
 const LayerTreeDebugState& LayerTreeHost::GetDebugState() const {
   return debug_state_;
 }
@@ -324,7 +320,7 @@ void LayerTreeHost::FinishCommitOnImplThread(
     PushPropertyTreesTo(sync_tree);
     sync_tree->lifecycle().AdvanceTo(LayerTreeLifecycle::kSyncedPropertyTrees);
 
-    PushSurfaceIdsTo(sync_tree);
+    PushSurfaceRangesTo(sync_tree);
     TreeSynchronizer::PushLayerProperties(this, sync_tree);
     sync_tree->lifecycle().AdvanceTo(
         LayerTreeLifecycle::kSyncedLayerProperties);
@@ -537,6 +533,10 @@ void LayerTreeHost::SetNeedsCommit() {
   swap_promise_manager_.NotifySwapPromiseMonitorsOfSetNeedsCommit();
 }
 
+bool LayerTreeHost::RequestedMainFramePending() {
+  return proxy_->RequestedAnimatePending();
+}
+
 void LayerTreeHost::SetNeedsRecalculateRasterScales() {
   next_commit_forces_recalculate_raster_scales_ = true;
   proxy_->SetNeedsCommit();
@@ -638,20 +638,6 @@ void LayerTreeHost::Composite(base::TimeTicks frame_begin_time, bool raster) {
   proxy->CompositeImmediately(frame_begin_time, raster);
 }
 
-static int GetLayersUpdateTimeHistogramBucket(size_t numLayers) {
-  // We uses the following exponential (ratio 2) bucketization:
-  // [0, 10), [10, 30), [30, 70), [70, 150), [150, infinity)
-  if (numLayers < 10)
-    return 0;
-  if (numLayers < 30)
-    return 1;
-  if (numLayers < 70)
-    return 2;
-  if (numLayers < 150)
-    return 3;
-  return 4;
-}
-
 bool LayerTreeHost::UpdateLayers() {
   if (!root_layer()) {
     property_trees_.clear();
@@ -668,11 +654,6 @@ bool LayerTreeHost::UpdateLayers() {
 
     std::string histogram_name =
         base::StringPrintf("Compositing.%s.LayersUpdateTime", client_name);
-    base::UmaHistogramCounts10M(histogram_name, elapsed);
-
-    // Also add UpdateLayers metrics bucketed by the layer count.
-    base::StringAppendF(&histogram_name, ".%d",
-                        GetLayersUpdateTimeHistogramBucket(NumLayers()));
     base::UmaHistogramCounts10M(histogram_name, elapsed);
   }
 
@@ -1068,6 +1049,22 @@ void LayerTreeHost::SetEventListenerProperties(
   if (event_listener_properties_[index] == properties)
     return;
 
+  // TODO(sunxd): Remove NeedsFullTreeSync when computing mouse wheel event
+  // handler region is done.
+  // We only do full tree sync if the mouse wheel event listener property
+  // changes from kNone/kPassive to kBlocking/kBlockingAndPassive.
+  if (event_class == EventListenerClass::kMouseWheel &&
+      !(event_listener_properties_[index] ==
+            EventListenerProperties::kBlocking ||
+        event_listener_properties_[index] ==
+            EventListenerProperties::kBlockingAndPassive) &&
+      (properties == EventListenerProperties::kBlocking ||
+       properties == EventListenerProperties::kBlockingAndPassive)) {
+    if (root_layer())
+      root_layer()->SetSubtreePropertyChanged();
+    SetNeedsFullTreeSync();
+  }
+
   event_listener_properties_[index] = properties;
   SetNeedsCommit();
 }
@@ -1203,16 +1200,25 @@ void LayerTreeHost::SetRasterColorSpace(
 }
 
 void LayerTreeHost::SetContentSourceId(uint32_t id) {
-  if (content_source_id_ == id)
-    return;
   content_source_id_ = id;
-  SetNeedsCommit();
 }
 
 void LayerTreeHost::SetLocalSurfaceIdFromParent(
     const viz::LocalSurfaceId& local_surface_id_from_parent) {
-  if (local_surface_id_from_parent_ == local_surface_id_from_parent)
+  if (local_surface_id_from_parent_.parent_sequence_number() ==
+          local_surface_id_from_parent.parent_sequence_number() &&
+      local_surface_id_from_parent_.embed_token() ==
+          local_surface_id_from_parent.embed_token()) {
     return;
+  }
+
+  TRACE_EVENT_WITH_FLOW2(
+      TRACE_DISABLED_BY_DEFAULT("viz.surface_id_flow"),
+      "LocalSurfaceId.Submission.Flow",
+      TRACE_ID_GLOBAL(local_surface_id_from_parent.submission_trace_id()),
+      TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "step",
+      "SetLocalSurfaceIdFromParent", "local_surface_id",
+      local_surface_id_from_parent.ToString());
   local_surface_id_from_parent_ = local_surface_id_from_parent;
   has_pushed_local_surface_id_from_parent_ = false;
   UpdateDeferCommitsInternal();
@@ -1267,10 +1273,6 @@ Layer* LayerTreeHost::LayerById(int id) const {
   return iter != layer_id_map_.end() ? iter->second : nullptr;
 }
 
-size_t LayerTreeHost::NumLayers() const {
-  return layer_id_map_.size();
-}
-
 bool LayerTreeHost::PaintContent(const LayerList& update_layer_list,
                                  bool* content_has_slow_paths,
                                  bool* content_has_non_aa_paint) {
@@ -1284,27 +1286,27 @@ bool LayerTreeHost::PaintContent(const LayerList& update_layer_list,
   return did_paint_content;
 }
 
-void LayerTreeHost::AddSurfaceLayerId(const viz::SurfaceId& surface_id) {
-  if (++surface_layer_ids_[surface_id] == 1)
-    needs_surface_ids_sync_ = true;
+void LayerTreeHost::AddSurfaceRange(const viz::SurfaceRange& surface_range) {
+  if (++surface_ranges_[surface_range] == 1)
+    needs_surface_ranges_sync_ = true;
 }
 
-void LayerTreeHost::RemoveSurfaceLayerId(const viz::SurfaceId& surface_id) {
-  auto iter = surface_layer_ids_.find(surface_id);
-  if (iter == surface_layer_ids_.end())
+void LayerTreeHost::RemoveSurfaceRange(const viz::SurfaceRange& surface_range) {
+  auto iter = surface_ranges_.find(surface_range);
+  if (iter == surface_ranges_.end())
     return;
 
   if (--iter->second <= 0) {
-    surface_layer_ids_.erase(iter);
-    needs_surface_ids_sync_ = true;
+    surface_ranges_.erase(iter);
+    needs_surface_ranges_sync_ = true;
   }
 }
 
-base::flat_set<viz::SurfaceId> LayerTreeHost::SurfaceLayerIds() const {
-  base::flat_set<viz::SurfaceId> ids;
-  for (auto& map_entry : surface_layer_ids_)
-    ids.insert(map_entry.first);
-  return ids;
+base::flat_set<viz::SurfaceRange> LayerTreeHost::SurfaceRanges() const {
+  base::flat_set<viz::SurfaceRange> ranges;
+  for (auto& map_entry : surface_ranges_)
+    ranges.insert(map_entry.first);
+  return ranges;
 }
 
 void LayerTreeHost::AddLayerShouldPushProperties(Layer* layer) {
@@ -1419,8 +1421,8 @@ void LayerTreeHost::PushLayerTreePropertiesTo(LayerTreeImpl* tree_impl) {
 
   tree_impl->set_browser_controls_shrink_blink_size(
       browser_controls_shrink_blink_size_);
-  tree_impl->set_top_controls_height(top_controls_height_);
-  tree_impl->set_bottom_controls_height(bottom_controls_height_);
+  tree_impl->SetTopControlsHeight(top_controls_height_);
+  tree_impl->SetBottomControlsHeight(bottom_controls_height_);
   tree_impl->set_overscroll_behavior(overscroll_behavior_);
   tree_impl->PushBrowserControlsFromMainThread(top_controls_shown_ratio_);
   tree_impl->elastic_overscroll()->PushMainToPending(elastic_overscroll_);
@@ -1438,23 +1440,22 @@ void LayerTreeHost::PushLayerTreePropertiesTo(LayerTreeImpl* tree_impl) {
 
   tree_impl->SetLocalSurfaceIdFromParent(local_surface_id_from_parent_);
   has_pushed_local_surface_id_from_parent_ = true;
+  tree_impl->SetDeviceViewportSize(device_viewport_size_);
 
   if (pending_page_scale_animation_) {
     tree_impl->SetPendingPageScaleAnimation(
         std::move(pending_page_scale_animation_));
   }
 
-  DCHECK(!tree_impl->ViewportSizeInvalid());
-
   tree_impl->set_has_ever_been_drawn(false);
 }
 
-void LayerTreeHost::PushSurfaceIdsTo(LayerTreeImpl* tree_impl) {
-  if (needs_surface_ids_sync()) {
-    tree_impl->ClearSurfaceLayerIds();
-    tree_impl->SetSurfaceLayerIds(SurfaceLayerIds());
+void LayerTreeHost::PushSurfaceRangesTo(LayerTreeImpl* tree_impl) {
+  if (needs_surface_ranges_sync()) {
+    tree_impl->ClearSurfaceRanges();
+    tree_impl->SetSurfaceRanges(SurfaceRanges());
     // Reset for next update
-    set_needs_surface_ids_sync(false);
+    set_needs_surface_ranges_sync(false);
   }
 }
 
@@ -1465,7 +1466,6 @@ void LayerTreeHost::PushLayerTreeHostPropertiesTo(
   host_impl->SetContentHasNonAAPaint(content_has_non_aa_paint_);
   RecordGpuRasterizationHistogram(host_impl);
 
-  host_impl->SetViewportSize(device_viewport_size_);
   host_impl->SetViewportVisibleRect(viewport_visible_rect_);
   host_impl->SetDebugState(debug_state_);
 }

@@ -76,6 +76,10 @@
       status: "experimental",
     },
     {
+      name: "AdTagging",
+      status: "test",
+    },
+    {
       name: "AllowActivationDelegationAttr",
     },
     {
@@ -89,10 +93,6 @@
     },
     {
       name: "AsyncClipboard",
-      status: "experimental",
-    },
-    {
-      name: "AsyncCookies",
       status: "experimental",
     },
     {
@@ -234,6 +234,11 @@
       status: "experimental",
     },
     {
+      name: "CookieStore",
+      origin_trial_feature_name: "CookieStore",
+      status: "experimental",
+    },
+    {
       name: "CorsRFC1918",
     },
     {
@@ -255,7 +260,7 @@
     },
     {
       name: "CSSEnvironmentVariables",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "CSSFocusVisible",
@@ -282,6 +287,10 @@
     },
     {
       name: "CSSLayoutAPI",
+      status: "experimental",
+    },
+    {
+      name: "CSSLogical",
       status: "experimental",
     },
     {
@@ -312,6 +321,12 @@
       name: "CSSOverscrollBehavior",
       status: "stable",
     },
+    // Do not ship CSSPaintAPIArguments without shipping CSSVariables2 first.
+    //
+    // CSSPaintAPIArguments depends on parts of the the 'CSS Properties and
+    // Values API Level 1', specification (section 'Supported syntax strings').
+    // That specification is implemented behind the runtime enabled feature
+    // CSSVariables2.
     {
       name: "CSSPaintAPIArguments",
       status: "experimental",
@@ -474,15 +489,12 @@
       status: "stable"
     },
     {
-      name: "FeaturePolicyExperimentalFeatures",
-      status: "experimental"
-    },
-    {
       name: "FeaturePolicyForPermissions",
       status: "stable"
     },
     {
       name: "FeaturePolicyJavaScriptInterface",
+      origin_trial_feature_name: "FeaturePolicyJSAPI",
       status: "experimental"
     },
     {
@@ -541,7 +553,6 @@
     },
     {
       name: "GamepadExtensions",
-      origin_trial_feature_name: "WebVR1.1M62",
       status: "experimental",
     },
     {
@@ -571,6 +582,10 @@
     {
       name: "IDBObserver",
       status: "experimental",
+    },
+    {
+      name: "IdleTimeColdModeSpellChecking",
+      status: "stable",
     },
     {
       name: "ImageDecodingAttribute",
@@ -608,7 +623,7 @@
     },
     {
       name: "InterventionReporting",
-      status: "experimental",
+      status: "stable",
     },
     {
       // Tracks "jank" from layout objects changing their visual location
@@ -622,7 +637,7 @@
     },
     {
       name: "KeyboardMap",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "LangAttributeAwareFormControlUI",
@@ -783,12 +798,16 @@
       status: "stable",
     },
     {
+      name: "NestedWorkers",
+      status: "stable",
+    },
+    {
       name: "NetInfoDownlink",
       status: "stable",
     },
     {
       name: "NetInfoDownlinkHeader",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "NetInfoDownlinkMax",
@@ -800,7 +819,7 @@
     },
     {
       name: "NetInfoEffectiveTypeHeader",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "NetInfoRtt",
@@ -808,7 +827,7 @@
     },
     {
       name: "NetInfoRttHeader",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "NetInfoSaveData",
@@ -820,6 +839,10 @@
     // Not a web exposed feature, enabled from the command line.
     {
       name: "NewRemotePlaybackPipeline",
+    },
+    {
+      name: "NoIdleEncodingForLayoutTests",
+      status: "test",
     },
     {
       name: "NotificationConstructor",
@@ -848,6 +871,10 @@
     {
       name: "OffscreenCanvas",
       status: "stable",
+    },
+    {
+      name: "OffscreenCanvasCommit",
+      status: "experimental",
     },
     {
       name: "OffscreenCanvasText",
@@ -934,6 +961,10 @@
     {
       name: "PaymentRequestBasicCard",
       status: "stable",
+    },
+    {
+      name: "PaymentRetry",
+      status: "experimental",
     },
     {
       name: "PerformanceNavigationTiming2",
@@ -1087,6 +1118,9 @@
       name: "RTCUnifiedPlanByDefault",
     },
     {
+      name: "ScheduledScriptStreaming",
+    },
+    {
       name: "ScriptedSpeech",
       status: "stable",
     },
@@ -1117,8 +1151,7 @@
     },
     {
       name: "Sensor",
-      origin_trial_feature_name: "GenericSensor",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "SensorExtraClasses",
@@ -1196,19 +1229,19 @@
     {
       name: "StaleWhileRevalidate",
       origin_trial_feature_name: "StaleWhileRevalidate",
-      status: "test",
+      status: "experimental",
     },
     {
       name: "StopInBackground",
       status: "test",
     },
     {
-      name: "StopLoadingInBackground",
+      name: "StopNonTimersInBackground",
       status: "test",
     },
     {
-      name: "StopNonTimersInBackground",
-      status: "test",
+      name: "TextUnderlinePositionLeftRight",
+      status: "experimental",
     },
     {
       name: "TimerThrottlingForBackgroundTabs",
@@ -1254,6 +1287,10 @@
     {
       name: "UnifiedTouchAdjustment",
       status: "stable",
+    },
+    {
+      name: "UserActivationAPI",
+      status: "experimental",
     },
     {
       name: "UserActivationV2",
@@ -1316,6 +1353,10 @@
       status: "experimental",
     },
     {
+      name: "WebGL2ComputeContext",
+      status: "experimental",
+    },
+    {
       name: "WebGLDraftExtensions",
       status: "experimental",
     },
@@ -1333,8 +1374,7 @@
     },
     {
       name: "WebLocksAPI",
-      origin_trial_feature_name: "WebLocksAPI",
-      status: "experimental",
+      status: "stable",
     },
     {
       name: "WebNFC",
@@ -1350,13 +1390,17 @@
       status: "stable",
     },
     {
-      name: "WebUSBOnDedicatedAndSharedWorkers",
+      name: "WebUSBOnDedicatedWorkers",
+      status: "stable",
+      depends_on: ["WebUSB"],
+    },
+    {
+      name: "WebUSBOnSharedWorkers",
       status: "test",
       depends_on: ["WebUSB"],
     },
     {
       name: "WebVR",
-      origin_trial_feature_name: "WebVR1.1M62",
       status: "experimental",
     },
     {
@@ -1365,7 +1409,7 @@
     },
     {
       name: "WebXR",
-      origin_trial_feature_name: "WebXRDevice",
+      origin_trial_feature_name: "WebXRDeviceM69",
       status: "experimental",
     },
     // Subset of the GamepadExtensions wanted for WebXR, which expose VR controller
@@ -1379,6 +1423,11 @@
     },
     {
       name: "WebXRHitTest",
+      status: "experimental"
+    },
+    {
+      name: "WindowPostMessageOptions",
+      status: "experimental",
     },
     {
       name: "WorkerNosniffBlock",

@@ -406,11 +406,11 @@ void BrowserPluginGuest::PointerLockPermissionResponse(bool allow) {
       browser_plugin_instance_id(), allow));
 }
 
-void BrowserPluginGuest::SetChildFrameSurface(
+void BrowserPluginGuest::FirstSurfaceActivation(
     const viz::SurfaceInfo& surface_info) {
   if (features::IsAshInBrowserProcess()) {
     SendMessageToEmbedder(
-        std::make_unique<BrowserPluginMsg_SetChildFrameSurface>(
+        std::make_unique<BrowserPluginMsg_FirstSurfaceActivation>(
             browser_plugin_instance_id(), surface_info));
   }
 }
@@ -1036,8 +1036,7 @@ void BrowserPluginGuest::OnSynchronizeVisualProperties(
       ((frame_rect_.size() != visual_properties.screen_space_rect.size() ||
         screen_info_ != visual_properties.screen_info ||
         capture_sequence_number_ != visual_properties.capture_sequence_number ||
-        zoom_level_ != visual_properties.zoom_level ||
-        uses_temporary_zoom_ != visual_properties.uses_temporary_zoom) &&
+        zoom_level_ != visual_properties.zoom_level) &&
        local_surface_id_ == local_surface_id)) {
     SiteInstance* owner_site_instance = delegate_->GetOwnerSiteInstance();
     bad_message::ReceivedBadMessage(
@@ -1049,7 +1048,6 @@ void BrowserPluginGuest::OnSynchronizeVisualProperties(
   screen_info_ = visual_properties.screen_info;
   frame_rect_ = visual_properties.screen_space_rect;
   zoom_level_ = visual_properties.zoom_level;
-  uses_temporary_zoom_ = visual_properties.uses_temporary_zoom;
 
   GetWebContents()->SendScreenRects();
   local_surface_id_ = local_surface_id;

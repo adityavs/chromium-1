@@ -129,6 +129,7 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
     bool chromium_gpu_fence = false;
     bool unpremultiply_and_dither_copy = false;
     bool separate_stencil_ref_mask_writemask = false;
+    bool mesa_framebuffer_flip_y = false;
   };
 
   FeatureInfo();
@@ -180,6 +181,8 @@ class GPU_GLES2_EXPORT FeatureInfo : public base::RefCounted<FeatureInfo> {
   bool IsWebGLContext() const;
   bool IsWebGL1OrES2Context() const;
   bool IsWebGL2OrES3Context() const;
+  bool IsWebGL2OrES3OrHigherContext() const;
+  bool IsWebGL2ComputeContext() const;
 
   void EnableCHROMIUMTextureStorageImage();
   void EnableCHROMIUMColorBufferFloatRGBA();

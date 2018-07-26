@@ -40,6 +40,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_event_listener.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_target_impl.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
 #include "third_party/blink/renderer/core/events/event_util.h"
@@ -53,7 +54,6 @@
 #include "third_party/blink/renderer/core/probe/core_probes.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/histogram.h"
 #include "third_party/blink/renderer/platform/wtf/assertions.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
@@ -737,6 +737,18 @@ bool EventTarget::FireEventListeners(Event* event,
       } else if (CheckTypeThenUseCount(event, EventTypeNames::pointerout,
                                        WebFeature::kPointerOverOutFired,
                                        document)) {
+      } else if (event->eventPhase() == Event::kCapturingPhase ||
+                 event->eventPhase() == Event::kBubblingPhase) {
+        if (CheckTypeThenUseCount(
+                event, EventTypeNames::DOMNodeRemoved,
+                WebFeature::kDOMNodeRemovedEventListenedAtNonTarget,
+                document)) {
+        } else if (CheckTypeThenUseCount(
+                       event, EventTypeNames::DOMNodeRemovedFromDocument,
+                       WebFeature::
+                           kDOMNodeRemovedFromDocumentEventListenedAtNonTarget,
+                       document)) {
+        }
       }
     }
   }
@@ -870,18 +882,19 @@ void EventTarget::RemoveAllEventListeners() {
   }
 }
 
-void EventTarget::EnqueueAsyncEvent(Event* event, TaskType task_type) {
+void EventTarget::EnqueueEvent(Event* event, TaskType task_type) {
   ExecutionContext* context = GetExecutionContext();
   if (!context)
     return;
   probe::AsyncTaskScheduled(context, event->type(), event);
   context->GetTaskRunner(task_type)->PostTask(
       FROM_HERE,
-      WTF::Bind(&EventTarget::DispatchAsyncEvent, WrapPersistent(this),
+      WTF::Bind(&EventTarget::DispatchEnqueuedEvent, WrapPersistent(this),
                 WrapPersistent(event), WrapPersistent(context)));
 }
 
-void EventTarget::DispatchAsyncEvent(Event* event, ExecutionContext* context) {
+void EventTarget::DispatchEnqueuedEvent(Event* event,
+                                        ExecutionContext* context) {
   if (!GetExecutionContext()) {
     probe::AsyncTaskCanceled(context, event);
     return;

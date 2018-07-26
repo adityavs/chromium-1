@@ -85,6 +85,13 @@ typedef NS_ENUM(NSInteger, BookmarksContextBarState) {
   BookmarksContextBarMixedSelection,  // Multiple URL / Folders selected.
 };
 
+// Light gray color that matches the favicon background image color to eliminate
+// setting a non-opaque background color.
+const CGFloat kFallbackIconDefaultBackgroundColor = 0xf1f3f4;
+
+// Grayscale fallback favicon light gray text color.
+const CGFloat kFallbackIconDefaultTextColorWhitePercentage = 0.66;
+
 // NetworkTrafficAnnotationTag for fetching favicon from a Google server.
 const net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("bookmarks_get_large_icon", R"(
@@ -869,6 +876,7 @@ const CGFloat kShadowRadius = 12.0f;
           self.spinnerView = nil;
         }];
     [strongSelf loadBookmarkViews];
+    [strongSelf.sharedState.tableView reloadData];
   }];
 }
 
@@ -1573,6 +1581,19 @@ const CGFloat kShadowRadius = 12.0f;
       [URLCell.faviconView
           configureWithAttributes:[FaviconAttributes
                                       attributesWithImage:image]];
+    else {
+      // UI Refresh fallback colors are default fixed.
+      textColor =
+          [UIColor colorWithWhite:kFallbackIconDefaultTextColorWhitePercentage
+                            alpha:1.0];
+      backgroundColor = UIColorFromRGB(kFallbackIconDefaultBackgroundColor);
+      [URLCell.faviconView
+          configureWithAttributes:[FaviconAttributes
+                                      attributesWithMonogram:fallbackText
+                                                   textColor:textColor
+                                             backgroundColor:backgroundColor
+                                      defaultBackgroundColor:NO]];
+    }
   } else {
     BookmarkTableCell* cell =
         [self.sharedState.tableView cellForRowAtIndexPath:indexPath];

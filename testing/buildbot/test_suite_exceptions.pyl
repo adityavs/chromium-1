@@ -25,18 +25,6 @@
       # chromium.android.fyi
       'x64 Device Tester',
     ],
-    'modifications': {
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 900,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 900,
-        },
-      },
-    },
   },
   'angle_end2end_tests': {
     'remove_from': [
@@ -51,8 +39,7 @@
   },
   'angle_perftests': {
     'remove_from': [
-      # anglebug.com/2433
-      'Android FYI Release (Nexus 6)',
+      'Android FYI Release (Nexus 6)',  # anglebug.com/2433
     ],
   },
   'angle_unittests': {
@@ -69,95 +56,11 @@
       },
     },
   },
-  'base_unittests': {
-    'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 600,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 600,
-        },
-      },
-      # chromium.clang
-      'ToTMac': {
-        'swarming': {
-          'shards': 5,
-        },
-      },
-    },
-  },
   'blink_heap_unittests': {
     'remove_from': [
       # chromium.memory
       'Linux TSan Tests',  # https://crbug.com/831674
     ],
-    'modifications': {
-      # chromium.android
-      'android-kitkat-arm-rel': {
-        'swarming': {
-          'hard_timeout': 180,
-        },
-      },
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Phone Tester (dbg)': {
-        'swarming': {
-          'hard_timeout': 180,
-        },
-      },
-      # chromium.android.fyi
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
-  'blink_platform_unittests': {
-    'modifications': {
-      'android-kitkat-arm-rel': {
-        'experiment_percentage': 100,
-      },
-      'android-marshmallow-arm64-rel': {
-        'experiment_percentage': 100,
-      },
-    },
-  },
-  'breakpad_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-    },
   },
   'browser_tests': {
     'remove_from': [
@@ -290,6 +193,20 @@
           'shards': 20,
         },
       },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 20,
+        },
+      },
+      'Linux Chromium OS ASan LSan Tests (1)': {
+        # These are very slow on the ASAN trybot for some reason.
+        # crbug.com/794372
+        'swarming': {
+          'shards': 30,
+        },
+      },
       # client.v8.chromium
       'Linux - Future (dbg)': {
         'swarming': {
@@ -304,20 +221,6 @@
       },
     },
   },
-  'capture_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
   'cast_shell_browsertests': {
     'modifications': {
       'Cast Audio Linux': {
@@ -328,7 +231,7 @@
           '--test-launcher-jobs=1',
         ],
         'swarming': {
-          'can_use_on_swarming_builders': False,
+          'can_use_on_swarming_builders': False,  # https://crbug.com/861753
         },
       },
       'Cast Linux': {
@@ -339,21 +242,10 @@
           '--test-launcher-jobs=1',
         ],
         'swarming': {
-          'can_use_on_swarming_builders': False,
+          'can_use_on_swarming_builders': False,  # https://crbug.com/861753
         },
       },
     },
-  },
-  'cast_unittests': {
-    'remove_from': [
-      # Unclear why these largely aren't run on Android.
-      # TODO(kbr): why are the cast unit tests not run on the Cast bots?!
-      'Cast Audio Linux',
-      'Cast Linux',
-      # chromium.clang
-      'ToTAndroidCFI',
-      'ToTLinuxThinLTO',
-    ],
   },
   'checkbins': {
     'remove_from': [
@@ -362,26 +254,12 @@
     ],
   },
   'chrome_public_test_apk': {
-    'remove_gtest_from': [
-      # chromium.android.fyi
-      'Unswarmed N5 Tests Dummy Builder',
-      'Unswarmed N5X Tests Dummy Builder',
-    ],
     'remove_from': [
       # chromium.clang
-      'ToTAndroidCFI',
+      'ToTAndroidCFI',  # https://crbug.com/862581
       # chromium.memory
-      'Android CFI',
+      'Android CFI',  # https://crbug.com/862581
     ],
-    'key_removals': {
-      # chromium.android.fyi
-      'Nougat Phone Tester': [
-        'args',
-      ],
-      'x86 Cloud Tester': [
-        'args',
-      ],
-    },
     'modifications': {
       # chromium.android
       'android-kitkat-arm-rel': {
@@ -399,60 +277,16 @@
           'shards': 20,
         },
       },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 2400,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-        },
-      },
       'Marshmallow 64 bit Tester': {
         # TODO(crbug.com/731759): Enable this once we're confident that it
         # passes.
         'experiment_percentage': 100,
         'swarming': {
-          'hard_timeout': 1200,
           'shards': 14,
         },
       },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 8,
-        },
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 1,
-        },
-      },
-      # chromium.clang
-      'ToTAndroid x64': {
-        'swarming': {
-          'shards': 1,
-          'hard_timeout': 0,
-        },
+      'Oreo Phone Tester': {
+        'experiment_percentage': 100,
       },
       # chromium.swarm
       'Android N5X Swarm': {
@@ -463,7 +297,7 @@
     },
   },
   'chrome_public_test_vr_apk': {
-    'remove_gtest_from': [
+    'remove_from': [
       # chromium.android
       'KitKat Tablet Tester',
       'Lollipop Tablet Tester',
@@ -475,27 +309,18 @@
           '--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_cardboard_skipdon_setupcomplete.json',
           '--additional-apk=//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk',
         ],
-        'swarming': {
-          'hard_timeout': 1920,
-        },
       },
       'android-marshmallow-arm64-rel': {
         'args': [
           '--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_cardboard_skipdon_setupcomplete.json',
           '--additional-apk=//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk',
         ],
-        'swarming': {
-          'hard_timeout': 1200,
-        },
       },
       'Lollipop Phone Tester': {
         'args': [
           '--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_cardboard_skipdon_setupcomplete.json',
           '--additional-apk=//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk',
         ],
-        'swarming': {
-          'hard_timeout': 1920,
-        },
       },
       'Marshmallow 64 bit Tester': {
         'args': [
@@ -506,23 +331,6 @@
     },
   },
   'chrome_sync_shell_test_apk': {
-    'remove_gtest_from': [
-      # chromium.android.fyi
-      'Unswarmed N5 Tests Dummy Builder',
-      'Unswarmed N5X Tests Dummy Builder',
-    ],
-    'key_removals': {
-      # chromium.android.fyi
-      'Nougat Phone Tester': [
-        'args',
-      ],
-      'x64 Device Tester': [
-        'args',
-      ],
-      'x86 Cloud Tester': [
-        'args',
-      ],
-    },
     'modifications': {
       # chromium.android
       'KitKat Phone Tester (dbg)': {
@@ -530,153 +338,30 @@
           'shards': 2,
         },
       },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      # chromium.android.fyi
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 600,
-        },
-      },
-      # chromium.clang
-      'ToTAndroid x64': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      'ToTAndroidCFI': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      # chromium.memory
-      'Android CFI': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
     },
   },
   'chromevox_tests': {
     'modifications': {
-      # Takes a long time under msan for some reason.
       'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
         'swarming': {
-          'shards': 4,
-        },
-      },
-    },
-  },
-  'components_browsertests': {
-    'remove_from': [
-      # On chromium.linux, unclear why these aren't run on the Cast bots.
-      'Cast Audio Linux',
-      'Cast Linux',
-      'Linux Tests (dbg)(1)(32)',
-      # chromium.win
-      'Win7 Tests (dbg)(1)',
-      'Win10 Tests x64 (dbg)',
-    ],
-    'modifications': {
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 600,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 600,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 600,
+          'shards': 6,
         },
       },
     },
   },
   'components_unittests': {
-    'remove_from': [
-      # On chromium.linux, unclear why these aren't run on the Cast bots.
-      'Cast Audio Linux',
-      'Cast Linux',
-    ],
     'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1500,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1500,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-          'shards': 1,
-        },
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
       # chromium.memory
       'Linux ASan LSan Tests (1)': {
+        # These are very slow on the ASAN trybot for some reason.
+        # crbug.com/794372
+        'swarming': {
+          'shards': 5,
+        },
+      },
+      'Linux Chromium OS ASan LSan Tests (1)': {
         # These are very slow on the ASAN trybot for some reason.
         # crbug.com/794372
         'swarming': {
@@ -687,74 +372,6 @@
   },
   'content_browsertests': {
     'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 6,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 6,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 6,
-        },
-      },
-      'Unswarmed N5 Tests Dummy Builder': {
-        'args': [
-          '--shard-timeout',
-          '600',
-        ],
-      },
-      'Unswarmed N5X Tests Dummy Builder': {
-        'args': [
-          '--shard-timeout',
-          '600',
-        ],
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-          'shards': 1,
-        },
-      },
       # chromium.chromiumos
       'linux-chromeos-dbg': {
         'swarming': {
@@ -784,19 +401,13 @@
       # chromium.linux
       'Cast Audio Linux': {
         'args': [
-          '--test-launcher-filter-file=src/testing/buildbot/filters/cast-linux.content_browsertests.filter',
+          '--test-launcher-filter-file=../../testing/buildbot/filters/cast-linux.content_browsertests.filter',
         ],
-        'swarming': {
-          'can_use_on_swarming_builders': False,
-        },
       },
       'Cast Linux': {
         'args': [
-          '--test-launcher-filter-file=src/testing/buildbot/filters/cast-linux.content_browsertests.filter',
+          '--test-launcher-filter-file=../../testing/buildbot/filters/cast-linux.content_browsertests.filter',
         ],
-        'swarming': {
-          'can_use_on_swarming_builders': False,
-        },
       },
       # chromium.memory
       'Linux ASan LSan Tests (1)': {
@@ -839,144 +450,15 @@
       # chromium.linux
       'Linux Tests (dbg)(1)(32)',  # https://crbug.com/859264
     ],
-  },
-  'content_shell_test_apk': {
-    'remove_gtest_from': [
-      # chromium.android.fyi
-      'Unswarmed N5 Tests Dummy Builder',
-      'Unswarmed N5X Tests Dummy Builder',
-    ],
-    'key_removals': {
-      # chromium.android.fyi
-      'Nougat Phone Tester': [
-        'args',
-      ],
-      'x86 Cloud Tester': [
-        'args',
-      ],
-    },
     'modifications': {
-      # chromium.android
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 2,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'shards': 2,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1500,
-          'shards': 2,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 4,
-        },
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 1920,
-          'shards': 1,
-        },
-      },
-      # chromium.clang
-      'ToTAndroid x64': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      'ToTAndroidCFI': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
-      },
-      # chromium.memory
-      'Android CFI': {
-        'swarming': {
-          'hard_timeout': 0,
-          'shards': 1,
-        },
+      # chromium.win
+      'Win10 Tests x64 (dbg)': {
+        'experiment_percentage': 100,  # https://crbug.com/861730
       },
     },
   },
   'content_unittests': {
-    'remove_from': [
-      # chromium.linux
-      # Fails due to package install issues (https://crbug.com/858692).
-      'Fuchsia x64',
-
-      # chromium.fyi
-      'Fuchsia (dbg)',
-      'Fuchsia ARM64',
-    ],
     'modifications': {
-      # TODO(dpranke) - on chromium.swarm, remove this exception.
-      'Android N5X Swarm': {
-        'swarming': {
-          'shards': 4,
-        },
-      },
-      # chromium.android
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1500,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      # chromium.fyi
-      'Site Isolation Android': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
       # chromium.memory
       'Linux ASan LSan Tests (1)': {
         # These are slow on the ASAN trybot for some reason.
@@ -984,6 +466,22 @@
         'swarming': {
           'shards': 2,
         },
+      },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 2,
+        },
+      },
+    },
+  },
+  'context_lost_tests': {
+    'modifications': {
+      'Mac FYI GPU ASAN Release': {
+        'args': [
+          '--is-asan',
+        ]
       },
     },
   },
@@ -993,60 +491,6 @@
       'linux-win_cross-rel', # https://crbug.com/762167
     ],
   },
-  'cronet_test_instrumentation_apk': {
-    'modifications': {
-      'Android Cronet Builder (dbg) chromium.android.fyi': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'Android Cronet KitKat Builder chromium.android.fyi': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-    },
-  },
-  'device_unittests': {
-    'modifications': {
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
-  'events_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
   'gin_unittests': {
     'remove_from': [
       # chromium.clang
@@ -1054,8 +498,6 @@
       # chromium.memory
       'Linux ASan LSan Tests (1)',  # https://crbug.com/831667
       'Linux Chromium OS ASan LSan Tests (1)',  # https://crbug.com/831667
-      # client.v8.chromium
-      'Linux - Future (dbg)',
     ],
   },
   'gl_tests': {
@@ -1071,16 +513,6 @@
       'Linux MSan Tests',
     ],
     'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
       # chromium.memory
       # TODO(kbr): figure out a better way to specify blocks of
       # arguments like this for tests on multiple machines.
@@ -1160,28 +592,6 @@
       'Linux FYI Release (AMD R7 240)',
     ],
     'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
       # chromium.clang
       'CFI Linux (icall)': {
         'args': [
@@ -1293,6 +703,13 @@
           'shards': 6,
         },
       },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 5,
+        },
+      },
       # client.v8.chromium
       'Linux - Future (dbg)': {
         'swarming': {
@@ -1305,58 +722,18 @@
       },
     },
   },
-  'ipc_tests': {
-    'remove_from': [
-      # chromium.linux
-      'Fuchsia x64',
-    ],
-    'modifications': {
-      # chromium.android
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      # chromium.android.fyi
-      'Unswarmed N5 Tests Dummy Builder': {
-        'args': [
-          '--shard-timeout',
-          '600',
-        ],
-      },
-      'Unswarmed N5X Tests Dummy Builder': {
-        'args': [
-          '--shard-timeout',
-          '600',
-        ],
-      },
-    },
-  },
-  'latency_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-    },
-  },
   'mash_browser_tests': {
     'remove_from': [
       # Not needed on chromium.fyi because suite is on main waterfall.
       'Mojo ChromiumOS',
     ],
     'modifications': {
+      # chromium.chromiumos
+      'linux-chromeos-dbg': {
+        'swarming': {
+          'shards': 20,
+        },
+      },
       # chromium.memory
       'Linux Chromium OS ASan LSan Tests (1)': {
         'swarming': {
@@ -1366,50 +743,6 @@
       'Linux ChromiumOS MSan Tests': {
         'swarming': {
           'shards': 20,
-        },
-      },
-    },
-  },
-  'mash_unittests': {
-    'remove_from': [
-      # chromium.fyi
-      'Mojo ChromiumOS',
-    ],
-  },
-  'media_blink_unittests': {
-    'modifications': {
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-    },
-  },
-  'media_unittests': {
-    'remove_from': [
-      # chromium.linux
-      'Fuchsia x64',
-      # chromium.fyi
-      'Fuchsia ARM64',
-    ],
-  },
-  'mojo_test_apk': {
-    'modifications': {
-      # chromium.clang
-      'ToTAndroidCFI': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      # chromium.clang
-      'Android CFI': {
-        'swarming': {
-          'hard_timeout': 0,
         },
       },
     },
@@ -1433,10 +766,10 @@
   'net_unittests': {
     'remove_from': [
       # chromium.fyi
-      'Fuchsia (dbg)',
-      'Fuchsia ARM64',
+      'fuchsia-fyi-arm64-rel',  # https://crbug.com/847915
+      'fuchsia-fyi-x64-dbg',  # https://crbug.com/844416 (and 847915)
       # chromium.linux
-      'Fuchsia x64',
+      'Fuchsia x64',  # https://crbug.com/847915
     ],
     'modifications': {
       # chromium.clang
@@ -1455,9 +788,18 @@
         },
       },
       'Linux Chromium OS ASan LSan Tests (1)': {
+        # These are very slow on the ASAN trybot for some reason.
+        # crbug.com/794372
         'swarming': {
           'shards': 8,
         }
+      },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 2,
+        },
       },
       'Linux TSan Tests': {
         'swarming': {
@@ -1571,45 +913,6 @@
       'Linux Tests (dbg)(1)(32)',  # https://crbug.com/852895
     ],
   },
-  'sandbox_linux_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'linux-chromeos-dbg': {
-        'args': [
-          '--test-launcher-print-test-stdio=always',
-        ],
-      },
-      'linux-chromeos-rel': {
-        'args': [
-          '--test-launcher-print-test-stdio=always',
-        ],
-      },
-      'Linux Tests (dbg)(1)': {
-        'args': [
-          '--test-launcher-print-test-stdio=always',
-        ],
-      },
-      'Linux Tests (dbg)(1)(32)': {
-        'args': [
-          '--test-launcher-print-test-stdio=always',
-        ],
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-    },
-  },
   'services_unittests': {
     'remove_from': [
       # chromium.clang
@@ -1617,9 +920,6 @@
       # chromium.gpu.fyi
       # The face and barcode detection tests fail on the Mac Pros.
       'Mac Pro FYI Release (AMD)',
-      # On chromium.linux, unclear why these aren't run on Cast.
-      'Cast Audio Linux',
-      'Cast Linux',
       # chromium.memory
       'Linux ChromiumOS MSan Tests',  # https://crbug.com/831676
       'Linux MSan Tests',  # https://crbug.com/831676
@@ -1780,69 +1080,6 @@
       },
     },
   },
-  'sql_unittests': {
-    'remove_from': [
-      # chromium.fyi
-      'Fuchsia ARM64',
-    ],
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 60,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
-  'storage_unittests': {
-    'modifications': {
-      # chromium.android
-      'android-kitkat-arm-rel': {
-        'swarming': {
-          'hard_timeout': 180,
-        },
-      },
-      'KitKat Phone Tester (dbg)': {
-        'swarming': {
-          'hard_timeout': 180,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-    },
-  },
   'sync_integration_tests': {
     'modifications': {
       'Win7 Tests (dbg)(1)': {
@@ -1912,7 +1149,6 @@
               'temp_band': '<30',
             },
           ],
-          'hard_timeout': 1500,
           'shards': 15,
         },
       },
@@ -1927,7 +1163,6 @@
               'temp_band': '<30',
             },
           ],
-          'hard_timeout': 1500,
           'shards': 15,
         },
       },
@@ -1997,132 +1232,8 @@
       'Win10 Tests x64 (dbg)',
     ],
   },
-  'telemetry_unittests': {
-    'remove_from': [
-      # chromium.win
-      'Win10 Tests x64 (dbg)',
-    ],
-  },
-  'traffic_annotation_auditor_unittests': {
-    'modifications': {
-      'Linux Tests': {
-        # Unclear why this isn't swarmed.
-        'swarming': {
-          'can_use_on_swarming_builders': False,
-        },
-      },
-    },
-    'remove_from': [
-      # On chromium.linux, unclear why these only run on "Linux Tests".
-      'Linux Tests (dbg)(1)',
-      'Linux Tests (dbg)(1)(32)',
-    ],
-  },
-  'ui_android_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
-  'ui_base_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
-  'ui_touch_selection_unittests': {
-    'modifications': {
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 120,
-        },
-      },
-    },
-  },
   'unit_tests': {
-    'remove_from': [
-      # On chromium.linux, unclear why these aren't run on Cast.
-      'Cast Audio Linux',
-      'Cast Linux',
-      # chromium.win
-      'Win10 Tests x64 (dbg)',
-    ],
     'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-          'shards': 2,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-          'shards': 2,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-          'shards': 2,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 2,
-        },
-      },
-      'x64 Device Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 0,
-        },
-      },
       # chromium.clang
       'ToTLinuxASan': {
         'swarming': {
@@ -2138,6 +1249,20 @@
         },
       },
       'Linux TSan Tests': {
+        'swarming': {
+          'shards': 2,
+        },
+      },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 2,
+        },
+      },
+      'Linux Chromium OS ASan LSan Tests (1)': {
+        # These are slow on the ASAN trybot for some reason.
+        # crbug.com/794372
         'swarming': {
           'shards': 2,
         },
@@ -2193,6 +1318,13 @@
         'swarming': {
           'shards': 4,
         }
+      },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 2,
+        },
       },
       'Linux TSan Tests': {
         'swarming': {
@@ -2251,6 +1383,20 @@
           'shards': 20,
         },
       },
+      'Linux ChromiumOS MSan Tests': {
+        # These are very slow on the Chrome OS MSAN trybot for some reason.
+        # crbug.com/865455
+        'swarming': {
+          'shards': 20,
+        },
+      },
+      'Linux Chromium OS ASan LSan Tests (1)': {
+        # These are very slow on the ASAN trybot for some reason.
+        # crbug.com/794372
+        'swarming': {
+          'shards': 20,
+        },
+      },
     },
   },
   'viz_unittests': {
@@ -2258,28 +1404,6 @@
       # chromium.win
       'Win10 Tests x64',
     ],
-    'modifications': {
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-    },
   },
   'vr_common_unittests': {
     'remove_from': [
@@ -2287,28 +1411,6 @@
       'Win 7 Tests x64 (1)',
       'Win10 Tests x64',
     ],
-    'modifications': {
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
-      },
-      'KitKat Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 300,
-        },
-      },
-    },
   },
   'vr_browser_tests': {
     'remove_from': [
@@ -2331,6 +1433,11 @@
       'Win10 Tests x64',
       'Win7 Tests (1)',
       'Win7 Tests (dbg)(1)',
+    ],
+  },
+  'wayland_client_perftests': {
+    'remove_from': [
+      'linux-chromeos-dbg',  # https://crbug.com/859307
     ],
   },
   'webgl_conformance_d3d9_passthrough_tests': {
@@ -2434,17 +1541,6 @@
             { # This should match Mac10.12 Tests on chromium.mac.
               'gpu': '8086:0a2e',
               'hidpi': '0',
-              'os': 'Mac-10.12',
-            },
-          ],
-        },
-      },
-      'mac10.12_retina-blink-rel-dummy': {
-        'swarming': {
-          'dimension_sets': [
-            { # This should match WebKit Mac10.12 (retina) on chromium.webkit.
-              'gpu': '8086:0a2e',
-              'hidpi': '1',
               'os': 'Mac-10.12',
             },
           ],
@@ -2702,10 +1798,6 @@
     },
   },
   'webview_instrumentation_test_apk': {
-    'remove_gtest_from': [
-      'Unswarmed N5 Tests Dummy Builder',
-      'Unswarmed N5X Tests Dummy Builder',
-    ],
     'remove_from': [
       # This test frequently fails on Android, https://crbug.com/824959
       # chromium.android
@@ -2719,57 +1811,10 @@
       # from Android N5X Swarm).
       'Android N5 Swarm',
     ],
-    'key_removals': {
-      # chromium.android.fyi
-      'Nougat Phone Tester': [
-        'args',
-      ],
-      'x86 Cloud Tester': [
-        'args',
-      ],
-    },
     'modifications': {
-      # chromium.android
-      'android-marshmallow-arm64-rel': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 8,
-        },
-      },
-      'Lollipop Phone Tester': {
-        'swarming': {
-          'shards': 6,
-        },
-      },
-      'Lollipop Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      'Marshmallow 64 bit Tester': {
-        'swarming': {
-          'hard_timeout': 1200,
-          'shards': 8,
-        },
-      },
-      'Marshmallow Tablet Tester': {
-        'swarming': {
-          'hard_timeout': 1800,
-          'shards': 6,
-        },
-      },
-      # chromium.android.fyi
-      'Nougat Phone Tester': {
-        'swarming': {
-          'hard_timeout': 1500,
-          'shards': 6,
-        },
-      },
-      'x86 Cloud Tester': {
-        'swarming': {
-          'hard_timeout': 960,
-        },
+      'Oreo Phone Tester': {
+        # TODO(crbug.com/863089): Enable this once it's passing.
+        'experiment_percentage': 100,
       },
     },
   },

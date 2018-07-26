@@ -11,6 +11,8 @@
 #include "components/favicon/ios/web_favicon_driver.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
+#import "ios/chrome/browser/chrome_url_util.h"
+#include "ios/chrome/browser/experimental_flags.h"
 #import "ios/chrome/browser/snapshots/snapshot_cache.h"
 #import "ios/chrome/browser/snapshots/snapshot_cache_factory.h"
 #import "ios/chrome/browser/snapshots/snapshot_tab_helper.h"
@@ -35,7 +37,10 @@ namespace {
 GridItem* CreateItem(web::WebState* web_state) {
   TabIdTabHelper* tab_helper = TabIdTabHelper::FromWebState(web_state);
   GridItem* item = [[GridItem alloc] initWithIdentifier:tab_helper->tab_id()];
-  item.title = base::SysUTF16ToNSString(web_state->GetTitle());
+  // chrome://newtab (NTP) tabs have no title.
+  if (!IsURLNtp(web_state->GetVisibleURL())) {
+    item.title = base::SysUTF16ToNSString(web_state->GetTitle());
+  }
   return item;
 }
 
@@ -205,7 +210,7 @@ web::WebState* GetWebStateWithId(WebStateList* web_state_list,
 
 #pragma mark - CRWWebStateObserver
 
-- (void)webState:(web::WebState*)webState didLoadPageWithSuccess:(BOOL)success {
+- (void)webStateDidChangeTitle:(web::WebState*)webState {
   // Assumption: the ID of the webState didn't change as a result of this load.
   TabIdTabHelper* tabHelper = TabIdTabHelper::FromWebState(webState);
   NSString* itemID = tabHelper->tab_id();
@@ -314,14 +319,26 @@ web::WebState* GetWebStateWithId(WebStateList* web_state_list,
 - (void)faviconForIdentifier:(NSString*)identifier
                   completion:(void (^)(UIImage*))completion {
   web::WebState* webState = GetWebStateWithId(self.webStateList, identifier);
-  if (webState) {
-    favicon::FaviconDriver* faviconDriver =
-        favicon::WebFaviconDriver::FromWebState(webState);
-    if (faviconDriver) {
-      gfx::Image favicon = faviconDriver->GetFavicon();
-      if (!favicon.IsEmpty())
-        completion(favicon.ToUIImage());
-    }
+  if (!webState) {
+    return;
+  }
+  // NTP tabs get no favicon.
+  if (IsURLNtp(webState->GetVisibleURL())) {
+    return;
+  }
+  UIImage* defaultFavicon;
+  if (experimental_flags::IsCollectionsUIRebootEnabled()) {
+    defaultFavicon = [UIImage imageNamed:@"default_world_favicon"];
+  }
+  defaultFavicon = [UIImage imageNamed:@"default_favicon"];
+  completion(defaultFavicon);
+
+  favicon::FaviconDriver* faviconDriver =
+      favicon::WebFaviconDriver::FromWebState(webState);
+  if (faviconDriver) {
+    gfx::Image favicon = faviconDriver->GetFavicon();
+    if (!favicon.IsEmpty())
+      completion(favicon.ToUIImage());
   }
 }
 

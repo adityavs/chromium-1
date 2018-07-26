@@ -7,8 +7,10 @@
 #include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/media/router/media_router_metrics.h"
 #include "chrome/browser/ui/media_router/media_sink_with_cast_modes.h"
 #include "chrome/browser/ui/media_router/ui_media_sink.h"
+#include "chrome/common/media_router/route_request_result.h"
 #include "chrome/grit/generated_resources.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -54,7 +56,11 @@ void MediaRouterViewsUI::StartCasting(const std::string& sink_id,
 }
 
 void MediaRouterViewsUI::StopCasting(const std::string& route_id) {
-  TerminateRoute(route_id);
+  terminating_route_id_ = route_id;
+  // |route_id| may become invalid after UpdateSinks(), so we cannot refer to
+  // |route_id| below this line.
+  UpdateSinks();
+  TerminateRoute(terminating_route_id_.value());
 }
 
 std::vector<MediaSinkWithCastModes> MediaRouterViewsUI::GetEnabledSinks()
@@ -82,6 +88,13 @@ void MediaRouterViewsUI::OnRoutesUpdated(
     const std::vector<MediaRoute>& routes,
     const std::vector<MediaRoute::Id>& joinable_route_ids) {
   MediaRouterUIBase::OnRoutesUpdated(routes, joinable_route_ids);
+  if (terminating_route_id_ &&
+      std::find_if(
+          routes.begin(), routes.end(), [this](const MediaRoute& route) {
+            return route.media_route_id() == terminating_route_id_.value();
+          }) == routes.end()) {
+    terminating_route_id_.reset();
+  }
   UpdateSinks();
 }
 
@@ -114,7 +127,10 @@ UIMediaSink MediaRouterViewsUI::ConvertToUISink(
   if (route) {
     ui_sink.status_text = base::UTF8ToUTF16(route->description());
     ui_sink.route_id = route->media_route_id();
-    ui_sink.state = UIMediaSinkState::CONNECTED;
+    ui_sink.state = terminating_route_id_ && route->media_route_id() ==
+                                                 terminating_route_id_.value()
+                        ? UIMediaSinkState::DISCONNECTING
+                        : UIMediaSinkState::CONNECTED;
   } else {
     ui_sink.state = current_route_request() &&
                             sink.sink.id() == current_route_request()->sink_id

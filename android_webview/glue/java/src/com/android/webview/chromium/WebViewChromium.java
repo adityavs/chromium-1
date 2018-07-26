@@ -79,7 +79,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * This class is the delegate to which WebViewProxy forwards all API calls.
  *
- * Most of the actual functionality is implemented by AwContents (or ContentViewCore within
+ * Most of the actual functionality is implemented by AwContents (or WebContents within
  * it). This class also contains WebView-specific APIs that require the creation of other
  * adapters (otherwise org.chromium.content would depend on the webview.chromium package)
  * and a small set of no-op deprecated APIs.
@@ -101,7 +101,7 @@ class WebViewChromium implements WebViewProvider, WebViewProvider.ScrollDelegate
 
     // Variables for functionality provided by this adapter ---------------------------------------
     private ContentSettingsAdapter mWebSettings;
-    // The WebView wrapper for ContentViewCore and required browser compontents.
+    // The WebView wrapper for WebContents and required browser components.
     AwContents mAwContents;
 
     private final WebView.HitTestResult mHitTestResult;
@@ -175,10 +175,7 @@ class WebViewChromium implements WebViewProvider, WebViewProvider.ScrollDelegate
             //   comes from a single thread. (Note in JB MR2 this exception was in WebView.java).
             if (mAppTargetSdkVersion >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
                 mFactory.startYourEngines(false);
-                try (ScopedSysTraceEvent e2 = ScopedSysTraceEvent.scoped(
-                             "WebViewChromium.checkThreadInsideInit")) {
-                    checkThread();
-                }
+                checkThread();
             } else if (!mFactory.hasStarted()) {
                 if (Looper.myLooper() == Looper.getMainLooper()) {
                     mFactory.startYourEngines(true);
@@ -198,11 +195,8 @@ class WebViewChromium implements WebViewProvider, WebViewProvider.ScrollDelegate
             final boolean doNotUpdateSelectionOnMutatingSelectionRange =
                     mAppTargetSdkVersion <= Build.VERSION_CODES.M;
 
-            try (ScopedSysTraceEvent e2 = ScopedSysTraceEvent.scoped(
-                         "WebViewChromiumFactoryProvider.createWebViewContentsClientAdapter")) {
-                mContentsClientAdapter =
-                        mFactory.createWebViewContentsClientAdapter(mWebView, mContext);
-            }
+            mContentsClientAdapter =
+                    mFactory.createWebViewContentsClientAdapter(mWebView, mContext);
             try (ScopedSysTraceEvent e2 =
                             ScopedSysTraceEvent.scoped("WebViewChromium.ContentSettingsAdapter")) {
                 mWebSettings = new ContentSettingsAdapter(new AwSettings(mContext,
@@ -238,10 +232,10 @@ class WebViewChromium implements WebViewProvider, WebViewProvider.ScrollDelegate
                     }
                 }
             });
-        } finally {
-            // The real initialization may be deferred, in which case we don't record this.
-            if (!mFactory.hasStarted()) return;
+        }
 
+        // If initialization hasn't been deferred, record a startup time histogram entry.
+        if (mFactory.hasStarted()) {
             TimesHistogramSample histogram = new TimesHistogramSample(
                     "Android.WebView.Startup.CreationTime.Stage2.ProviderInit."
                             + (isFirstWebViewInit ? "Cold" : "Warm"),

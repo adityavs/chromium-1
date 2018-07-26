@@ -179,6 +179,10 @@
     "label": "//third_party/blink/common:blink_common_unittests",
     "type": "console_test_launcher",
   },
+  "blink_fuzzer_unittests": {
+    "label": "//third_party/blink/renderer/platform:blink_fuzzer_unittests",
+    "type": "console_test_launcher",
+  },
   "blink_heap_unittests": {
     "label": "//third_party/blink/renderer/platform/heap:blink_heap_unittests",
     "type": "console_test_launcher",
@@ -599,10 +603,6 @@
     "label": "//:gn_all",
     "type": "additional_compile_target",
   },
-  "gn_unittests": {
-    "label": "//tools/gn:gn_unittests",
-    "type": "console_test_launcher",
-  },
   "google_apis_unittests": {
     "label": "//google_apis:google_apis_unittests",
     "type": "console_test_launcher",
@@ -841,7 +841,7 @@
     ],
   },
   "mojo_core_unittests": {
-    "label": "//mojo/edk:mojo_core_unittests",
+    "label": "//mojo/core:mojo_core_unittests",
     "type": "console_test_launcher",
   },
   "mojo_unittests": {
@@ -849,7 +849,7 @@
     "type": "console_test_launcher",
   },
   "mojo_test_apk": {
-    "label": "//mojo/android:mojo_test_apk",
+    "label": "//mojo/public/java/system:mojo_test_apk",
     "type": "console_test_launcher",
   },
   "monochrome_apk_checker": {
@@ -882,10 +882,6 @@
     "args": [
       "../../tools/metrics/metrics_python_tests.py"
     ]
-  },
-  "mash_unittests": {
-    "label": "//mash:mash_unittests",
-    "type": "windowed_test_launcher",
   },
   "nacl_helper_nonsfi_unittests": {
     "label": "//components/nacl/loader:nacl_helper_nonsfi_unittests",
@@ -1084,14 +1080,9 @@
       "-v",
     ],
   },
-  "telemetry_perf_tests": {
-    "label": "//chrome/test:telemetry_perf_tests",
-    "type": "script",
-    "script": "//testing/scripts/run_telemetry_benchmark_as_googletest.py",
-    "args": [
-      "../../tools/perf/run_benchmark",
-    ],
-  },
+  # This isolate is solely used to run the One Builbot Step Tester
+  # trybot so that we don't use the full chrome build each time.  Instead
+  # this uses the reference build to run telemetry.
   "telemetry_perf_tests_without_chrome": {
     "label": "//chrome/test:telemetry_perf_tests_without_chrome",
     "type": "script",
@@ -1100,9 +1091,6 @@
       "../../tools/perf/run_benchmark",
     ],
   },
-  # Perf is in the middle of refactoring their recipe.  crbug.com/757933
-  # These isolates are the new targets for the refactor and will replace
-  # the old ones when migration is complete.
   "performance_test_suite": {
     "label": "//chrome/test:performance_test_suite",
     "type": "script",
@@ -1123,21 +1111,6 @@
       "-v",
       "--",
       "../../testing/scripts/run_performance_tests.py",
-      "../../tools/perf/run_benchmark",
-    ],
-  },
-  "telemetry_perf_webview_tests": {
-    "label": "//chrome/test:telemetry_perf_webview_tests",
-    "type": "script",
-    "script": "//third_party/catapult/devil/devil/android/tools/system_app.py",
-    "args": [
-      "remove",
-      "--package",
-      "com.android.webview",
-      "com.google.android.webview",
-      "-v",
-      "--",
-      "../../testing/scripts/run_telemetry_benchmark_as_googletest.py",
       "../../tools/perf/run_benchmark",
     ],
   },

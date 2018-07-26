@@ -67,13 +67,13 @@ class AppSearchProviderTest : public AppListTestBase {
     AppListTestBase::SetUp();
 
     model_updater_ = std::make_unique<FakeAppListModelUpdater>();
-    controller_.reset(new ::test::TestAppListControllerDelegate);
+    controller_ = std::make_unique<::test::TestAppListControllerDelegate>();
   }
 
   void CreateSearch() {
     clock_.SetNow(kTestCurrentTime);
-    app_search_.reset(new AppSearchProvider(profile_.get(), nullptr, &clock_,
-                                            model_updater_.get()));
+    app_search_ = std::make_unique<AppSearchProvider>(
+        profile_.get(), nullptr, &clock_, model_updater_.get());
   }
 
   std::string RunQuery(const std::string& query) {
@@ -261,19 +261,22 @@ TEST_F(AppSearchProviderTest, FetchRecommendations) {
   prefs->SetLastLaunchTime(kHostedAppId, base::Time::FromInternalValue(20));
   prefs->SetLastLaunchTime(kPackagedApp1Id, base::Time::FromInternalValue(10));
   prefs->SetLastLaunchTime(kPackagedApp2Id, base::Time::FromInternalValue(5));
-  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings", RunQuery(""));
+  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings,Camera",
+            RunQuery(""));
 
   prefs->SetLastLaunchTime(kHostedAppId, base::Time::FromInternalValue(5));
   prefs->SetLastLaunchTime(kPackagedApp1Id, base::Time::FromInternalValue(10));
   prefs->SetLastLaunchTime(kPackagedApp2Id, base::Time::FromInternalValue(20));
-  EXPECT_EQ("Packaged App 2,Packaged App 1,Hosted App,Settings", RunQuery(""));
+  EXPECT_EQ("Packaged App 2,Packaged App 1,Hosted App,Settings,Camera",
+            RunQuery(""));
 
   // Times in the future should just be handled as highest priority.
   prefs->SetLastLaunchTime(kHostedAppId,
                            kTestCurrentTime + base::TimeDelta::FromSeconds(5));
   prefs->SetLastLaunchTime(kPackagedApp1Id, base::Time::FromInternalValue(10));
   prefs->SetLastLaunchTime(kPackagedApp2Id, base::Time::FromInternalValue(5));
-  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings", RunQuery(""));
+  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings,Camera",
+            RunQuery(""));
 }
 
 TEST_F(AppSearchProviderTest, FetchUnlaunchedRecommendations) {
@@ -287,7 +290,8 @@ TEST_F(AppSearchProviderTest, FetchUnlaunchedRecommendations) {
   prefs->SetLastLaunchTime(kHostedAppId, base::Time::Now());
   prefs->SetLastLaunchTime(kPackagedApp1Id, base::Time::FromInternalValue(0));
   prefs->SetLastLaunchTime(kPackagedApp2Id, base::Time::FromInternalValue(0));
-  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings", RunQuery(""));
+  EXPECT_EQ("Hosted App,Packaged App 1,Packaged App 2,Settings,Camera",
+            RunQuery(""));
 }
 
 TEST_F(AppSearchProviderTest, FilterDuplicate) {

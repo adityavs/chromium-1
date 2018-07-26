@@ -29,6 +29,7 @@
 #include "net/http/http_status_code.h"
 #include "net/http/http_util.h"
 #include "services/identity/public/cpp/identity_manager.h"
+#include "services/identity/public/cpp/primary_account_access_token_fetcher.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
@@ -102,7 +103,7 @@ class RequestImpl : public WebHistoryService::Request {
   }
 
   void OnAccessTokenFetchComplete(GoogleServiceAuthError error,
-                                  std::string access_token) {
+                                  identity::AccessTokenInfo access_token_info) {
     access_token_fetcher_.reset();
 
     if (error.state() != GoogleServiceAuthError::NONE) {
@@ -115,8 +116,8 @@ class RequestImpl : public WebHistoryService::Request {
       return;
     }
 
-    DCHECK(!access_token.empty());
-    access_token_ = access_token;
+    DCHECK(!access_token_info.token.empty());
+    access_token_ = access_token_info.token;
 
     UMA_HISTOGRAM_BOOLEAN("WebHistory.OAuthTokenCompletion", true);
 
@@ -142,7 +143,7 @@ class RequestImpl : public WebHistoryService::Request {
         net::LOAD_DO_NOT_SEND_COOKIES | net::LOAD_DO_NOT_SAVE_COOKIES;
     resource_request->method = post_data_ ? "POST" : "GET";
     resource_request->headers.SetHeader(net::HttpRequestHeaders::kAuthorization,
-                                        "Bearer " + access_token);
+                                        "Bearer " + access_token_info.token);
     resource_request->headers.SetHeader(
         "X-Developer-Key", GaiaUrls::GetInstance()->oauth2_chrome_client_id());
     if (!user_agent_.empty()) {
@@ -172,8 +173,8 @@ class RequestImpl : public WebHistoryService::Request {
     oauth_scopes.insert(kHistoryOAuthScope);
 
     access_token_fetcher_ =
-        identity_manager_->CreateAccessTokenFetcherForPrimaryAccount(
-            "web_history", oauth_scopes,
+        std::make_unique<identity::PrimaryAccountAccessTokenFetcher>(
+            "web_history", identity_manager_, oauth_scopes,
             base::BindOnce(&RequestImpl::OnAccessTokenFetchComplete,
                            base::Unretained(this)),
             identity::PrimaryAccountAccessTokenFetcher::Mode::kImmediate);

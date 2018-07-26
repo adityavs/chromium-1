@@ -9,9 +9,13 @@
 #ifndef CHROME_BROWSER_CHROMEOS_CHILD_ACCOUNTS_USAGE_TIME_LIMIT_PROCESSOR_H_
 #define CHROME_BROWSER_CHROMEOS_CHILD_ACCOUNTS_USAGE_TIME_LIMIT_PROCESSOR_H_
 
+#include <memory>
+#include <unordered_map>
+
 #include "base/optional.h"
 #include "base/time/time.h"
 #include "base/values.h"
+#include "chromeos/settings/timezone_settings.h"
 
 namespace chromeos {
 namespace usage_time_limit {
@@ -54,7 +58,7 @@ struct TimeWindowLimitEntry {
 
 class TimeWindowLimit {
  public:
-  TimeWindowLimit(const base::Value& window_limit_dict);
+  explicit TimeWindowLimit(const base::Value& window_limit_dict);
   ~TimeWindowLimit();
   TimeWindowLimit(TimeWindowLimit&&);
   TimeWindowLimit& operator=(TimeWindowLimit&&);
@@ -74,7 +78,7 @@ struct TimeUsageLimitEntry {
 
 class TimeUsageLimit {
  public:
-  TimeUsageLimit(const base::Value& usage_limit_dict);
+  explicit TimeUsageLimit(const base::Value& usage_limit_dict);
   ~TimeUsageLimit();
   TimeUsageLimit(TimeUsageLimit&&);
   TimeUsageLimit& operator=(TimeUsageLimit&&);
@@ -90,7 +94,7 @@ class Override {
  public:
   enum class Action { kLock, kUnlock };
 
-  Override(const base::Value& override_dict);
+  explicit Override(const base::Value& override_dict);
   ~Override();
   Override(Override&&);
   Override& operator=(Override&&);
@@ -102,12 +106,6 @@ class Override {
  private:
   DISALLOW_COPY_AND_ASSIGN(Override);
 };
-
-// Retrieves the weekday from a time.
-Weekday GetWeekday(base::Time time);
-
-// Shifts the current weekday, if the value is po
-Weekday WeekdayShift(Weekday current_day, int shift);
 
 }  // namespace internal
 
@@ -163,12 +161,14 @@ State GetState(const std::unique_ptr<base::DictionaryValue>& time_limit,
                const base::TimeDelta& used_time,
                const base::Time& usage_timestamp,
                const base::Time& current_time,
+               const icu::TimeZone* const time_zone,
                const base::Optional<State>& previous_state);
 
 // Ruturns the expected time that the used time stored should be reseted.
 base::Time GetExpectedResetTime(
     const std::unique_ptr<base::DictionaryValue>& time_limit,
-    base::Time current_time);
+    base::Time current_time,
+    const icu::TimeZone* const time_zone);
 
 }  // namespace usage_time_limit
 }  // namespace chromeos

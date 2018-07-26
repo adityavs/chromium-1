@@ -11,11 +11,13 @@
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/task_scheduler/post_task.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/engagement/site_engagement_service.h"
+#include "chrome/browser/history/history_service_factory.h"
 #include "chrome/browser/notifications/metrics/notification_metrics_logger.h"
 #include "chrome/browser/notifications/metrics/notification_metrics_logger_factory.h"
 #include "chrome/browser/notifications/notification_common.h"
@@ -27,7 +29,6 @@
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/safe_browsing/ping_manager.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -42,14 +43,18 @@
 #include "components/content_settings/core/browser/host_content_settings_map.h"
 #include "components/content_settings/core/common/content_settings.h"
 #include "components/content_settings/core/common/content_settings_types.h"
+#include "components/pref_registry/pref_registry_syncable.h"
+#include "components/prefs/pref_change_registrar.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/notification_event_dispatcher.h"
-#include "content/public/browser/permission_manager.h"
+#include "content/public/browser/permission_controller.h"
 #include "content/public/browser/permission_type.h"
 #include "content/public/common/notification_resources.h"
 #include "content/public/common/platform_notification_data.h"
 #include "extensions/buildflags/buildflags.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
 #include "third_party/skia/include/core/SkBitmap.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/base/resource/resource_bundle.h"
@@ -72,6 +77,7 @@
 
 using content::BrowserContext;
 using content::BrowserThread;
+using content::NotificationDatabaseData;
 using message_center::NotifierId;
 
 namespace {
@@ -133,6 +139,16 @@ PlatformNotificationServiceImpl::PlatformNotificationServiceImpl() {
 
 PlatformNotificationServiceImpl::~PlatformNotificationServiceImpl() {}
 
+// static
+void PlatformNotificationServiceImpl::RegisterProfilePrefs(
+    user_prefs::PrefRegistrySyncable* registry) {
+  // The first persistent ID is registered as 10000 rather than 1 to prevent the
+  // reuse of persistent notification IDs, which must be unique. Reuse of
+  // notification IDs may occur as they were previously stored in a different
+  // data store.
+  registry->RegisterIntegerPref(prefs::kNotificationNextPersistentId, 10000);
+}
+
 // TODO(miguelg): Move this to PersistentNotificationHandler
 void PlatformNotificationServiceImpl::OnPersistentNotificationClick(
     BrowserContext* browser_context,
@@ -145,8 +161,9 @@ void PlatformNotificationServiceImpl::OnPersistentNotificationClick(
 
   NotificationMetricsLogger* metrics_logger = GetMetricsLogger(browser_context);
   blink::mojom::PermissionStatus permission_status =
-      browser_context->GetPermissionManager()->GetPermissionStatus(
-          content::PermissionType::NOTIFICATIONS, origin, origin);
+      BrowserContext::GetPermissionController(browser_context)
+          ->GetPermissionStatus(content::PermissionType::NOTIFICATIONS, origin,
+                                origin);
 
   // TODO(peter): Change this to a CHECK() when Issue 555572 is resolved.
   // Also change this method to be const again.
@@ -315,6 +332,44 @@ void PlatformNotificationServiceImpl::GetDisplayedNotifications(
       callback);
 }
 
+int64_t PlatformNotificationServiceImpl::ReadNextPersistentNotificationId(
+    BrowserContext* browser_context) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  PrefService* prefs = Profile::FromBrowserContext(browser_context)->GetPrefs();
+
+  int64_t current_id = prefs->GetInteger(prefs::kNotificationNextPersistentId);
+  int64_t next_id = current_id + 1;
+
+  prefs->SetInteger(prefs::kNotificationNextPersistentId, next_id);
+  return next_id;
+}
+
+void PlatformNotificationServiceImpl::RecordNotificationUkmEvent(
+    BrowserContext* browser_context,
+    const NotificationDatabaseData& data) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  // Only record the event if a user explicitly interacted with the notification
+  // to close it.
+  if (data.closed_reason != NotificationDatabaseData::ClosedReason::USER &&
+      data.num_clicks == 0 && data.num_action_button_clicks == 0) {
+    return;
+  }
+
+  // Query the HistoryService so we only record a notification if the origin is
+  // in the user's history.
+  Profile* profile = Profile::FromBrowserContext(browser_context);
+  history::HistoryService* history_service =
+      HistoryServiceFactory::GetForProfile(profile,
+                                           ServiceAccessType::EXPLICIT_ACCESS);
+  DCHECK(history_service);
+  history_service->QueryURL(
+      data.origin, /*want_visits=*/false,
+      base::BindOnce(
+          &PlatformNotificationServiceImpl::OnUrlHistoryQueryComplete,
+          base::Unretained(this), data),
+      &task_tracker_);
+}
+
 void PlatformNotificationServiceImpl::OnClickEventDispatchComplete(
     base::OnceClosure completed_closure,
     content::PersistentNotificationStatus status) {
@@ -341,6 +396,38 @@ void PlatformNotificationServiceImpl::OnCloseEventDispatchComplete(
           PERSISTENT_NOTIFICATION_STATUS_MAX);
 
   std::move(completed_closure).Run();
+}
+
+void PlatformNotificationServiceImpl::OnUrlHistoryQueryComplete(
+    const content::NotificationDatabaseData& data,
+    bool found_url,
+    const history::URLRow& url_row,
+    const history::VisitVector& visits) {
+  // Post the |history_query_complete_closure_for_testing_| closure to the
+  // current task runner to inform tests that the history query has completed.
+  if (history_query_complete_closure_for_testing_) {
+    base::PostTask(FROM_HERE,
+                   std::move(history_query_complete_closure_for_testing_));
+  }
+
+  // Only record the notification if the |data.origin| is in the history
+  // service.
+  if (!found_url)
+    return;
+
+  ukm::UkmRecorder* recorder = ukm::UkmRecorder::Get();
+  DCHECK(recorder);
+  // We are using UpdateSourceURL as notifications are not tied to a navigation.
+  // This is ok from a privacy perspective as we have explicitly verified that
+  // |data.origin| is in the HistoryService before recording to UKM.
+  ukm::SourceId source_id = ukm::UkmRecorder::GetNewSourceID();
+  recorder->UpdateSourceURL(source_id, data.origin);
+
+  ukm::builders::Notification(source_id)
+      .SetClosedReason(static_cast<int>(data.closed_reason))
+      .SetNumClicks(data.num_clicks)
+      .SetNumActionButtonClicks(data.num_action_button_clicks)
+      .Record(recorder);
 }
 
 message_center::Notification
@@ -385,16 +472,6 @@ PlatformNotificationServiceImpl::CreateNotificationFromData(
     notification.set_type(message_center::NOTIFICATION_TYPE_IMAGE);
     notification.set_image(
         gfx::Image::CreateFrom1xBitmap(notification_resources.image));
-    // n.b. this should only be posted once per notification.
-    if (g_browser_process->safe_browsing_service() &&
-        g_browser_process->safe_browsing_service()->enabled_by_prefs()) {
-      g_browser_process->safe_browsing_service()
-          ->ping_manager()
-          ->ReportNotificationImage(
-              profile,
-              g_browser_process->safe_browsing_service()->database_manager(),
-              origin, notification_resources.image);
-    }
   }
 
   // Badges are only supported on Android, primarily because it's the only

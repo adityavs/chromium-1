@@ -102,8 +102,6 @@ class DownloadHistory : public download::AllDownloadItemNotifier::Observer {
   bool WasRestoredFromHistory(const download::DownloadItem* item) const;
 
  private:
-  typedef std::set<download::DownloadItem*> ItemSet;
-
   // Callback from |history_| containing all entries in the downloads database
   // table.
   void QueryCallback(std::unique_ptr<std::vector<history::DownloadRow>> infos);
@@ -136,6 +134,10 @@ class DownloadHistory : public download::AllDownloadItemNotifier::Observer {
 
   // Removes all |removing_ids_| from |history_|.
   void RemoveDownloadsBatch();
+
+  // Creates DownloadHistoryData and attach it to the |item|.
+  void CreateDownloadHistoryData(download::DownloadItem* item,
+                                 bool was_restored_from_history);
 
   download::AllDownloadItemNotifier notifier_;
 

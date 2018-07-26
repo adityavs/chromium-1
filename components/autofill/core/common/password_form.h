@@ -177,6 +177,11 @@ struct PasswordForm {
   uint32_t username_element_renderer_id =
       FormFieldData::kNotSetFormControlRendererId;
 
+  // True if the server-side classification believes that the field may be
+  // pre-filled with a placeholder in the value attribute. It is set during
+  // form parsing and not persisted.
+  bool username_may_use_prefilled_placeholder = false;
+
   // Whether the |username_element| has an autocomplete=username attribute. This
   // is only used in parsed HTML forms.
   bool username_marked_by_site;
@@ -341,6 +346,9 @@ struct PasswordForm {
   // True iff heuristics declined this form for saving (e.g. only credit card
   // fields were found). But this form can be saved only with the fallback.
   bool only_for_fallback_saving;
+
+  // True iff this is Gaia form which should be skipped on saving.
+  bool is_gaia_with_skip_save_password_form;
 
   // Return true if we consider this form to be a change password form.
   // We use only client heuristics, so it could include signup forms.

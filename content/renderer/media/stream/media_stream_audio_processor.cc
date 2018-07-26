@@ -36,6 +36,8 @@
 
 namespace content {
 
+using EchoCancellationType = AudioProcessingProperties::EchoCancellationType;
+
 namespace {
 
 using webrtc::AudioProcessing;
@@ -442,7 +444,7 @@ bool MediaStreamAudioProcessor::WouldModifyAudio(
     return true;
 
 #if !defined(OS_IOS)
-  if (properties.enable_sw_echo_cancellation ||
+  if (properties.EchoCancellationIsWebRtcProvided() ||
       properties.goog_auto_gain_control) {
     return true;
   }
@@ -556,9 +558,10 @@ void MediaStreamAudioProcessor::InitializeAudioProcessingModule(
 
   // Return immediately if none of the goog constraints requiring
   // webrtc::AudioProcessing are enabled.
-  if (!properties.enable_sw_echo_cancellation && !goog_experimental_aec &&
-      !properties.goog_noise_suppression && !properties.goog_highpass_filter &&
-      !goog_typing_detection && !properties.goog_auto_gain_control &&
+  if (!properties.EchoCancellationIsWebRtcProvided() &&
+      !goog_experimental_aec && !properties.goog_noise_suppression &&
+      !properties.goog_highpass_filter && !goog_typing_detection &&
+      !properties.goog_auto_gain_control &&
       !properties.goog_experimental_noise_suppression) {
     // Sanity-check: WouldModifyAudio() should return true iff
     // |audio_mirroring_| is true.
@@ -590,21 +593,10 @@ void MediaStreamAudioProcessor::InitializeAudioProcessingModule(
         new webrtc::ExperimentalAgc(true, startup_min_volume.value_or(0)));
   }
 
-  // Check if experimental echo canceller should be used.
-  if (properties.enable_sw_echo_cancellation) {
-    base::Optional<bool> override_aec3;
-    // In unit tests not creating a message filter, |aec_dump_message_filter_|
-    // will be null. We can just ignore that. Other unit tests and browser tests
-    // ensure that we do get the filter when we should.
-    if (aec_dump_message_filter_)
-      override_aec3 = aec_dump_message_filter_->GetOverrideAec3();
-    using_aec3_ = override_aec3.value_or(
-        base::FeatureList::IsEnabled(features::kWebRtcUseEchoCanceller3));
-  }
-
   // Create and configure the webrtc::AudioProcessing.
   webrtc::AudioProcessingBuilder ap_builder;
-  if (using_aec3_) {
+  if (properties.echo_cancellation_type ==
+      EchoCancellationType::kEchoCancellationAec3) {
     webrtc::EchoCanceller3Config aec3_config;
     aec3_config.ep_strength.bounded_erl =
         base::FeatureList::IsEnabled(features::kWebRtcAecBoundedErlSetup);
@@ -626,14 +618,16 @@ void MediaStreamAudioProcessor::InitializeAudioProcessingModule(
     playout_data_source_->AddPlayoutSink(this);
   }
 
-  if (properties.enable_sw_echo_cancellation) {
+  if (properties.EchoCancellationIsWebRtcProvided()) {
     EnableEchoCancellation(audio_processing_.get());
 
     // Prepare for logging echo information. Do not log any echo information
     // when AEC3 is active, as the echo information then will not be properly
     // updated.
-    if (!using_aec3_)
+    if (properties.echo_cancellation_type !=
+        EchoCancellationType::kEchoCancellationAec3) {
       echo_information_ = std::make_unique<EchoInformation>();
+    }
   }
 
   if (properties.goog_noise_suppression)

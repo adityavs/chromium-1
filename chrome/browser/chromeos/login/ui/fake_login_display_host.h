@@ -24,6 +24,7 @@ class FakeLoginDisplayHost : public LoginDisplayHost {
 
   // chromeos::LoginDisplayHost:
   LoginDisplay* GetLoginDisplay() override;
+  ExistingUserController* GetExistingUserController() override;
   gfx::NativeWindow GetNativeWindow() const override;
   OobeUI* GetOobeUI() const override;
   content::WebContents* GetOobeWebContents() const override;
@@ -57,13 +58,17 @@ class FakeLoginDisplayHost : public LoginDisplayHost {
   void ShowGaiaDialog(
       bool can_close,
       const base::Optional<AccountId>& prefilled_account) override;
-  void HideGaiaDialog() override;
-  void UpdateGaiaDialogSize(int width, int height) override;
+  void HideOobeDialog() override;
+  void UpdateOobeDialogSize(int width, int height) override;
   const user_manager::UserList GetUsers() override;
   void CancelPasswordChangedFlow() override;
   void MigrateUserData(const std::string& old_password) override;
   void ResyncUserData() override;
   void ShowFeedback() override;
+  void ShowResetScreen() override;
+  void ShowDialogForCaptivePortal() override;
+  void HideDialogForCaptivePortal() override;
+  void UpdateAddUserButtonStatus() override;
 
  private:
   class FakeBaseScreen;

@@ -11,6 +11,7 @@
 #include "chrome/browser/ui/views/chrome_constrained_window_views_client.h"
 #include "chrome/browser/ui/views/chrome_views_delegate.h"
 #include "chrome/browser/ui/views/harmony/chrome_layout_provider.h"
+#include "chrome/browser/ui/views/relaunch_notification/relaunch_notification_controller.h"
 #include "components/constrained_window/constrained_window_views.h"
 #include "services/service_manager/sandbox/switches.h"
 
@@ -53,8 +54,6 @@
 #include "ash/public/interfaces/constants.mojom.h"
 #include "content/public/common/content_switches.h"
 #include "ui/base/ui_base_features.h"
-#else  // defined(OS_CHROMEOS)
-#include "chrome/browser/ui/views/relaunch_notification/relaunch_notification_controller.h"
 #endif  // defined(OS_CHROMEOS)
 
 ChromeBrowserMainExtraPartsViews::ChromeBrowserMainExtraPartsViews() {
@@ -150,24 +149,17 @@ void ChromeBrowserMainExtraPartsViews::PreProfileInit() {
 void ChromeBrowserMainExtraPartsViews::ServiceManagerConnectionStarted(
     content::ServiceManagerConnection* connection) {
   DCHECK(connection);
-#if defined(USE_AURA)
-  if (aura::Env::GetInstance()->mode() == aura::Env::Mode::LOCAL)
-    return;
-
 #if defined(OS_CHROMEOS)
-  // Start up the window service and the ash system UI service.
-  if (!features::IsAshInBrowserProcess()) {
-    connection->GetConnector()->StartService(
-        service_manager::Identity(ui::mojom::kServiceName));
-    connection->GetConnector()->StartService(
-        service_manager::Identity(ash::mojom::kServiceName));
+  if (aura::Env::GetInstance()->mode() == aura::Env::Mode::LOCAL ||
+      features::IsAshInBrowserProcess()) {
+    return;
   }
-#endif
 
-#if defined(OS_CHROMEOS)
-  if (features::IsAshInBrowserProcess())
-    return;
-#endif
+  // Start up the window service and the ash system UI service.
+  connection->GetConnector()->StartService(
+      service_manager::Identity(ui::mojom::kServiceName));
+  connection->GetConnector()->StartService(
+      service_manager::Identity(ash::mojom::kServiceName));
 
   views::MusClient::InitParams params;
   params.connector = connection->GetConnector();
@@ -176,22 +168,18 @@ void ChromeBrowserMainExtraPartsViews::ServiceManagerConnectionStarted(
   // WMState is owned as a member, so don't have MusClient create it.
   params.create_wm_state = false;
   mus_client_ = std::make_unique<views::MusClient>(params);
-#endif  // defined(USE_AURA)
+#endif  // defined(OS_CHROMEOS)
 }
 
 void ChromeBrowserMainExtraPartsViews::PostBrowserStart() {
-#if !defined(OS_CHROMEOS)
   relaunch_notification_controller_ =
       std::make_unique<RelaunchNotificationController>(
           UpgradeDetector::GetInstance());
-#endif
 }
 
 void ChromeBrowserMainExtraPartsViews::PostMainMessageLoopRun() {
-#if !defined(OS_CHROMEOS)
   // The relaunch notification controller acts on timer-based events. Tear it
   // down explicitly here to avoid a case where such an event arrives during
   // shutdown.
   relaunch_notification_controller_.reset();
-#endif
 }

@@ -14,6 +14,7 @@
 #include "base/containers/circular_deque.h"
 #include "base/macros.h"
 #include "base/memory/memory_coordinator_client.h"
+#include "base/memory/memory_pressure_listener.h"
 #include "base/memory/weak_ptr.h"
 #include "base/optional.h"
 #include "base/trace_event/memory_allocator_dump_guid.h"
@@ -55,14 +56,17 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider,
    public:
     virtual ~GpuBacking() = default;
 
-    // Guids for for memory dumps. This guid will be valid once the GpuBacking
-    // has memory allocated. Called on the compositor thread.
-    virtual base::trace_event::MemoryAllocatorDumpGuid MemoryDumpGuid(
-        uint64_t tracing_process_id) = 0;
-    // Some gpu resources can be shared memory-backed, and this guid should be
-    // prefered in that case. But if not then this will be empty. Called on the
-    // compositor thread.
-    virtual base::UnguessableToken SharedMemoryGuid() = 0;
+    // Dumps information about the memory backing the GpuBacking to |pmd|.
+    // The memory usage is attributed to |buffer_dump_guid|.
+    // |tracing_process_id| uniquely identifies the process owning the memory.
+    // |importance| is relevant only for the cases of co-ownership, the memory
+    // gets attributed to the owner with the highest importance.
+    // Called on the compositor thread.
+    virtual void OnMemoryDump(
+        base::trace_event::ProcessMemoryDump* pmd,
+        const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
+        uint64_t tracing_process_id,
+        int importance) const = 0;
 
     gpu::Mailbox mailbox;
     gpu::SyncToken mailbox_sync_token;
@@ -87,8 +91,17 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider,
    public:
     virtual ~SoftwareBacking() = default;
 
-    // Return the guid for this resource, based on the shared memory backing it.
-    virtual base::UnguessableToken SharedMemoryGuid() = 0;
+    // Dumps information about the memory backing the SoftwareBacking to |pmd|.
+    // The memory usage is attributed to |buffer_dump_guid|.
+    // |tracing_process_id| uniquely identifies the process owning the memory.
+    // |importance| is relevant only for the cases of co-ownership, the memory
+    // gets attributed to the owner with the highest importance.
+    // Called on the compositor thread.
+    virtual void OnMemoryDump(
+        base::trace_event::ProcessMemoryDump* pmd,
+        const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
+        uint64_t tracing_process_id,
+        int importance) const = 0;
 
     viz::SharedBitmapId shared_bitmap_id;
   };
@@ -225,6 +238,11 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider,
   // Overriden from base::MemoryCoordinatorClient.
   void OnPurgeMemory() override;
   void OnMemoryStateChange(base::MemoryState state) override;
+
+  // TODO(gyuyoung): OnMemoryPressure is deprecated. So this should be removed
+  // when the memory coordinator is enabled by default.
+  void OnMemoryPressure(
+      base::MemoryPressureListener::MemoryPressureLevel level);
 
   size_t GetTotalMemoryUsageForTesting() const {
     return total_memory_usage_bytes_;
@@ -369,6 +387,8 @@ class CC_EXPORT ResourcePool : public base::trace_event::MemoryDumpProvider,
 
   // Map from the PoolResource |unique_id| to the PoolResource.
   std::map<size_t, std::unique_ptr<PoolResource>> in_use_resources_;
+
+  std::unique_ptr<base::MemoryPressureListener> memory_pressure_listener_;
 
   base::WeakPtrFactory<ResourcePool> weak_ptr_factory_;
 

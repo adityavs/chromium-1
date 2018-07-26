@@ -136,15 +136,15 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   // Since the URL of content rendered by this class is not displayed in
   // the URL bar, this method does not need an implementation.
   void ClearCompositorFrame() override {}
-  gfx::Vector2d GetOffsetFromRootSurface() override;
+  void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
   void ProcessAckedTouchEvent(const TouchEventWithLatencyInfo& touch,
                               InputEventAckState ack_result) override;
   void DidStopFlinging() override;
   bool LockMouse() override;
   void UnlockMouse() override;
-  viz::FrameSinkId GetFrameSinkId() override;
-  viz::LocalSurfaceId GetLocalSurfaceId() const override;
+  const viz::FrameSinkId& GetFrameSinkId() const override;
+  const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   void PreProcessTouchEvent(const blink::WebTouchEvent& event) override;
   viz::FrameSinkId GetRootFrameSinkId() override;
   viz::SurfaceId GetCurrentSurfaceId() const override;
@@ -289,8 +289,7 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
   FRIEND_TEST_ALL_PREFIXES(SitePerProcessBrowserTest,
                            SubframeVisibleAfterRenderViewBecomesSwappedOut);
 
-  virtual void SendSurfaceInfoToEmbedderImpl(
-      const viz::SurfaceInfo& surface_info);
+  virtual void FirstSurfaceActivation(const viz::SurfaceInfo& surface_info);
 
   void CreateCompositorFrameSinkSupport();
   void ResetCompositorFrameSinkSupport();
@@ -326,17 +325,6 @@ class CONTENT_EXPORT RenderWidgetHostViewChildFrame
 
   // True if there is currently a scroll sequence being bubbled to our parent.
   bool is_scroll_sequence_bubbling_ = false;
-
-  // Used to prevent bubbling of subsequent GestureScrollUpdates in a scroll
-  // gesture if the child consumed the first GSU.
-  // TODO(mcnee): This is only needed for |!wheel_scroll_latching_enabled()|
-  // and can be removed once scroll-latching lands. crbug.com/526463
-  enum ScrollBubblingState {
-    NO_ACTIVE_GESTURE_SCROLL,
-    AWAITING_FIRST_UPDATE,
-    BUBBLE,
-    SCROLL_CHILD,
-  } scroll_bubbling_state_;
 
   base::WeakPtrFactory<RenderWidgetHostViewChildFrame> weak_factory_;
   DISALLOW_COPY_AND_ASSIGN(RenderWidgetHostViewChildFrame);

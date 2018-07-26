@@ -56,7 +56,6 @@
 #include "chrome/browser/ui/extensions/app_launch_params.h"
 #include "chrome/browser/ui/extensions/application_launch.h"
 #include "chrome/browser/ui/javascript_dialogs/javascript_dialog_tab_helper.h"
-#include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/search/local_ntp_test_utils.h"
 #include "chrome/browser/ui/search/search_tab_helper.h"
 #include "chrome/browser/ui/startup/startup_browser_creator.h"
@@ -78,7 +77,6 @@
 #include "components/app_modal/javascript_app_modal_dialog.h"
 #include "components/app_modal/native_app_modal_dialog.h"
 #include "components/content_settings/core/browser/host_content_settings_map.h"
-#include "components/omnibox/browser/omnibox_view.h"
 #include "components/omnibox/common/omnibox_focus_state.h"
 #include "components/prefs/pref_service.h"
 #include "components/sessions/core/base_session_service_test_helper.h"
@@ -123,6 +121,7 @@
 #if defined(OS_MACOSX)
 #include "base/mac/scoped_nsautorelease_pool.h"
 #include "chrome/browser/ui/cocoa/test/run_loop_testing.h"
+#include "ui/accelerated_widget_mac/ca_transaction_observer.h"
 #endif
 
 #if defined(OS_WIN)
@@ -1778,53 +1777,6 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, InterstitialCloseTab) {
   // interstitial is deleted now.
 }
 
-class MockWebContentsObserver : public WebContentsObserver {
- public:
-  explicit MockWebContentsObserver(WebContents* web_contents)
-      : WebContentsObserver(web_contents),
-        got_user_gesture_(false) {
-  }
-
-  void DidGetUserInteraction(const blink::WebInputEvent::Type type) override {
-    // We expect the only interaction here to be a browser-initiated navigation,
-    // which is sent with the Undefined event type.
-    EXPECT_EQ(blink::WebInputEvent::kUndefined, type);
-    got_user_gesture_ = true;
-  }
-
-  bool got_user_gesture() const {
-    return got_user_gesture_;
-  }
-
-  void set_got_user_gesture(bool got_it) {
-    got_user_gesture_ = got_it;
-  }
-
- private:
-  bool got_user_gesture_;
-
-  DISALLOW_COPY_AND_ASSIGN(MockWebContentsObserver);
-};
-
-IN_PROC_BROWSER_TEST_F(BrowserTest, UserGesturesReported) {
-  // Regression test for http://crbug.com/110707.  Also tests that a user
-  // gesture is sent when a normal navigation (via e.g. the omnibox) is
-  // performed.
-  WebContents* web_contents =
-      browser()->tab_strip_model()->GetActiveWebContents();
-  MockWebContentsObserver mock_observer(web_contents);
-
-  ASSERT_TRUE(embedded_test_server()->Start());
-  GURL url(embedded_test_server()->GetURL("/empty.html"));
-
-  ui_test_utils::NavigateToURL(browser(), url);
-  EXPECT_TRUE(mock_observer.got_user_gesture());
-
-  mock_observer.set_got_user_gesture(false);
-  chrome::Reload(browser(), WindowOpenDisposition::CURRENT_TAB);
-  EXPECT_TRUE(mock_observer.got_user_gesture());
-}
-
 // TODO(ben): this test was never enabled. It has bit-rotted since being added.
 // It originally lived in browser_unittest.cc, but has been moved here to make
 // room for real browser unit tests.
@@ -1933,8 +1885,8 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_WindowOpenClose1) {
   EXPECT_EQ(title, title_watcher.WaitAndGetTitle());
 }
 
-// Flaky on Chrome OS only. TODO(https://crbug.com/823043) fix it.
-#if defined(OS_CHROMEOS)
+// Flaky on Chrome OS and Windows. TODO(https://crbug.com/823043) fix it.
+#if defined(OS_CHROMEOS) || defined(OS_WIN)
 #define MAYBE_WindowOpenClose2 DISABLED_WindowOpenClose2
 #else
 #define MAYBE_WindowOpenClose2 WindowOpenClose2
@@ -1956,15 +1908,17 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_WindowOpenClose2) {
   EXPECT_EQ(title, title_watcher.WaitAndGetTitle());
 }
 
-#if defined(OS_MACOSX) || (defined(OS_WIN) && !defined(NDEBUG))
+#if (defined(OS_WIN) && !defined(NDEBUG))
 // Times out on windows (dbg). https://crbug.com/753691.
-// Also times out on macOS (can be made to pass by lowering kPaintMsgTimeoutMS
-// in RenderWidgetHostImpl).
 #define MAYBE_WindowOpenClose3 DISABLED_WindowOpenClose3
 #else
 #define MAYBE_WindowOpenClose3 WindowOpenClose3
 #endif
 IN_PROC_BROWSER_TEST_F(BrowserTest, MAYBE_WindowOpenClose3) {
+#if defined(OS_MACOSX)
+  // Ensure that tests don't wait for frames that will never come.
+  ui::CATransactionCoordinator::Get().DisableForTesting();
+#endif
   base::CommandLine::ForCurrentProcess()->AppendSwitch(
       switches::kDisablePopupBlocking);
   ASSERT_TRUE(embedded_test_server()->Start());
@@ -2786,32 +2740,4 @@ IN_PROC_BROWSER_TEST_F(BrowserTest, TestPopupBounds) {
     EXPECT_EQ(122, bounds.height());
     browser->window()->Close();
   }
-}
-
-// Opens a page, modifies omnibox text, click on a link in the page that
-// navigates to itself, and verifies the user's entered omnibox text is reset
-IN_PROC_BROWSER_TEST_F(BrowserTest, ResetUrlOnReNavigation) {
-  // Navigate to links.html
-  ASSERT_TRUE(embedded_test_server()->Start());
-  GURL links_url = embedded_test_server()->GetURL("/links.html");
-  ui_test_utils::NavigateToURL(browser(), links_url);
-  OmniboxView* omnibox_view =
-      browser()->window()->GetLocationBar()->GetOmniboxView();
-  EXPECT_EQ(ASCIIToUTF16(links_url.GetContent()), omnibox_view->GetText());
-
-  // Insert temporary text into omnibox
-  base::string16 temporary_text = ASCIIToUTF16("temporary text");
-  omnibox_view->SetUserText(temporary_text);
-  EXPECT_EQ(temporary_text, omnibox_view->GetText());
-
-  // Renavigate: click a link navigating to the same URL as the current URL.
-  WebContents* contents = browser()->tab_strip_model()->GetActiveWebContents();
-  content::TestNavigationObserver observer(contents);
-  contents->GetMainFrame()->ExecuteJavaScriptForTests(
-      ASCIIToUTF16("document.getElementById('self').click();"));
-  observer.Wait();
-  EXPECT_TRUE(observer.last_navigation_succeeded());
-  // Verifying the user-entered temporary text has been cleared and replaced
-  // with the URL of the current page
-  EXPECT_EQ(ASCIIToUTF16(links_url.GetContent()), omnibox_view->GetText());
 }

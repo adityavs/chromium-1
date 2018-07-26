@@ -1086,9 +1086,15 @@ static_assert(offsetof(%(cmd_name)s::Result, %(field_name)s) == %(offset)d,
         uint32_t immediate_data_size, const volatile void* cmd_data) {
       """ % {'name': func.name, 'prefix' : _prefix})
     if func.IsES3():
-      f.write("""if (!feature_info_->IsWebGL2OrES3Context())
+      f.write("""if (!feature_info_->IsWebGL2OrES3OrHigherContext())
           return error::kUnknownCommand;
         """)
+    if func.IsES31():
+      f.write("""return error::kUnknownCommand;
+        }
+
+        """)
+      return
     if func.GetCmdArgs():
       f.write("""const volatile %(prefix)s::cmds::%(name)s& c =
             *static_cast<const volatile %(prefix)s::cmds::%(name)s*>(cmd_data);
@@ -1123,6 +1129,8 @@ static_assert(offsetof(%(cmd_name)s::Result, %(field_name)s) == %(offset)d,
   def WriteServiceImplementation(self, func, f):
     """Writes the service implementation for a command."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     self.WriteHandlerExtensionCheck(func, f)
     self.WriteHandlerDeferReadWrite(func, f);
     self.WriteServiceHandlerArgGetCode(func, f)
@@ -1136,6 +1144,8 @@ static_assert(offsetof(%(cmd_name)s::Result, %(field_name)s) == %(offset)d,
   def WriteImmediateServiceImplementation(self, func, f):
     """Writes the service implementation for an immediate version of command."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     self.WriteHandlerExtensionCheck(func, f)
     self.WriteHandlerDeferReadWrite(func, f);
     self.WriteImmediateServiceHandlerArgGetCode(func, f)
@@ -1149,6 +1159,8 @@ static_assert(offsetof(%(cmd_name)s::Result, %(field_name)s) == %(offset)d,
   def WriteBucketServiceImplementation(self, func, f):
     """Writes the service implementation for a bucket version of command."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     self.WriteHandlerExtensionCheck(func, f)
     self.WriteHandlerDeferReadWrite(func, f);
     self.WriteBucketServiceHandlerArgGetCode(func, f)
@@ -1165,7 +1177,11 @@ static_assert(offsetof(%(cmd_name)s::Result, %(field_name)s) == %(offset)d,
         uint32_t immediate_data_size, const volatile void* cmd_data) {
       """ % {'name': func.name})
     if func.IsES3():
-      f.write("""if (!feature_info_->IsWebGL2OrES3Context())
+      f.write("""if (!feature_info_->IsWebGL2OrES3OrHigherContext())
+          return error::kUnknownCommand;
+        """)
+    if func.IsES31():
+      f.write("""if (!feature_info_->IsWebGL2ComputeContext())
           return error::kUnknownCommand;
         """)
     if func.GetCmdArgs():
@@ -2186,10 +2202,10 @@ class GENnHandler(TypeHandler):
   def WriteGetDataSizeCode(self, func, f):
     """Overrriden from TypeHandler."""
     code = """  uint32_t data_size;
-  if (!SafeMultiplyUint32(n, sizeof(GLuint), &data_size)) {
+  if (!%sSafeMultiplyUint32(n, sizeof(GLuint), &data_size)) {
     return error::kOutOfBounds;
   }
-"""
+""" % _Namespace()
     f.write(code)
 
   def WriteHandlerImplementation (self, func, f):
@@ -2202,10 +2218,12 @@ class GENnHandler(TypeHandler):
     f.write("  auto %(name)s_copy = std::make_unique<GLuint[]>(n);\n"
             "  GLuint* %(name)s_safe = %(name)s_copy.get();\n"
             "  std::copy(%(name)s, %(name)s + n, %(name)s_safe);\n"
-            "  if (!CheckUniqueAndNonNullIds(n, %(name)s_safe) ||\n"
+            "  if (!%(ns)sCheckUniqueAndNonNullIds(n, %(name)s_safe) ||\n"
             "      !%(func)sHelper(n, %(name)s_safe)) {\n"
             "    return error::kInvalidArguments;\n"
-            "  }\n" % {'name': param_name, 'func': func.original_name})
+            "  }\n" % {'name': param_name,
+                       'func': func.original_name,
+                       'ns': _Namespace()})
 
   def WriteGLES2Implementation(self, func, f):
     """Overrriden from TypeHandler."""
@@ -2636,10 +2654,10 @@ class DELnHandler(TypeHandler):
   def WriteGetDataSizeCode(self, func, f):
     """Overrriden from TypeHandler."""
     code = """  uint32_t data_size;
-  if (!SafeMultiplyUint32(n, sizeof(GLuint), &data_size)) {
+  if (!%sSafeMultiplyUint32(n, sizeof(GLuint), &data_size)) {
     return error::kOutOfBounds;
   }
-"""
+""" % _Namespace()
     f.write(code)
 
   def WriteGLES2ImplementationUnitTest(self, func, f):
@@ -2899,6 +2917,8 @@ class GETnHandler(TypeHandler):
   def WriteServiceImplementation(self, func, f):
     """Overrriden from TypeHandler."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     last_arg = func.GetLastOriginalArg()
     # All except shm_id and shm_offset.
     all_but_last_args = func.GetCmdArgs()[:-2]
@@ -3314,11 +3334,13 @@ TEST_P(%(test_name)s, %(name)sInvalidArgs%(arg_index)d_%(value_index)d) {
   def WriteGetDataSizeCode(self, func, f):
     """Overrriden from TypeHandler."""
     code = """  uint32_t data_size;
-  if (!GLES2Util::ComputeDataSize<%s, %d>(1, &data_size)) {
+  if (!%sGLES2Util::ComputeDataSize<%s, %d>(1, &data_size)) {
     return error::kOutOfBounds;
   }
 """
-    f.write(code % (self.GetArrayType(func), self.GetArrayCount(func)))
+    f.write(code % (_Namespace(),
+                    self.GetArrayType(func),
+                    self.GetArrayCount(func)))
     if func.IsImmediate():
       f.write("  if (data_size > immediate_data_size) {\n")
       f.write("    return error::kOutOfBounds;\n")
@@ -3341,8 +3363,8 @@ TEST_P(%(test_name)s, %(name)sInvalidArgs%(arg_index)d_%(value_index)d) {
     self.WriteClientGLCallLog(func, f)
 
     if self.__NeedsToCalcDataCount(func):
-      f.write("  size_t count = GLES2Util::Calc%sDataCount(%s);\n" %
-                 (func.name, func.GetOriginalArgs()[0].name))
+      f.write("  size_t count = %sGLES2Util::Calc%sDataCount(%s);\n" %
+                 (_Namespace(), func.name, func.GetOriginalArgs()[0].name))
       f.write("  DCHECK_LE(count, %du);\n" % self.GetArrayCount(func))
     else:
       f.write("  size_t count = %d;" % self.GetArrayCount(func))
@@ -3408,8 +3430,8 @@ TEST_F(%(prefix)sImplementationTest, %(name)s) {
                  (func.GetOriginalArgs()[0].type,
                   func.GetOriginalArgs()[0].name))
       f.write("    return static_cast<uint32_t>(\n")
-      f.write("        sizeof(%s) * GLES2Util::Calc%sDataCount(%s));\n" %
-                 (self.GetArrayType(func), func.original_name,
+      f.write("        sizeof(%s) * %sGLES2Util::Calc%sDataCount(%s));\n" %
+                 (self.GetArrayType(func), _Namespace(), func.original_name,
                   func.GetOriginalArgs()[0].name))
       f.write("  }\n")
       f.write("\n")
@@ -3614,11 +3636,12 @@ TEST_P(%(test_name)s, %(name)sInvalidArgs%(arg_index)d_%(value_index)d) {
     """Overrriden from TypeHandler."""
     code = """  uint32_t data_size = 0;
   if (count >= 0 &&
-      !GLES2Util::ComputeDataSize<%s, %d>(count, &data_size)) {
+      !%sGLES2Util::ComputeDataSize<%s, %d>(count, &data_size)) {
     return error::kOutOfBounds;
   }
 """
-    f.write(code % (self.GetArrayType(func),
+    f.write(code % (_Namespace(),
+                    self.GetArrayType(func),
                     self.GetArrayCount(func)))
     if func.IsImmediate():
       f.write("  if (data_size > immediate_data_size) {\n")
@@ -4372,6 +4395,8 @@ class GLcharNHandler(CustomHandler):
   def WriteServiceImplementation(self, func, f):
     """Overrriden from TypeHandler."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     f.write("""
   GLuint bucket_id = static_cast<GLuint>(c.%(bucket_id)s);
   Bucket* bucket = GetBucket(bucket_id);
@@ -4453,6 +4478,8 @@ TEST_P(%(test_name)s, %(name)sInvalidArgsBadSharedMemoryId) {
   def WriteServiceImplementation(self, func, f):
     """Overrriden from TypeHandler."""
     self.WriteServiceHandlerFunctionHeader(func, f)
+    if func.IsES31():
+      return
     self.WriteHandlerExtensionCheck(func, f)
     args = func.GetOriginalArgs()
     for arg in args:
@@ -4893,9 +4920,9 @@ class Argument(object):
   def GetLogArg(self):
     """Get argument appropriate for LOG macro."""
     if self.type == 'GLboolean':
-      return 'GLES2Util::GetStringBool(%s)' % self.name
+      return '%sGLES2Util::GetStringBool(%s)' % (_Namespace(), self.name)
     if self.type == 'GLenum':
-      return 'GLES2Util::GetStringEnum(%s)' % self.name
+      return '%sGLES2Util::GetStringEnum(%s)' % (_Namespace(), self.name)
     return self.name
 
   def WriteGetCode(self, f):
@@ -5250,8 +5277,8 @@ class ImmediatePointerArgument(Argument):
 
   def WriteGetCode(self, f):
     """Overridden from Argument."""
-    f.write("  volatile %s %s = GetImmediateDataAs<volatile %s>(\n" %
-            (self.type, self.name, self.type))
+    f.write("  volatile %s %s = %sGetImmediateDataAs<volatile %s>(\n" %
+            (self.type, self.name, _Namespace(), self.type))
     f.write("      c, data_size, immediate_data_size);\n")
 
   def WriteValidationCode(self, f, func):
@@ -5654,6 +5681,10 @@ class Function(object):
     """Returns whether the function requires an ES3 context or not."""
     return self.GetInfo('es3', False)
 
+  def IsES31(self):
+    """Returns whether the function requires an ES31 context or not."""
+    return self.GetInfo('es31', False)
+
   def GetInfo(self, name, default = None):
     """Returns a value from the function info for this function."""
     if name in self.info:
@@ -5683,7 +5714,8 @@ class Function(object):
   def IsCoreGLFunction(self):
     return (not self.IsExtension() and
             not self.GetInfo('pepper_interface') and
-            not self.IsES3())
+            not self.IsES3() and
+            not self.IsES31())
 
   def InPepperInterface(self, interface):
     ext = self.GetInfo('pepper_interface')
@@ -7316,6 +7348,7 @@ extern const NameToFunc g_gles2_function_table[] = {
     for fname in ['third_party/khronos/GLES2/gl2.h',
                   'third_party/khronos/GLES2/gl2ext.h',
                   'third_party/khronos/GLES3/gl3.h',
+                  'third_party/khronos/GLES3/gl31.h',
                   'gpu/GLES2/gl2chromium.h',
                   'gpu/GLES2/gl2extchromium.h']:
       lines = open(fname).readlines()

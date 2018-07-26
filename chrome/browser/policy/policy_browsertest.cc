@@ -80,6 +80,7 @@
 #include "chrome/browser/policy/profile_policy_connector_factory.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/resource_coordinator/tab_load_tracker_test_support.h"
 #include "chrome/browser/safe_browsing/chrome_password_protection_service.h"
 #include "chrome/browser/search/search.h"
 #include "chrome/browser/search_engines/template_url_service_factory.h"
@@ -125,6 +126,7 @@
 #include "components/content_settings/core/common/pref_names.h"
 #include "components/download/public/common/download_item.h"
 #include "components/infobars/core/infobar.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/network_time/network_time_tracker.h"
 #include "components/omnibox/browser/autocomplete_controller.h"
 #include "components/omnibox/browser/omnibox_edit_model.h"
@@ -148,6 +150,7 @@
 #include "components/strings/grit/components_strings.h"
 #include "components/translate/core/browser/language_state.h"
 #include "components/translate/core/browser/translate_infobar_delegate.h"
+#include "components/unified_consent/pref_names.h"
 #include "components/update_client/update_client.h"
 #include "components/update_client/update_client_errors.h"
 #include "components/update_client/url_loader_post_interceptor.h"
@@ -385,18 +388,18 @@ class MakeRequestFail {
  public:
   // Sets up the filter on IO thread such that requests to |host| fail.
   explicit MakeRequestFail(const std::string& host) : host_(host) {
-    BrowserThread::PostTaskAndReply(
-        BrowserThread::IO, FROM_HERE,
-        base::BindOnce(MakeRequestFailOnIO, host_),
-        base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
-    content::RunMessageLoop();
+    base::RunLoop run_loop;
+    BrowserThread::PostTaskAndReply(BrowserThread::IO, FROM_HERE,
+                                    base::BindOnce(MakeRequestFailOnIO, host_),
+                                    run_loop.QuitClosure());
+    run_loop.Run();
   }
   ~MakeRequestFail() {
+    base::RunLoop run_loop;
     BrowserThread::PostTaskAndReply(
         BrowserThread::IO, FROM_HERE,
-        base::BindOnce(UndoMakeRequestFailOnIO, host_),
-        base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
-    content::RunMessageLoop();
+        base::BindOnce(UndoMakeRequestFailOnIO, host_), run_loop.QuitClosure());
+    run_loop.Run();
   }
 
  private:
@@ -808,25 +811,31 @@ class PolicyTest : public InProcessBrowserTest {
   class QuitMessageLoopAfterScreenshot
       : public ChromeScreenshotGrabberTestObserver {
    public:
+    explicit QuitMessageLoopAfterScreenshot(base::OnceClosure done)
+        : done_(std::move(done)) {}
     void OnScreenshotCompleted(
         ui::ScreenshotResult screenshot_result,
         const base::FilePath& screenshot_path) override {
-      BrowserThread::PostTaskAndReply(
-          BrowserThread::IO, FROM_HERE, base::DoNothing(),
-          base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
+      BrowserThread::PostTaskAndReply(BrowserThread::IO, FROM_HERE,
+                                      base::DoNothing(), std::move(done_));
     }
 
     ~QuitMessageLoopAfterScreenshot() override {}
+
+   private:
+    base::OnceClosure done_;
   };
 
   void TestScreenshotFile(bool enabled) {
-    // ScreenshotGrabber doesn't own this observer, so the observer's lifetime
-    // is tied to the test instead.
+    base::RunLoop run_loop;
+    QuitMessageLoopAfterScreenshot observer_(run_loop.QuitClosure());
+
     ChromeScreenshotGrabber* grabber = ChromeScreenshotGrabber::Get();
     grabber->test_observer_ = &observer_;
     SetScreenshotPolicy(enabled);
     grabber->HandleTakeScreenshotForAllRootWindows();
-    content::RunMessageLoop();
+    run_loop.Run();
+
     grabber->test_observer_ = nullptr;
   }
 #endif  // defined(OS_CHROMEOS)
@@ -909,7 +918,12 @@ class PolicyTest : public InProcessBrowserTest {
   }
 
   void UpdateProviderPolicy(const PolicyMap& policy) {
-    provider_.UpdateChromePolicy(policy);
+    PolicyMap policy_with_defaults;
+    policy_with_defaults.CopyFrom(policy);
+#if defined(OS_CHROMEOS)
+    SetEnterpriseUsersDefaults(&policy_with_defaults);
+#endif
+    provider_.UpdateChromePolicy(policy_with_defaults);
     DCHECK(base::MessageLoopCurrent::Get());
     base::RunLoop loop;
     loop.RunUntilIdle();
@@ -977,9 +991,6 @@ class PolicyTest : public InProcessBrowserTest {
   MockConfigurationPolicyProvider provider_;
   std::unique_ptr<extensions::ExtensionCacheFake> test_extension_cache_;
   extensions::ScopedIgnoreContentVerifierForTest ignore_content_verifier_;
-#if defined(OS_CHROMEOS)
-  QuitMessageLoopAfterScreenshot observer_;
-#endif
 };
 
 // A subclass of PolicyTest that runs each test with the old interstitial code
@@ -1137,7 +1148,7 @@ IN_PROC_BROWSER_TEST_F(LoginPolicyTestBase, PRE_AllowedUILocales) {
   PrefService* prefs = profile->GetPrefs();
 
   // Set locale and preferred languages to "en-US".
-  prefs->SetString(prefs::kApplicationLocale, "en-US");
+  prefs->SetString(language::prefs::kApplicationLocale, "en-US");
   prefs->SetString(prefs::kLanguagePreferredLanguages, "en-US");
 
   // Set policy to only allow "fr" as locale.
@@ -1161,7 +1172,7 @@ IN_PROC_BROWSER_TEST_F(LoginPolicyTestBase, AllowedUILocales) {
   // Verifies that the default locale has been overridden by policy
   // (see |GetMandatoryPoliciesValue|)
   Browser* browser = CreateBrowser(profile);
-  EXPECT_EQ("fr", prefs->GetString(prefs::kApplicationLocale));
+  EXPECT_EQ("fr", prefs->GetString(language::prefs::kApplicationLocale));
   ui_test_utils::NavigateToURL(browser, GURL(chrome::kChromeUINewTabURL));
   base::string16 french_title = l10n_util::GetStringUTF16(IDS_NEW_TAB_TITLE);
   base::string16 title;
@@ -1466,6 +1477,9 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, SeparateProxyPoliciesMerging) {
   expected_value->SetInteger(key::kProxyServerMode, 3);
   expected.Set(key::kProxySettings, POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER,
                POLICY_SOURCE_CLOUD, std::move(expected_value), nullptr);
+#if defined(OS_CHROMEOS)
+  SetEnterpriseUsersDefaults(&expected);
+#endif
 
   // Check both the browser and the profile.
   const PolicyMap& actual_from_browser =
@@ -3201,6 +3215,24 @@ IN_PROC_BROWSER_TEST_F(PolicyTest, MAYBE_FileURLBlacklist) {
   CheckURLIsBlocked(browser(), file_path2);
 }
 
+IN_PROC_BROWSER_TEST_F(PolicyTest, UrlKeyedAnonymizedDataCollection) {
+  PrefService* prefs = browser()->profile()->GetPrefs();
+  prefs->SetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled, true);
+  EXPECT_TRUE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+
+  // Disable by policy.
+  PolicyMap policies;
+  policies.Set(key::kUrlKeyedAnonymizedDataCollectionEnabled,
+               POLICY_LEVEL_MANDATORY, POLICY_SCOPE_USER, POLICY_SOURCE_CLOUD,
+               std::make_unique<base::Value>(false), nullptr);
+  UpdateProviderPolicy(policies);
+
+  EXPECT_FALSE(prefs->GetBoolean(
+      unified_consent::prefs::kUrlKeyedAnonymizedDataCollectionEnabled));
+}
+
 #if !defined(OS_MACOSX)
 IN_PROC_BROWSER_TEST_F(PolicyTest, FullscreenAllowedBrowser) {
   PolicyMap policies;
@@ -3769,9 +3801,9 @@ IN_PROC_BROWSER_TEST_P(RestoreOnStartupPolicyTest, MAYBE_RunTest) {
   TabStripModel* model = browser()->tab_strip_model();
   int size = static_cast<int>(expected_urls_.size());
   EXPECT_EQ(size, model->count());
+  resource_coordinator::WaitForTransitionToLoaded(model);
   for (int i = 0; i < size && i < model->count(); ++i) {
     content::WebContents* web_contents = model->GetWebContentsAt(i);
-    content::WaitForLoadStop(web_contents);
     if (blocked_)
       CheckURLIsBlockedInWebContents(web_contents, expected_urls_[i]);
     else if (expected_urls_[i] == GURL(chrome::kChromeUINewTabURL))
@@ -5310,6 +5342,7 @@ IN_PROC_BROWSER_TEST_F(ArcPolicyTest, ArcBackupRestoreServiceEnabled) {
   pref->SetBoolean(arc::prefs::kArcBackupRestoreEnabled, true);
 
   // ARC backup and restore is disabled by policy by default.
+  UpdateProviderPolicy(PolicyMap());
   EXPECT_FALSE(pref->GetBoolean(arc::prefs::kArcBackupRestoreEnabled));
   EXPECT_TRUE(pref->IsManagedPreference(arc::prefs::kArcBackupRestoreEnabled));
 
@@ -5365,6 +5398,7 @@ IN_PROC_BROWSER_TEST_F(ArcPolicyTest, ArcGoogleLocationServicesEnabled) {
   pref->SetBoolean(arc::prefs::kArcLocationServiceEnabled, true);
 
   // The pref is overridden to disabled by policy by default.
+  UpdateProviderPolicy(PolicyMap());
   EXPECT_FALSE(pref->GetBoolean(arc::prefs::kArcBackupRestoreEnabled));
   EXPECT_TRUE(pref->IsManagedPreference(arc::prefs::kArcBackupRestoreEnabled));
 
@@ -5899,16 +5933,24 @@ class PromotionalTabsEnabledPolicyTest
 
   void CreatedBrowserMainParts(
       content::BrowserMainParts* browser_main_parts) override {
+    // Set policies before the browser starts up.
+    PolicyMap policies;
+
+    // Suppress the first-run dialog by disabling metrics reporting.
+    policies.Set(key::kMetricsReportingEnabled, POLICY_LEVEL_MANDATORY,
+                 POLICY_SCOPE_MACHINE, POLICY_SOURCE_CLOUD,
+                 std::make_unique<base::Value>(false), nullptr);
+
+    // Apply the policy setting under test.
     if (GetParam() != BooleanPolicy::kNotConfigured) {
-      // Set the policy now before the browser starts up.
-      PolicyMap policies;
       policies.Set(
           key::kPromotionalTabsEnabled, POLICY_LEVEL_MANDATORY,
           POLICY_SCOPE_MACHINE, POLICY_SOURCE_CLOUD,
           std::make_unique<base::Value>(GetParam() == BooleanPolicy::kTrue),
           nullptr);
-      UpdateProviderPolicy(policies);
     }
+
+    UpdateProviderPolicy(policies);
     PolicyTest::CreatedBrowserMainParts(browser_main_parts);
   }
 
@@ -5916,13 +5958,7 @@ class PromotionalTabsEnabledPolicyTest
   DISALLOW_COPY_AND_ASSIGN(PromotionalTabsEnabledPolicyTest);
 };
 
-#if defined(OS_LINUX) && defined(GOOGLE_CHROME_BUILD)
-// Passes then times out on official Linux builds; https://crbug.com/856995.
-#define MAYBE_RunTest DISABLED_RunTest
-#else
-#define MAYBE_RunTest RunTest
-#endif
-IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyTest, MAYBE_RunTest) {
+IN_PROC_BROWSER_TEST_P(PromotionalTabsEnabledPolicyTest, RunTest) {
   TabStripModel* tab_strip = browser()->tab_strip_model();
   ASSERT_GE(tab_strip->count(), 1);
   const auto& url = tab_strip->GetWebContentsAt(0)->GetURL();

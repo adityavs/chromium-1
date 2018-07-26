@@ -31,6 +31,7 @@
 #include "third_party/blink/renderer/core/animation/document_animations.h"
 #include "third_party/blink/renderer/core/animation/document_timeline.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -51,7 +52,6 @@
 #include "third_party/blink/renderer/core/svg/svg_image_element.h"
 #include "third_party/blink/renderer/core/svg/svg_svg_element.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/geometry/int_rect.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
@@ -398,7 +398,7 @@ sk_sp<PaintRecord> SVGImage::PaintRecordForContainer(
     canvas->scale(1, -1);
   }
   DrawForContainer(canvas, PaintFlags(), FloatSize(container_size), 1,
-                   draw_dst_rect, draw_src_rect, url);
+                   FloatRect(draw_dst_rect), FloatRect(draw_src_rect), url);
   return recorder.finishRecordingAsPicture();
 }
 
@@ -414,7 +414,7 @@ void SVGImage::PopulatePaintRecordForCurrentFrameForContainer(
   PaintRecorder recorder;
   cc::PaintCanvas* canvas = recorder.beginRecording(container_rect);
   DrawForContainer(canvas, PaintFlags(), FloatSize(container_rect.Size()), 1,
-                   container_rect, container_rect, url);
+                   FloatRect(container_rect), FloatRect(container_rect), url);
   builder.set_paint_record(recorder.finishRecordingAsPicture(), container_rect,
                            PaintImage::GetNextContentId());
 }
@@ -591,6 +591,17 @@ void SVGImage::ResetAnimation() {
   chrome_client_->SuspendAnimation();
   root_element->pauseAnimations();
   ScheduleTimelineRewind();
+}
+
+void SVGImage::RestoreAnimation() {
+  // If the image has no animations then do nothing.
+  if (!MaybeAnimated())
+    return;
+  // If there are no clients, or no client is going to render, then do nothing.
+  ImageObserver* image_observer = GetImageObserver();
+  if (!image_observer || image_observer->ShouldPauseAnimation(this))
+    return;
+  StartAnimation();
 }
 
 bool SVGImage::MaybeAnimated() {

@@ -176,7 +176,7 @@ void VrShellDelegate::RecordVrStartAction(
 void VrShellDelegate::OnPresentResult(
     device::mojom::VRDisplayInfoPtr display_info,
     device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
-    device::mojom::VRDisplayHost::RequestSessionCallback callback,
+    base::OnceCallback<void(device::mojom::XRSessionPtr)> callback,
     bool success) {
   DVLOG(1) << __FUNCTION__ << ": success=" << success;
   if (!success) {
@@ -187,7 +187,7 @@ void VrShellDelegate::OnPresentResult(
 
   if (!vr_shell_) {
     // We have to wait until the GL thread is ready since we have to get the
-    // VRSubmitFrameClient.
+    // XRPresentationClient.
     pending_successful_present_request_ = true;
     on_present_result_callback_ = base::BindOnce(
         &VrShellDelegate::OnPresentResult, base::Unretained(this),
@@ -211,27 +211,15 @@ void VrShellDelegate::OnPresentResult(
 }
 
 void VrShellDelegate::SendRequestPresentReply(
-    bool success,
-    device::mojom::VRSubmitFrameClientRequest request,
-    device::mojom::VRPresentationProviderPtr provider,
-    device::mojom::VRDisplayFrameTransportOptionsPtr transport_options) {
+    device::mojom::XRSessionPtr session) {
   DVLOG(1) << __FUNCTION__;
   if (!request_present_response_callback_) {
     DLOG(ERROR) << __FUNCTION__ << ": ERROR: no callback";
     return;
   }
 
-  if (success) {
-    auto connection = device::mojom::XRPresentationConnection::New();
-    connection->client_request = std::move(request);
-    connection->provider = provider.PassInterface();
-    connection->transport_options = std::move(transport_options);
-
-    base::ResetAndReturn(&request_present_response_callback_)
-        .Run(std::move(connection));
-  } else {
-    base::ResetAndReturn(&request_present_response_callback_).Run(nullptr);
-  }
+  base::ResetAndReturn(&request_present_response_callback_)
+      .Run(std::move(session));
 }
 
 void VrShellDelegate::DisplayActivate(JNIEnv* env,
@@ -278,11 +266,10 @@ void VrShellDelegate::Destroy(JNIEnv* env, const JavaParamRef<jobject>& obj) {
 }
 
 bool VrShellDelegate::ShouldDisableGvrDevice() {
-  JNIEnv* env = AttachCurrentThread();
   int vr_support_level =
-      Java_VrShellDelegate_getVrSupportLevel(env, j_vr_shell_delegate_);
-  return static_cast<VrSupportLevel>(vr_support_level) ==
-         VrSupportLevel::kVrNotAvailable;
+      Java_VrShellDelegate_getVrSupportLevel(AttachCurrentThread());
+  return static_cast<VrSupportLevel>(vr_support_level) <=
+         VrSupportLevel::kVrNeedsUpdate;
 }
 
 void VrShellDelegate::SetDeviceId(unsigned int device_id) {
@@ -300,7 +287,7 @@ void VrShellDelegate::SetDeviceId(unsigned int device_id) {
 void VrShellDelegate::StartWebXRPresentation(
     device::mojom::VRDisplayInfoPtr display_info,
     device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
-    device::mojom::VRDisplayHost::RequestSessionCallback callback) {
+    base::OnceCallback<void(device::mojom::XRSessionPtr)> callback) {
   if (!on_present_result_callback_.is_null() ||
       !request_present_response_callback_.is_null()) {
     // Can only handle one request at a time. This is also extremely unlikely to

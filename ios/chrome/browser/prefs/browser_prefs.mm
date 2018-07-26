@@ -11,6 +11,7 @@
 #include "components/flags_ui/pref_service_flags_storage.h"
 #include "components/gcm_driver/gcm_channel_status_syncer.h"
 #import "components/handoff/handoff_manager.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/network_time/network_time_tracker.h"
 #include "components/ntp_snippets/category_rankers/click_based_category_ranker.h"
@@ -35,6 +36,7 @@
 #include "components/sync/base/sync_prefs.h"
 #include "components/translate/core/browser/translate_pref_names.h"
 #include "components/translate/core/browser/translate_prefs.h"
+#include "components/unified_consent/unified_consent_service.h"
 #include "components/update_client/update_client.h"
 #include "components/variations/service/variations_service.h"
 #include "components/web_resource/web_resource_pref_names.h"
@@ -85,7 +87,8 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
                                 false);
 
   // Preferences related to the application context.
-  registry->RegisterStringPref(prefs::kApplicationLocale, std::string());
+  registry->RegisterStringPref(language::prefs::kApplicationLocale,
+                               std::string());
   registry->RegisterBooleanPref(prefs::kEulaAccepted, false);
   registry->RegisterBooleanPref(metrics::prefs::kMetricsReportingEnabled,
                                 false);
@@ -95,6 +98,7 @@ void RegisterLocalStatePrefs(PrefRegistrySimple* registry) {
 
 void RegisterBrowserStatePrefs(user_prefs::PrefRegistrySyncable* registry) {
   autofill::AutofillManager::RegisterProfilePrefs(registry);
+  DesktopPromotionSyncService::RegisterDesktopPromotionUserPrefs(registry);
   dom_distiller::DistilledPagePrefs::RegisterProfilePrefs(registry);
   FirstRun::RegisterProfilePrefs(registry);
   gcm::GCMChannelStatusSyncer::RegisterProfilePrefs(registry);
@@ -111,13 +115,13 @@ void RegisterBrowserStatePrefs(user_prefs::PrefRegistrySyncable* registry) {
   password_manager::PasswordManager::RegisterProfilePrefs(registry);
   payments::RegisterProfilePrefs(registry);
   PrefProxyConfigTrackerImpl::RegisterProfilePrefs(registry);
+  RegisterVoiceSearchBrowserStatePrefs(registry);
   syncer::SyncPrefs::RegisterProfilePrefs(registry);
   TemplateURLPrepopulateData::RegisterProfilePrefs(registry);
   translate::TranslatePrefs::RegisterProfilePrefs(registry);
+  unified_consent::UnifiedConsentService::RegisterPrefs(registry);
   variations::VariationsService::RegisterProfilePrefs(registry);
   ZeroSuggestProvider::RegisterProfilePrefs(registry);
-  DesktopPromotionSyncService::RegisterDesktopPromotionUserPrefs(registry);
-  RegisterVoiceSearchBrowserStatePrefs(registry);
 
   [BookmarkMediator registerBrowserStatePrefs:registry];
   [BookmarkPathCache registerBrowserStatePrefs:registry];

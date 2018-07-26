@@ -51,20 +51,24 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
       const blink::WebString& value2) override;
   blink::WebString DefaultLocale() override;
 
-  std::unique_ptr<blink::WebGestureCurve> CreateFlingAnimationCurve(
-      blink::WebGestureDevice device_source,
-      const blink::WebFloatPoint& velocity,
-      const blink::WebSize& cumulative_scroll) override;
-
   blink::WebURLLoaderMockFactory* GetURLLoaderMockFactory() override;
 
   blink::WebThread* CurrentThread() override;
+
+  bool IsThreadedAnimationEnabled() override;
 
   std::unique_ptr<blink::WebRTCCertificateGenerator>
   CreateRTCCertificateGenerator() override;
 
   service_manager::Connector* GetConnector() override;
   blink::InterfaceProvider* GetInterfaceProvider() override;
+
+  // May be called when |this| is registered as the active blink Platform
+  // implementation. Overrides the result of IsThreadedAnimationEnabled() to
+  // the provided value, and returns the value it was set to before the call.
+  // The original value should be restored before ending a test to avoid
+  // cross-test side effects.
+  static bool SetThreadedAnimationEnabled(bool enabled);
 
  private:
   void BindClipboardHost(mojo::ScopedMessagePipeHandle handle);
@@ -77,6 +81,7 @@ class TestBlinkWebUnitTestSupport : public BlinkPlatformImpl {
   std::unique_ptr<blink::WebURLLoaderMockFactory> url_loader_factory_;
   std::unique_ptr<blink::scheduler::WebThreadScheduler> main_thread_scheduler_;
   std::unique_ptr<blink::WebThread> web_thread_;
+  bool threaded_animation_ = true;
 
   base::WeakPtrFactory<TestBlinkWebUnitTestSupport> weak_factory_;
 

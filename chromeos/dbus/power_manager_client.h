@@ -133,6 +133,9 @@ class CHROMEOS_EXPORT PowerManagerClient : public DBusClient {
     virtual void TabletModeEventReceived(TabletMode mode,
                                          const base::TimeTicks& timestamp) {}
 
+    // Called just before the screen is dimmed in response to user inactivity.
+    virtual void ScreenDimImminent() {}
+
     // Called when the idle action will be performed after
     // |time_until_idle_action|.
     virtual void IdleActionImminent(
@@ -191,6 +194,11 @@ class CHROMEOS_EXPORT PowerManagerClient : public DBusClient {
 
   // Increases the keyboard brightness.
   virtual void IncreaseKeyboardBrightness() = 0;
+
+  // Similar to GetScreenBrightnessPercent, but gets the keyboard brightness
+  // instead.
+  virtual void GetKeyboardBrightnessPercent(
+      DBusMethodCallback<double> callback) = 0;
 
   // Returns the last power status that was received from D-Bus, if any.
   virtual const base::Optional<power_manager::PowerSupplyProperties>&
@@ -292,6 +300,11 @@ class CHROMEOS_EXPORT PowerManagerClient : public DBusClient {
   // false on failure.
   virtual void DeleteArcTimers(const std::string& tag,
                                VoidDBusMethodCallback callback) = 0;
+
+  // Instructs powerd to defer dimming the screen. This only has an effect when
+  // called shortly (i.e. seconds) after observers have received
+  // ScreenDimImminent notifications.
+  virtual void DeferScreenDim() = 0;
 
   // Creates the instance.
   static PowerManagerClient* Create(DBusClientImplementationType type);

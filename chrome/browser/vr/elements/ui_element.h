@@ -26,7 +26,7 @@
 #include "chrome/browser/vr/model/reticle_model.h"
 #include "chrome/browser/vr/model/sounds.h"
 #include "chrome/browser/vr/target_property.h"
-#include "chrome/browser/vr/vr_export.h"
+#include "chrome/browser/vr/vr_ui_export.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/quaternion.h"
 #include "ui/gfx/geometry/rect_f.h"
@@ -38,15 +38,12 @@ namespace base {
 class TimeTicks;
 }
 
-namespace blink {
-class WebGestureEvent;
-}
-
 namespace vr {
 
 class KeyframeModel;
 class SkiaSurfaceProvider;
 class UiElementRenderer;
+class InputEvent;
 struct CameraModel;
 struct EditedText;
 
@@ -58,7 +55,7 @@ enum LayoutAlignment {
   BOTTOM,
 };
 
-struct VR_EXPORT EventHandlers {
+struct VR_UI_EXPORT EventHandlers {
   EventHandlers();
   EventHandlers(const EventHandlers& other);
   ~EventHandlers();
@@ -99,7 +96,7 @@ struct HitTestResult {
   float distance_to_plane;
 };
 
-class VR_EXPORT UiElement : public cc::AnimationTarget {
+class VR_UI_EXPORT UiElement : public cc::AnimationTarget {
  public:
   UiElement();
   ~UiElement() override;
@@ -139,7 +136,9 @@ class VR_EXPORT UiElement : public cc::AnimationTarget {
   virtual bool PrepareToDraw();
 
   // Returns true if the element updated its texture.
-  virtual bool UpdateTexture();
+  virtual bool HasDirtyTexture() const;
+
+  virtual void UpdateTexture();
 
   bool IsHitTestable() const;
 
@@ -160,13 +159,13 @@ class VR_EXPORT UiElement : public cc::AnimationTarget {
                           base::TimeTicks timestamp);
   virtual void OnTouchMove(const gfx::PointF& position,
                            base::TimeTicks timestamp);
-  virtual void OnFlingCancel(std::unique_ptr<blink::WebGestureEvent> gesture,
+  virtual void OnFlingCancel(std::unique_ptr<InputEvent> gesture,
                              const gfx::PointF& position);
-  virtual void OnScrollBegin(std::unique_ptr<blink::WebGestureEvent> gesture,
+  virtual void OnScrollBegin(std::unique_ptr<InputEvent> gesture,
                              const gfx::PointF& position);
-  virtual void OnScrollUpdate(std::unique_ptr<blink::WebGestureEvent> gesture,
+  virtual void OnScrollUpdate(std::unique_ptr<InputEvent> gesture,
                               const gfx::PointF& position);
-  virtual void OnScrollEnd(std::unique_ptr<blink::WebGestureEvent> gesture,
+  virtual void OnScrollEnd(std::unique_ptr<InputEvent> gesture,
                            const gfx::PointF& position);
 
   // Whether the point (relative to the origin of the element), should be
@@ -407,8 +406,8 @@ class VR_EXPORT UiElement : public cc::AnimationTarget {
   void SetTransitionDuration(base::TimeDelta delta);
 
   void AddKeyframeModel(std::unique_ptr<cc::KeyframeModel> keyframe_model);
-  void RemoveKeyframeModels();
-  void RemoveKeyframeModelsWithProperty(int target_property);
+  void RemoveKeyframeModel(int keyframe_model_id);
+  void RemoveKeyframeModels(int target_property);
   bool IsAnimatingProperty(TargetProperty property) const;
 
   // Recursive method that sizes and lays out element subtrees.

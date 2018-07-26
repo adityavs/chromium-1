@@ -25,14 +25,14 @@
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/app_mode/app_mode_utils.h"
-#include "chrome/browser/apps/app_load_service.h"
+#include "chrome/browser/apps/platform_apps/app_load_service.h"
 #include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
 #include "chrome/browser/devtools/devtools_window.h"
 #include "chrome/browser/download/download_stats.h"
 #include "chrome/browser/extensions/extension_util.h"
-#include "chrome/browser/language/language_model_factory.h"
+#include "chrome/browser/language/language_model_manager_factory.h"
 #include "chrome/browser/media/router/media_router_dialog_controller.h"
 #include "chrome/browser/media/router/media_router_feature.h"
 #include "chrome/browser/media/router/media_router_metrics.h"
@@ -40,7 +40,6 @@
 #include "chrome/browser/net/spdyproxy/data_reduction_proxy_chrome_settings_factory.h"
 #include "chrome/browser/password_manager/chrome_password_manager_client.h"
 #include "chrome/browser/plugins/chrome_plugin_service_filter.h"
-#include "chrome/browser/policy/developer_tools_policy_handler.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
@@ -65,7 +64,7 @@
 #include "chrome/browser/ui/exclusive_access/keyboard_lock_controller.h"
 #include "chrome/browser/ui/tab_contents/core_tab_helper.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_render_frame.mojom.h"
@@ -82,6 +81,7 @@
 #include "components/download/public/common/download_url_parameters.h"
 #include "components/google/core/browser/google_util.h"
 #include "components/guest_view/browser/guest_view_base.h"
+#include "components/language/core/browser/language_model_manager.h"
 #include "components/omnibox/browser/autocomplete_classifier.h"
 #include "components/omnibox/browser/autocomplete_match.h"
 #include "components/password_manager/core/browser/password_manager_util.h"
@@ -174,7 +174,9 @@
 
 #if defined(OS_CHROMEOS)
 #include "ash/public/cpp/window_pin_type.h"
+#include "chrome/browser/chromeos/arc/arc_util.h"
 #include "chrome/browser/chromeos/arc/intent_helper/open_with_menu.h"
+#include "chrome/browser/chromeos/arc/intent_helper/start_smart_selection_action_menu.h"
 #endif
 
 using base::UserMetricsAction;
@@ -341,10 +343,11 @@ const struct UmaEnumCommandIdPair {
     {90, -1, IDC_CONTENT_CONTEXT_SHOWALLSAVEDPASSWORDS},
     {91, -1, IDC_CONTENT_CONTEXT_PICTUREINPICTURE},
     {92, -1, IDC_CONTENT_CONTEXT_EMOJI},
+    {93, -1, IDC_CONTENT_CONTEXT_START_SMART_SELECTION_ACTION},
     // Add new items here and use |enum_id| from the next line.
     // Also, add new items to RenderViewContextMenuItem enum in
     // tools/metrics/histograms/enums.xml.
-    {93, -1, 0},  // Must be the last. Increment |enum_id| when new IDC
+    {94, -1, 0},  // Must be the last. Increment |enum_id| when new IDC
                   // was added.
 };
 
@@ -510,6 +513,19 @@ void OnProfileCreated(const GURL& link_url,
     nav_params.referrer = referrer;
     nav_params.window_action = NavigateParams::SHOW_WINDOW;
     Navigate(&nav_params);
+  }
+}
+
+bool DoesInputFieldTypeSupportEmoji(
+    blink::WebContextMenuData::InputFieldType text_input_type) {
+  // Disable emoji for input types that definitely do not support emoji.
+  switch (text_input_type) {
+    case blink::WebContextMenuData::kInputFieldTypeNumber:
+    case blink::WebContextMenuData::kInputFieldTypeTelephone:
+    case blink::WebContextMenuData::kInputFieldTypeOther:
+      return false;
+    default:
+      return true;
   }
 }
 
@@ -742,6 +758,17 @@ void RenderViewContextMenu::InitMenu() {
       menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
   }
 
+  bool supports_smart_text_selection = content_type_->SupportsGroup(
+      ContextMenuContentType::ITEM_GROUP_SMART_SELECTION);
+#if defined(OS_CHROMEOS)
+  supports_smart_text_selection &=
+      arc::IsArcPlayStoreEnabledForProfile(GetProfile());
+#else
+  supports_smart_text_selection = false;
+#endif  // defined(OS_CHROMEOS)
+  if (supports_smart_text_selection)
+    AppendSmartSelectionActionItems();
+
   bool media_image = content_type_->SupportsGroup(
       ContextMenuContentType::ITEM_GROUP_MEDIA_IMAGE);
   if (media_image)
@@ -781,6 +808,11 @@ void RenderViewContextMenu::InitMenu() {
 
   if (content_type_->SupportsGroup(ContextMenuContentType::ITEM_GROUP_COPY)) {
     DCHECK(!editable);
+    // If smart text selection is supported, then a separator will be added
+    // below the suggested action item asynchronously, so there's no need to
+    // add another one here.
+    if (menu_model_.GetItemCount() && !supports_smart_text_selection)
+      menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
     AppendCopyItem();
   }
 
@@ -847,7 +879,7 @@ void RenderViewContextMenu::InitMenu() {
   }
 }
 
-Profile* RenderViewContextMenu::GetProfile() {
+Profile* RenderViewContextMenu::GetProfile() const {
   return Profile::FromBrowserContext(browser_context_);
 }
 
@@ -947,7 +979,8 @@ std::string RenderViewContextMenu::GetTargetLanguage() const {
   std::unique_ptr<translate::TranslatePrefs> prefs(
       ChromeTranslateClient::CreateTranslatePrefs(GetPrefs(browser_context_)));
   language::LanguageModel* language_model =
-      LanguageModelFactory::GetForBrowserContext(browser_context_);
+      LanguageModelManagerFactory::GetForBrowserContext(browser_context_)
+          ->GetDefaultModel();
   return translate::TranslateManager::GetTargetLanguage(prefs.get(),
                                                         language_model);
 }
@@ -1138,6 +1171,15 @@ void RenderViewContextMenu::AppendOpenWithLinkItems() {
 #endif
 }
 
+void RenderViewContextMenu::AppendSmartSelectionActionItems() {
+#if defined(OS_CHROMEOS)
+  start_smart_selection_action_menu_observer_ =
+      std::make_unique<arc::StartSmartSelectionActionMenu>(this);
+  observers_.AddObserver(start_smart_selection_action_menu_observer_.get());
+  start_smart_selection_action_menu_observer_->InitMenu(params_);
+#endif
+}
+
 void RenderViewContextMenu::AppendOpenInBookmarkAppLinkItems() {
   const Extension* pwa = extensions::util::GetInstalledPwaForUrl(
       browser_context_, params_.link_url);
@@ -1292,7 +1334,8 @@ void RenderViewContextMenu::AppendPageItems() {
             GetPrefs(browser_context_)));
     if (prefs->IsTranslateAllowedByPolicy()) {
       language::LanguageModel* language_model =
-          LanguageModelFactory::GetForBrowserContext(browser_context_);
+          LanguageModelManagerFactory::GetForBrowserContext(browser_context_)
+              ->GetDefaultModel();
       std::string locale = translate::TranslateManager::GetTargetLanguage(
           prefs.get(), language_model);
       base::string16 language =
@@ -1323,8 +1366,6 @@ void RenderViewContextMenu::AppendExitFullscreenItem() {
 }
 
 void RenderViewContextMenu::AppendCopyItem() {
-  if (menu_model_.GetItemCount())
-    menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
   menu_model_.AddItemWithStringId(IDC_CONTENT_CONTEXT_COPY,
                                   IDS_CONTENT_CONTEXT_COPY);
 }
@@ -1419,7 +1460,9 @@ void RenderViewContextMenu::AppendEditableItems() {
     AppendSearchProvider();
     menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
   }
-  if (params_.misspelled_word.empty() && ui::IsEmojiPanelSupported()) {
+  if (params_.misspelled_word.empty() &&
+      DoesInputFieldTypeSupportEmoji(params_.input_field_type) &&
+      ui::IsEmojiPanelSupported()) {
     menu_model_.AddItemWithStringId(IDC_CONTENT_CONTEXT_EMOJI,
                                     IDS_CONTENT_CONTEXT_EMOJI);
     menu_model_.AddSeparator(ui::NORMAL_SEPARATOR);
@@ -1760,6 +1803,9 @@ bool RenderViewContextMenu::IsCommandIdEnabled(int id) const {
 
     case IDC_CONTENT_CONTEXT_EMOJI:
       return params_.is_editable;
+
+    case IDC_CONTENT_CONTEXT_START_SMART_SELECTION_ACTION:
+      return true;
 
     default:
       NOTREACHED();
@@ -2133,13 +2179,8 @@ bool RenderViewContextMenu::IsDevCommandEnabled(int id) const {
 
     // Don't enable the web inspector if the developer tools are disabled via
     // the preference dev-tools-disabled.
-    // TODO(pfeldman): Possibly implement handling for
-    // Availability::kDisallowedForForceInstalledExtensions
-    // (https://crbug.com/838146).
-    if (policy::DeveloperToolsPolicyHandler::GetDevToolsAvailability(prefs) ==
-        policy::DeveloperToolsPolicyHandler::Availability::kDisallowed) {
+    if (!DevToolsWindow::AllowDevToolsFor(GetProfile(), source_web_contents_))
       return false;
-    }
   }
 
   return true;

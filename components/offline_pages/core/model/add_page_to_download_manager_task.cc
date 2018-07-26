@@ -19,12 +19,9 @@ namespace {
 bool SetDownloadIdSync(int64_t offline_id,
                        int64_t download_id,
                        sql::Connection* db) {
-  if (!db)
-    return false;
-
-  const char kSql[] = "UPDATE OR IGNORE " OFFLINE_PAGES_TABLE_NAME
-                      " SET system_download_id = ?"
-                      " WHERE offline_id = ?";
+  static const char kSql[] = "UPDATE OR IGNORE " OFFLINE_PAGES_TABLE_NAME
+                             " SET system_download_id = ?"
+                             " WHERE offline_id = ?";
   sql::Statement statement(db->GetCachedStatement(SQL_FROM_HERE, kSql));
   statement.BindInt64(0, download_id);
   statement.BindInt64(1, offline_id);
@@ -75,7 +72,8 @@ void AddPageToDownloadManagerTask::Run() {
   // Add the download ID to the OfflinePageModel database.
   store_->Execute(base::BindOnce(&SetDownloadIdSync, offline_id_, download_id),
                   base::BindOnce(&AddPageToDownloadManagerTask::OnAddIdDone,
-                                 weak_ptr_factory_.GetWeakPtr()));
+                                 weak_ptr_factory_.GetWeakPtr()),
+                  false);
 }
 
 void AddPageToDownloadManagerTask::OnAddIdDone(bool result) {

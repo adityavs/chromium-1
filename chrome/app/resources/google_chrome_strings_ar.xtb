@@ -39,11 +39,10 @@
 <translation id="1873233029667955273">‏Google Chrome ليس متصفحك التلقائي.</translation>
 <translation id="1874309113135274312">‏الإصدار التجريبي من Google Chrome‏ (mDNS-In)</translation>
 <translation id="1877026089748256423">‏إصدار Chrome قديم</translation>
-<translation id="2007150628464581396">{0,plural, =1{‏ستتم إعادة تشغيل Chrome خلال دقيقة واحدة}zero{‏ستتم إعادة تشغيل Chrome خلال # دقيقة}two{‏ستتم إعادة تشغيل Chrome خلال دقيقتين (#)}few{‏ستتم إعادة تشغيل Chrome خلال # دقائق}many{‏ستتم إعادة تشغيل Chrome خلال # دقيقةً}other{‏ستتم إعادة تشغيل Chrome خلال # دقيقة}}</translation>
+<translation id="1915828456209461693">‏يتوفر تحديث جديد لبرنامج Chrome وسيتم تطبيقه عند إعادة التشغيل.</translation>
 <translation id="2063848847527508675">‏يلزم إعادة تشغيل نظام التشغيل Chrome حتى يتم تطبيق التحديث.</translation>
 <translation id="2084710999043359739">‏إضافة إلى Chrome</translation>
 <translation id="2094919256425865063">‏هل تريد الخروج من Chrome على أي حال؟</translation>
-<translation id="210890598424854131">{0,plural, =0{‏ستتم إعادة تشغيل Chrome الآن}=1{‏ستتم إعادة تشغيل Chrome خلال ثانية واحدة}two{‏ستتم إعادة تشغيل Chrome خلال ثانيتين (#)}few{‏ستتم إعادة تشغيل Chrome خلال # ثوانٍ}many{‏ستتم إعادة تشغيل Chrome خلال # ثانيةً}other{‏ستتم إعادة تشغيل Chrome خلال # ثانية}}</translation>
 <translation id="2120620239521071941">‏سيعمل هذا على حذف <ph name="ITEMS_COUNT" /> من العناصر من هذا الجهاز. لاسترداد بياناتك لاحقًا، سجّل الدخول إلى Chrome كـ <ph name="USER_EMAIL" />.</translation>
 <translation id="2123055963409958220">‏ساعد في تحسين Chrome بالإبلاغ عن <ph name="BEGIN_LINK" />الإعدادات الحالية<ph name="END_LINK" /></translation>
 <translation id="216054706567564023">‏بادِر بتثبيت Chrome على هاتفك. سنرسل رسالة قصيرة SMS إلى رقم هاتف استرداد حسابك.</translation>
@@ -60,6 +59,7 @@
 <translation id="2348335408836342058">‏يحتاج Chrome إلى إذن للوصول إلى الكاميرا والميكروفون من أجل موقع الويب هذا.</translation>
 <translation id="2397416548179033562">‏لإظهار قائمة Chrome</translation>
 <translation id="2429317896000329049">‏تعذر على Google Chrome مزامنة البيانات نظرًا لأن المزامنة غير متاحة في نطاقك.</translation>
+<translation id="2436117022029368436">‏التواصل مع Google لتحسين التصفُّح وخدمات Chrome</translation>
 <translation id="2467438592969358367">‏يرغب Google Chrome في تصدير كلمات مرورك، لذا يُرجى كتابة كلمة مرور Windows للسماح بذلك.</translation>
 <translation id="2485422356828889247">إزالة التثبيت</translation>
 <translation id="2534507159460261402">‏Google Pay (تم النسخ إلى Chrome)</translation>
@@ -100,7 +100,6 @@
 <translation id="3479552764303398839">ليس الآن</translation>
 <translation id="3503306920980160878">‏يحتاج Chrome للوصول إلى موقعك الجغرافي لمشاركته مع موقع الويب هذا.</translation>
 <translation id="3582972582564653026">‏يمكنك مزامنة Chrome وتخصيصه على جميع أجهزتك.</translation>
-<translation id="3612333635265770873">‏هناك وحدة تحمل الاسم نفسه ومعروف أنها تتعارض مع Google Chrome.</translation>
 <translation id="3622797965165704966">‏الآن أصبح استخدام Chrome مع حسابك في Google وفي أجهزة الكمبيوتر المشتركة أكثر سهولة.</translation>
 <translation id="3637702109597584617">‏<ph name="TERMS_OF_SERVICE_LINK" />بنود خدمة<ph name="END_TERMS_OF_SERVICE_LINK" /> نظام التشغيل Google Chrome</translation>
 <translation id="3716182511346448902">‏تستهلك هذه الصفحة مساحة كبيرة من الذاكرة، لذلك أوقفها Chrome مؤقتًا.</translation>
@@ -133,6 +132,7 @@
 <translation id="4561051373932531560">‏يتيح لك Google Chrome النقر على رقم هاتف على الويب والاتصال به باستخدام Skype!</translation>
 <translation id="4567424176335768812">لقد سجلت دخولك باعتبارك <ph name="USER_EMAIL_ADDRESS" />. ويُمكنك الآن الاستمتاع بالدخول إلى الإشارات المرجعية، والسجلّ، والإعدادات الأخرى على جميع الأجهزة التي تسجّل الدخول إليها.</translation>
 <translation id="4571503333518166079">‏الانتقال إلى إعدادات الإشعارات في Chrome</translation>
+<translation id="459622048091363950">‏بعد حصول Chrome على إمكانية الوصول، ستتمكن المواقع الإلكترونية من مطالبتك بإمكانية الوصول.</translation>
 <translation id="4600710005438004015">‏تعذّر تحديث Chrome إلى آخر إصدار، لذلك قد تفوتك الميزات وعمليات إصلاح الأمان الجديدة.</translation>
 <translation id="4631713731678262610">‏الإخفاء في قائمة Chrome</translation>
 <translation id="4633000520311261472">‏لجعل Chrome أكثر أمانًا، تم إيقاف بعض الإضافات غير المدرجة في <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> والتي ربما تمت إضافتها بدون علمك.</translation>
@@ -144,7 +144,6 @@
 <translation id="4771048833395599659">‏قد يكون هذا الملف ضارًا، لذلك فقد حظره Chrome.</translation>
 <translation id="4794050651896644714">‏حفظ التفاصيل في Chrome</translation>
 <translation id="4804732725083176494">‏أوقف مشرف هذا الجهاز تسجيل الدخول إلى Chrome.</translation>
-<translation id="4833487314064352405">{0,plural, =1{‏إعادة تشغيل Chrome خلال يوم واحد}zero{‏إعادة تشغيل Chrome خلال # يوم}two{‏إعادة تشغيل Chrome خلال يومين (#)}few{‏إعادة تشغيل Chrome خلال # أيام}many{‏إعادة تشغيل Chrome خلال # يومًا}other{‏إعادة تشغيل Chrome خلال # يوم}}</translation>
 <translation id="4891791193823137474">‏دع Google Chrome يعمل في الخلفية</translation>
 <translation id="4895437082222824641">‏فتح الرابط في علامة تبويب جديدة في Chrome</translation>
 <translation id="4921569541910214635">‏هل تشارك جهاز كمبيوتر؟ يمكنك الآن إعداد Chrome بالطريقة التي تعجبك تمامًا.</translation>
@@ -152,7 +151,6 @@
 <translation id="495931528404527476">‏في Chrome</translation>
 <translation id="4990567037958725628">Google Chrome Canary</translation>
 <translation id="5028489144783860647">‏تعذر على Google Chrome مزامنة البيانات. يُرجى تحديث عبارة مرور المزامنة.</translation>
-<translation id="5131923704757666404">{0,plural, =1{‏ستتم إعادة تشغيل Chrome خلال ساعة واحدة}zero{‏ستتم إعادة تشغيل Chrome خلال # ساعة}two{‏ستتم إعادة تشغيل Chrome خلال ساعتين (#)}few{‏ستتم إعادة تشغيل Chrome خلال # ساعات}many{‏ستتم إعادة تشغيل Chrome خلال # ساعةً}other{‏ستتم إعادة تشغيل Chrome خلال # ساعة}}</translation>
 <translation id="5132929315877954718">‏يمكنك اكتشاف تطبيقات، وألعاب، وإضافات، ومظاهر رائعة لمتصفح Google Chrome.</translation>
 <translation id="5166975452760862670">‏يتم عرض Google Chrome بهذه اللغة</translation>
 <translation id="5170938038195470297">‏لا يمكن استخدام ملفك الشخصي نظرًا لأنه من إصدار أحدث من Google Chrome.
@@ -162,10 +160,8 @@
 <translation id="5204098752394657250">‏<ph name="TERMS_OF_SERVICE_LINK" />بنود خدمة<ph name="END_TERMS_OF_SERVICE_LINK" /> Google Chrome</translation>
 <translation id="5251420635869119124">‏يمكن للضيف استخدام Chrome بدون أن يترك أي أثر وراءه.</translation>
 <translation id="532046782124376502">‏تحذير: يتعذّر على Google Chrome منع الإضافات من تسجيل سجل تصفحك. لإيقاف هذه الإضافة في وضع التصفح المتخفي، ألغِ تحديد هذا الخيار.</translation>
-<translation id="5334545119300433702">‏هذه الوحدة معروف أنها تتعارض مع Google Chrome.</translation>
 <translation id="5386244825306882791">‏كما أنها تتحكم في الصفحة التي تظهر عند تشغيل Chrome أو إجراء بحث من المربع متعدد الاستخدامات.</translation>
 <translation id="5430073640787465221">‏ملف التفضيلات تالف أو غير صالح. يتعذر على Google Chrome استرداد إعداداتك.</translation>
-<translation id="5495581687705680288">‏الوحدات المحملة في Google Chrome</translation>
 <translation id="556024056938947818">‏يحاول Google Chrome إظهار كلمات المرور.</translation>
 <translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
 <translation id="565744775970812598">‏قد يكون ملف <ph name="FILE_NAME" /> ضارًا، لذلك فقد حظره Chrome.</translation>
@@ -248,9 +244,9 @@
 <translation id="8286862437124483331">‏يحاول Google Chrome عرض كلمات المرور. اكتب كلمة مرور Windows للسماح بذلك.</translation>
 <translation id="8290100596633877290">‏للأسف! تعطل Google Chrome. هل تريد إعادة التشغيل الآن؟</translation>
 <translation id="8342675569599923794">‏هذا الملف ضار، لذلك فقد حظره Chrome.</translation>
+<translation id="8380166467911888159">‏لإصلاح الأخطاء الإملائية، يرسِل Chrome ما تكتبه في حقول النص إلى Google</translation>
 <translation id="840084489713044809">‏يرغب Google Chrome في تصدير كلمات المرور.</translation>
 <translation id="8406086379114794905">‏ساهم في تحسين Chrome</translation>
-<translation id="8439301513305169426">‏سيحفظ Chrome كلمة المرور هذه بواسطة <ph name="SAVED_PASSWORD_LINK" />، ولن تحتاج إلى تذكّرها.</translation>
 <translation id="8455999171311319804">‏اختياري: ساعد في تحسين نظام التشغيل Chrome عن طريق إرسال بيانات التشخيص والاستخدام إلى Google تلقائيًا.</translation>
 <translation id="8478823064122749032">‏بادِر بتثبيت Chrome على هاتفك. سنرسل رسالة قصيرة SMS إلى رقم هاتف استرداد حسابك: <ph name="PHONE_NUMBER" /></translation>
 <translation id="8521348052903287641">‏قاعدة الوارد إلى إصدار مطوري البرامج من Google Chrome للسماح بحركة مرور mDNS.</translation>
@@ -258,7 +254,6 @@
 <translation id="8547799825197623713">‏مشغل تطبيقات Chrome في Canary</translation>
 <translation id="8556340503434111824">‏يتوفر إصدار جديد من Google Chrome، وهو أسرع بكثير من ذي قبل.</translation>
 <translation id="8568392309447938879">‏يلزمك تسجيل الدخول إلى Chrome لتتمكن من استخدام التطبيقات. سيتيح هذا للمتصفح Chrome مزامنة تطبيقاتك والإشارات المرجعية والسجل وكلمات المرور وغير ذلك من الإعدادات على جميع الأجهزة.</translation>
-<translation id="859960207076826247">{0,plural, =0{‏هناك تحديث متاح لـ Chrome}=1{‏هناك تحديث واحد متاح لـ Chrome}two{‏هناك تحديث متاح لـ Chrome منذ يومين (#)}few{‏هناك تحديث متاح لـ Chrome منذ # أيام}many{‏هناك تحديث متاح لـ Chrome منذ # يومًا}other{‏هناك تحديث متاح لـ Chrome منذ # يوم}}</translation>
 <translation id="8606668294522778825">‏قد يستخدم Google Chrome خدمات الويب لتحسين تجربة التصفح. ويمكنك بشكل اختياري إيقاف هذه الخدمات. <ph name="BEGIN_LINK" />مزيد من المعلومات<ph name="END_LINK" /></translation>
 <translation id="8614913330719544658">‏لا يستجيب Google Chrome. هل تريد إعادة التشغيل الآن؟</translation>
 <translation id="8667808506758191620">جهاز <ph name="DEVICE_TYPE" /> مُحدّث.</translation>

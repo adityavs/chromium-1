@@ -64,9 +64,6 @@ class FakeContentPasswordManagerDriver : public mojom::PasswordManagerDriver {
                                int options,
                                const gfx::RectF& bounds) override {}
 
-  void ShowManualFallbackSuggestion(base::i18n::TextDirection text_direction,
-                                    const gfx::RectF& bounds) override {}
-
   void RecordSavePasswordProgress(const std::string& log) override {
     called_record_save_ = true;
     log_ = log;
@@ -80,6 +77,8 @@ class FakeContentPasswordManagerDriver : public mojom::PasswordManagerDriver {
 
   void CheckSafeBrowsingReputation(const GURL& form_action,
                                    const GURL& frame_url) override {}
+
+  void FocusedInputChanged(bool is_fillable, bool is_password_field) override {}
 
   // Records whether RecordSavePasswordProgress() gets called.
   bool called_record_save_;

@@ -31,23 +31,26 @@ class FileManagerBrowserTestBase : public extensions::ExtensionApiTest {
   FileManagerBrowserTestBase();
   ~FileManagerBrowserTestBase() override;
 
-  // ExtensionApiTest overrides.
+  // extensions::ExtensionApiTest:
   void SetUp() override;
   void SetUpCommandLine(base::CommandLine* command_line) override;
   bool SetUpUserDataDirectory() override;
   void SetUpInProcessBrowserTestFixture() override;
   void SetUpOnMainThread() override;
 
+  // Overrides for each FileManagerBrowserTest test extension type.
+  virtual GuestMode GetGuestMode() const = 0;
+  virtual const char* GetTestCaseName() const = 0;
+  virtual std::string GetFullTestCaseName() const = 0;
+  virtual const char* GetTestExtensionManifestName() const = 0;
+  virtual bool GetEnableDriveFs() const;
+  virtual bool GetRequiresStartupBrowser() const;
+  virtual bool GetNeedsZipSupport() const;
+
   // Launches the test extension from GetTestExtensionManifestName() and uses
   // it to drive the testing the actual FileManager component extension under
   // test by calling RunTestMessageLoop().
   void StartTest();
-
-  // Overrides for each FileManagerBrowserTest test extension type.
-  virtual GuestMode GetGuestMode() const = 0;
-  virtual bool GetEnableDriveFs() const;
-  virtual const char* GetTestCaseName() const = 0;
-  virtual const char* GetTestExtensionManifestName() const = 0;
 
  private:
   // Returns true if the test requires incognito mode.
@@ -59,10 +62,8 @@ class FileManagerBrowserTestBase : public extensions::ExtensionApiTest {
   // Returns true if the test requires DriveFS.
   bool IsDriveFsTest() const { return GetEnableDriveFs(); }
 
-  // Called during setup if needed, to create a drive integration service for
-  // the given |profile|. Caller owns the return result.
-  drive::DriveIntegrationService* CreateDriveIntegrationService(
-      Profile* profile);
+  // Returns true if the test requires zip/unzip support.
+  bool IsZipTest() const { return GetNeedsZipSupport(); }
 
   // Launches the test extension with manifest |manifest_name|. The extension
   // manifest_name file should reside in the specified |path| relative to the
@@ -80,8 +81,13 @@ class FileManagerBrowserTestBase : public extensions::ExtensionApiTest {
                  const base::DictionaryValue& value,
                  std::string* output);
 
-  // Called during tests to mount a crostini volume if needed. Returns the mount
-  // path of the volume.
+  // Called during setup if needed, to create a drive integration service for
+  // the given |profile|. Caller owns the return result.
+  drive::DriveIntegrationService* CreateDriveIntegrationService(
+      Profile* profile);
+
+  // Called during tests if needed to mount a crostini volume, and return the
+  // mount path of the volume.
   base::FilePath MaybeMountCrostini(
       const std::string& source_path,
       const std::vector<std::string>& mount_options);

@@ -13,7 +13,7 @@
 #include "chrome/browser/ui/browser_window.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
-#include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/extensions/api/url_handlers/url_handlers_parser.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
@@ -122,7 +122,7 @@ bool HostedAppBrowserController::IsForHostedApp(const Browser* browser) {
 // static
 bool HostedAppBrowserController::IsForExperimentalHostedAppBrowser(
     const Browser* browser) {
-  return base::FeatureList::IsEnabled(features::kDesktopPWAWindowing) &&
+  return base::FeatureList::IsEnabled(::features::kDesktopPWAWindowing) &&
          IsForHostedApp(browser);
 }
 
@@ -162,7 +162,7 @@ HostedAppBrowserController::HostedAppBrowserController(Browser* browser)
       // TODO(https://crbug.com/774918): Replace once there is a more explicit
       // indicator of a Bookmark App for an installable website.
       created_for_installed_pwa_(
-          base::FeatureList::IsEnabled(features::kDesktopPWAWindowing) &&
+          base::FeatureList::IsEnabled(::features::kDesktopPWAWindowing) &&
           UrlHandlers::GetUrlHandlers(GetExtension())) {
   browser_->tab_strip_model()->AddObserver(this);
 }
@@ -246,7 +246,9 @@ base::Optional<SkColor> HostedAppBrowserController::GetThemeColor() const {
   ExtensionRegistry* registry = ExtensionRegistry::Get(browser_->profile());
   const Extension* extension =
       registry->GetExtensionById(extension_id_, ExtensionRegistry::EVERYTHING);
-  return AppThemeColorInfo::GetThemeColor(extension);
+  if (extension)
+    return AppThemeColorInfo::GetThemeColor(extension);
+  return base::nullopt;
 }
 
 base::string16 HostedAppBrowserController::GetTitle() const {

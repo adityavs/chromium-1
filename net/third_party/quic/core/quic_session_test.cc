@@ -15,6 +15,7 @@
 #include "net/third_party/quic/core/quic_packets.h"
 #include "net/third_party/quic/core/quic_stream.h"
 #include "net/third_party/quic/core/quic_utils.h"
+#include "net/third_party/quic/platform/api/quic_expect_bug.h"
 #include "net/third_party/quic/platform/api/quic_flags.h"
 #include "net/third_party/quic/platform/api/quic_map_util.h"
 #include "net/third_party/quic/platform/api/quic_ptr_util.h"
@@ -1402,6 +1403,29 @@ TEST_P(QuicSessionTestServer, RetransmitFrames) {
   EXPECT_CALL(*stream6, RetransmitStreamData(_, _, _)).WillOnce(Return(true));
   EXPECT_CALL(*send_algorithm, OnApplicationLimited(_));
   session_.RetransmitFrames(frames, TLP_RETRANSMISSION);
+}
+
+// Regression test of b/110082001.
+TEST_P(QuicSessionTestServer, RetransmitLostDataCausesConnectionClose) {
+  // This test mimics the scenario when a dynamic stream retransmits lost data
+  // and causes connection close.
+  QuicConnectionPeer::SetSessionDecidesWhatToWrite(connection_);
+  TestStream* stream = session_.CreateOutgoingDynamicStream();
+  QuicStreamFrame frame(stream->id(), false, 0, 9);
+
+  EXPECT_CALL(*stream, HasPendingRetransmission())
+      .Times(2)
+      .WillOnce(Return(true))
+      .WillOnce(Return(false));
+  session_.OnFrameLost(QuicFrame(&frame));
+  // Retransmit stream data causes connection close. Stream has not sent fin
+  // yet, so an RST is sent.
+  EXPECT_CALL(*stream, OnCanWrite())
+      .WillOnce(Invoke(stream, &QuicStream::OnClose));
+  EXPECT_CALL(*connection_, SendControlFrame(_))
+      .WillOnce(Invoke(&session_, &TestSession::ClearControlFrame));
+  EXPECT_CALL(*connection_, OnStreamReset(stream->id(), _));
+  session_.OnCanWrite();
 }
 
 }  // namespace

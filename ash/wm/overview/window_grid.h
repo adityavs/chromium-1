@@ -70,8 +70,11 @@ class ASH_EXPORT WindowGrid : public aura::WindowObserver,
   // fit that height. Optionally animates the windows to their targets when
   // |animate| is true. If |ignored_item| is not null and is an item in
   // |window_list_|, that item is not positioned. This is for split screen.
+  // |transition| specifies the overview state when this function is called.
   void PositionWindows(bool animate,
-                       WindowSelectorItem* ignored_item = nullptr);
+                       WindowSelectorItem* ignored_item = nullptr,
+                       WindowSelector::OverviewTransition transition =
+                           WindowSelector::OverviewTransition::kInOverview);
 
   // Updates |selected_index_| according to the specified |direction| and calls
   // MoveSelectionWidget(). Returns |true| if the new selection index is out of
@@ -88,11 +91,13 @@ class ASH_EXPORT WindowGrid : public aura::WindowObserver,
       const aura::Window* window) const;
 
   // Adds |window| to the grid. Intended to be used by split view. |window|
-  // cannot already be on the grid.
-  void AddItem(aura::Window* window);
+  // cannot already be on the grid. If |reposition| is true, reposition all
+  // window items in the grid after adding the item.
+  void AddItem(aura::Window* window, bool reposition);
 
-  // Removes |selector_item| from the grid.
-  void RemoveItem(WindowSelectorItem* selector_item);
+  // Removes |selector_item| from the grid. If |reprosition| is ture, reposition
+  // all window items in the grid after removing the item.
+  void RemoveItem(WindowSelectorItem* selector_item, bool reposition);
 
   // Dims the items whose titles do not contain |pattern| and prevents their
   // selection. The pattern has its accents removed and is converted to
@@ -128,7 +133,8 @@ class ASH_EXPORT WindowGrid : public aura::WindowObserver,
   // WindowGrid.
   void OnWindowDragStarted(aura::Window* dragged_window);
   void OnWindowDragContinued(aura::Window* dragged_window,
-                             const gfx::Point& location_in_screen);
+                             const gfx::Point& location_in_screen,
+                             IndicatorState indicator_state);
   void OnWindowDragEnded(aura::Window* dragged_window,
                          const gfx::Point& location_in_screen);
 
@@ -202,10 +208,6 @@ class ASH_EXPORT WindowGrid : public aura::WindowObserver,
   // snapped window animation and reset all windows transform in WindowGrid
   // directly when the animation is completed.
   void SetWindowListNotAnimatedWhenExiting();
-
-  // Reset |selector_item|'s |should_animate_when_entering_|,
-  // |should_animate_when_exiting_| and |should_be_observed_when_exiting_|.
-  void ResetWindowListAnimationStates();
 
   // Starts a nudge, with |item| being the item that may be deleted. This method
   // calculates which items in |window_list_| are to be updated, and their

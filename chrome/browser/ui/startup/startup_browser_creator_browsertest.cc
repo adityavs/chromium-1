@@ -82,6 +82,7 @@ using testing::Return;
 #endif  // !defined(OS_CHROMEOS)
 
 #if BUILDFLAG(ENABLE_SUPERVISED_USERS)
+#include "chrome/browser/supervised_user/supervised_user_constants.h"
 #include "chrome/browser/supervised_user/supervised_user_navigation_observer.h"
 #include "chrome/browser/supervised_user/supervised_user_service.h"
 #include "chrome/browser/supervised_user/supervised_user_service_factory.h"
@@ -1025,7 +1026,8 @@ IN_PROC_BROWSER_TEST_F(StartupBrowserCreatorTest,
 class SupervisedUserBrowserCreatorTest : public InProcessBrowserTest {
  protected:
   void SetUpCommandLine(base::CommandLine* command_line) override {
-    command_line->AppendSwitchASCII(switches::kSupervisedUserId, "asdf");
+    command_line->AppendSwitchASCII(switches::kSupervisedUserId,
+                                    supervised_users::kChildAccountSUID);
   }
 };
 
@@ -1451,8 +1453,13 @@ IN_PROC_BROWSER_TEST_F(StartupBrowserCreatorWelcomeBackTest,
 }
 #endif  // defined(OS_WIN)
 
+#if defined(OS_LINUX)
+#define MAYBE_WelcomeBackStandardNoPolicy DISABLED_WelcomeBackStandardNoPolicy
+#else
+#define MAYBE_WelcomeBackStandardNoPolicy WelcomeBackStandardNoPolicy
+#endif
 IN_PROC_BROWSER_TEST_F(StartupBrowserCreatorWelcomeBackTest,
-                       WelcomeBackStandardNoPolicy) {
+                       MAYBE_WelcomeBackStandardNoPolicy) {
   ASSERT_NO_FATAL_FAILURE(
       StartBrowser(StartupBrowserCreator::WelcomeBackPage::kWelcomeStandard,
                    PolicyVariant()));

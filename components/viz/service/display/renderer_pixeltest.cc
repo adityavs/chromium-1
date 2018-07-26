@@ -102,11 +102,6 @@ ResourceId CreateGpuResource(scoped_refptr<ContextProvider> context_provider,
       mailbox, GL_LINEAR, allocation.texture_target, sync_token);
   gl_resource.size = size;
   gl_resource.format = format;
-  // We didn't allocate a GpuMemoryBuffer, but we want to set buffer_format for
-  // consistency with other callsites.
-  // TODO(piman): See if we can remove TransferableResource::buffer_format
-  // altogether, it looks redundant with format. crbug.com/836488
-  gl_resource.buffer_format = BufferFormat(format);
   gl_resource.color_space = std::move(color_space);
   auto release_callback = SingleReleaseCallback::Create(base::BindOnce(
       &DeleteTexture, std::move(context_provider), allocation.texture_id));
@@ -2596,7 +2591,7 @@ using BackgroundFilterRendererTypes =
 TYPED_TEST_CASE(RendererPixelTestWithBackgroundFilter,
                 BackgroundFilterRendererTypes);
 
-TYPED_TEST(RendererPixelTestWithBackgroundFilter, DISABLED_InvertFilter) {
+TYPED_TEST(RendererPixelTestWithBackgroundFilter, InvertFilter) {
   this->background_filters_.Append(
       cc::FilterOperation::CreateInvertFilter(1.f));
 

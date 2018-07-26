@@ -30,6 +30,7 @@
 #include "third_party/blink/public/platform/web_size.h"
 #include "third_party/blink/renderer/bindings/core/v8/string_or_trusted_html.h"
 #include "third_party/blink/renderer/core/css/css_style_declaration.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/mutation_observer.h"
 #include "third_party/blink/renderer/core/dom/mutation_observer_init.h"
 #include "third_party/blink/renderer/core/dom/mutation_record.h"
@@ -81,7 +82,6 @@
 #include "third_party/blink/renderer/modules/remoteplayback/html_media_element_remote_playback.h"
 #include "third_party/blink/renderer/modules/remoteplayback/remote_playback.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/text/platform_locale.h"
 
@@ -219,10 +219,12 @@ bool PreferHiddenVolumeControls(const Document& document) {
 
 // If you change this value, then also update the corresponding value in
 // LayoutTests/media/media-controls.js.
-double kTimeWithoutMouseMovementBeforeHidingMediaControls = 3;
-double kModernTimeWithoutMouseMovementBeforeHidingMediaControls = 2.5;
+constexpr TimeDelta kTimeWithoutMouseMovementBeforeHidingMediaControls =
+    TimeDelta::FromSeconds(3);
+constexpr TimeDelta kModernTimeWithoutMouseMovementBeforeHidingMediaControls =
+    TimeDelta::FromSecondsD(2.5);
 
-double GetTimeWithoutMouseMovementBeforeHidingMediaControls() {
+TimeDelta GetTimeWithoutMouseMovementBeforeHidingMediaControls() {
   return MediaControlsImpl::IsModern()
              ? kModernTimeWithoutMouseMovementBeforeHidingMediaControls
              : kTimeWithoutMouseMovementBeforeHidingMediaControls;
@@ -570,6 +572,8 @@ void MediaControlsImpl::InitializeControls() {
   }
 
   if (RuntimeEnabledFeatures::PictureInPictureEnabled() &&
+      GetDocument().GetSettings() &&
+      GetDocument().GetSettings()->GetPictureInPictureEnabled() &&
       MediaElement().IsHTMLVideoElement()) {
     picture_in_picture_button_ =
         new MediaControlPictureInPictureButtonElement(*this);
@@ -612,8 +616,7 @@ void MediaControlsImpl::InitializeControls() {
   overflow_list_->ParserAppendChild(
       toggle_closed_captions_button_->CreateOverflowElement(
           new MediaControlToggleClosedCaptionsButtonElement(*this)));
-  if (RuntimeEnabledFeatures::PictureInPictureEnabled() &&
-      MediaElement().IsHTMLVideoElement()) {
+  if (picture_in_picture_button_) {
     overflow_list_->ParserAppendChild(
         picture_in_picture_button_->CreateOverflowElement(
             new MediaControlPictureInPictureButtonElement(*this)));
@@ -1716,6 +1719,10 @@ void MediaControlsImpl::OnExitedFullscreen() {
 }
 
 void MediaControlsImpl::OnPictureInPictureChanged() {
+  // This will only be called if the media controls are listening to the
+  // Picture-in-Picture events which only happen when they provide a
+  // Picture-in-Picture button.
+  DCHECK(picture_in_picture_button_);
   picture_in_picture_button_->UpdateDisplayType();
 }
 

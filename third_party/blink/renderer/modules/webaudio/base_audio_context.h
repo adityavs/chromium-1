@@ -127,16 +127,12 @@ class MODULES_EXPORT BaseAudioContext
   AudioDestinationNode* destination() const;
 
   size_t CurrentSampleFrame() const {
-    return destination_node_->GetAudioDestinationHandler().CurrentSampleFrame();
+    return destination_handler_->CurrentSampleFrame();
   }
 
-  double currentTime() const {
-    return destination_node_->GetAudioDestinationHandler().CurrentTime();
-  }
+  double currentTime() const { return destination_handler_->CurrentTime(); }
 
-  float sampleRate() const {
-    return destination_node_->GetAudioDestinationHandler().SampleRate();
-  }
+  float sampleRate() const { return destination_handler_->SampleRate(); }
 
   String state() const;
   AudioContextState ContextState() const { return context_state_; }
@@ -251,14 +247,6 @@ class MODULES_EXPORT BaseAudioContext
   // Called at the end of each render quantum.
   void HandlePostRenderTasks();
 
-  // Keeps track of the number of connections made.
-  void IncrementConnectionCount() {
-    DCHECK(IsMainThread());
-    connection_count_++;
-  }
-
-  unsigned ConnectionCount() const { return connection_count_; }
-
   DeferredTaskHandler& GetDeferredTaskHandler() const {
     return *deferred_task_handler_;
   }
@@ -359,8 +347,13 @@ class MODULES_EXPORT BaseAudioContext
   // Returns the Document wich wich the instance is associated.
   Document* GetDocument() const;
 
+  const String& Uuid() const { return uuid_; }
+
  private:
   friend class AudioContextAutoplayTest;
+
+  // Unique ID for each context.
+  const String uuid_;
 
   bool is_cleared_;
   void Clear();
@@ -421,8 +414,6 @@ class MODULES_EXPORT BaseAudioContext
   // thread. Cleared by the main thread task once it has run.
   bool has_posted_cleanup_task_;
 
-  unsigned connection_count_;
-
   // Graph locking.
   scoped_refptr<DeferredTaskHandler> deferred_task_handler_;
 
@@ -449,6 +440,9 @@ class MODULES_EXPORT BaseAudioContext
   enum { kMaxNumberOfChannels = 32 };
 
   AudioIOPosition output_position_;
+
+  // The handler associated with the above |destination_node_|.
+  scoped_refptr<AudioDestinationHandler> destination_handler_;
 
   Member<AudioWorklet> audio_worklet_;
 

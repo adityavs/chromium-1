@@ -17,8 +17,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/aura/client/window_types.h"
-#include "ui/aura/env_observer.h"
-#include "ui/aura/window_tree_host_observer.h"
 #include "ui/display/display.h"
 
 namespace aura {
@@ -40,9 +38,6 @@ class Rect;
 }
 
 namespace ui {
-namespace mojom {
-enum class WindowType;
-}
 namespace test {
 class EventGenerator;
 }
@@ -69,9 +64,7 @@ class TestScreenshotDelegate;
 class TestSessionControllerClient;
 class UnifiedSystemTray;
 
-class AshTestBase : public testing::Test,
-                    public aura::EnvObserver,
-                    public aura::WindowTreeHostObserver {
+class AshTestBase : public testing::Test {
  public:
   AshTestBase();
   ~AshTestBase() override;
@@ -121,8 +114,8 @@ class AshTestBase : public testing::Test,
       int shell_window_id = kShellWindowId_Invalid);
 
   // Creates a visible top-level window. For Config::CLASSIC this creates a
-  // Window with a delegate. For Config::MASH this creates a window as if the
-  // client requested a top-level window.
+  // Window with a delegate. For Config::MASH_DEPRECATED this creates a window
+  // as if the client requested a top-level window.
   std::unique_ptr<aura::Window> CreateToplevelTestWindow(
       const gfx::Rect& bounds_in_screen = gfx::Rect(),
       int shell_window_id = kShellWindowId_Invalid);
@@ -156,16 +149,16 @@ class AshTestBase : public testing::Test,
   void ParentWindowInPrimaryRootWindow(aura::Window* window);
 
   // Returns the EventGenerator that uses screen coordinates and works
-  // across multiple displays. It createse a new generator if it
+  // across multiple displays. It creates a new generator if it
   // hasn't been created yet.
-  ui::test::EventGenerator& GetEventGenerator();
+  ui::test::EventGenerator* GetEventGenerator();
 
   // Convenience method to return the DisplayManager.
   display::DisplayManager* display_manager();
 
   // Test if moving a mouse to |point_in_screen| warps it to another
   // display.
-  bool TestIfMouseWarpsAt(ui::test::EventGenerator& event_generator,
+  bool TestIfMouseWarpsAt(ui::test::EventGenerator* event_generator,
                           const gfx::Point& point_in_screen);
 
  protected:
@@ -246,19 +239,7 @@ class AshTestBase : public testing::Test,
   ui::ws2::WindowTree* GetWindowTree();
 
  private:
-  std::unique_ptr<aura::Window> CreateTestWindowMash(
-      ui::mojom::WindowType window_type,
-      int shell_window_id,
-      std::map<std::string, std::vector<uint8_t>>* properties);
-
   void CreateWindowTreeIfNecessary();
-
-  // aura::EnvObserver:
-  void OnWindowInitialized(aura::Window* window) override;
-  void OnHostInitialized(aura::WindowTreeHost* host) override;
-
-  // aura::WindowTreeHostObserver:
-  void OnHostResized(aura::WindowTreeHost* host) override;
 
   bool setup_called_;
   bool teardown_called_;

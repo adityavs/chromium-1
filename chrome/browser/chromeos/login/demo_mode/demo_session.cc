@@ -8,8 +8,14 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "chrome/browser/browser_process.h"
+#include "chrome/browser/browser_process_platform_part.h"
+#include "chrome/browser/chromeos/login/demo_mode/demo_setup_controller.h"
+#include "chrome/browser/chromeos/policy/browser_policy_connector_chromeos.h"
+#include "chrome/browser/chromeos/settings/install_attributes.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/image_loader_client.h"
+#include "content/public/browser/browser_thread.h"
 
 namespace chromeos {
 
@@ -18,8 +24,9 @@ namespace {
 // Global DemoSession instance.
 DemoSession* g_demo_session = nullptr;
 
-// Whether the demo mode was forced on for tests.
-bool g_force_device_in_demo_mode = false;
+// Type of demo setup forced on for tests.
+DemoSession::EnrollmentType g_force_enrollment_type =
+    DemoSession::EnrollmentType::kNone;
 
 // The name of the offline demo resource image loader component.
 constexpr char kOfflineResourcesComponentName[] = "demo_mode_resources";
@@ -35,17 +42,43 @@ constexpr base::FilePath::CharType kOfflineResourcesComponentPath[] =
 constexpr base::FilePath::CharType kDemoAppsPath[] =
     FILE_PATH_LITERAL("android_demo_apps.squash");
 
+constexpr base::FilePath::CharType kExternalExtensionsPrefsPath[] =
+    FILE_PATH_LITERAL("demo_extensions.json");
+
+bool IsDemoModeOfflineEnrolled() {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  DCHECK(DemoSession::IsDeviceInDemoMode());
+  return DemoSession::GetEnrollmentType() ==
+         DemoSession::EnrollmentType::kOffline;
+}
+
 }  // namespace
 
 // static
 bool DemoSession::IsDeviceInDemoMode() {
-  // TODO(tbarzic): Implement this.
-  return g_force_device_in_demo_mode;
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  const EnrollmentType enrollment_type = GetEnrollmentType();
+  return enrollment_type != EnrollmentType::kNone &&
+         enrollment_type != EnrollmentType::kUnenrolled;
 }
 
 // static
-void DemoSession::SetDeviceInDemoModeForTesting(bool in_demo_mode) {
-  g_force_device_in_demo_mode = in_demo_mode;
+DemoSession::EnrollmentType DemoSession::GetEnrollmentType() {
+  if (g_force_enrollment_type != EnrollmentType::kNone)
+    return g_force_enrollment_type;
+
+  const policy::BrowserPolicyConnectorChromeOS* const connector =
+      g_browser_process->platform_part()->browser_policy_connector_chromeos();
+  bool enrolled = connector->GetInstallAttributes()->GetDomain() ==
+                  DemoSetupController::kDemoModeDomain;
+  return enrolled ? EnrollmentType::kOnline : EnrollmentType::kUnenrolled;
+}
+
+// static
+void DemoSession::SetDemoModeEnrollmentTypeForTesting(
+    EnrollmentType enrollment_type) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  g_force_enrollment_type = enrollment_type;
 }
 
 // static
@@ -119,7 +152,23 @@ base::FilePath DemoSession::GetDemoAppsPath() const {
   return offline_resources_path_.Append(kDemoAppsPath);
 }
 
-DemoSession::DemoSession() : weak_ptr_factory_(this) {}
+base::FilePath DemoSession::GetExternalExtensionsPrefsPath() const {
+  if (offline_resources_path_.empty())
+    return base::FilePath();
+  return offline_resources_path_.Append(kExternalExtensionsPrefsPath);
+}
+
+base::FilePath DemoSession::GetOfflineResourceAbsolutePath(
+    const base::FilePath& relative_path) const {
+  if (offline_resources_path_.empty())
+    return base::FilePath();
+  if (relative_path.ReferencesParent())
+    return base::FilePath();
+  return offline_resources_path_.Append(relative_path);
+}
+
+DemoSession::DemoSession()
+    : offline_enrolled_(IsDemoModeOfflineEnrolled()), weak_ptr_factory_(this) {}
 
 DemoSession::~DemoSession() = default;
 

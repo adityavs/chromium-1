@@ -29,6 +29,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/layout/custom/custom_layout_child.h"
 #include "third_party/blink/renderer/core/layout/layout_box_model_object.h"
+#include "third_party/blink/renderer/core/layout/min_max_size.h"
 #include "third_party/blink/renderer/core/layout/overflow_model.h"
 #include "third_party/blink/renderer/platform/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/wtf/compiler.h"
@@ -69,7 +70,7 @@ struct LayoutBoxRareData {
         override_logical_height_(-1),
         has_override_containing_block_content_logical_width_(false),
         has_override_containing_block_content_logical_height_(false),
-        has_previous_content_box_size_and_layout_overflow_rect_(false),
+        has_previous_content_box_rect_and_layout_overflow_rect_(false),
         percent_height_container_(nullptr),
         snap_container_(nullptr),
         snap_areas_(nullptr) {}
@@ -83,7 +84,7 @@ struct LayoutBoxRareData {
 
   bool has_override_containing_block_content_logical_width_ : 1;
   bool has_override_containing_block_content_logical_height_ : 1;
-  bool has_previous_content_box_size_and_layout_overflow_rect_ : 1;
+  bool has_previous_content_box_rect_and_layout_overflow_rect_ : 1;
 
   LayoutUnit override_containing_block_content_logical_width_;
   LayoutUnit override_containing_block_content_logical_height_;
@@ -108,8 +109,8 @@ struct LayoutBoxRareData {
 
   // Used by BoxPaintInvalidator. Stores the previous content box size and
   // layout overflow rect after the last paint invalidation. They are valid if
-  // m_hasPreviousContentBoxSizeAndLayoutOverflowRect is true.
-  LayoutSize previous_content_box_size_;
+  // m_hasPreviousContentBoxRectAndLayoutOverflowRect is true.
+  LayoutRect previous_content_box_rect_;
   LayoutRect previous_physical_layout_overflow_rect_;
 
   // Used by LocalFrameView::ScrollIntoView. When the scroll is sequenced
@@ -671,7 +672,7 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   FloatRect LocalBoundingBoxRectForAccessibility() const final;
 
   void UpdateLayout() override;
-  void Paint(const PaintInfo&, const LayoutPoint&) const override;
+  void Paint(const PaintInfo&) const override;
 
   virtual bool IsInSelfHitTestingPhase(HitTestAction hit_test_action) const {
     return hit_test_action == kHitTestForeground;
@@ -1067,9 +1068,11 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   // for this object.
   LayoutRect ClippingRect(const LayoutPoint& location) const;
 
-  virtual void PaintBoxDecorationBackground(const PaintInfo&,
-                                            const LayoutPoint&) const;
-  virtual void PaintMask(const PaintInfo&, const LayoutPoint&) const;
+  virtual void PaintBoxDecorationBackground(
+      const PaintInfo&,
+      const LayoutPoint& paint_offset) const;
+  virtual void PaintMask(const PaintInfo&,
+                         const LayoutPoint& paint_offset) const;
   void ImageChanged(WrappedImagePtr,
                     CanDeferInvalidation,
                     const IntRect* = nullptr) override;
@@ -1148,11 +1151,6 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
 
   LayoutPoint FlipForWritingModeForChild(const LayoutBox* child,
                                          const LayoutPoint&) const;
-
-  // NG: Like FlipForWritingModeForChild, except that it will not flip
-  // if LayoutBox will be painted by NG using fragment.Offset.
-  LayoutPoint FlipForWritingModeForChildForPaint(const LayoutBox* child,
-                                                 const LayoutPoint&) const;
 
   WARN_UNUSED_RESULT LayoutUnit FlipForWritingMode(LayoutUnit position) const {
     // The offset is in the block direction (y for horizontal writing modes, x
@@ -1374,12 +1372,12 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
     void SavePreviousSize() {
       GetLayoutBox().previous_size_ = GetLayoutBox().Size();
     }
-    void SavePreviousContentBoxSizeAndLayoutOverflowRect();
-    void ClearPreviousContentBoxSizeAndLayoutOverflowRect() {
+    void SavePreviousContentBoxRectAndLayoutOverflowRect();
+    void ClearPreviousContentBoxRectAndLayoutOverflowRect() {
       if (!GetLayoutBox().rare_data_)
         return;
       GetLayoutBox()
-          .rare_data_->has_previous_content_box_size_and_layout_overflow_rect_ =
+          .rare_data_->has_previous_content_box_rect_and_layout_overflow_rect_ =
           false;
     }
 
@@ -1397,19 +1395,44 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   }
 
   LayoutSize PreviousSize() const { return previous_size_; }
-  LayoutSize PreviousContentBoxSize() const {
+  LayoutRect PreviousContentBoxRect() const {
     return rare_data_ &&
                    rare_data_
-                       ->has_previous_content_box_size_and_layout_overflow_rect_
-               ? rare_data_->previous_content_box_size_
-               : PreviousSize();
+                       ->has_previous_content_box_rect_and_layout_overflow_rect_
+               ? rare_data_->previous_content_box_rect_
+               : LayoutRect(LayoutPoint(), PreviousSize());
   }
   LayoutRect PreviousPhysicalLayoutOverflowRect() const {
     return rare_data_ &&
                    rare_data_
-                       ->has_previous_content_box_size_and_layout_overflow_rect_
+                       ->has_previous_content_box_rect_and_layout_overflow_rect_
                ? rare_data_->previous_physical_layout_overflow_rect_
                : LayoutRect(LayoutPoint(), PreviousSize());
+  }
+
+  // This function calculates the preferred widths for an object.
+  //
+  // This function is only expected to be called if
+  // the boolean preferredLogicalWidthsDirty is true. It also MUST clear the
+  // boolean before returning.
+  //
+  // See INTRINSIC SIZES / PREFERRED LOGICAL WIDTHS in layout_object.h for more
+  // details about those widths.
+  //
+  // This function is public only for use by LayoutNG. Other callers should go
+  // through MinPreferredLogicalWidth/MaxPreferredLogicalWidth.
+  virtual void ComputePreferredLogicalWidths() {
+    ClearPreferredLogicalWidthsDirty();
+  }
+
+  // LayoutNG can use this function to update our cache of preferred logical
+  // widths when the layout object is managed by NG. Should not be called by
+  // regular code.
+  // Also clears the "dirty" flag for preferred widths.
+  void SetPreferredLogicalWidthsFromNG(MinMaxSize sizes) {
+    min_preferred_logical_width_ = sizes.min_size;
+    max_preferred_logical_width_ = sizes.max_size;
+    ClearPreferredLogicalWidthsDirty();
   }
 
  protected:
@@ -1596,18 +1619,6 @@ class CORE_EXPORT LayoutBox : public LayoutBoxModelObject {
   virtual void ComputeIntrinsicLogicalWidths(
       LayoutUnit& min_logical_width,
       LayoutUnit& max_logical_width) const;
-
-  // This function calculates the preferred widths for an object.
-  //
-  // This function is only expected to be called if
-  // the boolean preferredLogicalWidthsDirty is true. It also MUST clear the
-  // boolean before returning.
-  //
-  // See INTRINSIC SIZES / PREFERRED LOGICAL WIDTHS in LayoutObject.h for more
-  // details about those widths.
-  virtual void ComputePreferredLogicalWidths() {
-    ClearPreferredLogicalWidthsDirty();
-  }
 
   LayoutBoxRareData& EnsureRareData() {
     if (!rare_data_)

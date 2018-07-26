@@ -6,10 +6,15 @@ package org.chromium.chrome.browser;
 
 import android.app.Notification;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.annotation.Nullable;
 import android.support.v4.content.ContextCompat;
+
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GoogleApiAvailability;
 
 import org.chromium.base.Callback;
 import org.chromium.base.ContextUtils;
@@ -17,7 +22,6 @@ import org.chromium.base.VisibleForTesting;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.chrome.browser.banners.AppDetailsDelegate;
 import org.chromium.chrome.browser.customtabs.CustomTabsConnection;
-import org.chromium.chrome.browser.datausage.ExternalDataUseObserver;
 import org.chromium.chrome.browser.externalauth.ExternalAuthUtils;
 import org.chromium.chrome.browser.feedback.AsyncFeedbackSource;
 import org.chromium.chrome.browser.feedback.FeedbackCollector;
@@ -74,9 +78,7 @@ public abstract class AppHooks {
 
     @CalledByNative
     public static AppHooks get() {
-        if (sInstance == null) {
-            sInstance = new AppHooksImpl();
-        }
+        if (sInstance == null) sInstance = new AppHooksImpl();
         return sInstance;
     }
 
@@ -141,14 +143,6 @@ public abstract class AppHooks {
      */
     public ExternalAuthUtils createExternalAuthUtils() {
         return new ExternalAuthUtils();
-    }
-
-    /**
-     * @return An external observer of data use.
-     * @param nativePtr Pointer to the native ExternalDataUseObserver object.
-     */
-    public ExternalDataUseObserver createExternalDataUseObserver(long nativePtr) {
-        return new ExternalDataUseObserver(nativePtr);
     }
 
     /**
@@ -329,5 +323,30 @@ public abstract class AppHooks {
      */
     public Fido2ApiHandler createFido2ApiHandler() {
         return new Fido2ApiHandler();
+    }
+
+    /**
+     * Checks the Google Play services availability on the this device.
+     *
+     * This is a workaround for the
+     * versioned API of {@link GoogleApiAvailability#isGooglePlayServicesAvailable()}. The current
+     * Google Play services SDK version doesn't have this API yet.
+     *
+     * TODO(zqzhang): Remove this method after the SDK is updated.
+     *
+     * @return status code indicating whether there was an error. The possible return values are the
+     * same as {@link GoogleApiAvailability#isGooglePlayServicesAvailable()}.
+     */
+    public int isGoogleApiAvailableWithMinApkVersion(int minApkVersion) {
+        try {
+            PackageInfo gmsPackageInfo =
+                    ContextUtils.getApplicationContext().getPackageManager().getPackageInfo(
+                            GoogleApiAvailability.GOOGLE_PLAY_SERVICES_PACKAGE, /* flags= */ 0);
+            int apkVersion = gmsPackageInfo.versionCode;
+            if (apkVersion >= minApkVersion) return ConnectionResult.SUCCESS;
+        } catch (PackageManager.NameNotFoundException e) {
+            return ConnectionResult.SERVICE_MISSING;
+        }
+        return ConnectionResult.SERVICE_VERSION_UPDATE_REQUIRED;
     }
 }

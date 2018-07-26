@@ -47,7 +47,6 @@
 #include "content/browser/web_contents/web_contents_impl.h"
 #include "content/common/service_worker/service_worker_messages.h"
 #include "content/common/service_worker/service_worker_types.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
@@ -87,6 +86,7 @@
 #include "storage/browser/blob/blob_storage_context.h"
 #include "third_party/blink/public/common/service_worker/service_worker_status_code.h"
 #include "third_party/blink/public/common/service_worker/service_worker_type_converters.h"
+#include "third_party/blink/public/common/service_worker/service_worker_utils.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
@@ -525,8 +525,6 @@ class ConsoleMessageContextObserver
 
   // ServiceWorkerContextCoreObserver overrides.
   void OnReportConsoleMessage(int64_t version_id,
-                              int process_id,
-                              int thread_id,
                               const ConsoleMessage& console_message) override {
     messages_.push_back(console_message.message);
     if (messages_.size() == expected_message_count_) {
@@ -581,14 +579,14 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
                                  base::Unretained(this), worker_url));
 
     // Dispatch install on a worker.
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    base::Optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop install_run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
         base::BindOnce(&self::InstallOnIOThread, base::Unretained(this),
                        install_run_loop.QuitClosure(), &status));
     install_run_loop.Run();
-    ASSERT_EQ(expected_status, status);
+    ASSERT_EQ(expected_status, status.value());
 
     // Stop the worker.
     base::RunLoop stop_run_loop;
@@ -601,14 +599,14 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
 
   void ActivateTestHelper(const std::string& worker_url,
                           blink::ServiceWorkerStatusCode expected_status) {
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    base::Optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
         base::BindOnce(&self::ActivateOnIOThread, base::Unretained(this),
                        run_loop.QuitClosure(), &status));
     run_loop.Run();
-    ASSERT_EQ(expected_status, status);
+    ASSERT_EQ(expected_status, status.value());
   }
 
   void FetchOnRegisteredWorker(
@@ -619,7 +617,7 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
         shell()->web_contents()->GetBrowserContext());
     bool prepare_result = false;
     FetchResult fetch_result;
-    fetch_result.status = blink::SERVICE_WORKER_ERROR_FAILED;
+    fetch_result.status = blink::ServiceWorkerStatusCode::kErrorFailed;
     base::RunLoop fetch_run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
@@ -631,7 +629,7 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
     *result = fetch_result.result;
     *response = fetch_result.response;
     *blob_data_handle = std::move(fetch_result.blob_data_handle);
-    ASSERT_EQ(blink::SERVICE_WORKER_OK, fetch_result.status);
+    ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, fetch_result.status);
   }
 
   void SetUpRegistrationOnIOThread(const std::string& worker_url) {
@@ -694,14 +692,14 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
 
   void StartWorker(blink::ServiceWorkerStatusCode expected_status) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    base::Optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop start_run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
         base::BindOnce(&self::StartOnIOThread, base::Unretained(this),
                        start_run_loop.QuitClosure(), &status));
     start_run_loop.Run();
-    ASSERT_EQ(expected_status, status);
+    ASSERT_EQ(expected_status, status.value());
   }
 
   void StopWorker() {
@@ -717,18 +715,18 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
   void StoreRegistration(int64_t version_id,
                          blink::ServiceWorkerStatusCode expected_status) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    base::Optional<blink::ServiceWorkerStatusCode> status;
     base::RunLoop store_run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
         base::BindOnce(&self::StoreOnIOThread, base::Unretained(this),
                        store_run_loop.QuitClosure(), &status, version_id));
     store_run_loop.Run();
-    ASSERT_EQ(expected_status, status);
+    ASSERT_EQ(expected_status, status.value());
 
     RunOnIOThread(
         base::BindOnce(&self::NotifyDoneInstallingRegistrationOnIOThread,
-                       base::Unretained(this), status));
+                       base::Unretained(this), status.value()));
   }
 
   void UpdateRegistration(int64_t registration_id,
@@ -749,7 +747,8 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
                              const GURL& origin,
                              blink::ServiceWorkerStatusCode expected_status) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::UI));
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    blink::ServiceWorkerStatusCode status =
+        blink::ServiceWorkerStatusCode::kErrorFailed;
     base::RunLoop run_loop;
     BrowserThread::PostTask(
         BrowserThread::IO, FROM_HERE,
@@ -784,15 +783,16 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
   }
 
   void StartOnIOThread(const base::Closure& done,
-                       blink::ServiceWorkerStatusCode* result) {
+                       base::Optional<blink::ServiceWorkerStatusCode>* result) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
     version_->SetMainScriptHttpResponseInfo(CreateHttpResponseInfo());
     version_->StartWorker(ServiceWorkerMetrics::EventType::UNKNOWN,
                           CreateReceiver(BrowserThread::UI, done, result));
   }
 
-  void InstallOnIOThread(const base::Closure& done,
-                         blink::ServiceWorkerStatusCode* result) {
+  void InstallOnIOThread(
+      const base::RepeatingClosure& done,
+      base::Optional<blink::ServiceWorkerStatusCode>* result) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
     version_->RunAfterStartWorker(
         ServiceWorkerMetrics::EventType::INSTALL,
@@ -802,22 +802,22 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
 
   void DispatchInstallEventOnIOThread(
       const base::Closure& done,
-      blink::ServiceWorkerStatusCode* result,
+      base::Optional<blink::ServiceWorkerStatusCode>* result,
       blink::ServiceWorkerStatusCode start_worker_status) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
-    ASSERT_EQ(blink::SERVICE_WORKER_OK, start_worker_status);
+    ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, start_worker_status);
     version_->SetStatus(ServiceWorkerVersion::INSTALLING);
     int request_id =
         version_->StartRequest(ServiceWorkerMetrics::EventType::INSTALL,
                                CreateReceiver(BrowserThread::UI, done, result));
-    version_->event_dispatcher()->DispatchInstallEvent(
+    version_->endpoint()->DispatchInstallEvent(
         base::BindOnce(&self::ReceiveInstallEventOnIOThread,
                        base::Unretained(this), done, result, request_id));
   }
 
   void ReceiveInstallEventOnIOThread(
       const base::Closure& done,
-      blink::ServiceWorkerStatusCode* out_result,
+      base::Optional<blink::ServiceWorkerStatusCode>* out_result,
       int request_id,
       blink::mojom::ServiceWorkerEventStatus status,
       bool has_fetch_handler,
@@ -836,7 +836,7 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
   }
 
   void StoreOnIOThread(const base::Closure& done,
-                       blink::ServiceWorkerStatusCode* result,
+                       base::Optional<blink::ServiceWorkerStatusCode>* result,
                        int64_t version_id) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
     ServiceWorkerVersion* version =
@@ -846,8 +846,9 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
         CreateReceiver(BrowserThread::UI, done, result));
   }
 
-  void ActivateOnIOThread(const base::Closure& done,
-                          blink::ServiceWorkerStatusCode* result) {
+  void ActivateOnIOThread(
+      const base::RepeatingClosure& done,
+      base::Optional<blink::ServiceWorkerStatusCode>* result) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
     version_->RunAfterStartWorker(
         ServiceWorkerMetrics::EventType::ACTIVATE,
@@ -857,16 +858,16 @@ class ServiceWorkerVersionBrowserTest : public ServiceWorkerBrowserTest {
 
   void DispatchActivateEventOnIOThread(
       const base::Closure& done,
-      blink::ServiceWorkerStatusCode* result,
+      base::Optional<blink::ServiceWorkerStatusCode>* result,
       blink::ServiceWorkerStatusCode start_worker_status) {
     ASSERT_TRUE(BrowserThread::CurrentlyOn(BrowserThread::IO));
-    ASSERT_EQ(blink::SERVICE_WORKER_OK, start_worker_status);
+    ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, start_worker_status);
     version_->SetStatus(ServiceWorkerVersion::ACTIVATING);
     registration_->SetActiveVersion(version_.get());
     int request_id =
         version_->StartRequest(ServiceWorkerMetrics::EventType::INSTALL,
                                CreateReceiver(BrowserThread::UI, done, result));
-    version_->event_dispatcher()->DispatchActivateEvent(
+    version_->endpoint()->DispatchActivateEvent(
         version_->CreateSimpleEventCallback(request_id));
   }
 
@@ -1009,14 +1010,14 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, StartAndStop) {
                                "/service_worker/worker.js"));
 
   // Start a worker.
-  blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+  base::Optional<blink::ServiceWorkerStatusCode> status;
   base::RunLoop start_run_loop;
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
       base::BindOnce(&self::StartOnIOThread, base::Unretained(this),
                      start_run_loop.QuitClosure(), &status));
   start_run_loop.Run();
-  ASSERT_EQ(blink::SERVICE_WORKER_OK, status);
+  ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, status.value());
 
   // Stop the worker.
   base::RunLoop stop_run_loop;
@@ -1036,14 +1037,14 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                                base::Unretained(this),
                                "/service_worker/worker.js"));
   // Start a worker.
-  blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+  base::Optional<blink::ServiceWorkerStatusCode> status;
   base::RunLoop start_run_loop;
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
       base::BindOnce(&self::StartOnIOThread, base::Unretained(this),
                      start_run_loop.QuitClosure(), &status));
   start_run_loop.Run();
-  ASSERT_EQ(blink::SERVICE_WORKER_OK, status);
+  ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, status.value());
 
   // Expect no PageVisits count.
   EXPECT_EQ(nullptr, base::StatisticsRecorder::FindHistogram(
@@ -1068,7 +1069,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, StartNotFound) {
                                "/service_worker/nonexistent.js"));
 
   // Start a worker for nonexistent URL.
-  StartWorker(blink::SERVICE_WORKER_ERROR_NETWORK);
+  StartWorker(blink::ServiceWorkerStatusCode::kErrorNetwork);
 }
 
 #if defined(ANDROID)
@@ -1095,10 +1096,11 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
   version_->script_cache_map()->SetResources(records);
 
   // Store the registration.
-  StoreRegistration(version_->version_id(), blink::SERVICE_WORKER_OK);
+  StoreRegistration(version_->version_id(),
+                    blink::ServiceWorkerStatusCode::kOk);
 
   // Start the worker. We'll fail to read the resource.
-  StartWorker(blink::SERVICE_WORKER_ERROR_DISK_CACHE);
+  StartWorker(blink::ServiceWorkerStatusCode::kErrorDiskCache);
   EXPECT_EQ(ServiceWorkerVersion::REDUNDANT, version_->status());
 
   // The registration should be deleted from storage since the broken worker was
@@ -1107,15 +1109,17 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                                base::Unretained(this), registration_->id()));
   FindRegistrationForId(registration_->id(),
                         registration_->pattern().GetOrigin(),
-                        blink::SERVICE_WORKER_ERROR_NOT_FOUND);
+                        blink::ServiceWorkerStatusCode::kErrorNotFound);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        ReadResourceFailure_WaitingWorker) {
   StartServerAndNavigateToSetup();
   // Create a registration and active version.
-  InstallTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
-  ActivateTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/worker.js",
+                    blink::ServiceWorkerStatusCode::kOk);
+  ActivateTestHelper("/service_worker/worker.js",
+                     blink::ServiceWorkerStatusCode::kOk);
   ASSERT_TRUE(registration_->active_version());
 
   // Give the version a controllee.
@@ -1134,12 +1138,12 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
       ServiceWorkerDatabase::ResourceRecord(31, version_->script_url(), 100)};
   registration_->waiting_version()->script_cache_map()->SetResources(records);
   StoreRegistration(registration_->waiting_version()->version_id(),
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
 
   // Start the broken worker. We'll fail to read from disk and the worker should
   // be doomed.
   StopWorker();  // in case it's already running
-  StartWorker(blink::SERVICE_WORKER_ERROR_DISK_CACHE);
+  StartWorker(blink::ServiceWorkerStatusCode::kErrorDiskCache);
   EXPECT_EQ(ServiceWorkerVersion::REDUNDANT, version_->status());
 
   // The registration should still be in storage since the waiting worker was
@@ -1148,25 +1152,27 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                                base::Unretained(this), registration_->id()));
   FindRegistrationForId(registration_->id(),
                         registration_->pattern().GetOrigin(),
-                        blink::SERVICE_WORKER_OK);
+                        blink::ServiceWorkerStatusCode::kOk);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, Install) {
   StartServerAndNavigateToSetup();
-  InstallTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/worker.js",
+                    blink::ServiceWorkerStatusCode::kOk);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        InstallWithWaitUntil_Fulfilled) {
   StartServerAndNavigateToSetup();
   InstallTestHelper("/service_worker/worker_install_fulfilled.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        InstallWithFetchHandler) {
   StartServerAndNavigateToSetup();
-  InstallTestHelper("/service_worker/fetch_event.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/fetch_event.js",
+                    blink::ServiceWorkerStatusCode::kOk);
   EXPECT_EQ(ServiceWorkerVersion::FetchHandlerExistence::EXISTS,
             version_->fetch_handler_existence());
 }
@@ -1174,7 +1180,8 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        InstallWithoutFetchHandler) {
   StartServerAndNavigateToSetup();
-  InstallTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/worker.js",
+                    blink::ServiceWorkerStatusCode::kOk);
   EXPECT_EQ(ServiceWorkerVersion::FetchHandlerExistence::DOES_NOT_EXIST,
             version_->fetch_handler_existence());
 }
@@ -1187,30 +1194,34 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
       base::Bind(&VerifyServiceWorkerHeaderInRequest));
   StartServerAndNavigateToSetup();
   InstallTestHelper("/service_worker/generated_sw.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        Activate_NoEventListener) {
   StartServerAndNavigateToSetup();
-  InstallTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
-  ActivateTestHelper("/service_worker/worker.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/worker.js",
+                    blink::ServiceWorkerStatusCode::kOk);
+  ActivateTestHelper("/service_worker/worker.js",
+                     blink::ServiceWorkerStatusCode::kOk);
   ASSERT_EQ(ServiceWorkerVersion::ACTIVATING, version_->status());
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, Activate_Rejected) {
   StartServerAndNavigateToSetup();
   InstallTestHelper("/service_worker/worker_activate_rejected.js",
-                    blink::SERVICE_WORKER_OK);
-  ActivateTestHelper("/service_worker/worker_activate_rejected.js",
-                     blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED);
+                    blink::ServiceWorkerStatusCode::kOk);
+  ActivateTestHelper(
+      "/service_worker/worker_activate_rejected.js",
+      blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                        InstallWithWaitUntil_Rejected) {
   StartServerAndNavigateToSetup();
-  InstallTestHelper("/service_worker/worker_install_rejected.js",
-                    blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED);
+  InstallTestHelper(
+      "/service_worker/worker_install_rejected.js",
+      blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected);
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
@@ -1226,14 +1237,15 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
                                &console_listener));
 
   // Dispatch install on a worker.
-  blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+  base::Optional<blink::ServiceWorkerStatusCode> status;
   base::RunLoop install_run_loop;
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
       base::BindOnce(&self::InstallOnIOThread, base::Unretained(this),
                      install_run_loop.QuitClosure(), &status));
   install_run_loop.Run();
-  ASSERT_EQ(blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED, status);
+  ASSERT_EQ(blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected,
+            status.value());
 
   const base::string16 expected =
       base::ASCIIToUTF16("Rejecting oninstall event");
@@ -1249,7 +1261,7 @@ class WaitForLoaded : public EmbeddedWorkerInstance::Listener {
  public:
   explicit WaitForLoaded(const base::Closure& quit) : quit_(quit) {}
 
-  void OnThreadStarted() override {
+  void OnScriptEvaluationStart() override {
     DCHECK_CURRENTLY_ON(BrowserThread::IO);
     BrowserThread::PostTask(BrowserThread::UI, FROM_HERE, quit_);
   }
@@ -1265,7 +1277,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutStartingWorker) {
                                "/service_worker/while_true_worker.js"));
 
   // Start a worker, waiting until the script is loaded.
-  blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+  base::Optional<blink::ServiceWorkerStatusCode> status;
   base::RunLoop start_run_loop;
   base::RunLoop load_run_loop;
   WaitForLoaded wait_for_load(load_run_loop.QuitClosure());
@@ -1282,7 +1294,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutStartingWorker) {
                                &wait_for_load));
 
   // The script has loaded but start has not completed yet.
-  ASSERT_EQ(blink::SERVICE_WORKER_ERROR_FAILED, status);
+  ASSERT_FALSE(status);
   EXPECT_EQ(EmbeddedWorkerStatus::STARTING, version_->running_status());
 
   // Simulate execution timeout. Use a delay to prevent killing the worker
@@ -1292,7 +1304,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutStartingWorker) {
       base::TimeDelta::FromMilliseconds(100));
   start_run_loop.Run();
 
-  EXPECT_EQ(blink::SERVICE_WORKER_ERROR_TIMEOUT, status);
+  EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorTimeout, status.value());
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutWorkerInEvent) {
@@ -1302,14 +1314,14 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutWorkerInEvent) {
                      "/service_worker/while_true_in_install_worker.js"));
 
   // Start a worker.
-  blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+  base::Optional<blink::ServiceWorkerStatusCode> status;
   base::RunLoop start_run_loop;
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
       base::BindOnce(&self::StartOnIOThread, base::Unretained(this),
                      start_run_loop.QuitClosure(), &status));
   start_run_loop.Run();
-  ASSERT_EQ(blink::SERVICE_WORKER_OK, status);
+  ASSERT_EQ(blink::ServiceWorkerStatusCode::kOk, status.value());
 
   // Dispatch an event.
   base::RunLoop install_run_loop;
@@ -1327,7 +1339,8 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, TimeoutWorkerInEvent) {
 
   // Terminating a worker, even one in an infinite loop, is treated as if
   // waitUntil was rejected in the renderer code.
-  EXPECT_EQ(blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED, status);
+  EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected,
+            status.value());
 }
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, FetchEvent_Response) {
@@ -1335,9 +1348,10 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, FetchEvent_Response) {
   ServiceWorkerFetchDispatcher::FetchEventResult result;
   ServiceWorkerResponse response;
   std::unique_ptr<storage::BlobDataHandle> blob_data_handle;
-  InstallTestHelper("/service_worker/fetch_event.js", blink::SERVICE_WORKER_OK);
+  InstallTestHelper("/service_worker/fetch_event.js",
+                    blink::ServiceWorkerStatusCode::kOk);
   ActivateTestHelper("/service_worker/fetch_event.js",
-                     blink::SERVICE_WORKER_OK);
+                     blink::ServiceWorkerStatusCode::kOk);
 
   FetchOnRegisteredWorker(&result, &response, &blob_data_handle);
   ASSERT_EQ(ServiceWorkerFetchDispatcher::FetchEventResult::kGotResponse,
@@ -1364,9 +1378,9 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
   std::unique_ptr<storage::BlobDataHandle> blob_data_handle;
   const base::Time start_time(base::Time::Now());
   InstallTestHelper("/service_worker/fetch_event_response_via_cache.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
   ActivateTestHelper("/service_worker/fetch_event_response_via_cache.js",
-                     blink::SERVICE_WORKER_OK);
+                     blink::ServiceWorkerStatusCode::kOk);
 
   FetchOnRegisteredWorker(&result, &response1, &blob_data_handle);
   ASSERT_EQ(ServiceWorkerFetchDispatcher::FetchEventResult::kGotResponse,
@@ -1394,9 +1408,9 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
   ServiceWorkerResponse response;
   std::unique_ptr<storage::BlobDataHandle> blob_data_handle;
   InstallTestHelper("/service_worker/fetch_event_rejected.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
   ActivateTestHelper("/service_worker/fetch_event_rejected.js",
-                     blink::SERVICE_WORKER_OK);
+                     blink::ServiceWorkerStatusCode::kOk);
 
   ConsoleListener console_listener;
   RunOnIOThread(base::BindOnce(&EmbeddedWorkerInstance::AddObserver,
@@ -1464,10 +1478,10 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
   // be found.
   {
     blink::ServiceWorkerStatusCode status =
-        blink::SERVICE_WORKER_ERROR_MAX_VALUE;
+        blink::ServiceWorkerStatusCode::kErrorFailed;
     bool update_found = true;
     UpdateRegistration(registration_id, &status, &update_found);
-    EXPECT_EQ(blink::SERVICE_WORKER_OK, status);
+    EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     EXPECT_FALSE(update_found);
   }
   // The last update time should be unchanged.
@@ -1489,10 +1503,10 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
   // should be found.
   {
     blink::ServiceWorkerStatusCode status =
-        blink::SERVICE_WORKER_ERROR_MAX_VALUE;
+        blink::ServiceWorkerStatusCode::kErrorFailed;
     bool update_found = false;
     UpdateRegistration(registration_id, &status, &update_found);
-    EXPECT_EQ(blink::SERVICE_WORKER_OK, status);
+    EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status);
     EXPECT_TRUE(update_found);
   }
   // The last update time should be bumped.
@@ -1532,7 +1546,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, FetchWithSaveData) {
       SetBrowserClientForTesting(&content_browser_client);
   shell()->web_contents()->GetRenderViewHost()->OnWebkitPreferencesChanged();
   InstallTestHelper("/service_worker/fetch_in_install.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
   SetBrowserClientForTesting(old_client);
 }
 
@@ -1547,7 +1561,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest,
       SetBrowserClientForTesting(&content_browser_client);
   shell()->web_contents()->GetRenderViewHost()->OnWebkitPreferencesChanged();
   InstallTestHelper("/service_worker/generated_sw.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
   SetBrowserClientForTesting(old_client);
 }
 
@@ -1559,7 +1573,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, FetchWithoutSaveData) {
   ContentBrowserClient* old_client =
       SetBrowserClientForTesting(&content_browser_client);
   InstallTestHelper("/service_worker/fetch_in_install.js",
-                    blink::SERVICE_WORKER_OK);
+                    blink::ServiceWorkerStatusCode::kOk);
   SetBrowserClientForTesting(old_client);
 }
 
@@ -2174,7 +2188,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerNavigationPreloadTest, NetworkError) {
 
 IN_PROC_BROWSER_TEST_F(ServiceWorkerNavigationPreloadTest,
                        CanceledByInterceptor) {
-  if (ServiceWorkerUtils::IsServicificationEnabled()) {
+  if (blink::ServiceWorkerUtils::IsServicificationEnabled()) {
     // This is a test for a ResourceDispatcherHost interceptor cancelling the
     // Navigation Preload request. The analogue for the
     // NetworkService/ServiceWorker*Loader code path would be throttles, but
@@ -2443,7 +2457,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerNavigationPreloadTest,
 // correctly.
 IN_PROC_BROWSER_TEST_F(ServiceWorkerNavigationPreloadTest,
                        RespondWithNavigationPreloadWithMimeSniffing) {
-  if (ServiceWorkerUtils::IsServicificationEnabled()) {
+  if (blink::ServiceWorkerUtils::IsServicificationEnabled()) {
     // When S13nSW/NetworkService is enabled, we don't do MIME sniffing
     // (https://crbug.com/771118), so just skip this test. Also, this test was
     // meant to test an internal quirk of MimeSniffingResourceHandler, which
@@ -2607,7 +2621,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserTest, RendererCrash) {
   RunOnIOThread(base::BindOnce(&self::SetUpRegistrationOnIOThread,
                                base::Unretained(this),
                                "/service_worker/worker.js"));
-  StartWorker(blink::SERVICE_WORKER_OK);
+  StartWorker(blink::ServiceWorkerStatusCode::kOk);
 
   // Crash the renderer process. The version should stop.
   base::RunLoop run_loop;
@@ -2643,7 +2657,7 @@ class ServiceWorkerBlackBoxBrowserTest : public ServiceWorkerBrowserTest {
       scoped_refptr<ServiceWorkerRegistration> registration) {
     *out_status = status;
     if (!registration.get())
-      EXPECT_NE(blink::SERVICE_WORKER_OK, status);
+      EXPECT_NE(blink::ServiceWorkerStatusCode::kOk, status);
     continuation.Run();
   }
 };
@@ -2727,12 +2741,13 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerBlackBoxBrowserTest, Registration) {
 
   // Should not be able to find it.
   {
-    blink::ServiceWorkerStatusCode status = blink::SERVICE_WORKER_ERROR_FAILED;
+    blink::ServiceWorkerStatusCode status =
+        blink::ServiceWorkerStatusCode::kErrorFailed;
     RunOnIOThread(base::Bind(
         &ServiceWorkerBlackBoxBrowserTest::FindRegistrationOnIO,
         base::Unretained(this),
         embedded_test_server()->GetURL("/service_worker/empty.html"), &status));
-    EXPECT_EQ(blink::SERVICE_WORKER_ERROR_NOT_FOUND, status);
+    EXPECT_EQ(blink::ServiceWorkerStatusCode::kErrorNotFound, status);
   }
 }
 
@@ -2828,7 +2843,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserV8CacheTest, Restart) {
     cache_updated_closure_ = cached_metadata_run_loop.QuitClosure();
 
     // Start a worker.
-    StartWorker(blink::SERVICE_WORKER_OK);
+    StartWorker(blink::ServiceWorkerStatusCode::kOk);
 
     // Wait for the metadata to be stored. This run loop should finish when
     // OnCachedMetadataUpdated() is called.
@@ -2845,7 +2860,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserV8CacheTest, Restart) {
     base::RunLoop cached_metadata_run_loop;
     cache_updated_closure_ = cached_metadata_run_loop.QuitClosure();
     // Restart the worker.
-    StartWorker(blink::SERVICE_WORKER_OK);
+    StartWorker(blink::ServiceWorkerStatusCode::kOk);
     // Wait for the matadata to be stored. This run loop should finish when
     // OnCachedMetadataUpdated() is called.
     cached_metadata_run_loop.Run();
@@ -2903,7 +2918,7 @@ IN_PROC_BROWSER_TEST_F(ServiceWorkerVersionBrowserV8FullCodeCacheTest,
   cache_updated_closure_ = cached_metadata_run_loop.QuitClosure();
 
   // Start a worker.
-  StartWorker(blink::SERVICE_WORKER_OK);
+  StartWorker(blink::ServiceWorkerStatusCode::kOk);
 
   // Wait for the metadata to be stored. This run loop should finish when
   // OnCachedMetadataUpdated() is called.

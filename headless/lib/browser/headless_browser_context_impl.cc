@@ -18,11 +18,9 @@
 #include "headless/lib/browser/headless_browser_context_options.h"
 #include "headless/lib/browser/headless_browser_impl.h"
 #include "headless/lib/browser/headless_browser_main_parts.h"
-#include "headless/lib/browser/headless_net_log.h"
 #include "headless/lib/browser/headless_permission_manager.h"
 #include "headless/lib/browser/headless_url_request_context_getter.h"
-#include "headless/public/util/black_hole_protocol_handler.h"
-#include "headless/public/util/in_memory_protocol_handler.h"
+#include "net/log/net_log.h"
 #include "net/url_request/url_request_context.h"
 #include "ui/base/resource/resource_bundle.h"
 
@@ -37,7 +35,6 @@ class HeadlessResourceContext : public content::ResourceContext {
   ~HeadlessResourceContext() override;
 
   // ResourceContext implementation:
-  net::HostResolver* GetHostResolver() override;
   net::URLRequestContext* GetRequestContext() override;
 
   // Configure the URL request context getter to be used for resource fetching.
@@ -67,11 +64,6 @@ HeadlessResourceContext::~HeadlessResourceContext() {
   DCHECK(content::BrowserThread::CurrentlyOn(content::BrowserThread::IO));
 }
 
-net::HostResolver* HeadlessResourceContext::GetHostResolver() {
-  CHECK(url_request_context_getter_);
-  return url_request_context_getter_->GetURLRequestContext()->host_resolver();
-}
-
 net::URLRequestContext* HeadlessResourceContext::GetRequestContext() {
   CHECK(url_request_context_getter_);
   return url_request_context_getter_->GetURLRequestContext();
@@ -83,7 +75,9 @@ HeadlessBrowserContextImpl::HeadlessBrowserContextImpl(
     : browser_(browser),
       context_options_(std::move(context_options)),
       resource_context_(std::make_unique<HeadlessResourceContext>()),
-      permission_manager_(std::make_unique<HeadlessPermissionManager>(this)) {
+      permission_controller_delegate_(
+          std::make_unique<HeadlessPermissionManager>(this)),
+      net_log_(new net::NetLog()) {
   InitWhileIOAllowed();
 }
 
@@ -98,6 +92,8 @@ HeadlessBrowserContextImpl::~HeadlessBrowserContextImpl() {
     content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
                                        resource_context_.release());
   }
+  content::BrowserThread::DeleteSoon(content::BrowserThread::IO, FROM_HERE,
+                                     net_log_.release());
 
   ShutdownStoragePartitions();
 
@@ -251,8 +247,9 @@ HeadlessBrowserContextImpl::GetSSLHostStateDelegate() {
   return nullptr;
 }
 
-content::PermissionManager* HeadlessBrowserContextImpl::GetPermissionManager() {
-  return permission_manager_.get();
+content::PermissionControllerDelegate*
+HeadlessBrowserContextImpl::GetPermissionControllerDelegate() {
+  return permission_controller_delegate_.get();
 }
 
 content::BackgroundFetchDelegate*
@@ -277,8 +274,8 @@ net::URLRequestContextGetter* HeadlessBrowserContextImpl::CreateRequestContext(
       content::BrowserThread::GetTaskRunnerForThread(
           content::BrowserThread::IO),
       protocol_handlers, context_options_->TakeProtocolHandlers(),
-      std::move(request_interceptors), context_options_.get(),
-      browser_->net_log(), this);
+      std::move(request_interceptors), context_options_.get(), net_log_.get(),
+      this);
   resource_context_->set_url_request_context_getter(url_request_getter_);
   return url_request_getter_.get();
 }
@@ -369,8 +366,7 @@ HeadlessNetworkConditions HeadlessBrowserContextImpl::GetNetworkConditions() {
 
 HeadlessBrowserContext::Builder::Builder(HeadlessBrowserImpl* browser)
     : browser_(browser),
-      options_(new HeadlessBrowserContextOptions(browser->options())),
-      enable_http_and_https_if_mojo_used_(false) {}
+      options_(new HeadlessBrowserContextOptions(browser->options())) {}
 
 HeadlessBrowserContext::Builder::~Builder() = default;
 
@@ -450,19 +446,6 @@ HeadlessBrowserContext::Builder::SetBlockNewWebContents(
 }
 
 HeadlessBrowserContext::Builder&
-HeadlessBrowserContext::Builder::SetAllowCookies(bool allow_cookies) {
-  options_->allow_cookies_ = allow_cookies;
-  return *this;
-}
-
-HeadlessBrowserContext::Builder&
-HeadlessBrowserContext::Builder::EnableUnsafeNetworkAccessWithMojoBindings(
-    bool enable_http_and_https_if_mojo_used) {
-  enable_http_and_https_if_mojo_used_ = enable_http_and_https_if_mojo_used;
-  return *this;
-}
-
-HeadlessBrowserContext::Builder&
 HeadlessBrowserContext::Builder::SetOverrideWebPreferencesCallback(
     base::RepeatingCallback<void(WebPreferences*)> callback) {
   options_->override_web_preferences_callback_ = std::move(callback);
@@ -470,17 +453,6 @@ HeadlessBrowserContext::Builder::SetOverrideWebPreferencesCallback(
 }
 
 HeadlessBrowserContext* HeadlessBrowserContext::Builder::Build() {
-  if (!mojo_bindings_.empty()) {
-    // Unless you know what you're doing it's unsafe to allow http/https for a
-    // context with mojo bindings.
-    if (!enable_http_and_https_if_mojo_used_) {
-      options_->protocol_handlers_[url::kHttpScheme] =
-          std::make_unique<BlackHoleProtocolHandler>();
-      options_->protocol_handlers_[url::kHttpsScheme] =
-          std::make_unique<BlackHoleProtocolHandler>();
-    }
-  }
-
   return browser_->CreateBrowserContext(this);
 }
 

@@ -257,6 +257,10 @@ void SingleThreadProxy::SetNextCommitWaitsForActivation() {
   DCHECK(task_runner_provider_->IsMainThread());
 }
 
+bool SingleThreadProxy::RequestedAnimatePending() {
+  return animate_requested_ || commit_requested_;
+}
+
 void SingleThreadProxy::SetDeferCommits(bool defer_commits) {
   DCHECK(task_runner_provider_->IsMainThread());
   // Deferring commits only makes sense if there's a scheduler.
@@ -521,7 +525,13 @@ void SingleThreadProxy::CompositeImmediately(base::TimeTicks frame_begin_time,
 #if DCHECK_IS_ON()
     DCHECK(inside_impl_frame_);
 #endif
+    animate_requested_ = false;
+    // Prevent new commits from being requested inside DoBeginMainFrame.
+    // Note: We do not want to prevent SetNeedsAnimate from requesting
+    // a commit here.
+    commit_requested_ = true;
     DoBeginMainFrame(begin_frame_args);
+    commit_requested_ = false;
     DoPainting();
     DoCommit();
 
@@ -574,6 +584,20 @@ void SingleThreadProxy::ScheduleRequestNewLayerTreeFrameSink() {
                    weak_factory_.GetWeakPtr()));
     task_runner_provider_->MainThreadTaskRunner()->PostTask(
         FROM_HERE, layer_tree_frame_sink_creation_callback_.callback());
+  }
+}
+
+void SingleThreadProxy::OnMemoryPressureOnImplThread(
+    base::MemoryPressureListener::MemoryPressureLevel level) {
+  TRACE_EVENT0("cc", "SingleThreadProxy::OnMemoryPressureOnImplThread");
+  switch (level) {
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+      break;
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+      DebugScopedSetImplThread impl(task_runner_provider_);
+      host_impl_->OnPurgeMemory();
+      break;
   }
 }
 

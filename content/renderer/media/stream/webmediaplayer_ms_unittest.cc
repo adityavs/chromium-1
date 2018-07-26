@@ -143,6 +143,8 @@ class FakeWebMediaPlayerDelegate
     EXPECT_EQ(delegate_id_, delegate_id);
   }
 
+  bool IsBackgroundMediaSuspendEnabled() override { return true; }
+
   bool IsFrameHidden() override { return is_hidden_; }
   bool IsFrameClosed() override { return false; }
 
@@ -561,7 +563,8 @@ class WebMediaPlayerMSTest
   void MediaRemotingStopped(
       blink::WebLocalizedString::Name error_msg) override {}
   void PictureInPictureStopped() override {}
-  void PictureInPictureControlClicked() override {}
+  void PictureInPictureControlClicked(
+      const blink::WebString& control_id) override {}
   void RequestPlay() override {}
   void RequestPause() override {}
 

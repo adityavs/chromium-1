@@ -32,7 +32,10 @@
 #include "components/password_manager/core/browser/stub_password_manager_driver.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
+#include "components/ukm/test_ukm_recorder.h"
+#include "components/ukm/ukm_source.h"
 #include "net/cert/cert_status_flags.h"
+#include "services/metrics/public/cpp/ukm_builders.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -41,6 +44,8 @@ using base::ASCIIToUTF16;
 using base::TestMockTimeTaskRunner;
 using testing::_;
 using testing::AnyNumber;
+using testing::IsNull;
+using testing::NotNull;
 using testing::Return;
 using testing::ReturnRef;
 using testing::SaveArg;
@@ -563,6 +568,35 @@ TEST_F(PasswordManagerTest, DontSaveAlreadySavedCredential) {
   manager()->OnPasswordFormsRendered(&driver_, observed, true);
   EXPECT_EQ(1,
             user_action_tester.GetActionCount("PasswordManager_LoginPassed"));
+}
+
+// Tests that on Chrome sign-in form credentials are not saved.
+TEST_F(PasswordManagerTest, DoNotSaveOnChromeSignInForm) {
+  EXPECT_CALL(client_, IsSavingAndFillingEnabledForCurrentPage())
+      .WillRepeatedly(Return(true));
+
+  PasswordForm form(MakeSimpleForm());
+  form.is_gaia_with_skip_save_password_form = true;
+  std::vector<PasswordForm> observed = {form};
+  EXPECT_CALL(*store_, GetLogins(_, _))
+      .WillRepeatedly(WithArg<1>(InvokeEmptyConsumerWithForms()));
+  manager()->OnPasswordFormsParsed(&driver_, observed);
+  manager()->OnPasswordFormsRendered(&driver_, observed, true);
+
+  EXPECT_CALL(*client_.GetStoreResultFilter(), ShouldSave(_))
+      .WillRepeatedly(Return(false));
+  // The user is typing a credential. No fallback should be available.
+  PasswordForm typed_credentials(form);
+  typed_credentials.password_value = ASCIIToUTF16("pw");
+  EXPECT_CALL(client_, ShowManualFallbackForSavingPtr(_, _, _)).Times(0);
+  manager()->ShowManualFallbackForSaving(&driver_, form);
+
+  // The user submits the form. No prompt should pop up.
+  OnPasswordFormSubmitted(form);
+  EXPECT_CALL(client_, PromptUserToSaveOrUpdatePasswordPtr(_)).Times(0);
+  observed.clear();
+  manager()->DidNavigateMainFrame();
+  manager()->OnPasswordFormsRendered(&driver_, observed, true);
 }
 
 // Tests that a UKM metric "Login Passed" is sent when the submitted credentials
@@ -1292,7 +1326,7 @@ TEST_F(PasswordManagerTest, SameDocumentNavigation) {
   EXPECT_CALL(client_, PromptUserToSaveOrUpdatePasswordPtr(_))
       .WillOnce(WithArg<0>(SaveToScopedPtr(&form_manager_to_save)));
 
-  manager()->OnSameDocumentNavigation(&driver_, form);
+  manager()->OnPasswordFormSubmittedNoChecks(&driver_, form);
   ASSERT_TRUE(form_manager_to_save);
 
   // Simulate saving the form, as if the info bar was accepted.
@@ -1327,7 +1361,7 @@ TEST_F(PasswordManagerTest, SameDocumentBlacklistedSite) {
   EXPECT_CALL(client_, PromptUserToSaveOrUpdatePasswordPtr(_))
       .WillOnce(WithArg<0>(SaveToScopedPtr(&form_manager_to_save)));
 
-  manager()->OnSameDocumentNavigation(&driver_, form);
+  manager()->OnPasswordFormSubmittedNoChecks(&driver_, form);
   EXPECT_TRUE(form_manager_to_save->IsBlacklisted());
 }
 
@@ -2127,6 +2161,8 @@ TEST_F(PasswordManagerTest, NotSavingSyncPasswordHash_NotSyncCredentials) {
 #endif
 
 TEST_F(PasswordManagerTest, ManualFallbackForSaving) {
+  ukm::TestAutoSetUkmRecorder test_ukm_recorder;
+
   EXPECT_CALL(client_, IsSavingAndFillingEnabledForCurrentPage())
       .WillRepeatedly(Return(true));
 
@@ -2162,6 +2198,22 @@ TEST_F(PasswordManagerTest, ManualFallbackForSaving) {
   // Hide the manual fallback.
   EXPECT_CALL(client_, HideManualFallbackForSaving());
   manager()->HideManualFallbackForSaving();
+
+  // Two PasswordFormManagers instances hold references to a shared
+  // PasswordFormMetrics recorder. These need to be freed to flush the metrics
+  // into the test_ukm_recorder.
+  manager_.reset();
+  form_manager_to_save.reset();
+
+  // Verify that the last state is recorded.
+  std::vector<const ukm::mojom::UkmEntry*> ukm_entries =
+      test_ukm_recorder.GetEntriesByName(
+          ukm::builders::PasswordForm::kEntryName);
+  ASSERT_EQ(1u, ukm_entries.size());
+  test_ukm_recorder.ExpectEntryMetric(
+      ukm_entries[0],
+      ukm::builders::PasswordForm::kSaving_ShowedManualFallbackForSavingName,
+      1);
 }
 
 // Tests that the manual fallback for saving isn't shown if there is no response
@@ -2278,7 +2330,7 @@ TEST_F(PasswordManagerTest, ProcessAutofillPredictions) {
 
   std::string response_string;
   ASSERT_TRUE(response.SerializeToString(&response_string));
-  FormStructure::ParseQueryResponse(response_string, forms);
+  FormStructure::ParseQueryResponse(response_string, forms, nullptr);
 
   // Check that Autofill predictions are converted to password related
   // predictions.
@@ -2500,6 +2552,41 @@ TEST_F(PasswordManagerTest, CreatingFormManagers) {
   // creating new form manager.
   manager()->OnPasswordFormsParsed(&driver_, observed);
   EXPECT_EQ(1u, manager()->form_managers().size());
+}
+
+TEST_F(PasswordManagerTest,
+       ShowManualFallbacksDontChangeProvisionalSaveManager) {
+  EXPECT_CALL(client_, IsSavingAndFillingEnabledForCurrentPage())
+      .WillRepeatedly(Return(true));
+
+  std::vector<PasswordForm> observed;
+  PasswordForm form(MakeSimpleForm());
+  observed.push_back(form);
+  EXPECT_CALL(*store_, GetLogins(_, _))
+      .WillRepeatedly(WithArg<1>(InvokeConsumer(form)));
+  EXPECT_CALL(driver_, FillPasswordForm(_)).Times(2);
+  manager()->OnPasswordFormsParsed(&driver_, observed);
+  manager()->OnPasswordFormsRendered(&driver_, observed, true);
+
+  EXPECT_THAT(manager()->provisional_save_manager(), IsNull());
+  manager()->ShowManualFallbackForSaving(&driver_, form);
+  EXPECT_THAT(manager()->provisional_save_manager(), IsNull());
+
+  // The user submits the form and a provisional save manager is set.
+  OnPasswordFormSubmitted(form);
+
+  EXPECT_THAT(manager()->provisional_save_manager(), NotNull());
+  const PasswordFormManager* last_provisional_save_manager =
+      manager()->provisional_save_manager();
+
+  EXPECT_CALL(client_, HideManualFallbackForSaving());
+  // The call to manual fallback with |form| equal to already saved should close
+  // the fallback.
+  manager()->ShowManualFallbackForSaving(&driver_, form);
+
+  EXPECT_THAT(manager()->provisional_save_manager(), NotNull());
+  EXPECT_EQ(last_provisional_save_manager,
+            manager()->provisional_save_manager());
 }
 
 }  // namespace password_manager

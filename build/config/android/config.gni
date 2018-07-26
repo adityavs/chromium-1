@@ -23,7 +23,8 @@ if (is_android || is_chromeos) {
                  ".gclient configuration file (in the parent directory of " +
                  "src) must include \"android\" and/or \"chromeos\". For " +
                  "example:${n}${n}solutions = [${n}...${n}]${n}" +
-                 "target_os=[\"chromeos\"]${n}")
+                 "target_os=[\"chromeos\"]${n}${n}" +
+                 "After adding |target_os| please re-run \"gclient sync\".${n}")
     }
   }
 
@@ -353,20 +354,12 @@ if (is_android || is_chromeos) {
     android_libcpp_lib_dir = "${android_libcpp_root}/libs/${android_app_abi}"
   }
 
-  # Dynamic app bundles -------------------------------------------------------
-
-  # TODO(digit): Remove this once we roll a version of the Android SDK that
-  # has the proper build-tools binaries to both public and internal.
   declare_args() {
-    # To enable generation of application bundles, define
-    # android_sdk_app_bundle_build_tools to point to an Android SDK build-tools
-    # directory that has the relevant aapt2 and bundletool binaries.
-    #
-    android_sdk_app_bundle_build_tools = ""
+    # Location of aapt2 binary used for app bundles. For now, a more recent version
+    # than the one distributed with the Android SDK is required.
+    android_sdk_tools_bundle_aapt2 =
+        "//third_party/android_build_tools/aapt2/aapt2"
   }
-
-  # Whether building application bundles is supported.
-  android_enable_app_bundles = android_sdk_app_bundle_build_tools != ""
 }
 
 declare_args() {

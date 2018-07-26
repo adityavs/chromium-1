@@ -1360,7 +1360,7 @@ void BaseRenderingContext2D::drawImage(ScriptState* script_state,
 
   if (!IsPaint2D()) {
     DCHECK(!start_time.is_null());
-    timer->Count((WTF::CurrentTimeTicks() - start_time).InMicroseconds());
+    timer->CountMicroseconds(WTF::CurrentTimeTicks() - start_time);
   }
 }
 
@@ -1656,7 +1656,6 @@ ImageData* BaseRenderingContext2D::getImageData(
     exception_state.ThrowRangeError("Out of memory at ImageData creation");
     return nullptr;
   }
-
   base::Optional<ScopedUsHistogramTimer> timer;
   if (!IsPaint2D()) {
     if (CanCreateCanvas2dResourceProvider() && IsAccelerated()) {

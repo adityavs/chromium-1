@@ -18,18 +18,19 @@ namespace EventHandlingUtil {
 
 HitTestResult HitTestResultInFrame(
     LocalFrame* frame,
-    const LayoutPoint& point,
+    const HitTestLocation& location,
     HitTestRequest::HitTestRequestType hit_type) {
-  HitTestResult result(HitTestRequest(hit_type), point);
+  DCHECK(!location.IsRectBasedTest());
+  HitTestResult result(HitTestRequest(hit_type), location);
 
   if (!frame || !frame->ContentLayoutObject())
     return result;
   if (frame->View()) {
-    IntRect rect(IntPoint(), frame->View()->Size());
-    if (!rect.Contains(RoundedIntPoint(point)))
+    FloatRect rect(FloatPoint(), FloatSize(frame->View()->Size()));
+    if (!location.Intersects(rect))
       return result;
   }
-  frame->ContentLayoutObject()->HitTest(result);
+  frame->ContentLayoutObject()->HitTest(location, result);
   return result;
 }
 

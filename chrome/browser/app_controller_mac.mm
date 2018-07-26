@@ -29,7 +29,7 @@
 #include "base/threading/thread_restrictions.h"
 #include "chrome/app/chrome_command_ids.h"
 #include "chrome/browser/apps/app_shim/extension_app_shim_handler_mac.h"
-#include "chrome/browser/apps/app_window_registry_util.h"
+#include "chrome/browser/apps/platform_apps/app_window_registry_util.h"
 #include "chrome/browser/background/background_application_list_model.h"
 #include "chrome/browser/background/background_mode_manager.h"
 #include "chrome/browser/browser_process.h"
@@ -42,6 +42,8 @@
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/mac/mac_startup_profiler.h"
+#include "chrome/browser/policy/chrome_browser_policy_connector.h"
+#include "chrome/browser/policy/machine_level_user_cloud_policy_controller.h"
 #include "chrome/browser/prefs/incognito_mode_prefs.h"
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_attributes_storage.h"
@@ -79,6 +81,7 @@
 #include "chrome/browser/ui/startup/startup_browser_creator_impl.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/user_manager.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/browser/web_applications/web_app_mac.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths_internal.h"
@@ -198,7 +201,6 @@ bool IsProfileSignedOut(Profile* profile) {
 }  // namespace
 
 @interface AppController () <HandoffActiveURLObserverBridgeDelegate>
-
 - (void)initMenuState;
 - (void)initProfileMenu;
 - (void)updateConfirmToQuitPrefMenuItem:(NSMenuItem*)item;
@@ -327,7 +329,7 @@ static base::mac::ScopedObjCClassSwizzler* g_swizzle_imk_input_session;
 // This method is called very early in application startup (ie, before
 // the profile is loaded or any preferences have been registered). Defer any
 // user-data initialization until -applicationDidFinishLaunching:.
-- (void)awakeFromNib {
+- (void)mainMenuCreated {
   MacStartupProfiler::GetInstance()->Profile(
       MacStartupProfiler::AWAKE_FROM_NIB);
   // We need to register the handlers early to catch events fired on launch.
@@ -734,6 +736,14 @@ static base::mac::ScopedObjCClassSwizzler* g_swizzle_imk_input_session;
 // This is called after profiles have been loaded and preferences registered.
 // It is safe to access the default profile here.
 - (void)applicationDidFinishLaunching:(NSNotification*)notify {
+  if (g_browser_process->browser_policy_connector()
+          ->machine_level_user_cloud_policy_controller()
+          ->IsEnterpriseStartupDialogShowing()) {
+    // As Chrome is not ready when the Enterprise startup dialog is being shown.
+    // Store the notification as it will be reposted when the dialog is closed.
+    return;
+  }
+
   MacStartupProfiler::GetInstance()->Profile(
       MacStartupProfiler::DID_FINISH_LAUNCHING);
   MacStartupProfiler::GetInstance()->RecordMetrics();
@@ -760,10 +770,6 @@ static base::mac::ScopedObjCClassSwizzler* g_swizzle_imk_input_session;
   // notified when a profile is deleted.
   profileAttributesStorageObserver_.reset(new AppControllerProfileObserver(
       g_browser_process->profile_manager(), self));
-
-  // Since Chrome is localized to more languages than the OS, tell Cocoa which
-  // menu is the Help so it can add the search item to it.
-  [NSApp setHelpMenu:helpMenu_];
 
   // Record the path to the (browser) app bundle; this is used by the app mode
   // shim.
@@ -1747,6 +1753,17 @@ void CreateGuestProfileIfNeeded() {
       ProfileManager::GetGuestProfilePath(),
       base::BindRepeating(&UpdateProfileInUse), base::string16(), std::string(),
       std::string());
+}
+
+void EnterpriseStartupDialogClosed() {
+  AppController* controller =
+      base::mac::ObjCCastStrict<AppController>([NSApp delegate]);
+  if (controller != nil) {
+    NSNotification* notify = [NSNotification
+        notificationWithName:NSApplicationDidFinishLaunchingNotification
+                      object:NSApp];
+    [controller applicationDidFinishLaunching:notify];
+  }
 }
 
 }  // namespace app_controller_mac

@@ -53,26 +53,13 @@ void VRDeviceBase::ListenToDeviceChanges(
 }
 
 void VRDeviceBase::GetFrameData(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   if (!magic_window_enabled_) {
     std::move(callback).Run(nullptr);
     return;
   }
 
   OnMagicWindowFrameDataRequest(std::move(callback));
-}
-
-void VRDeviceBase::GetFrameData(
-    const gfx::Size& frame_size,
-    display::Display::Rotation display_rotation,
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
-  if (!magic_window_enabled_) {
-    std::move(callback).Run(nullptr);
-    return;
-  }
-
-  OnMagicWindowFrameDataRequest(frame_size, display_rotation,
-                                std::move(callback));
 }
 
 void VRDeviceBase::SetVRDisplayInfo(mojom::VRDisplayInfoPtr display_info) {
@@ -108,14 +95,7 @@ bool VRDeviceBase::ShouldPauseTrackingWhenFrameDataRestricted() {
 void VRDeviceBase::OnListeningForActivate(bool listening) {}
 
 void VRDeviceBase::OnMagicWindowFrameDataRequest(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
-  std::move(callback).Run(nullptr);
-}
-
-void VRDeviceBase::OnMagicWindowFrameDataRequest(
-    const gfx::Size& frame_size,
-    display::Display::Rotation display_rotation,
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   std::move(callback).Run(nullptr);
 }
 
@@ -125,18 +105,27 @@ void VRDeviceBase::SetListeningForActivate(bool is_listening) {
 
 void VRDeviceBase::RequestHitTest(
     mojom::XRRayPtr ray,
-    mojom::VRMagicWindowProvider::RequestHitTestCallback callback) {
+    mojom::XREnviromentIntegrationProvider::RequestHitTestCallback callback) {
   NOTREACHED() << "Unexpected call to a device without hit-test support";
   std::move(callback).Run(base::nullopt);
 }
 
-void VRDeviceBase::RequestMagicWindowSession(
-    mojom::VRMagicWindowProviderRequest provider_request,
-    mojom::XRSessionControllerRequest controller_request,
-    mojom::XRRuntime::RequestMagicWindowSessionCallback callback) {
+void VRDeviceBase::ReturnNonImmersiveSession(
+    mojom::XRRuntime::RequestSessionCallback callback) {
+  mojom::XRFrameDataProviderPtr data_provider;
+  mojom::XREnviromentIntegrationProviderPtr enviroment_provider;
+  mojom::XRSessionControllerPtr controller;
   magic_window_sessions_.push_back(std::make_unique<VRDisplayImpl>(
-      this, std::move(provider_request), std::move(controller_request)));
-  std::move(callback).Run(true);
+      this, mojo::MakeRequest(&data_provider),
+      mojo::MakeRequest(&enviroment_provider), mojo::MakeRequest(&controller)));
+
+  auto session = mojom::XRSession::New();
+  session->data_provider = data_provider.PassInterface();
+  // TODO(offenwanger) Not all session will want the enviroment provider. This
+  // should be refactored so it's only passed when it's requested.
+  session->enviroment_provider = enviroment_provider.PassInterface();
+
+  std::move(callback).Run(std::move(session), std::move(controller));
 }
 
 void VRDeviceBase::EndMagicWindowSession(VRDisplayImpl* session) {

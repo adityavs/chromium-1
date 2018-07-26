@@ -37,11 +37,10 @@
 <translation id="1873233029667955273">Google Chrome ist nicht als Ihr Standardbrowser festgelegt</translation>
 <translation id="1874309113135274312">Google Chrome Beta (mDNS-In)</translation>
 <translation id="1877026089748256423">Chrome ist veraltet.</translation>
-<translation id="2007150628464581396">{0,plural, =1{Chrome wird in 1 Minute neu gestartet}other{Chrome wird in # Minuten neu gestartet}}</translation>
+<translation id="1915828456209461693">Ein neues Update für Chrome ist verfügbar und wird installiert, sobald Sie den Browser neu starten.</translation>
 <translation id="2063848847527508675">Chrome OS muss neu gestartet werden, um das Update zu übernehmen.</translation>
 <translation id="2084710999043359739">Zu Chrome hinzufügen</translation>
 <translation id="2094919256425865063">Chrome trotzdem beenden?</translation>
-<translation id="210890598424854131">{0,plural, =0{Chrome wird jetzt neu gestartet}=1{Chrome wird in 1 Sekunde neu gestartet}other{Chrome wird in # Sekunden neu gestartet}}</translation>
 <translation id="2120620239521071941">Dadurch werden <ph name="ITEMS_COUNT" /> Elemente von diesem Gerät gelöscht. Wenn Sie Ihre Daten später abrufen möchten, melden Sie sich als <ph name="USER_EMAIL" /> in Chrome an.</translation>
 <translation id="2123055963409958220">Helfen Sie uns mit Ihrem Feedback zu den <ph name="BEGIN_LINK" />aktuellen Einstellungen<ph name="END_LINK" /> bei der Verbesserung von Chrome</translation>
 <translation id="216054706567564023">Installieren Sie Chrome auf Ihrem Smartphone. Wir senden Ihnen eine SMS an die Telefonnummer zur Kontowiederherstellung.</translation>
@@ -58,6 +57,7 @@ Sollten Sie sich trotzdem anmelden, werden die Chrome-Daten wie Lesezeichen, Ver
 <translation id="2348335408836342058">Chrome benötigt für diese Website die Berechtigung, auf Ihre Kamera und Ihr Mikrofon zuzugreifen</translation>
 <translation id="2397416548179033562">Chrome-Menü anzeigen</translation>
 <translation id="2429317896000329049">Google Chrome konnte Ihre Daten nicht synchronisieren, da die Synchronisierung für Ihre Domain nicht zur Verfügung steht.</translation>
+<translation id="2436117022029368436">Funktionen nutzen, die helfen, Chrome für Sie noch besser zu machen</translation>
 <translation id="2467438592969358367">Google Chrome möchte Ihre Passwörter exportieren. Wenn Sie dies zulassen möchten, geben Sie Ihr Windows-Passwort ein.</translation>
 <translation id="2485422356828889247">Deinstallieren</translation>
 <translation id="2534507159460261402">Google Pay (in Chrome kopiert)</translation>
@@ -98,7 +98,6 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="3479552764303398839">Jetzt nicht</translation>
 <translation id="3503306920980160878">Chrome benötigt Zugriff auf Ihren Standort, um ihn mit dieser Website zu teilen</translation>
 <translation id="3582972582564653026">Chrome wird auf allen Ihren Geräten synchronisiert und personalisiert</translation>
-<translation id="3612333635265770873">Es ist bekannt, dass ein Modul mit dem gleichen Namen in Konflikt mit Google Chrome steht.</translation>
 <translation id="3622797965165704966">Sie können Chrome jetzt noch einfacher mit Ihrem Google-Konto und auf gemeinsam genutzten Computern verwenden.</translation>
 <translation id="3637702109597584617">Google Chrome OS – <ph name="TERMS_OF_SERVICE_LINK" />Nutzungsbedingungen<ph name="END_TERMS_OF_SERVICE_LINK" /></translation>
 <translation id="3716182511346448902">Diese Seite benötigt zu viel Arbeitsspeicher und wurde daher von Chrome angehalten.</translation>
@@ -115,7 +114,7 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="4028693306634653894">Schneller Zugriff auf Chrome</translation>
 <translation id="4050175100176540509">Wichtige Sicherheitsverbesserungen und neue Funktionen sind in der aktuellen Version verfügbar.</translation>
 <translation id="4053720452172726777">Google Chrome anpassen und einstellen</translation>
-<translation id="4143243756087420366">Chrome-Name und -Bild</translation>
+<translation id="4143243756087420366">Profilname und -bild in Chrome</translation>
 <translation id="4147555960264124640">Sie melden sich mit einem verwalteten Konto an und ermöglichen dessen Administrator Zugriff auf Ihr Google Chrome-Profil. Ihre Chrome-Daten, wie Apps, Lesezeichen, Verlauf, Passwörter und andere Einstellungen, werden dauerhaft mit <ph name="USER_NAME" /> verknüpft. Sie können diese Daten über das Google Konten-Dashboard löschen, aber nicht mit einem anderen Konto verknüpfen. <ph name="LEARN_MORE" /></translation>
 <translation id="4149882025268051530">Das Installationsprogramm konnte das Archiv nicht dekomprimieren. Laden Sie Google Chrome erneut herunter.</translation>
 <translation id="424864128008805179">Von Chrome abmelden?</translation>
@@ -131,6 +130,7 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="4561051373932531560">In Google Chrome können Sie auf eine Telefonnummer im Web klicken und diese mit Skype anrufen.</translation>
 <translation id="4567424176335768812">Sie sind als <ph name="USER_EMAIL_ADDRESS" /> angemeldet. Auf allen Geräten, auf denen Sie angemeldet sind, sind nun Ihre Lesezeichen, Ihr Verlauf und andere Einstellungen verfügbar.</translation>
 <translation id="4571503333518166079">Chrome-Benachrichtigungseinstellungen aufrufen</translation>
+<translation id="459622048091363950">Sobald Chrome Zugriff hat, können Websites Sie um Zugriff bitten.</translation>
 <translation id="4600710005438004015">Chrome konnte nicht auf die neueste Version aktualisiert werden. In Ihrer Version fehlen daher einige neue Funktionen und Sicherheitspatches.</translation>
 <translation id="4631713731678262610">Ins Chrome-Menü verschieben</translation>
 <translation id="4633000520311261472">Um Chrome sicherer zu machen, haben wir einige Erweiterungen deaktiviert, die nicht im <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> aufgeführt sind und möglicherweise ohne Ihr Wissen hinzugefügt wurden.</translation>
@@ -142,7 +142,6 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="4771048833395599659">Diese Datei ist eventuell schädlich und wurde von Chrome blockiert.</translation>
 <translation id="4794050651896644714">Details in Chrome speichern</translation>
 <translation id="4804732725083176494">Die Anmeldung in Chrome wurde vom Administrator dieses Geräts deaktiviert.</translation>
-<translation id="4833487314064352405">{0,plural, =1{Chrome innerhalb eines Tages neu starten}other{Chrome innerhalb von # Tagen neu starten}}</translation>
 <translation id="4891791193823137474">Google Chrome im Hintergrund ausführen</translation>
 <translation id="4895437082222824641">Link in neuem Chrome-Tab öffnen</translation>
 <translation id="4921569541910214635">Sie nutzen einen Computer gemeinsam mit anderen? Jetzt können Sie Chrome nach Ihren Wünschen einrichten.</translation>
@@ -150,7 +149,6 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="495931528404527476">In Chrome</translation>
 <translation id="4990567037958725628">Google Chrome Canary</translation>
 <translation id="5028489144783860647">Google Chrome konnte Ihre Daten nicht synchronisieren. Bitte aktualisieren Sie Ihre Passphrase für die Synchronisierung.</translation>
-<translation id="5131923704757666404">{0,plural, =1{Chrome wird in einer Stunde neu gestartet}other{Chrome wird in # Stunden neu gestartet}}</translation>
 <translation id="5132929315877954718">Entdecken Sie tolle Apps, Spiele, Erweiterungen und Designs für Google Chrome.</translation>
 <translation id="5166975452760862670">Google Chrome wird in dieser Sprache angezeigt</translation>
 <translation id="5170938038195470297">Ihr Profil kann nicht verwendet werden, da es von einer neueren Version von Google Chrome stammt. Einige Funktionen stehen möglicherweise nicht zur Verfügung. Geben Sie bitte ein anderes Profilverzeichnis an oder verwenden Sie eine neuere Version von Google Chrome.</translation>
@@ -158,10 +156,8 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="5204098752394657250"><ph name="TERMS_OF_SERVICE_LINK" />Google Chrome-Nutzungsbedingungen<ph name="END_TERMS_OF_SERVICE_LINK" /></translation>
 <translation id="5251420635869119124">Gastnutzer können Chrome verwenden, ohne Daten zu hinterlassen.</translation>
 <translation id="532046782124376502">Warnung: Google Chrome kann nicht verhindern, dass Ihr Suchverlauf von Erweiterungen protokolliert wird. Sie können diese Erweiterung für den Inkognitomodus deaktivieren, indem Sie das Häkchen aus dem Kästchen entfernen.</translation>
-<translation id="5334545119300433702">Es ist bekannt, dass dieses Modul einen Konflikt mit Google Chrome verursacht.</translation>
 <translation id="5386244825306882791">Die Erweiterung legt auch fest, welche Seite beim Start von Chrome oder bei der Suche über die Omnibox angezeigt wird.</translation>
 <translation id="5430073640787465221">Ihre Einstellungsdatei ist beschädigt oder ungültig. Google Chrome kann Ihre Einstellungen nicht wiederherstellen.</translation>
-<translation id="5495581687705680288">Module in Google Chrome geladen</translation>
 <translation id="556024056938947818">Google Chrome versucht, Passwörter anzuzeigen.</translation>
 <translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
 <translation id="565744775970812598"><ph name="FILE_NAME" /> ist möglicherweise schädlich und wurde daher von Chrome blockiert.</translation>
@@ -244,9 +240,9 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="8286862437124483331">Google Chrome möchte Passwörter anzeigen. Geben Sie Ihr Windows-Passwort ein, um dies zuzulassen.</translation>
 <translation id="8290100596633877290">Google Chrome ist abgestürzt. Jetzt neu starten?</translation>
 <translation id="8342675569599923794">Diese Datei ist schädlich und wurde von Chrome blockiert.</translation>
+<translation id="8380166467911888159">Um Tippfehler zu beheben, sendet Chrome den eingegebenen Text an Google</translation>
 <translation id="840084489713044809">Google Chrome möchte Ihre Passwörter exportieren.</translation>
 <translation id="8406086379114794905">Zur Verbesserung von Chrome beitragen</translation>
-<translation id="8439301513305169426">Chrome speichert dieses Passwort mit <ph name="SAVED_PASSWORD_LINK" />. Sie müssen es sich nicht merken.</translation>
 <translation id="8455999171311319804">Optional: Diagnose- und Nutzungsdaten zur Verbesserung von Chrome OS automatisch an Google senden.</translation>
 <translation id="8478823064122749032">Installieren Sie Chrome auf Ihrem Smartphone. Wir senden Ihnen eine SMS an die Telefonnummer zur Kontowiederherstellung: <ph name="PHONE_NUMBER" /></translation>
 <translation id="8521348052903287641">Eingangsregel für die Zulassung von mDNS-Verkehr in Google Chrome Dev.</translation>
@@ -254,7 +250,6 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="8547799825197623713">Chrome App Launcher für Canary</translation>
 <translation id="8556340503434111824">Es gibt eine neue Version von Google Chrome, die schneller ist, als anderen zuvor.</translation>
 <translation id="8568392309447938879">Sie können Apps verwenden, wenn Sie in Chrome angemeldet sind. Chrome kann dann Ihre Apps, Lesezeichen, Passwörter, Ihren Verlauf und andere Einstellungen auf Ihren Geräten synchronisieren.</translation>
-<translation id="859960207076826247">{0,plural, =0{Ein Chrome-Update ist verfügbar}=1{Ein Chrome-Update ist verfügbar}other{Ein Chrome-Update steht seit # Tagen zur Verfügung}}</translation>
 <translation id="8606668294522778825">Google Chrome verwendet möglicherweise Webdienste zur Unterstützung Ihrer Onlinesuche. Sie haben die Möglichkeit, diese Dienste zu deaktivieren. <ph name="BEGIN_LINK" />Weitere Informationen<ph name="END_LINK" /></translation>
 <translation id="8614913330719544658">Google Chrome reagiert nicht. Jetzt neu starten?</translation>
 <translation id="8667808506758191620">Ihr <ph name="DEVICE_TYPE" /> ist auf dem neuesten Stand.</translation>

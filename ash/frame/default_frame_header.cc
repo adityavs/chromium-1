@@ -101,11 +101,6 @@ DefaultFrameHeader::DefaultFrameHeader(
 
 DefaultFrameHeader::~DefaultFrameHeader() = default;
 
-void DefaultFrameHeader::SetThemeColor(SkColor theme_color) {
-  set_button_color_mode(FrameCaptionButton::ColorMode::kThemed);
-  SetFrameColorsImpl(theme_color, theme_color);
-}
-
 void DefaultFrameHeader::SetWidthInPixels(int width_in_pixels) {
   if (width_in_pixels_ == width_in_pixels)
     return;
@@ -130,11 +125,14 @@ void DefaultFrameHeader::DoPaintHeader(gfx::Canvas* canvas) {
   flags.setAntiAlias(true);
   if (width_in_pixels_ > 0) {
     canvas->Save();
-    float scale = canvas->UndoDeviceScaleFactor();
-    gfx::Rect rect = ScaleToEnclosingRect(GetPaintedBounds(), scale, scale);
-
-    rect.set_width(width_in_pixels_);
-    TileRoundRect(canvas, flags, rect, static_cast<int>(corner_radius * scale));
+    float layer_scale =
+        target_widget()->GetNativeWindow()->layer()->device_scale_factor();
+    float canvas_scale = canvas->UndoDeviceScaleFactor();
+    gfx::Rect rect =
+        ScaleToEnclosingRect(GetPaintedBounds(), canvas_scale, canvas_scale);
+    rect.set_width(width_in_pixels_ * canvas_scale / layer_scale);
+    TileRoundRect(canvas, flags, rect,
+                  static_cast<int>(corner_radius * canvas_scale));
     canvas->Restore();
   } else {
     TileRoundRect(canvas, flags, GetPaintedBounds(), corner_radius);
@@ -144,24 +142,6 @@ void DefaultFrameHeader::DoPaintHeader(gfx::Canvas* canvas) {
 
 void DefaultFrameHeader::DoSetFrameColors(SkColor active_frame_color,
                                           SkColor inactive_frame_color) {
-  set_button_color_mode(FrameCaptionButton::ColorMode::kDefault);
-  SetFrameColorsImpl(active_frame_color, inactive_frame_color);
-}
-
-AshLayoutSize DefaultFrameHeader::GetButtonLayoutSize() const {
-  return AshLayoutSize::kNonBrowserCaption;
-}
-
-SkColor DefaultFrameHeader::GetTitleColor() const {
-  return color_utils::IsDark(GetCurrentFrameColor()) ? kLightTitleTextColor
-                                                     : kTitleTextColor;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-// DefaultFrameHeader, private:
-
-void DefaultFrameHeader::SetFrameColorsImpl(SkColor active_frame_color,
-                                            SkColor inactive_frame_color) {
   bool updated = false;
   if (active_frame_color_.target_color() != active_frame_color) {
     active_frame_color_.SetTargetColor(active_frame_color);
@@ -177,6 +157,18 @@ void DefaultFrameHeader::SetFrameColorsImpl(SkColor active_frame_color,
     view()->SchedulePaint();
   }
 }
+
+AshLayoutSize DefaultFrameHeader::GetButtonLayoutSize() const {
+  return AshLayoutSize::kNonBrowserCaption;
+}
+
+SkColor DefaultFrameHeader::GetTitleColor() const {
+  return color_utils::IsDark(GetCurrentFrameColor()) ? kLightTitleTextColor
+                                                     : kTitleTextColor;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DefaultFrameHeader, private:
 
 SkColor DefaultFrameHeader::GetCurrentFrameColor() const {
   return mode() == MODE_ACTIVE ? active_frame_color_.target_color()

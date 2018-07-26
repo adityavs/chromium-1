@@ -30,13 +30,15 @@ import linker_map_parser
 import models
 import ninja_parser
 import nm
+import obj_analyzer
 import path_util
 
 sys.path.insert(1, os.path.join(path_util.SRC_ROOT, 'tools', 'grit'))
 from grit.format import data_pack
 
 _OWNERS_FILENAME = 'OWNERS'
-_COMPONENT_REGEX = re.compile('\s*#\s*COMPONENT\s*:\s*(\S+)')
+_COMPONENT_REGEX = re.compile(r'\s*#\s*COMPONENT\s*:\s*(\S+)')
+_FILE_PATH_REGEX = re.compile(r'\s*file://(\S+)')
 
 # Holds computation state that is live only when an output directory exists.
 _OutputDirectoryContext = collections.namedtuple('_OutputDirectoryContext', [
@@ -550,17 +552,33 @@ def _CalculatePadding(raw_symbols):
 def _ParseComponentFromOwners(filename):
   """Searches an OWNERS file for lines that start with `# COMPONENT:`.
 
+  If an OWNERS file has no COMPONENT but references another OWNERS file, follow
+  the reference and check that file instead.
+
   Args:
     filename: Path to the file to parse.
   Returns:
-    The text that follows the `# COMPONENT:` prefix, such as 'component>name'
- """
-  with open(filename) as f:
-    for line in f:
-      component_matches = _COMPONENT_REGEX.match(line)
-      if component_matches:
-        return component_matches.group(1)
-  return ''
+    The text that follows the `# COMPONENT:` prefix, such as 'component>name'.
+    Empty string if no component found or the file didn't exist.
+  """
+  reference_paths = []
+  try:
+    with open(filename) as f:
+      for line in f:
+        component_matches = _COMPONENT_REGEX.match(line)
+        path_matches = _FILE_PATH_REGEX.match(line)
+        if component_matches:
+          return component_matches.group(1)
+        elif path_matches:
+          reference_paths.append(path_matches.group(1))
+  except IOError:
+    return ''
+
+  if len(reference_paths) == 1:
+    newpath = os.path.join(path_util.SRC_ROOT, reference_paths[0])
+    return _ParseComponentFromOwners(newpath)
+  else:
+    return ''
 
 
 def _FindComponentRoot(start_path, cache, knobs):
@@ -586,13 +604,10 @@ def _FindComponentRoot(start_path, cache, knobs):
       return cached_component
     elif cached_component is None:
       owners_path = os.path.join(knobs.src_root, test_dir, _OWNERS_FILENAME)
-      if os.path.isfile(owners_path):
-        component = _ParseComponentFromOwners(owners_path)
-        cache[test_dir] = component
-        if component:
-          return component
-      else:
-        cache[test_dir] = ''
+      component = _ParseComponentFromOwners(owners_path)
+      cache[test_dir] = component
+      if component:
+        return component
     prev_dir = test_dir
     test_dir = os.path.dirname(test_dir)
   return ''
@@ -766,7 +781,7 @@ def _ParseElfInfo(map_path, elf_path, tool_prefix, track_string_literals,
     # Rather than record all paths for each symbol, set the paths to be the
     # common ancestor of all paths.
     if outdir_context:
-      bulk_analyzer = nm.BulkObjectFileAnalyzer(
+      bulk_analyzer = obj_analyzer.BulkObjectFileAnalyzer(
           tool_prefix, outdir_context.output_directory)
       bulk_analyzer.AnalyzePaths(outdir_context.elf_object_paths)
 
@@ -802,8 +817,8 @@ def _ParseElfInfo(map_path, elf_path, tool_prefix, track_string_literals,
       # More likely for there to be a bug in supersize than an ELF to not have a
       # single string literal.
       assert merge_string_syms
-      string_positions = [(s.address, s.size) for s in merge_string_syms]
-      bulk_analyzer.AnalyzeStringLiterals(elf_path, string_positions)
+      string_ranges = [(s.address, s.size) for s in merge_string_syms]
+      bulk_analyzer.AnalyzeStringLiterals(elf_path, string_ranges)
 
   logging.info('Stripping linker prefixes from symbol names')
   _StripLinkerAddedSymbolPrefixes(raw_symbols)

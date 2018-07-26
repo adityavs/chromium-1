@@ -19,7 +19,6 @@
 #include "net/third_party/quic/core/congestion_control/rtt_stats.h"
 #include "net/third_party/quic/core/congestion_control/send_algorithm_interface.h"
 #include "net/third_party/quic/core/proto/cached_network_parameters.pb.h"
-#include "net/third_party/quic/core/quic_debug_info_provider_interface.h"
 #include "net/third_party/quic/core/quic_packets.h"
 #include "net/third_party/quic/core/quic_pending_retransmission.h"
 #include "net/third_party/quic/core/quic_sustained_bandwidth_recorder.h"
@@ -46,8 +45,7 @@ struct QuicConnectionStats;
 // retransmittable data associated with each packet. If a packet is
 // retransmitted, it will keep track of each version of a packet so that if a
 // previous transmission is acked, the data will not be retransmitted.
-class QUIC_EXPORT_PRIVATE QuicSentPacketManager
-    : public QuicDebugInfoProviderInterface {
+class QUIC_EXPORT_PRIVATE QuicSentPacketManager {
  public:
   // Interface which gets callbacks from the QuicSentPacketManager at
   // interesting points.  Implementations must not mutate the state of
@@ -91,18 +89,9 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
                         QuicConnectionStats* stats,
                         CongestionControlType congestion_control_type,
                         LossDetectionType loss_type);
-
-  QuicSentPacketManager(Perspective perspective,
-                        const QuicClock* clock,
-                        QuicConnectionStats* stats,
-                        CongestionControlType congestion_control_type,
-                        LossDetectionType loss_type,
-                        QuicDebugInfoProviderInterface* debug_info_provider);
-
+  QuicSentPacketManager(const QuicSentPacketManager&) = delete;
+  QuicSentPacketManager& operator=(const QuicSentPacketManager&) = delete;
   virtual ~QuicSentPacketManager();
-
-  // From QuicDebugInfoProviderInterface
-  QuicString DebugStringForAckProcessing() const override;
 
   virtual void SetFromConfig(const QuicConfig& config);
 
@@ -123,10 +112,6 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
 
   void SetHandshakeConfirmed() { handshake_confirmed_ = true; }
 
-  // Processes the incoming ack. Returns true if a previously-unacked packet is
-  // acked.
-  bool OnIncomingAck(const QuicAckFrame& ack_frame, QuicTime ack_receive_time);
-
   // Requests retransmission of all unacked packets of |retransmission_type|.
   // The behavior of this method depends on the value of |retransmission_type|:
   // ALL_UNACKED_RETRANSMISSION - All unacked packets will be retransmitted.
@@ -143,12 +128,7 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
 
   // Retransmits the oldest pending packet there is still a tail loss probe
   // pending.  Invoked after OnRetransmissionTimeout.
-  bool MaybeRetransmitTailLossProbe() {
-    if (pending_timer_transmission_count_ == 0) {
-      return false;
-    }
-    return MaybeRetransmitOldestPacket(TLP_RETRANSMISSION);
-  }
+  bool MaybeRetransmitTailLossProbe();
 
   // Retransmits the oldest pending packet.
   bool MaybeRetransmitOldestPacket(TransmissionType type);
@@ -289,7 +269,7 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
   }
 
   QuicPacketNumber GetLargestObserved() const {
-    return unacked_packets_.largest_observed();
+    return unacked_packets_.largest_acked();
   }
 
   QuicPacketNumber GetLargestSentPacket() const {
@@ -341,6 +321,8 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
   QuicTime::Delta delayed_ack_time() const { return delayed_ack_time_; }
 
   void set_delayed_ack_time(QuicTime::Delta delayed_ack_time) {
+    // The delayed ack time should never be more than one half the min RTO time.
+    DCHECK_LE(delayed_ack_time, (min_rto_timeout_ * 0.5));
     delayed_ack_time_ = delayed_ack_time;
   }
 
@@ -368,9 +350,6 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
 
   typedef QuicLinkedHashMap<QuicPacketNumber, TransmissionType>
       PendingRetransmissionMap;
-
-  // Process the incoming ack looking for newly ack'd data packets.
-  void HandleAckForSentPackets(const QuicAckFrame& ack_frame);
 
   // Returns the current retransmission mode.
   RetransmissionTimeoutMode GetRetransmissionMode() const;
@@ -568,20 +547,12 @@ class QUIC_EXPORT_PRIVATE QuicSentPacketManager
   // Latest received ack frame.
   QuicAckFrame last_ack_frame_;
 
-  // Record whether RTT gets updated by last largest acked. This is only used
-  // when quic_reloadable_flag_quic_use_incremental_ack_processing4 is true.
+  // Record whether RTT gets updated by last largest acked..
   bool rtt_updated_;
 
-  // Latched value of quic_reloadable_flag_quic_extra_checks_in_ack_processing.
-  const bool extra_checks_in_ack_processing_;
-  QuicDebugInfoProviderInterface* debug_info_provider_;
-
   // A reverse iterator of last_ack_frame_.packets. This is reset in
-  // OnAckRangeStart, and gradually moves in OnAckRange. This is only used
-  // when quic_reloadable_flag_quic_use_incremental_ack_processing4 is true.
+  // OnAckRangeStart, and gradually moves in OnAckRange..
   PacketNumberQueue::const_reverse_iterator acked_packets_iter_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuicSentPacketManager);
 };
 
 }  // namespace quic

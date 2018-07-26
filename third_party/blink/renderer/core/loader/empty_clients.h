@@ -116,7 +116,7 @@ class CORE_EXPORT EmptyChromeClient : public ChromeClient {
   void StartDragging(LocalFrame*,
                      const WebDragData&,
                      WebDragOperationsMask,
-                     const WebImage& drag_image,
+                     const SkBitmap& drag_image,
                      const WebPoint& drag_image_offset) override {}
   bool AcceptsLoadDrops() const override { return true; }
 
@@ -198,12 +198,12 @@ class CORE_EXPORT EmptyChromeClient : public ChromeClient {
                        LocalFrame* local_root) override;
 
   void SetEventListenerProperties(LocalFrame*,
-                                  WebEventListenerClass,
-                                  WebEventListenerProperties) override {}
-  WebEventListenerProperties EventListenerProperties(
+                                  cc::EventListenerClass,
+                                  cc::EventListenerProperties) override {}
+  cc::EventListenerProperties EventListenerProperties(
       LocalFrame*,
-      WebEventListenerClass event_class) const override {
-    return WebEventListenerProperties::kNothing;
+      cc::EventListenerClass event_class) const override {
+    return cc::EventListenerProperties::kNone;
   }
   void SetHasScrollEventHandlers(LocalFrame*, bool) override {}
   void SetNeedsLowLatencyInput(LocalFrame*, bool) override {}
@@ -288,7 +288,8 @@ class CORE_EXPORT EmptyLocalFrameClient : public LocalFrameClient {
 
   void ForwardResourceTimingToParent(const WebResourceTimingInfo&) override {}
 
-  void DownloadURL(const ResourceRequest&) override {}
+  void DownloadURL(const ResourceRequest&,
+                   DownloadCrossOriginRedirects) override {}
   void LoadErrorPage(int reason) override {}
 
   DocumentLoader* CreateDocumentLoader(
@@ -296,7 +297,9 @@ class CORE_EXPORT EmptyLocalFrameClient : public LocalFrameClient {
       const ResourceRequest&,
       const SubstituteData&,
       ClientRedirectPolicy,
-      const base::UnguessableToken& devtools_navigation_token) override;
+      const base::UnguessableToken& devtools_navigation_token,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+      const WebNavigationTimings& navigation_timings) override;
 
   String UserAgent() override { return ""; }
 

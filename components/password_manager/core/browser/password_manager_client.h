@@ -121,10 +121,6 @@ class PasswordManagerClient {
       const GURL& origin,
       const CredentialsCallback& callback) = 0;
 
-  // Informs the embedder that the user has manually requested to save the
-  // password in the focused password field.
-  virtual void ForceSavePassword();
-
   // Informs the embedder that the user has manually requested to generate a
   // password in the focused password field.
   virtual void GeneratePassword();
@@ -259,6 +255,10 @@ class PasswordManagerClient {
   // has not been implemented for a specific platform or the context is an
   // incognito context. Callers should guard against this.
   virtual PasswordRequirementsService* GetPasswordRequirementsService();
+
+  // Causes all live PasswordFormManager objects to query the password store
+  // again. Results in updating the fill information on the page.
+  virtual void UpdateFormManagers() {}
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PasswordManagerClient);

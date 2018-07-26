@@ -505,7 +505,7 @@ void AppListFolderView::ScheduleShowHideAnimation(bool show,
 
   items_grid_view_->pagination_model()->SelectPage(0, false);
 
-  // Animate the background corner raidus, opacity and bounds.
+  // Animate the background corner radius, opacity and bounds.
   background_animation_ = std::make_unique<BackgroundAnimation>(show, this);
   background_animation_->Show();
 
@@ -589,16 +589,18 @@ void AppListFolderView::UpdatePreferredBounds() {
   preferred_bounds_.AdjustToFit(container_view_->GetContentsBounds());
 
   auto* const keyboard_controller = keyboard::KeyboardController::Get();
-  if (keyboard_controller->enabled() &&
-      contents_view_->app_list_view()->onscreen_keyboard_shown()) {
+  if (keyboard_controller->enabled()) {
     // This view should be on top of on-screen keyboard to prevent the folder
     // title from being blocked.
-    gfx::Point keyboard_top_right =
-        keyboard_controller->GetWorkspaceOccludedBounds().top_right();
-    ConvertPointFromScreen(parent(), &keyboard_top_right);
-    int y_offset = keyboard_top_right.y() - kOnscreenKeyboardTopPadding -
-                   preferred_bounds_.bottom();
-    preferred_bounds_.Offset(0, std::min(0, y_offset));
+    const gfx::Rect occluded_bounds =
+        keyboard_controller->GetWorkspaceOccludedBounds();
+    if (!occluded_bounds.IsEmpty()) {
+      gfx::Point keyboard_top_right = occluded_bounds.top_right();
+      ConvertPointFromScreen(parent(), &keyboard_top_right);
+      int y_offset = keyboard_top_right.y() - kOnscreenKeyboardTopPadding -
+                     preferred_bounds_.bottom();
+      preferred_bounds_.Offset(0, std::min(0, y_offset));
+    }
   }
 
   // Calculate the folder icon's bounds relative to this view.

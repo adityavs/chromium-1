@@ -107,10 +107,19 @@ class FindObjectPropertiesNeedingUpdateScope {
                                 object_properties->Effect());
       DCHECK_OBJECT_PROPERTY_EQ(object_, original_properties_->Filter(),
                                 object_properties->Filter());
+      DCHECK_OBJECT_PROPERTY_EQ(object_,
+                                original_properties_->VerticalScrollbarEffect(),
+                                object_properties->VerticalScrollbarEffect());
+      DCHECK_OBJECT_PROPERTY_EQ(
+          object_, original_properties_->HorizontalScrollbarEffect(),
+          object_properties->HorizontalScrollbarEffect());
       DCHECK_OBJECT_PROPERTY_EQ(object_, original_properties_->Mask(),
                                 object_properties->Mask());
       DCHECK_OBJECT_PROPERTY_EQ(object_, original_properties_->ClipPath(),
                                 object_properties->ClipPath());
+      DCHECK_OBJECT_PROPERTY_EQ(object_,
+                                original_properties_->LinkHighlightEffect(),
+                                object_properties->LinkHighlightEffect());
       DCHECK_OBJECT_PROPERTY_EQ(object_, original_properties_->ClipPathClip(),
                                 object_properties->ClipPathClip());
       DCHECK_OBJECT_PROPERTY_EQ(object_, original_properties_->MaskClip(),

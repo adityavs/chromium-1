@@ -11,9 +11,9 @@
 #include "ash/frame/caption_buttons/frame_caption_button.h"
 #include "ash/frame/caption_buttons/frame_caption_button_container_view.h"
 #include "ash/frame/default_frame_header.h"
-#include "ash/frame/frame_border_hit_test.h"
 #include "ash/frame/header_view.h"
 #include "ash/public/cpp/ash_constants.h"
+#include "ash/public/cpp/frame_border_hit_test.h"
 #include "ash/public/cpp/immersive/immersive_fullscreen_controller.h"
 #include "ash/public/cpp/immersive/immersive_fullscreen_controller_delegate.h"
 #include "ash/public/cpp/window_properties.h"
@@ -283,8 +283,6 @@ CustomFrameViewAsh::CustomFrameViewAsh(
   // |header_view_| is set as the non client view's overlay view so that it can
   // overlay the web contents in immersive fullscreen.
   frame->non_client_view()->SetOverlayView(overlay_view_);
-  frame_window->SetProperty(aura::client::kTopViewColor, kDefaultFrameColor);
-  frame_window->AddObserver(this);
 
   // A delegate for a more complex way of fullscreening the window may already
   // be set. This is the case for packaged apps.
@@ -302,10 +300,6 @@ CustomFrameViewAsh::~CustomFrameViewAsh() {
   Shell::Get()->RemoveShellObserver(this);
   if (Shell::Get()->split_view_controller())
     Shell::Get()->split_view_controller()->RemoveObserver(this);
-  if (frame_ && frame_->GetNativeWindow() &&
-      frame_->GetNativeWindow()->HasObserver(this)) {
-    frame_->GetNativeWindow()->RemoveObserver(this);
-  }
 }
 
 void CustomFrameViewAsh::InitImmersiveFullscreenControllerForView(
@@ -317,7 +311,6 @@ void CustomFrameViewAsh::InitImmersiveFullscreenControllerForView(
 void CustomFrameViewAsh::SetFrameColors(SkColor active_frame_color,
                                         SkColor inactive_frame_color) {
   aura::Window* frame_window = frame_->GetNativeWindow();
-  frame_window->SetProperty(aura::client::kTopViewColor, inactive_frame_color);
   frame_window->SetProperty(ash::kFrameActiveColorKey, active_frame_color);
   frame_window->SetProperty(ash::kFrameInactiveColorKey, inactive_frame_color);
 }
@@ -360,9 +353,7 @@ gfx::Rect CustomFrameViewAsh::GetWindowBoundsForClientBounds(
 }
 
 int CustomFrameViewAsh::NonClientHitTest(const gfx::Point& point) {
-  return FrameBorderNonClientHitTest(this, header_view_->GetBackButton(),
-                                     header_view_->caption_button_container(),
-                                     point);
+  return FrameBorderNonClientHitTest(this, point);
 }
 
 void CustomFrameViewAsh::GetWindowMask(const gfx::Size& size,
@@ -462,21 +453,6 @@ void CustomFrameViewAsh::SetVisible(bool visible) {
   views::View::SetVisible(visible);
   // We need to re-layout so that client view will occupy entire window.
   InvalidateLayout();
-}
-
-void CustomFrameViewAsh::OnWindowDestroying(aura::Window* window) {
-  DCHECK_EQ(frame_->GetNativeWindow(), window);
-  window->RemoveObserver(this);
-}
-
-void CustomFrameViewAsh::OnWindowPropertyChanged(aura::Window* window,
-                                                 const void* key,
-                                                 intptr_t old) {
-  DCHECK_EQ(frame_->GetNativeWindow(), window);
-  if (key == aura::client::kShowStateKey) {
-    header_view_->OnShowStateChanged(
-        window->GetProperty(aura::client::kShowStateKey));
-  }
 }
 
 const views::View* CustomFrameViewAsh::GetAvatarIconViewForTest() const {

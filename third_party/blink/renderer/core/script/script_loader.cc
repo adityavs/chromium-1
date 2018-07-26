@@ -47,6 +47,8 @@
 #include "third_party/blink/renderer/core/script/script_element_base.h"
 #include "third_party/blink/renderer/core/script/script_runner.h"
 #include "third_party/blink/renderer/core/svg_names.h"
+#include "third_party/blink/renderer/platform/feature_policy/feature_policy.h"
+#include "third_party/blink/renderer/platform/histogram.h"
 #include "third_party/blink/renderer/platform/loader/fetch/access_control_status.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_parameters.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
@@ -54,6 +56,7 @@
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
 #include "third_party/blink/renderer/platform/wtf/std_lib_extras.h"
+#include "third_party/blink/renderer/platform/wtf/text/movable_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_builder.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_hash.h"
 
@@ -214,6 +217,24 @@ network::mojom::FetchCredentialsMode ScriptLoader::ModuleScriptCredentialsMode(
   return network::mojom::FetchCredentialsMode::kOmit;
 }
 
+// https://github.com/WICG/feature-policy/issues/135
+bool ShouldBlockSyncScriptForFeaturePolicy(const ScriptElementBase* element,
+                                           ScriptType script_type,
+                                           bool parser_inserted) {
+  if (element->GetDocument().GetFeaturePolicy()->IsFeatureEnabled(
+          mojom::FeaturePolicyFeature::kSyncScript)) {
+    return false;
+  }
+
+  // Module scripts never block parsing.
+  if (script_type == ScriptType::kModule || !parser_inserted)
+    return false;
+
+  if (!element->HasSourceAttribute())
+    return true;
+  return !element->DeferAttributeValue() && !element->AsyncAttributeValue();
+}
+
 // https://html.spec.whatwg.org/multipage/scripting.html#prepare-a-script
 bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
                                  LegacyTypeSupport support_legacy_types) {
@@ -301,6 +322,15 @@ bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
   if (!IsScriptForEventSupported())
     return false;
 
+  // This FeaturePolicy is still in the process of being added to the spec.
+  if (ShouldBlockSyncScriptForFeaturePolicy(element_.Get(), GetScriptType(),
+                                            parser_inserted_)) {
+    element_document.AddConsoleMessage(ConsoleMessage::Create(
+        kJSMessageSource, kErrorMessageLevel,
+        "Synchronous script execution is disabled by Feature Policy"));
+    return false;
+  }
+
   // 14. is handled below.
 
   // <spec step="16">Let classic script CORS setting be the current state of the
@@ -373,7 +403,8 @@ bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
   // object's environment settings object.</spec>
   //
   // Note: We use |element_document| as "settings object" in the steps below.
-  FetchClientSettingsObjectSnapshot settings_object(element_document);
+  auto* settings_object =
+      new FetchClientSettingsObjectSnapshot(element_document);
 
   // <spec step="24">If the element has a src content attribute, then:</spec>
   if (element_->HasSourceAttribute()) {
@@ -515,8 +546,8 @@ bool ScriptLoader::PrepareScript(const TextPosition& script_start_position,
         Modulator* modulator = Modulator::From(
             ToScriptStateForMainWorld(context_document->GetFrame()));
         ModuleScript* module_script = ModuleScript::Create(
-            element_->TextFromChildren(), modulator, source_url, base_url,
-            options, kSharableCrossOrigin, position);
+            MovableString(element_->TextFromChildren().Impl()), modulator,
+            source_url, base_url, options, kSharableCrossOrigin, position);
 
         // <spec step="25.2.B.2">If this returns null, set the script's script
         // to null and return; the script is ready.</spec>
@@ -707,7 +738,7 @@ void ScriptLoader::FetchClassicScript(const KURL& url,
 
 void ScriptLoader::FetchModuleScriptTree(
     const KURL& url,
-    const FetchClientSettingsObjectSnapshot& settings_object,
+    FetchClientSettingsObjectSnapshot* settings_object,
     Modulator* modulator,
     const ScriptFetchOptions& options) {
   // <spec
@@ -727,6 +758,11 @@ void ScriptLoader::FetchModuleScriptTree(
 PendingScript* ScriptLoader::TakePendingScript(
     ScriptSchedulingType scheduling_type) {
   CHECK(prepared_pending_script_);
+
+  DEFINE_STATIC_LOCAL(
+      EnumerationHistogram, scheduling_type_histogram,
+      ("Blink.Script.SchedulingType", kLastScriptSchedulingType + 1));
+  scheduling_type_histogram.Count(static_cast<int>(scheduling_type));
 
   switch (scheduling_type) {
     case ScriptSchedulingType::kAsync:

@@ -45,13 +45,15 @@ class XRSession final : public EventTargetWithInlineData {
   };
 
   XRSession(XRDevice*,
-            bool exclusive,
+            bool immersive,
+            bool environment_integration,
             XRPresentationContext* output_context,
             EnvironmentBlendMode environment_blend_mode);
   ~XRSession() override = default;
 
   XRDevice* device() const { return device_; }
-  bool exclusive() const { return exclusive_; }
+  bool immersive() const { return immersive_; }
+  bool environmentIntegration() const { return environment_integration_; }
   XRPresentationContext* outputContext() const { return output_context_; }
   const String& environmentBlendMode() const { return blend_mode_string_; }
 
@@ -115,15 +117,13 @@ class XRSession final : public EventTargetWithInlineData {
 
   void LogGetPose() const;
 
-  // Output canvas orientation in degrees. Expected to be multiple of 90.
-  int OutputCanvasAngle() const;
-
   // EventTarget overrides.
   ExecutionContext* GetExecutionContext() const override;
   const AtomicString& InterfaceName() const override;
 
   void OnFocusChanged();
-  void OnFrame(std::unique_ptr<TransformationMatrix>,
+  void OnFrame(double timestamp,
+               std::unique_ptr<TransformationMatrix>,
                const base::Optional<gpu::MailboxHolder>& output_mailbox_holder,
                const base::Optional<gpu::MailboxHolder>& bg_mailbox_holder,
                const base::Optional<IntSize>& background_size);
@@ -139,7 +139,7 @@ class XRSession final : public EventTargetWithInlineData {
 
   void OnPoseReset();
 
-  void SetNonExclusiveProjectionMatrix(const WTF::Vector<float>&);
+  void SetNonImmersiveProjectionMatrix(const WTF::Vector<float>&);
 
   void Trace(blink::Visitor*) override;
 
@@ -165,7 +165,8 @@ class XRSession final : public EventTargetWithInlineData {
           results);
 
   const Member<XRDevice> device_;
-  const bool exclusive_;
+  const bool immersive_;
+  const bool environment_integration_;
   const Member<XRPresentationContext> output_context_;
   String blend_mode_string_;
   Member<XRLayer> base_layer_;
@@ -174,10 +175,10 @@ class XRSession final : public EventTargetWithInlineData {
   Member<ResizeObserver> resize_observer_;
   Member<XRCanvasInputProvider> canvas_input_provider_;
 
-  XRFrameRequestCallbackCollection callback_collection_;
+  TraceWrapperMember<XRFrameRequestCallbackCollection> callback_collection_;
   std::unique_ptr<TransformationMatrix> base_pose_matrix_;
 
-  WTF::Vector<float> non_exclusive_projection_matrix_;
+  WTF::Vector<float> non_immersive_projection_matrix_;
 
   double depth_near_ = 0.1;
   double depth_far_ = 1000.0;
@@ -196,7 +197,6 @@ class XRSession final : public EventTargetWithInlineData {
   // Dimensions of the output canvas.
   int output_width_ = 1;
   int output_height_ = 1;
-  int output_angle_ = 0;
 };
 
 }  // namespace blink

@@ -112,14 +112,6 @@ bool IsNewClearBrowsingDataUIEnabled() {
   return base::FeatureList::IsEnabled(kNewClearBrowsingDataUI);
 }
 
-bool IsNewFeedbackKitEnabled() {
-  return true;
-}
-
-bool IsNewFeedbackKitEnabledWithSSOService() {
-  return true;
-}
-
 bool IsThirdPartyKeyboardWorkaroundEnabled() {
   // Check if the experimental flag is forced on or off.
   base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
@@ -143,7 +135,7 @@ bool IsBookmarksUIRebootEnabled() {
 }
 
 bool IsReadingListUIRebootEnabled() {
-  return base::FeatureList::IsEnabled(kCollectionsUIReboot);
+  return base::FeatureList::IsEnabled(kUIRefreshPhase1);
 }
 
 bool IsCollectionsUIRebootEnabled() {
@@ -151,7 +143,7 @@ bool IsCollectionsUIRebootEnabled() {
 }
 
 bool IsSettingsUIRebootEnabled() {
-  return base::FeatureList::IsEnabled(kCollectionsUIReboot);
+  return base::FeatureList::IsEnabled(kUIRefreshPhase1);
 }
 
 }  // namespace experimental_flags

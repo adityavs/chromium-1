@@ -244,15 +244,12 @@ void LayoutGrid::RepeatTracksSizingIfNeeded(
   // In orthogonal flow cases column track's size is determined by using the
   // computed row track's size, which it was estimated during the first cycle of
   // the sizing algorithm.
-  bool has_any_orthogonal =
-      track_sizing_algorithm_.GetGrid().HasAnyOrthogonalGridItem();
-
   // TODO (lajava): these are just some of the cases which may require
   // a new cycle of the sizing algorithm; there may be more. In addition, not
   // all the cases with orthogonal flows require this extra cycle; we need a
   // more specific condition to detect whether child's min-content contribution
   // has changed or not.
-  if (!has_any_orthogonal)
+  if (!has_any_orthogonal_item_)
     return;
 
   // TODO (lajava): Whenever the min-content contribution of a grid item changes
@@ -292,9 +289,13 @@ void LayoutGrid::UpdateBlockLayout(bool relayout_children) {
     // we need to clear any override height set previously, so it doesn't
     // interfere in current layout execution.
     // Grid never uses the override width, that's why we don't need to clear it.
+    has_any_orthogonal_item_ = false;
     for (auto* child = FirstInFlowChildBox(); child;
-         child = child->NextInFlowSiblingBox())
+         child = child->NextInFlowSiblingBox()) {
       child->ClearOverrideLogicalHeight();
+      if (GridLayoutUtils::IsOrthogonalChild(*this, *child))
+        has_any_orthogonal_item_ = true;
+    }
 
     UpdateLogicalWidth();
 
@@ -773,7 +774,6 @@ void LayoutGrid::PlaceItemsOnGrid(
 #if DCHECK_IS_ON()
   DCHECK(!grid.HasAnyGridItemPaintOrder());
 #endif
-  DCHECK(!grid.HasAnyOrthogonalGridItem());
   size_t child_index = 0;
   for (LayoutBox* child = grid.GetOrderIterator().First(); child;
        child = grid.GetOrderIterator().Next()) {
@@ -788,10 +788,6 @@ void LayoutGrid::PlaceItemsOnGrid(
     if (!child->HasOverrideContainingBlockContentLogicalHeight())
       child->SetOverrideContainingBlockContentLogicalHeight(LayoutUnit(-1));
 
-    if (GridLayoutUtils::IsOrthogonalChild(*this, *child))
-      grid.AddOrthogonalItem(*child);
-    if (IsBaselineAlignmentForChild(*child))
-      grid.AddBaselineAlignedItem(*child);
     grid.SetGridItemPaintOrder(*child, child_index++);
 
     GridArea area = grid.GridItemArea(*child);
@@ -811,7 +807,7 @@ void LayoutGrid::PlaceItemsOnGrid(
         specified_major_axis_auto_grid_items.push_back(child);
       continue;
     }
-    grid.insert(*child, area);
+    grid.Insert(*child, area);
   }
 
 #if DCHECK_IS_ON()
@@ -865,34 +861,35 @@ void LayoutGrid::PerformGridItemsPreLayout(
   DCHECK(!algorithm.GetGrid().NeedsItemsPlacement());
   if (!GetDocument().View()->IsInPerformLayout())
     return;
-  // Blink does a pre-layout of all the orthogonal boxes in the layout
-  // tree (see how LocalFrameView::PerformLayout calls its
-  // LayoutOrthogonalWritingModeRoots function). However, grid items
-  // don't participate in this process (see the function
-  // PrepareOrthogonalWritingModeRootForLayout) because it's useless
-  // and even wrong if they don't have their corresponding Grid Area.
-  // TODO(jfernandez): Consider rafactoring this code with
-  // LocalFrameView::LayoutOrthogonalWritingModeRoots
-  for (auto* item : algorithm.GetGrid().OrthogonalGridItems()) {
-    DCHECK(GridLayoutUtils::IsOrthogonalChild(*this, *item));
-    if (PrepareOrthogonalWritingModeRootForLayout(*item)) {
-      UpdateGridAreaLogicalSize(
-          *item, algorithm.EstimatedGridAreaBreadthForChild(*item));
-      item->LayoutIfNeeded();
+  for (auto* child = FirstInFlowChildBox(); child;
+       child = child->NextInFlowSiblingBox()) {
+    // Blink does a pre-layout of all the orthogonal boxes in the layout
+    // tree (see how LocalFrameView::PerformLayout calls its
+    // LayoutOrthogonalWritingModeRoots function). However, grid items
+    // don't participate in this process (see the function
+    // PrepareOrthogonalWritingModeRootForLayout) because it's useless
+    // and even wrong if they don't have their corresponding Grid Area.
+    // TODO(jfernandez): Consider rafactoring this code with
+    // LocalFrameView::LayoutOrthogonalWritingModeRoots
+    if (GridLayoutUtils::IsOrthogonalChild(*this, *child)) {
+      if (PrepareOrthogonalWritingModeRootForLayout(*child)) {
+        UpdateGridAreaLogicalSize(
+            *child, algorithm.EstimatedGridAreaBreadthForChild(*child));
+        child->LayoutIfNeeded();
+        continue;
+      }
     }
-  }
-  // We need to layout the item to know whether it must synthesize its
-  // baseline or not, which may imply a cyclic sizing dependency.
-  // TODO (jfernandez): Can we avoid it ?
-  for (auto* item : algorithm.GetGrid().BaselineGridItems()) {
-    DCHECK(IsBaselineAlignmentForChild(*item));
-    if (GridLayoutUtils::IsOrthogonalChild(*this, *item))
-      continue;
-    if (item->HasRelativeLogicalWidth() || item->HasRelativeLogicalHeight()) {
-      UpdateGridAreaLogicalSize(
-          *item, algorithm.EstimatedGridAreaBreadthForChild(*item));
+    // We need to layout the item to know whether it must synthesize its
+    // baseline or not, which may imply a cyclic sizing dependency.
+    // TODO (jfernandez): Can we avoid it ?
+    if (IsBaselineAlignmentForChild(*child)) {
+      if (child->HasRelativeLogicalWidth() ||
+          child->HasRelativeLogicalHeight()) {
+        UpdateGridAreaLogicalSize(
+            *child, algorithm.EstimatedGridAreaBreadthForChild(*child));
+      }
+      child->LayoutIfNeeded();
     }
-    item->LayoutIfNeeded();
   }
 }
 
@@ -1016,7 +1013,7 @@ void LayoutGrid::PlaceSpecifiedMajorAxisItemsOnGrid(
           major_axis_positions);
     }
 
-    grid.insert(*auto_grid_item, *empty_grid_area);
+    grid.Insert(*auto_grid_item, *empty_grid_area);
 
     if (!is_grid_auto_flow_dense)
       minor_axis_cursors.Set(major_axis_initial_position,
@@ -1129,7 +1126,7 @@ void LayoutGrid::PlaceAutoMajorAxisItemOnGrid(
           GridSpan::TranslatedDefiniteGridSpan(0, minor_axis_span_size));
   }
 
-  grid.insert(grid_item, *empty_grid_area);
+  grid.Insert(grid_item, *empty_grid_area);
   // Move auto-placement cursor to the new position.
   auto_placement_cursor.first = empty_grid_area->rows.StartLine();
   auto_placement_cursor.second = empty_grid_area->columns.StartLine();

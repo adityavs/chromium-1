@@ -29,7 +29,14 @@ extern const char kProactiveTabFreezeAndDiscardFeatureName[];
 
 // Variations parameter names related to proactive discarding.
 // See ProactiveTabFreezeAndDiscardsParams for details.
-extern const char kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscard[];
+//
+// TODO(sebmarchand): Use the base::FeatureParam API here.
+extern const char kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardParam[];
+extern const char
+    kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeParam[];
+extern const char
+    kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceParam
+        [];
 extern const char kProactiveTabFreezeAndDiscard_LowLoadedTabCountParam[];
 extern const char
     kProactiveTabFreezeAndDiscard_ModerateLoadedTabsPerGbRamParam[];
@@ -37,7 +44,9 @@ extern const char kProactiveTabFreezeAndDiscard_HighLoadedTabCountParam[];
 extern const char kProactiveTabFreezeAndDiscard_LowOccludedTimeoutParam[];
 extern const char kProactiveTabFreezeAndDiscard_ModerateOccludedTimeoutParam[];
 extern const char kProactiveTabFreezeAndDiscard_HighOccludedTimeoutParam[];
-extern const char kProactiveTabFreezeAndDiscard_FreezeTimeout[];
+extern const char kProactiveTabFreezeAndDiscard_FreezeTimeoutParam[];
+extern const char kProactiveTabFreezeAndDiscard_UnfreezeTimeoutParam[];
+extern const char kProactiveTabFreezeAndDiscard_RefreezeTimeoutParam[];
 
 // Variations parameter names related to the site characteristics database.
 // See ProactiveTabFreezeAndDiscardsParams for details.
@@ -45,6 +54,8 @@ extern const char kSiteCharacteristicsDb_FaviconUpdateObservationWindow[];
 extern const char kSiteCharacteristicsDb_TitleUpdateObservationWindow[];
 extern const char kSiteCharacteristicsDb_AudioUsageObservationWindow[];
 extern const char kSiteCharacteristicsDb_NotificationsUsageObservationWindow[];
+extern const char kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod[];
+extern const char kSiteCharacteristicsDb_AudioUsageGracePeriod[];
 
 // Variation parameter names related to infinite session restore.
 extern const char kInfiniteSessionRestore_MinSimultaneousTabLoads[];
@@ -60,6 +71,10 @@ extern const char kInfiniteSessionRestore_MinSiteEngagementToRestore[];
 // Default values of parameters related to the site characteristics database.
 // See ProactiveTabFreezeAndDiscardsParams for details.
 extern const bool kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardDefault;
+extern const bool
+    kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeDefault;
+extern const bool
+    kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceDefault;
 extern const uint32_t kProactiveTabFreezeAndDiscard_LowLoadedTabCountDefault;
 extern const uint32_t
     kProactiveTabFreezeAndDiscard_ModerateLoadedTabsPerGbRamDefault;
@@ -70,8 +85,11 @@ extern const base::TimeDelta
     kProactiveTabFreezeAndDiscard_ModerateOccludedTimeoutDefault;
 extern const base::TimeDelta
     kProactiveTabFreezeAndDiscard_HighOccludedTimeoutDefault;
+extern const base::TimeDelta kProactiveTabFreezeAndDiscard_FreezeTimeoutDefault;
 extern const base::TimeDelta
-    kProactiveTabFreezeAndDiscard_FreezeTimeout_Default;
+    kProactiveTabFreezeAndDiscard_UnfreezeTimeoutDefault;
+extern const base::TimeDelta
+    kProactiveTabFreezeAndDiscard_RefreezeTimeoutDefault;
 
 // Default values of parameters related to the site characteristics database.
 // See SiteCharacteristicsDatabaseParams for details.
@@ -83,6 +101,10 @@ extern const base::TimeDelta
     kSiteCharacteristicsDb_AudioUsageObservationWindow_Default;
 extern const base::TimeDelta
     kSiteCharacteristicsDb_NotificationsUsageObservationWindow_Default;
+extern const base::TimeDelta
+    kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod_Default;
+extern const base::TimeDelta
+    kSiteCharacteristicsDb_AudioUsageGracePeriod_Default;
 
 // Default values for infinite session restore feature.
 extern const uint32_t kInfiniteSessionRestore_MinSimultaneousTabLoadsDefault;
@@ -141,6 +163,11 @@ struct ProactiveTabFreezeAndDiscardParams {
   // |kProactiveTabFreezeAndDiscard| feature is enabled and this is false, only
   // proactive tab freezing happens.
   bool should_proactively_discard;
+  // Whether frozen tabs should periodically be unfrozen to update their state.
+  bool should_periodically_unfreeze;
+  // Whether tabs should be protected from freezing/discarding if they share
+  // their BrowsingInstance with another tab.
+  bool should_protect_tabs_sharing_browsing_instance;
   // Tab count (inclusive) beyond which the state transitions to MODERATE.
   // Intended to cover the majority of simple workflows and be small enough that
   // it is very unlikely that memory pressure will be encountered with this many
@@ -165,6 +192,10 @@ struct ProactiveTabFreezeAndDiscardParams {
   base::TimeDelta high_occluded_timeout;
   // Amount of time a tab must be occluded before it is frozen.
   base::TimeDelta freeze_timeout;
+  // Amount of time a tab must be unfrozen before it is temporarily unfrozen.
+  base::TimeDelta unfreeze_timeout;
+  // Amount of time that a tab stays unfrozen before being frozen again.
+  base::TimeDelta refreeze_timeout;
 };
 
 // Parameters used by the site characteristics database.
@@ -195,6 +226,16 @@ struct SiteCharacteristicsDatabaseParams {
   // Minimum observation window before considering that this website doesn't
   // use notifications while in background.
   base::TimeDelta notifications_usage_observation_window;
+  // The period of time after loading during which we ignore title/favicon
+  // change events. It's possible for some site that are loaded in background to
+  // use some of these features without this being an attempt to communicate
+  // with the user (e.g. the tab is just really finishing to load).
+  base::TimeDelta title_or_favicon_change_grace_period;
+  // The period of time during which we ignore audio usage gets ignored after a
+  // tab gets backgrounded. It's necessary because there might be a delay
+  // between a media request gets initiated and the time the audio actually
+  // starts.
+  base::TimeDelta audio_usage_grace_period;
 };
 
 // Parameters used by the infinite session restore feature.
@@ -241,6 +282,8 @@ ProactiveTabFreezeAndDiscardParams GetProactiveTabFreezeAndDiscardParams(
 // all the classes that need one.
 const ProactiveTabFreezeAndDiscardParams&
 GetStaticProactiveTabFreezeAndDiscardParams();
+ProactiveTabFreezeAndDiscardParams*
+GetMutableStaticProactiveTabFreezeAndDiscardParamsForTesting();
 
 base::TimeDelta GetTabLoadTimeout(const base::TimeDelta& default_timeout);
 

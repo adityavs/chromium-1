@@ -22,12 +22,12 @@
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher_observer.h"
 #include "ui/aura/window_port_for_shutdown.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/events/event_target_iterator.h"
 #include "ui/events/platform/platform_event_source.h"
 
 #if defined(USE_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/ozone_switches.h"
 #endif
 
 namespace aura {
@@ -51,11 +51,6 @@ Env::~Env() {
 
   for (EnvObserver& observer : observers_)
     observer.OnWillDestroyEnv();
-
-#if defined(USE_OZONE)
-  if (mode_ == Mode::LOCAL)
-    ui::OzonePlatform::Shutdown();
-#endif
 
   DCHECK_EQ(this, lazy_tls_ptr.Pointer()->Get());
   lazy_tls_ptr.Pointer()->Set(NULL);
@@ -105,9 +100,6 @@ std::unique_ptr<WindowPort> Env::CreateWindowPort(Window* window) {
   switch (window->GetProperty(aura::client::kEmbedType)) {
     case aura::client::WindowEmbedType::NONE:
       window_mus_type = WindowMusType::LOCAL;
-      break;
-    case aura::client::WindowEmbedType::TOP_LEVEL_IN_WM:
-      window_mus_type = WindowMusType::TOP_LEVEL_IN_WM;
       break;
     case aura::client::WindowEmbedType::EMBED_IN_OWNER:
       window_mus_type = WindowMusType::EMBED_IN_OWNER;
@@ -223,7 +215,7 @@ void Env::Init(service_manager::Connector* connector) {
   // instead of checking flags here.
   params.single_process = command_line->HasSwitch("single-process") ||
                           command_line->HasSwitch("in-process-gpu");
-  params.using_mojo = command_line->HasSwitch(switches::kEnableDrmMojo);
+  params.using_mojo = features::IsOzoneDrmMojo();
 
   if (connector) {
     // Supplying a connector implies this process is hosting Viz.
@@ -303,7 +295,8 @@ std::unique_ptr<ui::OSExchangeData::Provider> Env::BuildProvider() {
 }
 
 std::unique_ptr<ui::SystemInputInjector> Env::CreateSystemInputInjector() {
-  return std::make_unique<SystemInputInjectorMus>(window_tree_client_);
+  return std::make_unique<SystemInputInjectorMus>(
+      window_tree_client_ ? window_tree_client_->connector() : nullptr);
 }
 
 }  // namespace aura

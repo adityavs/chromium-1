@@ -30,7 +30,6 @@ ChromeOSOAuth2TokenServiceDelegate::~ChromeOSOAuth2TokenServiceDelegate() {
 OAuth2AccessTokenFetcher*
 ChromeOSOAuth2TokenServiceDelegate::CreateAccessTokenFetcher(
     const std::string& account_id,
-    net::URLRequestContextGetter* getter,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     OAuth2AccessTokenConsumer* consumer) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -139,9 +138,9 @@ void ChromeOSOAuth2TokenServiceDelegate::UpdateCredentials(
   account_manager_->UpsertToken(account_key, refresh_token);
 }
 
-net::URLRequestContextGetter*
-ChromeOSOAuth2TokenServiceDelegate::GetRequestContext() const {
-  return account_manager_->GetUrlRequestContext();
+scoped_refptr<network::SharedURLLoaderFactory>
+ChromeOSOAuth2TokenServiceDelegate::GetURLLoaderFactory() const {
+  return account_manager_->GetUrlLoaderFactory();
 }
 
 OAuth2TokenServiceDelegate::LoadCredentialsState

@@ -34,6 +34,36 @@ class AuthenticatorDialogTest : public DialogBrowserTest {
           AuthenticatorTransport::kCloudAssistedBluetoothLowEnergy);
       model->SetCurrentStep(
           AuthenticatorRequestDialogModel::Step::kTransportSelection);
+    } else if (name == "insert_usb_register") {
+      model->SetCurrentStep(AuthenticatorRequestDialogModel::Step::
+                                kUsbInsertAndActivateOnRegister);
+    } else if (name == "insert_usb_sign") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kUsbInsertAndActivateOnSign);
+    } else if (name == "timeout") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kErrorTimedOut);
+    } else if (name == "ble_power_on_manual") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBlePowerOnManual);
+    } else if (name == "ble_pairing_begin") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBlePairingBegin);
+    } else if (name == "ble_enter_pairing_mode") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBleEnterPairingMode);
+    } else if (name == "ble_device_selection") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBleDeviceSelection);
+    } else if (name == "ble_pin_entry") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBlePinEntry);
+    } else if (name == "ble_verifying") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBleVerifying);
+    } else if (name == "ble_activate") {
+      model->SetCurrentStep(
+          AuthenticatorRequestDialogModel::Step::kBleActivate);
     }
 
     ShowAuthenticatorRequestDialog(
@@ -56,5 +86,46 @@ IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_completed) {
 }
 
 IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_transports) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_insert_usb_register) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_insert_usb_sign) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_timeout) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_power_on_manual) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_pairing_begin) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest,
+                       InvokeUi_ble_enter_pairing_mode) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_device_selection) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_pin_entry) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_verifying) {
+  ShowAndVerifyUi();
+}
+
+IN_PROC_BROWSER_TEST_F(AuthenticatorDialogTest, InvokeUi_ble_activate) {
   ShowAndVerifyUi();
 }

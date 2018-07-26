@@ -4,18 +4,17 @@
 
 #include "services/ui/gpu_host/gpu_client.h"
 
-#include "components/viz/host/server_gpu_memory_buffer_manager.h"
+#include "components/viz/host/host_gpu_memory_buffer_manager.h"
 #include "services/viz/privileged/interfaces/gl/gpu_service.mojom.h"
 
 namespace ui {
 namespace gpu_host {
 
-GpuClient::GpuClient(
-    int client_id,
-    gpu::GPUInfo* gpu_info,
-    gpu::GpuFeatureInfo* gpu_feature_info,
-    viz::ServerGpuMemoryBufferManager* gpu_memory_buffer_manager,
-    viz::mojom::GpuService* gpu_service)
+GpuClient::GpuClient(int client_id,
+                     gpu::GPUInfo* gpu_info,
+                     gpu::GpuFeatureInfo* gpu_feature_info,
+                     viz::HostGpuMemoryBufferManager* gpu_memory_buffer_manager,
+                     viz::mojom::GpuService* gpu_service)
     : client_id_(client_id),
       gpu_info_(gpu_info),
       gpu_feature_info_(gpu_feature_info),
@@ -54,8 +53,9 @@ void GpuClient::EstablishGpuChannel(EstablishGpuChannelCallback callback) {
              gpu::GpuFeatureInfo());
   }
   establish_callback_ = std::move(callback);
+  const bool cache_shaders_on_disk = true;
   gpu_service_->EstablishGpuChannel(
-      client_id_, client_tracing_id, is_gpu_host,
+      client_id_, client_tracing_id, is_gpu_host, cache_shaders_on_disk,
       base::Bind(&GpuClient::OnGpuChannelEstablished,
                  weak_factory_.GetWeakPtr()));
 }

@@ -818,6 +818,11 @@ PaintResult PaintLayerPainter::PaintSingleFragment(
     const PaintLayerFragment& fragment,
     const LayoutSize& subpixel_accumulation) {
   // Now do a paint with the root layer shifted to be us.
+
+  // We do not apply cull rect optimizations across transforms for two reasons:
+  //   1) Performance: We can optimize transform changes by not repainting.
+  //   2) Complexity: Difficulty updating clips when ancestor transforms change.
+  // For these reasons, we use an infinite dirty rect here.
   PaintLayerPaintingInfo new_paint_info(
       &paint_layer_, LayoutRect(LayoutRect::InfiniteIntRect()),
       painting_info.GetGlobalPaintFlags(), subpixel_accumulation);
@@ -936,8 +941,6 @@ void PaintLayerPainter::PaintFragmentWithPhase(
       DisplayItem::PaintPhaseToDrawingType(phase));
 
   LayoutRect new_cull_rect(clip_rect.Rect());
-  LayoutPoint paint_offset = -paint_layer_.LayoutBoxLocation();
-  paint_offset += fragment.fragment_data->PaintOffset();
   // We paint in the containing transform node's space. Now |new_cull_rect| is
   // in the pixel-snapped border box space of |painting_info.root_layer|.
   // Adjust it to the correct space. |paint_offset| is already in the correct
@@ -958,7 +961,7 @@ void PaintLayerPainter::PaintFragmentWithPhase(
                            .GetDocument()
                            .DidLayoutWithPendingStylesheets());
 
-  paint_layer_.GetLayoutObject().Paint(paint_info, paint_offset);
+  paint_layer_.GetLayoutObject().Paint(paint_info);
 }
 
 void PaintLayerPainter::PaintBackgroundForFragments(

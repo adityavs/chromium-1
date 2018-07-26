@@ -10,8 +10,21 @@ login.createScreen('DemoSetupScreen', 'demo-setup', function() {
   return {
     EXTERNAL_API: ['onSetupFinished'],
 
+    /** @override */
+    decorate: function() {
+      var demoSetupScreen = $('demo-setup-content');
+      demoSetupScreen.offlineDemoModeEnabled_ =
+          loadTimeData.getValue('offlineDemoModeEnabled');
+    },
+
+    /** Returns a control which should receive an initial focus. */
     get defaultControl() {
       return $('demo-setup-content');
+    },
+
+    /** Called after resources are updated. */
+    updateLocalizedContent: function() {
+      $('demo-setup-content').updateLocalizedContent();
     },
 
     /** @override */

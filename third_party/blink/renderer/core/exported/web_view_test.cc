@@ -35,6 +35,7 @@
 #include <string>
 
 #include "build/build_config.h"
+#include "cc/trees/layer_tree_host.h"
 #include "gin/handle.h"
 #include "gin/object_template_builder.h"
 #include "gin/wrappable.h"
@@ -104,6 +105,7 @@
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/focus_controller.h"
 #include "third_party/blink/renderer/core/page/page.h"
+#include "third_party/blink/renderer/core/page/page_visibility_state.h"
 #include "third_party/blink/renderer/core/page/print_context.h"
 #include "third_party/blink/renderer/core/page/scoped_page_pauser.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
@@ -119,6 +121,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_record_builder.h"
 #include "third_party/blink/renderer/platform/keyboard_codes.h"
 #include "third_party/blink/renderer/platform/scroll/scroll_types.h"
+#include "third_party/blink/renderer/platform/testing/histogram_tester.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/url_test_helpers.h"
 #include "third_party/blink/renderer/platform/testing/wtf/scoped_mock_clock.h"
@@ -255,7 +258,11 @@ class WebViewTest : public testing::Test {
 
  protected:
   void SetViewportSize(const WebSize& size) {
-    web_view_helper_.SetViewportSize(size);
+    content::LayerTreeView* layer_tree_view =
+        web_view_helper_.GetLayerTreeView();
+    layer_tree_view->SetViewportSizeAndScale(
+        static_cast<gfx::Size>(size), /*device_scale_factor=*/1.f,
+        layer_tree_view->layer_tree_host()->local_surface_id_from_parent());
   }
 
   std::string RegisterMockedHttpURLLoad(const std::string& file_name) {
@@ -466,8 +473,9 @@ TEST_F(WebViewTest, SetBaseBackgroundColorBeforeMainFrame) {
   // Note: this test doesn't use WebViewHelper since it intentionally runs
   // initialization code between WebView and WebLocalFrame creation.
   FrameTestHelpers::TestWebViewClient web_view_client;
-  WebViewImpl* web_view = static_cast<WebViewImpl*>(WebView::Create(
-      &web_view_client, mojom::PageVisibilityState::kVisible, nullptr));
+  WebViewImpl* web_view = static_cast<WebViewImpl*>(
+      WebView::Create(&web_view_client, &web_view_client,
+                      mojom::PageVisibilityState::kVisible, nullptr));
   EXPECT_NE(SK_ColorBLUE, web_view->BackgroundColor());
   // webView does not have a frame yet, but we should still be able to set the
   // background color.
@@ -2476,7 +2484,7 @@ static void DragAndDropURL(WebViewImpl* web_view, const std::string& url) {
   widget->DragTargetDragEnter(drag_data, client_point, screen_point,
                               kWebDragOperationCopy, 0);
   widget->DragTargetDrop(drag_data, client_point, screen_point, 0);
-  FrameTestHelpers::PumpPendingRequestsForFrameToLoad(web_view->MainFrame());
+  FrameTestHelpers::PumpPendingRequestsForFrameToLoad();
 }
 
 TEST_F(WebViewTest, DragDropURL) {
@@ -2583,8 +2591,8 @@ TEST_F(WebViewTest, ClientTapHandling) {
 TEST_F(WebViewTest, ClientTapHandlingNullWebViewClient) {
   // Note: this test doesn't use WebViewHelper since WebViewHelper creates an
   // internal WebViewClient on demand if the supplied WebViewClient is null.
-  WebViewImpl* web_view = static_cast<WebViewImpl*>(
-      WebView::Create(nullptr, mojom::PageVisibilityState::kVisible, nullptr));
+  WebViewImpl* web_view = static_cast<WebViewImpl*>(WebView::Create(
+      nullptr, nullptr, mojom::PageVisibilityState::kVisible, nullptr));
   FrameTestHelpers::TestWebFrameClient web_frame_client;
   FrameTestHelpers::TestWebWidgetClient web_widget_client;
   WebLocalFrame* local_frame = WebLocalFrame::CreateMainFrame(
@@ -5089,6 +5097,245 @@ TEST_F(WebViewTest, FirstInputDelayReported) {
                     .InMillisecondsF());
 }
 
+// Check that longest input delay is correctly reported to the document.
+TEST_F(WebViewTest, LongestInputDelayReported) {
+  WebViewImpl* web_view = web_view_helper_.Initialize();
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  LocalFrame* main_frame = web_view->MainFrameImpl()->GetFrame();
+  ASSERT_NE(nullptr, main_frame);
+
+  Document* document = main_frame->GetDocument();
+  ASSERT_NE(nullptr, document);
+
+  WTF::ScopedMockClock clock;
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+
+  InteractiveDetector* interactive_detector(
+      InteractiveDetector::From(*document));
+  ASSERT_NE(nullptr, interactive_detector);
+
+  EXPECT_TRUE(interactive_detector->GetLongestInputDelay().is_zero());
+
+  WebKeyboardEvent key_event1(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event1.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event1.windows_key_code = VKEY_SPACE;
+  key_event1.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event1));
+
+  TimeTicks longest_input_timestamp = CurrentTimeTicks();
+
+  WebKeyboardEvent key_event2(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event2.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event2.windows_key_code = VKEY_SPACE;
+  key_event2.SetTimeStamp(longest_input_timestamp);
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event2));
+
+  WebKeyboardEvent key_event3(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event3.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event3.windows_key_code = VKEY_SPACE;
+  key_event3.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event3));
+
+  EXPECT_NEAR(100,
+              interactive_detector->GetLongestInputDelay().InMillisecondsF(),
+              0.01);
+  EXPECT_EQ(longest_input_timestamp,
+            interactive_detector->GetLongestInputTimestamp());
+}
+
+TEST_F(WebViewTest, InputDelayReported) {
+  WTF::ScopedMockClock clock;
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+
+  WebViewImpl* web_view = web_view_helper_.Initialize();
+
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+
+  HistogramTester histogram_tester;
+  WebKeyboardEvent key_event1(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event1.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event1.windows_key_code = VKEY_SPACE;
+  key_event1.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event1));
+
+  WebKeyboardEvent key_event2(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event2.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event2.windows_key_code = VKEY_SPACE;
+  key_event2.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event2));
+
+  WebKeyboardEvent key_event3(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event3.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event3.windows_key_code = VKEY_SPACE;
+  key_event3.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event3));
+
+  histogram_tester.ExpectTotalCount("PageLoad.InteractiveTiming.InputDelay", 3);
+  histogram_tester.ExpectBucketCount("PageLoad.InteractiveTiming.InputDelay", 50, 2);
+  histogram_tester.ExpectBucketCount("PageLoad.InteractiveTiming.InputDelay", 70, 1);
+
+  histogram_tester.ExpectTotalCount("PageLoad.InteractiveTiming.InputTimestamp", 3);
+  histogram_tester.ExpectBucketCount("PageLoad.InteractiveTiming.InputTimestamp", 70, 1);
+  histogram_tester.ExpectBucketCount("PageLoad.InteractiveTiming.InputTimestamp", 120, 1);
+  histogram_tester.ExpectBucketCount("PageLoad.InteractiveTiming.InputTimestamp", 170, 1);
+}
+
+// Tests that if the page was backgrounded while an input event was queued,
+// we do not count its delay to calculate longest input delay.
+TEST_F(WebViewTest, LongestInputDelayPageBackgroundedDuringQueuing) {
+  WebViewImpl* web_view = web_view_helper_.Initialize();
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  LocalFrame* main_frame = web_view->MainFrameImpl()->GetFrame();
+  ASSERT_NE(nullptr, main_frame);
+
+  Document* document = main_frame->GetDocument();
+  ASSERT_NE(nullptr, document);
+
+  WTF::ScopedMockClock clock;
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+
+  InteractiveDetector* interactive_detector(
+      InteractiveDetector::From(*document));
+  ASSERT_NE(nullptr, interactive_detector);
+
+  EXPECT_TRUE(interactive_detector->GetLongestInputDelay().is_zero());
+
+  WebKeyboardEvent key_event1(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event1.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event1.windows_key_code = VKEY_SPACE;
+  TimeTicks key_event1_time = CurrentTimeTicks();
+  key_event1.SetTimeStamp(key_event1_time);
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event1));
+
+  WebKeyboardEvent key_event2(WebInputEvent::kRawKeyDown,
+                              WebInputEvent::kNoModifiers,
+                              WebInputEvent::GetStaticTimeStampForTests());
+  key_event2.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event2.windows_key_code = VKEY_SPACE;
+  key_event2.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kHidden, false);
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kVisible, false);
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  // Total input delay is >300ms.
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event2));
+
+  EXPECT_NEAR(
+      50, interactive_detector->GetLongestInputDelay().InMillisecondsF(), 0.01);
+  EXPECT_EQ(key_event1_time, interactive_detector->GetLongestInputTimestamp());
+}
+
+// Tests that if the page was backgrounded at navigation start and an input
+// event was queued before it was foregrounded, we do not count its delay to
+// calculate longest input delay.
+TEST_F(WebViewTest, LongestInputDelayPageBackgroundedAtNavStart) {
+  WebViewImpl* web_view = web_view_helper_.Initialize();
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kHidden, false);
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  LocalFrame* main_frame = web_view->MainFrameImpl()->GetFrame();
+  ASSERT_NE(nullptr, main_frame);
+
+  Document* document = main_frame->GetDocument();
+  ASSERT_NE(nullptr, document);
+
+  WTF::ScopedMockClock clock;
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+
+  InteractiveDetector* interactive_detector(
+      InteractiveDetector::From(*document));
+  ASSERT_NE(nullptr, interactive_detector);
+
+  WebKeyboardEvent key_event(WebInputEvent::kRawKeyDown,
+                             WebInputEvent::kNoModifiers,
+                             WebInputEvent::GetStaticTimeStampForTests());
+  key_event.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event.windows_key_code = VKEY_SPACE;
+  key_event.SetTimeStamp(CurrentTimeTicks());
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kVisible, false);
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event));
+
+  EXPECT_TRUE(interactive_detector->GetLongestInputDelay().is_zero());
+}
+
+// Tests page backgrounding outside of input queuing time does not affect
+// longest input delay.
+TEST_F(WebViewTest, LongestInputDelayPageBackgroundedNotDuringQueuing) {
+  WebViewImpl* web_view = web_view_helper_.Initialize();
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  LocalFrame* main_frame = web_view->MainFrameImpl()->GetFrame();
+  ASSERT_NE(nullptr, main_frame);
+
+  Document* document = main_frame->GetDocument();
+  ASSERT_NE(nullptr, document);
+
+  WTF::ScopedMockClock clock;
+  clock.Advance(TimeDelta::FromMilliseconds(70));
+
+  InteractiveDetector* interactive_detector(
+      InteractiveDetector::From(*document));
+  ASSERT_NE(nullptr, interactive_detector);
+
+  EXPECT_TRUE(interactive_detector->GetLongestInputDelay().is_zero());
+
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kHidden, false);
+  clock.Advance(TimeDelta::FromMilliseconds(100));
+  web_view->SetVisibilityState(mojom::PageVisibilityState::kVisible, false);
+  clock.Advance(TimeDelta::FromMilliseconds(1));
+
+  WebKeyboardEvent key_event(WebInputEvent::kRawKeyDown,
+                             WebInputEvent::kNoModifiers,
+                             WebInputEvent::GetStaticTimeStampForTests());
+  key_event.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event.windows_key_code = VKEY_SPACE;
+  TimeTicks key_event_time = CurrentTimeTicks();
+  key_event.SetTimeStamp(key_event_time);
+  clock.Advance(TimeDelta::FromMilliseconds(50));
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event));
+
+  EXPECT_NEAR(
+      50, interactive_detector->GetLongestInputDelay().InMillisecondsF(), 0.01);
+  EXPECT_EQ(key_event_time, interactive_detector->GetLongestInputTimestamp());
+}
+
 // Check that first input delay is correctly reported to the document when the
 // first input is a pointer down event, and we receive a pointer up event.
 TEST_F(WebViewTest, PointerDownUpFirstInputDelay) {
@@ -5181,31 +5428,34 @@ TEST_F(WebViewTest, PointerDownCancelFirstInputDelay) {
   EXPECT_TRUE(interactive_detector->GetFirstInputTimestamp().is_null());
 }
 
+// We need a way for JS to advance the mock clock. Hook into console.log, so
+// that logging advances the clock by |event_handling_delay| seconds.
+class MockClockAdvancingWebFrameClient
+    : public FrameTestHelpers::TestWebFrameClient {
+ public:
+  MockClockAdvancingWebFrameClient(WTF::ScopedMockClock* mock_clock,
+                                   TimeDelta event_handling_delay)
+      : mock_clock_(mock_clock), event_handling_delay_(event_handling_delay) {}
+  // WebLocalFrameClient overrides:
+  void DidAddMessageToConsole(const WebConsoleMessage& message,
+                              const WebString& source_name,
+                              unsigned source_line,
+                              const WebString& stack_trace) override {
+    mock_clock_->Advance(event_handling_delay_);
+  }
+
+ private:
+  WTF::ScopedMockClock* mock_clock_;
+  TimeDelta event_handling_delay_;
+};
+
 // Check that the input delay is correctly reported to the document.
 TEST_F(WebViewTest, FirstInputDelayExcludesProcessingTime) {
-  // We need a way for JS to advance the mock clock. Hook into console.log, so
-  // that logging advances the clock by 6 seconds.
-  class MockClockAdvancingWebFrameClient
-      : public FrameTestHelpers::TestWebFrameClient {
-   public:
-    MockClockAdvancingWebFrameClient(WTF::ScopedMockClock* mock_clock)
-        : mock_clock_(mock_clock) {}
-    // WebLocalFrameClient overrides:
-    void DidAddMessageToConsole(const WebConsoleMessage& message,
-                                const WebString& source_name,
-                                unsigned source_line,
-                                const WebString& stack_trace) override {
-      mock_clock_->Advance(TimeDelta::FromMilliseconds(6000));
-    }
-
-   private:
-    WTF::ScopedMockClock* mock_clock_;
-  };
-
   WTF::ScopedMockClock clock;
   // Page load timing logic depends on the time not being zero.
   clock.Advance(TimeDelta::FromMilliseconds(1));
-  MockClockAdvancingWebFrameClient frame_client(&clock);
+  MockClockAdvancingWebFrameClient frame_client(
+      &clock, TimeDelta::FromMilliseconds(6000));
   WebViewImpl* web_view = web_view_helper_.Initialize(&frame_client);
   WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
   FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
@@ -5244,4 +5494,48 @@ TEST_F(WebViewTest, FirstInputDelayExcludesProcessingTime) {
   web_view_helper_.Reset();  // Remove dependency on locally scoped client.
 }
 
+// Check that the longest input delay is correctly reported to the document.
+TEST_F(WebViewTest, LongestInputDelayExcludesProcessingTime) {
+  WTF::ScopedMockClock clock;
+  // Page load timing logic depends on the time not being zero.
+  clock.Advance(TimeDelta::FromMilliseconds(1));
+  MockClockAdvancingWebFrameClient frame_client(
+      &clock, TimeDelta::FromMilliseconds(6000));
+  WebViewImpl* web_view = web_view_helper_.Initialize(&frame_client);
+  WebURL base_url = URLTestHelpers::ToKURL("http://example.com/");
+  FrameTestHelpers::LoadHTMLString(web_view->MainFrameImpl(),
+                                   "<html><body></body></html>", base_url);
+
+  LocalFrame* main_frame = web_view->MainFrameImpl()->GetFrame();
+  ASSERT_NE(nullptr, main_frame);
+
+  Document* document = main_frame->GetDocument();
+  ASSERT_NE(nullptr, document);
+
+  WebLocalFrame* frame = web_view_helper_.LocalMainFrame();
+  // console.log will advance the mock clock.
+  frame->ExecuteScript(
+      WebScriptSource("document.addEventListener('keydown', "
+                      "() => {console.log('advancing timer');})"));
+
+  InteractiveDetector* interactive_detector(
+      InteractiveDetector::From(*document));
+  ASSERT_NE(nullptr, interactive_detector);
+
+  WebKeyboardEvent key_event(WebInputEvent::kRawKeyDown,
+                             WebInputEvent::kNoModifiers,
+                             WebInputEvent::GetStaticTimeStampForTests());
+  key_event.dom_key = Platform::Current()->DomKeyEnumFromString(" ");
+  key_event.windows_key_code = VKEY_SPACE;
+  key_event.SetTimeStamp(CurrentTimeTicks());
+
+  clock.Advance(TimeDelta::FromMilliseconds(5000));
+
+  web_view->HandleInputEvent(WebCoalescedInputEvent(key_event));
+
+  TimeDelta longest_input_delay = interactive_detector->GetLongestInputDelay();
+  EXPECT_EQ(5000, longest_input_delay.InMillisecondsF());
+
+  web_view_helper_.Reset();  // Remove dependency on locally scoped client.
+}
 }  // namespace blink

@@ -20,6 +20,7 @@
 #include "ui/aura/window.h"
 #include "ui/events/base_event_utils.h"
 #include "ui/events/event.h"
+#include "ui/views/accessibility/view_accessibility.h"
 #include "ui/views/mus/mus_client.h"
 #include "ui/views/mus/screen_mus.h"
 #include "ui/views/test/views_test_base.h"
@@ -78,9 +79,7 @@ class ExpectsNullCursorClientDuringTearDown : public aura::WindowObserver {
     window_->AddObserver(this);
   }
 
-  ~ExpectsNullCursorClientDuringTearDown() override {
-    EXPECT_FALSE(window_);
-  }
+  ~ExpectsNullCursorClientDuringTearDown() override { EXPECT_FALSE(window_); }
 
  private:
   // aura::WindowObserver:
@@ -258,8 +257,7 @@ TEST_F(DesktopWindowTreeHostMusTest, StackAtTop) {
   std::unique_ptr<Widget> widget2(CreateWidget());
   widget2->Show();
 
-  aura::test::ChangeCompletionWaiter waiter(
-      aura::ChangeType::REORDER, true);
+  aura::test::ChangeCompletionWaiter waiter(aura::ChangeType::REORDER, true);
   widget1->StackAtTop();
   waiter.Wait();
 
@@ -275,8 +273,7 @@ TEST_F(DesktopWindowTreeHostMusTest, StackAtTopAlreadyOnTop) {
   std::unique_ptr<Widget> widget2(CreateWidget());
   widget2->Show();
 
-  aura::test::ChangeCompletionWaiter waiter(
-      aura::ChangeType::REORDER, true);
+  aura::test::ChangeCompletionWaiter waiter(aura::ChangeType::REORDER, true);
   widget2->StackAtTop();
   waiter.Wait();
 }
@@ -288,8 +285,7 @@ TEST_F(DesktopWindowTreeHostMusTest, StackAbove) {
   std::unique_ptr<Widget> widget2(CreateWidget(nullptr));
   widget2->Show();
 
-  aura::test::ChangeCompletionWaiter waiter(
-      aura::ChangeType::REORDER, true);
+  aura::test::ChangeCompletionWaiter waiter(aura::ChangeType::REORDER, true);
   widget1->StackAboveWidget(widget2.get());
   waiter.Wait();
 }
@@ -445,6 +441,81 @@ TEST_F(DesktopWindowTreeHostMusTest, WindowTitle) {
   widget->UpdateWindowTitle();
   EXPECT_TRUE(window->GetProperty(aura::client::kTitleShownKey));
   EXPECT_EQ(title2, window->GetTitle());
+}
+
+TEST_F(DesktopWindowTreeHostMusTest, Accessibility) {
+  std::unique_ptr<Widget> widget = CreateWidget();
+  // Widget frame views do not participate in accessibility node hierarchy
+  // because the frame is provided by the window manager.
+  views::NonClientView* non_client_view = widget->non_client_view();
+  EXPECT_TRUE(non_client_view->GetViewAccessibility().is_ignored());
+  EXPECT_TRUE(
+      non_client_view->frame_view()->GetViewAccessibility().is_ignored());
+  EXPECT_TRUE(widget->client_view()->GetViewAccessibility().is_ignored());
+}
+
+// Used to ensure the visibility of the root window is changed before that of
+// the content window. This is necessary else close/hide animations end up
+// animating a hidden (black) window.
+class WidgetWindowVisibilityObserver : public aura::WindowObserver {
+ public:
+  explicit WidgetWindowVisibilityObserver(Widget* widget)
+      : content_window_(widget->GetNativeWindow()),
+        root_window_(content_window_->GetRootWindow()) {
+    EXPECT_NE(content_window_, root_window_);
+    content_window_->AddObserver(this);
+    root_window_->AddObserver(this);
+    EXPECT_TRUE(content_window_->IsVisible());
+    EXPECT_TRUE(root_window_->IsVisible());
+  }
+
+  ~WidgetWindowVisibilityObserver() override {
+    content_window_->RemoveObserver(this);
+    root_window_->RemoveObserver(this);
+  }
+
+  bool got_content_window_hidden() const { return got_content_window_hidden_; }
+
+  bool got_root_window_hidden() const { return got_root_window_hidden_; }
+
+ private:
+  // aura::WindowObserver:
+  void OnWindowVisibilityChanging(aura::Window* window, bool visible) override {
+    if (visible)
+      return;
+
+    if (!got_root_window_hidden_) {
+      EXPECT_EQ(window, root_window_);
+      got_root_window_hidden_ = true;
+    } else if (!got_content_window_hidden_) {
+      EXPECT_EQ(window, content_window_);
+      got_content_window_hidden_ = true;
+    }
+  }
+
+  aura::Window* content_window_;
+  aura::Window* root_window_;
+
+  // Set to true when |content_window_| is hidden. This is only checked after
+  // the |root_window_| is hidden.
+  bool got_content_window_hidden_ = false;
+
+  // Set to true when |root_window_| is hidden.
+  bool got_root_window_hidden_ = false;
+
+  DISALLOW_COPY_AND_ASSIGN(WidgetWindowVisibilityObserver);
+};
+
+// See comments above WidgetWindowVisibilityObserver for details on what this
+// verifies.
+TEST_F(DesktopWindowTreeHostMusTest,
+       HideChangesRootWindowVisibilityBeforeContentWindowVisibility) {
+  std::unique_ptr<Widget> widget(CreateWidget());
+  widget->Show();
+  WidgetWindowVisibilityObserver observer(widget.get());
+  widget->Close();
+  EXPECT_TRUE(observer.got_content_window_hidden());
+  EXPECT_TRUE(observer.got_root_window_hidden());
 }
 
 }  // namespace views

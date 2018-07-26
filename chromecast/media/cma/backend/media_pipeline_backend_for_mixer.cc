@@ -79,6 +79,7 @@ bool MediaPipelineBackendForMixer::Start(int64_t start_pts) {
     start_playback_timestamp_us_ =
         MonotonicClockNow() + kSyncedPlaybackStartDelayUs;
   }
+  start_playback_pts_us_ = start_pts;
 
   if (audio_decoder_ && !audio_decoder_->Start(start_playback_timestamp_us_))
     return false;
@@ -88,7 +89,7 @@ bool MediaPipelineBackendForMixer::Start(int64_t start_pts) {
       !video_decoder_->SetPts(start_playback_timestamp_us_, start_pts))
     return false;
   if (av_sync_) {
-    av_sync_->NotifyStart(start_playback_timestamp_us_);
+    av_sync_->NotifyStart(start_playback_timestamp_us_, start_pts);
   }
 
   state_ = kStatePlaying;
@@ -140,16 +141,14 @@ bool MediaPipelineBackendForMixer::Resume() {
 bool MediaPipelineBackendForMixer::SetPlaybackRate(float rate) {
   LOG(INFO) << __func__ << " rate=" << rate;
 
-  // TODO(almasrymina); instead of depending on the AV sync code to figure out
-  // that the playback rate has changed, we should notify it that we changed
-  // the playback rate and have it take that into account immediately.
-  // b/110230181.
-  //
   // If av_sync_ is available, only set the playback rate of the video master,
   // and let av_sync_ handle syncing the audio to the video.
   if (av_sync_) {
     DCHECK(video_decoder_);
-    return video_decoder_->SetPlaybackRate(rate);
+    if (!video_decoder_->SetPlaybackRate(rate))
+      return false;
+    av_sync_->NotifyPlaybackRateChange(rate);
+    return true;
   }
 
   // If there is no av_sync_, then we must manually set the playback rate of
@@ -181,6 +180,10 @@ AudioContentType MediaPipelineBackendForMixer::ContentType() const {
   return params_.content_type;
 }
 
+AudioChannel MediaPipelineBackendForMixer::AudioChannel() const {
+  return params_.audio_channel;
+}
+
 const scoped_refptr<base::SingleThreadTaskRunner>&
 MediaPipelineBackendForMixer::GetTaskRunner() const {
   return static_cast<TaskRunnerImpl*>(params_.task_runner)->runner();
@@ -189,11 +192,11 @@ MediaPipelineBackendForMixer::GetTaskRunner() const {
 #if defined(OS_LINUX)
 int64_t MediaPipelineBackendForMixer::MonotonicClockNow() const {
   timespec now = {0, 0};
-#if BUILDFLAG(ALSA_MONOTONIC_RAW_TSTAMPS)
+#if BUILDFLAG(MEDIA_CLOCK_MONOTONIC_RAW)
   clock_gettime(CLOCK_MONOTONIC_RAW, &now);
 #else
   clock_gettime(CLOCK_MONOTONIC, &now);
-#endif
+#endif // MEDIA_CLOCK_MONOTONIC_RAW
   return static_cast<int64_t>(now.tv_sec) * 1000000 + now.tv_nsec / 1000;
 }
 #elif defined(OS_FUCHSIA)

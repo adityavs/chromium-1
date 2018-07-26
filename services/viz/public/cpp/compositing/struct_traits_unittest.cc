@@ -17,6 +17,7 @@
 #include "components/viz/common/resources/returned_resource.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/common/surfaces/surface_info.h"
+#include "components/viz/common/surfaces/surface_range.h"
 #include "components/viz/test/begin_frame_args_test.h"
 #include "gpu/ipc/common/mailbox_holder_struct_traits.h"
 #include "gpu/ipc/common/mailbox_struct_traits.h"
@@ -47,6 +48,7 @@
 #include "services/viz/public/interfaces/compositing/filter_operations.mojom.h"
 #include "services/viz/public/interfaces/compositing/returned_resource.mojom.h"
 #include "services/viz/public/interfaces/compositing/surface_info.mojom.h"
+#include "services/viz/public/interfaces/compositing/surface_range.mojom.h"
 #include "services/viz/public/interfaces/compositing/transferable_resource.mojom.h"
 #include "skia/public/interfaces/bitmap_skbitmap_struct_traits.h"
 #include "skia/public/interfaces/blur_image_filter_tile_mode_struct_traits.h"
@@ -486,13 +488,11 @@ TEST_F(StructTraitsTest, CompositorFrame) {
   // TransferableResource constants.
   const uint32_t tr_id = 1337;
   const ResourceFormat tr_format = ALPHA_8;
-  const gfx::BufferFormat tr_buffer_format = gfx::BufferFormat::R_8;
   const uint32_t tr_filter = 1234;
   const gfx::Size tr_size(1234, 5678);
   TransferableResource resource;
   resource.id = tr_id;
   resource.format = tr_format;
-  resource.buffer_format = tr_buffer_format;
   resource.filter = tr_filter;
   resource.size = tr_size;
 
@@ -528,7 +528,6 @@ TEST_F(StructTraitsTest, CompositorFrame) {
   TransferableResource out_resource = output.resource_list[0];
   EXPECT_EQ(tr_id, out_resource.id);
   EXPECT_EQ(tr_format, out_resource.format);
-  EXPECT_EQ(tr_buffer_format, out_resource.buffer_format);
   EXPECT_EQ(tr_filter, out_resource.filter);
   EXPECT_EQ(tr_size, out_resource.size);
 
@@ -640,10 +639,10 @@ TEST_F(StructTraitsTest, CompositorFrameMetadata) {
   latency_info.AddLatencyNumber(
       ui::LATENCY_BEGIN_SCROLL_LISTENER_UPDATE_MAIN_COMPONENT);
   std::vector<ui::LatencyInfo> latency_infos = {latency_info};
-  std::vector<SurfaceId> referenced_surfaces;
+  std::vector<SurfaceRange> referenced_surfaces;
   SurfaceId id(FrameSinkId(1234, 4321),
                LocalSurfaceId(5678, base::UnguessableToken::Create()));
-  referenced_surfaces.push_back(id);
+  referenced_surfaces.emplace_back(id);
   std::vector<SurfaceId> activation_dependencies;
   SurfaceId id2(FrameSinkId(4321, 1234),
                 LocalSurfaceId(8765, base::UnguessableToken::Create()));
@@ -777,9 +776,11 @@ TEST_F(StructTraitsTest, RenderPass) {
   const gfx::Rect surface_quad_rect(1337, 2448, 1234, 5678);
   surface_quad->SetNew(
       shared_state_2, surface_quad_rect, surface_quad_rect,
-      SurfaceId(FrameSinkId(1337, 1234),
-                LocalSurfaceId(1234, base::UnguessableToken::Create())),
-      base::nullopt, SK_ColorYELLOW, false);
+      SurfaceRange(
+          base::nullopt,
+          SurfaceId(FrameSinkId(1337, 1234),
+                    LocalSurfaceId(1234, base::UnguessableToken::Create()))),
+      SK_ColorYELLOW, false);
 
   std::unique_ptr<RenderPass> output;
   SerializeAndDeserialize<mojom::RenderPass>(input, &output);
@@ -848,10 +849,7 @@ TEST_F(StructTraitsTest, RenderPass) {
   EXPECT_EQ(out_surface_quad->shared_quad_state, out_sqs2);
   EXPECT_EQ(surface_quad->rect, out_surface_quad->rect);
   EXPECT_EQ(surface_quad->visible_rect, out_surface_quad->visible_rect);
-  EXPECT_EQ(surface_quad->primary_surface_id,
-            out_surface_quad->primary_surface_id);
-  EXPECT_EQ(surface_quad->fallback_surface_id,
-            out_surface_quad->fallback_surface_id);
+  EXPECT_EQ(surface_quad->surface_range, out_surface_quad->surface_range);
   EXPECT_EQ(surface_quad->default_background_color,
             out_surface_quad->default_background_color);
   EXPECT_EQ(surface_quad->stretch_content_to_fill_bounds,
@@ -922,9 +920,9 @@ TEST_F(StructTraitsTest, QuadListBasic) {
       LocalSurfaceId(1234, base::UnguessableToken::Create()));
   SurfaceDrawQuad* primary_surface_quad =
       render_pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
-  primary_surface_quad->SetNew(sqs, rect3, rect3, primary_surface_id,
-                               base::Optional<SurfaceId>(fallback_surface_id),
-                               SK_ColorBLUE, false);
+  primary_surface_quad->SetNew(
+      sqs, rect3, rect3, SurfaceRange(fallback_surface_id, primary_surface_id),
+      SK_ColorBLUE, false);
 
   const gfx::Rect rect4(1234, 5678, 9101112, 13141516);
   const ResourceId resource_id4(1337);
@@ -1001,11 +999,11 @@ TEST_F(StructTraitsTest, QuadListBasic) {
   EXPECT_EQ(rect3, out_primary_surface_draw_quad->visible_rect);
   EXPECT_TRUE(out_primary_surface_draw_quad->needs_blending);
   EXPECT_EQ(primary_surface_id,
-            out_primary_surface_draw_quad->primary_surface_id);
+            out_primary_surface_draw_quad->surface_range.end());
   EXPECT_EQ(SK_ColorBLUE,
             out_primary_surface_draw_quad->default_background_color);
   EXPECT_EQ(fallback_surface_id,
-            out_primary_surface_draw_quad->fallback_surface_id);
+            out_primary_surface_draw_quad->surface_range.start());
 
   const RenderPassDrawQuad* out_render_pass_draw_quad =
       RenderPassDrawQuad::MaterialCast(output->quad_list.ElementAt(3));

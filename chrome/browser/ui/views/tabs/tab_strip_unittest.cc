@@ -195,8 +195,8 @@ class TabStripTest : public ChromeViewsTestBase,
     return tab->showing_close_button_;
   }
 
-  bool IsShowingAttentionIndicator(int model_index) {
-    return tab_strip_->tab_at(model_index)->icon_->ShowingAttentionIndicator();
+  bool IsShowingAttentionIndicator(Tab* tab) {
+    return tab->icon_->ShowingAttentionIndicator();
   }
 
   // Checks whether |tab| contains |point_in_tabstrip_coords|, where the point
@@ -252,7 +252,7 @@ TEST_P(TabStripTest, GetModelCount) {
 }
 
 TEST_P(TabStripTest, AccessibilityEvents) {
-  // When adding tabs, SetSelection() is called after RemoveTabAt(), as
+  // When adding tabs, SetSelection() is called after AddTabAt(), as
   // otherwise the index would not be meaningful.
   tab_strip_->AddTabAt(0, TabRendererData(), false);
   tab_strip_->AddTabAt(1, TabRendererData(), true);
@@ -266,7 +266,7 @@ TEST_P(TabStripTest, AccessibilityEvents) {
   // otherwise the index would not be meaningful.
   selection.SetSelectedIndex(0);
   tab_strip_->SetSelection(selection);
-  tab_strip_->RemoveTabAt(nullptr, 1);
+  tab_strip_->RemoveTabAt(nullptr, 1, true);
   EXPECT_EQ(2, test_views_delegate_->add_count());
   EXPECT_EQ(1, test_views_delegate_->remove_count());
 }
@@ -431,7 +431,7 @@ TEST_P(TabStripTest, TabCloseButtonVisibilityWhenStacked) {
     return;
   }
 
-  tab_strip_->SetBounds(0, 0, 300, 20);
+  tab_strip_->SetBounds(0, 0, 320, 20);
   controller_->AddTab(0, false);
   controller_->AddTab(1, true);
   controller_->AddTab(2, false);
@@ -507,7 +507,7 @@ TEST_P(TabStripTest, TabCloseButtonVisibilityWhenNotStacked) {
 
   // Set the tab strip width to be wide enough for three tabs to show all
   // three icons, but not enough for five tabs to show all three icons.
-  tab_strip_->SetBounds(0, 0, 290, 20);
+  tab_strip_->SetBounds(0, 0, 320, 20);
   controller_->AddTab(0, false);
   controller_->AddTab(1, true);
   controller_->AddTab(2, false);
@@ -817,6 +817,41 @@ TEST_P(TabStripTest, ResetBoundsForDraggedTabs) {
 
   EXPECT_FALSE(dragged_tab->dragging());
   EXPECT_LT(dragged_tab->bounds().width(), min_active_width);
+}
+
+// The "blocked" attention indicator should only show for background tabs.
+TEST_P(TabStripTest, TabNeedsAttentionBlocked) {
+  controller_->AddTab(0, false);
+  controller_->AddTab(1, true);
+
+  Tab* tab1 = tab_strip_->tab_at(1);
+
+  // Block tab1.
+  TabRendererData data;
+  data.blocked = true;
+  tab1->SetData(data);
+
+  EXPECT_FALSE(IsShowingAttentionIndicator(tab1));
+  controller_->SelectTab(0);
+  EXPECT_TRUE(IsShowingAttentionIndicator(tab1));
+  controller_->SelectTab(1);
+  EXPECT_FALSE(IsShowingAttentionIndicator(tab1));
+}
+
+// The generic "wants attention" version should always show.
+TEST_P(TabStripTest, TabNeedsAttentionGeneric) {
+  controller_->AddTab(0, false);
+  controller_->AddTab(1, true);
+
+  Tab* tab1 = tab_strip_->tab_at(1);
+
+  tab1->SetTabNeedsAttention(true);
+
+  EXPECT_TRUE(IsShowingAttentionIndicator(tab1));
+  controller_->SelectTab(0);
+  EXPECT_TRUE(IsShowingAttentionIndicator(tab1));
+  controller_->SelectTab(1);
+  EXPECT_TRUE(IsShowingAttentionIndicator(tab1));
 }
 
 // Defines an alias to be used for tests that are only relevant to the touch-

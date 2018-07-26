@@ -1,4 +1,4 @@
-// Copyright (c) 2017 The Chromium Authors. All rights reserved.
+// Copyright 2017 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -25,6 +25,7 @@
 
 namespace content {
 class BrowserContext;
+class NetworkConnectionTracker;
 };
 
 // This is a singleton class running in the browser UI thread (ownership of
@@ -197,6 +198,7 @@ class WebRtcEventLogManager final : public content::RenderProcessHostObserver,
   void EnableForBrowserContextInternal(
       BrowserContextId browser_context_id,
       const base::FilePath& browser_context_dir,
+      content::NetworkConnectionTracker* network_connection_tracker,
       net::URLRequestContextGetter* context_getter,
       base::OnceClosure reply);
   void DisableForBrowserContextInternal(BrowserContextId browser_context_id,
@@ -258,6 +260,12 @@ class WebRtcEventLogManager final : public content::RenderProcessHostObserver,
       std::unique_ptr<WebRtcEventLogUploader::Factory> uploader_factory,
       base::OnceClosure reply);
 
+  // It is not always feasible to check in unit tests that uploads do not occur
+  // at a certain time, because that's (sometimes) racy with the event that
+  // suppresses the upload. We therefore allow unit tests to glimpse into the
+  // black box and verify that the box is aware that it should not upload.
+  void UploadConditionsHoldForTesting(base::OnceCallback<void(bool)> callback);
+
   // This allows unit tests that do not wish to change the task runner to still
   // check when certain operations are finished.
   // TODO(crbug.com/775415): Remove this and use PostNullTaskForTesting instead.
@@ -303,10 +311,10 @@ class WebRtcEventLogManager final : public content::RenderProcessHostObserver,
   // peer connection. In (relevant) unit tests, a mock will be injected.
   std::unique_ptr<PeerConnectionTrackerProxy> pc_tracker_proxy_;
 
-  // The global system_request_context() is sent down to |remote_logs_manager_|
-  // with the first enabled browser context.
+  // The globals network_connection_tracker() and system_request_context() are
+  // sent down to |remote_logs_manager_| with the first enabled browser context.
   // This member must only be accessed on the UI thread.
-  bool url_request_context_getter_was_set_;
+  bool first_browser_context_initializations_done_;
 
   // The main logic will run sequentially on this runner, on which blocking
   // tasks are allowed.

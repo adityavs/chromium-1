@@ -287,16 +287,20 @@ const ActionList& GetActionList() {
   return action_map;
 }
 
+void PostAnnouncementNotification(NSString* announcement) {
+  NSDictionary* notification_info = @{
+    NSAccessibilityAnnouncementKey : announcement,
+    NSAccessibilityPriorityKey : @(NSAccessibilityPriorityHigh)
+  };
+  NSAccessibilityPostNotificationWithUserInfo(
+      [NSApp mainWindow], NSAccessibilityAnnouncementRequestedNotification,
+      notification_info);
+}
+
 void NotifyMacEvent(AXPlatformNodeCocoa* target, ax::mojom::Event event_type) {
   NSString* announcement_text = [target announcementTextForEvent:event_type];
   if (announcement_text) {
-    NSDictionary* notification_info = @{
-      NSAccessibilityAnnouncementKey : announcement_text,
-      NSAccessibilityPriorityKey : @(NSAccessibilityPriorityHigh)
-    };
-    NSAccessibilityPostNotificationWithUserInfo(
-        [NSApp mainWindow], NSAccessibilityAnnouncementRequestedNotification,
-        notification_info);
+    PostAnnouncementNotification(announcement_text);
     return;
   }
   NSAccessibilityPostNotification(
@@ -408,12 +412,15 @@ bool AlsoUseShowMenuActionForDefaultAction(const ui::AXNodeData& data) {
 }
 
 - (id)accessibilityHitTest:(NSPoint)point {
-  for (AXPlatformNodeCocoa* child in [self AXChildren]) {
-    if (![child accessibilityIsIgnored] &&
-        NSPointInRect(point, child.boundsInScreen)) {
-      return [child accessibilityHitTest:point];
-    }
+  if (!NSPointInRect(point, [self boundsInScreen]))
+    return nil;
+
+  for (id child in [[self AXChildren] reverseObjectEnumerator]) {
+    if (id foundChild = [child accessibilityHitTest:point])
+      return foundChild;
   }
+
+  // Hit self, but not any child.
   return NSAccessibilityUnignoredAncestor(self);
 }
 
@@ -651,7 +658,7 @@ bool AlsoUseShowMenuActionForDefaultAction(const ui::AXNodeData& data) {
 
   // Set type-specific information as necessary for actions set above.
   if ([value isKindOfClass:[NSString class]]) {
-    data.value = base::SysNSStringToUTF16(value);
+    data.value = base::SysNSStringToUTF8(value);
   } else if (data.action == ax::mojom::Action::kSetSelection &&
              [value isKindOfClass:[NSValue class]]) {
     NSRange range = [value rangeValue];
@@ -909,6 +916,11 @@ bool AlsoUseShowMenuActionForDefaultAction(const ui::AXNodeData& data) {
   return attributedString.autorelease();
 }
 
+- (NSString*)description {
+  return [NSString stringWithFormat:@"%@ - %@ (%@)", [super description],
+                                    [self AXTitle], [self AXRole]];
+}
+
 @end
 
 namespace ui {
@@ -970,6 +982,10 @@ void AXPlatformNodeMac::NotifyAccessibilityEvent(ax::mojom::Event event_type) {
       break;
   }
   NotifyMacEvent(native_node_, event_type);
+}
+
+void AXPlatformNodeMac::AnnounceText(base::string16& text) {
+  PostAnnouncementNotification(base::SysUTF16ToNSString(text));
 }
 
 int AXPlatformNodeMac::GetIndexInParent() {

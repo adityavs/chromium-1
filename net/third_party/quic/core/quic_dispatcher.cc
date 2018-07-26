@@ -10,7 +10,6 @@
 #include "net/third_party/quic/core/chlo_extractor.h"
 #include "net/third_party/quic/core/crypto/crypto_protocol.h"
 #include "net/third_party/quic/core/crypto/quic_random.h"
-#include "net/third_party/quic/core/quic_per_connection_packet_writer.h"
 #include "net/third_party/quic/core/quic_time_wait_list_manager.h"
 #include "net/third_party/quic/core/quic_utils.h"
 #include "net/third_party/quic/core/stateless_rejector.h"
@@ -36,14 +35,14 @@ class DeleteSessionsAlarm : public QuicAlarm::Delegate {
  public:
   explicit DeleteSessionsAlarm(QuicDispatcher* dispatcher)
       : dispatcher_(dispatcher) {}
+  DeleteSessionsAlarm(const DeleteSessionsAlarm&) = delete;
+  DeleteSessionsAlarm& operator=(const DeleteSessionsAlarm&) = delete;
 
   void OnAlarm() override { dispatcher_->DeleteSessions(); }
 
  private:
   // Not owned.
   QuicDispatcher* dispatcher_;
-
-  DISALLOW_COPY_AND_ASSIGN(DeleteSessionsAlarm);
 };
 
 // Collects packets serialized by a QuicPacketCreator in order
@@ -64,6 +63,11 @@ class PacketCollector : public QuicPacketCreator::DelegateInterface,
     serialized_packet->encrypted_buffer = nullptr;
     DeleteFrames(&(serialized_packet->retransmittable_frames));
     serialized_packet->retransmittable_frames.clear();
+  }
+
+  char* GetPacketBuffer() override {
+    // Let QuicPacketCreator to serialize packets on stack buffer.
+    return nullptr;
   }
 
   void OnUnrecoverableError(QuicErrorCode error,
@@ -702,11 +706,6 @@ bool QuicDispatcher::OnStreamFrame(const QuicStreamFrame& /*frame*/) {
   return false;
 }
 
-bool QuicDispatcher::OnAckFrame(const QuicAckFrame& /*frame*/) {
-  DCHECK(false);
-  return false;
-}
-
 bool QuicDispatcher::OnAckFrameStart(QuicPacketNumber /*largest_acked*/,
                                      QuicTime::Delta /*ack_delay_time*/) {
   DCHECK(false);
@@ -875,7 +874,7 @@ bool QuicDispatcher::ShouldAttemptCheapStatelessRejection() {
 }
 
 QuicTimeWaitListManager* QuicDispatcher::CreateQuicTimeWaitListManager() {
-  return new QuicTimeWaitListManager(writer_.get(), this, helper_.get(),
+  return new QuicTimeWaitListManager(writer_.get(), this, helper_->GetClock(),
                                      alarm_factory_.get());
 }
 
@@ -948,10 +947,6 @@ const QuicSocketAddress QuicDispatcher::GetClientAddress() const {
 
 bool QuicDispatcher::ShouldDestroySessionAsynchronously() {
   return true;
-}
-
-QuicPacketWriter* QuicDispatcher::CreatePerConnectionWriter() {
-  return new QuicPerConnectionPacketWriter(writer_.get());
 }
 
 void QuicDispatcher::SetLastError(QuicErrorCode error) {
@@ -1080,17 +1075,14 @@ void QuicDispatcher::OnStatelessRejectorProcessDone(
     const QuicSocketAddress& current_self_address,
     std::unique_ptr<QuicReceivedPacket> current_packet,
     ParsedQuicVersion first_version) {
-  const bool enable_l1_munge = GetQuicRestartFlag(quic_enable_l1_munge);
-  if (enable_l1_munge) {
-    // Reset current_* to correspond to the packet which initiated the stateless
-    // reject logic.
-    current_client_address_ = current_client_address;
-    current_peer_address_ = current_peer_address;
-    current_self_address_ = current_self_address;
-    current_packet_ = current_packet.get();
-    current_connection_id_ = rejector->connection_id();
-    framer_.set_version(first_version);
-  }
+  // Reset current_* to correspond to the packet which initiated the stateless
+  // reject logic.
+  current_client_address_ = current_client_address;
+  current_peer_address_ = current_peer_address;
+  current_self_address_ = current_self_address;
+  current_packet_ = current_packet.get();
+  current_connection_id_ = rejector->connection_id();
+  framer_.set_version(first_version);
 
   // Stop buffering packets on this connection
   const auto num_erased =
@@ -1106,17 +1098,6 @@ void QuicDispatcher::OnStatelessRejectorProcessDone(
     time_wait_list_manager_->ProcessPacket(
         current_self_address, current_peer_address, rejector->connection_id());
     return;
-  }
-
-  if (!enable_l1_munge) {
-    // Reset current_* to correspond to the packet which initiated the stateless
-    // reject logic.
-    current_client_address_ = current_client_address;
-    current_peer_address_ = current_peer_address;
-    current_self_address_ = current_self_address;
-    current_packet_ = current_packet.get();
-    current_connection_id_ = rejector->connection_id();
-    framer_.set_version(first_version);
   }
 
   ProcessStatelessRejectorState(std::move(rejector),

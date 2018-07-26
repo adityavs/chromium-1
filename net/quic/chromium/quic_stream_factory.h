@@ -35,7 +35,7 @@
 #include "net/quic/chromium/quic_session_key.h"
 #include "net/socket/client_socket_pool.h"
 #include "net/ssl/ssl_config_service.h"
-#include "net/third_party/quic/core/quic_client_push_promise_index.h"
+#include "net/third_party/quic/core/http/quic_client_push_promise_index.h"
 #include "net/third_party/quic/core/quic_config.h"
 #include "net/third_party/quic/core/quic_crypto_stream.h"
 #include "net/third_party/quic/core/quic_packets.h"
@@ -418,7 +418,8 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
                     base::TimeTicks dns_resolution_start_time,
                     base::TimeTicks dns_resolution_end_time,
                     const NetLogWithSource& net_log,
-                    QuicChromiumClientSession** session);
+                    QuicChromiumClientSession** session,
+                    NetworkChangeNotifier::NetworkHandle* network);
   void ActivateSession(const QuicSessionAliasKey& key,
                        QuicChromiumClientSession* session);
   void MarkAllActiveSessionsGoingAway();
@@ -582,7 +583,7 @@ class NET_EXPORT_PRIVATE QuicStreamFactory
 
   base::SequencedTaskRunner* task_runner_;
 
-  const scoped_refptr<SSLConfigService> ssl_config_service_;
+  SSLConfigService* const ssl_config_service_;
 
   // If set to true, the stream factory will create UDP Sockets with
   // experimental optimization enabled for receiving data.

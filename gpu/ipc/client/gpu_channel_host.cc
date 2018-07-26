@@ -107,8 +107,8 @@ uint32_t GpuChannelHost::OrderingBarrier(
   return flush_params.flush_id;
 }
 
-void GpuChannelHost::DestroyTransferBuffer(int32_t route_id,
-                                           int32_t id_to_destroy) {
+uint32_t GpuChannelHost::DestroyTransferBuffer(int32_t route_id,
+                                               int32_t id_to_destroy) {
   AutoLock lock(context_lock_);
 
   flush_list_.push_back(FlushParams());
@@ -117,6 +117,7 @@ void GpuChannelHost::DestroyTransferBuffer(int32_t route_id,
   flush_params.route_id = route_id;
   flush_params.put_offset = -1;
   flush_params.transfer_buffer_id_to_destroy = id_to_destroy;
+  return flush_params.flush_id;
 }
 
 void GpuChannelHost::EnsureFlush(uint32_t flush_id) {
@@ -182,6 +183,14 @@ base::SharedMemoryHandle GpuChannelHost::ShareToGpuProcess(
     return base::SharedMemoryHandle();
 
   return base::SharedMemory::DuplicateHandle(source_handle);
+}
+
+base::UnsafeSharedMemoryRegion GpuChannelHost::ShareToGpuProcess(
+    const base::UnsafeSharedMemoryRegion& source_region) {
+  if (IsLost())
+    return base::UnsafeSharedMemoryRegion();
+
+  return source_region.Duplicate();
 }
 
 int32_t GpuChannelHost::ReserveTransferBufferId() {

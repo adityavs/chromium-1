@@ -22,7 +22,9 @@ BookmarkSyncService::BookmarkSyncService(
 
 BookmarkSyncService::~BookmarkSyncService() {}
 
-void BookmarkSyncService::Shutdown() {}
+void BookmarkSyncService::Shutdown() {
+  bookmark_model_type_processor_.reset();
+}
 
 std::string BookmarkSyncService::EncodeBookmarkSyncMetadata() {
   if (!bookmark_model_type_processor_) {
@@ -36,7 +38,7 @@ void BookmarkSyncService::DecodeBookmarkSyncMetadata(
     const base::RepeatingClosure& schedule_save_closure,
     bookmarks::BookmarkModel* model) {
   if (bookmark_model_type_processor_) {
-    bookmark_model_type_processor_->DecodeSyncMetadata(
+    bookmark_model_type_processor_->ModelReadyToSync(
         metadata_str, schedule_save_closure, model);
   }
 }

@@ -418,6 +418,10 @@ void ProxyMain::SetNextCommitWaitsForActivation() {
   commit_waits_for_activation_ = true;
 }
 
+bool ProxyMain::RequestedAnimatePending() {
+  return max_requested_pipeline_stage_ >= ANIMATE_PIPELINE_STAGE;
+}
+
 void ProxyMain::NotifyInputThrottledUntilCommit() {
   DCHECK(IsMainThread());
   ImplThreadTaskRunner()->PostTask(
@@ -448,13 +452,6 @@ bool ProxyMain::CommitRequested() const {
   // CommitInProgress().
   return current_pipeline_stage_ != NO_PIPELINE_STAGE ||
          max_requested_pipeline_stage_ >= COMMIT_PIPELINE_STAGE;
-}
-
-void ProxyMain::MainThreadHasStoppedFlinging() {
-  DCHECK(IsMainThread());
-  ImplThreadTaskRunner()->PostTask(
-      FROM_HERE, base::BindOnce(&ProxyImpl::MainThreadHasStoppedFlingingOnImpl,
-                                base::Unretained(proxy_impl_.get())));
 }
 
 void ProxyMain::Start() {

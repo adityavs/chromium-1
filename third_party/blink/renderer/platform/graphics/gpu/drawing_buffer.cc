@@ -55,6 +55,7 @@
 #include "third_party/blink/renderer/platform/graphics/web_graphics_context_3d_provider_wrapper.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/blink/renderer/platform/wtf/typed_arrays/array_buffer_contents.h"
 #include "third_party/skia/include/core/SkColorSpaceXform.h"
 #include "third_party/skia/include/core/SkSurface.h"
@@ -179,7 +180,9 @@ DrawingBuffer::DrawingBuffer(
       sampler_color_space_(color_params.GetSamplerGfxColorSpace()),
       use_half_float_storage_(color_params.PixelFormat() ==
                               kF16CanvasPixelFormat),
-      chromium_image_usage_(chromium_image_usage) {
+      chromium_image_usage_(chromium_image_usage),
+      opengl_flip_y_extension_(
+          ContextProvider()->GetCapabilities().mesa_framebuffer_flip_y) {
   // Used by browser tests to detect the use of a DrawingBuffer.
   TRACE_EVENT_INSTANT0("test_gpu", "DrawingBufferCreation",
                        TRACE_EVENT_SCOPE_GLOBAL);
@@ -236,6 +239,10 @@ WebGraphicsContext3DProvider* DrawingBuffer::ContextProvider() {
 base::WeakPtr<WebGraphicsContext3DProviderWrapper>
 DrawingBuffer::ContextProviderWeakPtr() {
   return context_provider_->GetWeakPtr();
+}
+
+const DrawingBuffer::WebGLContextLimits& DrawingBuffer::webgl_context_limits() {
+  return webgl_context_limits_;
 }
 
 void DrawingBuffer::SetIsHidden(bool hidden) {
@@ -699,6 +706,10 @@ bool DrawingBuffer::Initialize(const IntSize& size, bool use_multisampling) {
 
   auto webgl_preferences =
       ContextProvider()->GetGpuFeatureInfo().webgl_preferences;
+  webgl_context_limits_.max_active_webgl_contexts =
+      webgl_preferences.max_active_webgl_contexts;
+  webgl_context_limits_.max_active_webgl_contexts_on_worker =
+      webgl_preferences.max_active_webgl_contexts_on_worker;
 
   int max_sample_count = 0;
   gl_->GetIntegerv(GL_MAX_SAMPLES_ANGLE, &max_sample_count);
@@ -795,10 +806,15 @@ bool DrawingBuffer::Initialize(const IntSize& size, bool use_multisampling) {
   state_restorer_->SetFramebufferBindingDirty();
   gl_->GenFramebuffers(1, &fbo_);
   gl_->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+  if (opengl_flip_y_extension_)
+    gl_->FramebufferParameteri(GL_FRAMEBUFFER, GL_FRAMEBUFFER_FLIP_Y_MESA, 1);
+
   if (WantExplicitResolve()) {
     gl_->GenFramebuffers(1, &multisample_fbo_);
     gl_->BindFramebuffer(GL_FRAMEBUFFER, multisample_fbo_);
     gl_->GenRenderbuffers(1, &multisample_renderbuffer_);
+    if (opengl_flip_y_extension_)
+      gl_->FramebufferParameteri(GL_FRAMEBUFFER, GL_FRAMEBUFFER_FLIP_Y_MESA, 1);
   }
   if (!ResizeFramebufferInternal(size)) {
     DLOG(ERROR) << "Initialization failed to allocate backbuffer.";
@@ -916,6 +932,9 @@ cc::Layer* DrawingBuffer::CcLayer() {
     layer_->SetPremultipliedAlpha(premultiplied_alpha_ ||
                                   premultiplied_alpha_false_texture_);
     layer_->SetNearestNeighbor(filter_quality_ == kNone_SkFilterQuality);
+
+    if (opengl_flip_y_extension_)
+      layer_->SetFlipped(false);
 
     GraphicsLayer::RegisterContentsLayer(layer_.get());
   }

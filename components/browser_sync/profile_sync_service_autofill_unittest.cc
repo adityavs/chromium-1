@@ -95,6 +95,7 @@ namespace {
 void RegisterAutofillPrefs(user_prefs::PrefRegistrySyncable* registry) {
   registry->RegisterBooleanPref(autofill::prefs::kAutofillCreditCardEnabled,
                                 true);
+  registry->RegisterBooleanPref(autofill::prefs::kAutofillProfileEnabled, true);
   registry->RegisterBooleanPref(autofill::prefs::kAutofillEnabled, true);
   registry->RegisterBooleanPref(autofill::prefs::kAutofillWalletImportEnabled,
                                 true);
@@ -176,7 +177,7 @@ class MockAutofillBackend : public autofill::AutofillWebDataBackend {
   void NotifyThatSyncHasStarted(syncer::ModelType model_type) override {
     DCHECK(!ui_task_runner_->RunsTasksInCurrentSequence());
     ui_task_runner_->PostTask(FROM_HERE,
-                              base::Bind(on_sync_started_, model_type));
+                              base::BindOnce(on_sync_started_, model_type));
   }
 
  private:
@@ -242,9 +243,9 @@ class WebDataServiceFake : public AutofillWebDataService {
             &WebDataServiceFake::NotifySyncStartedOnUISequence, AsWeakPtr());
 
     db_task_runner_->PostTask(
-        FROM_HERE, base::Bind(&WebDataServiceFake::CreateSyncableService,
-                              base::Unretained(this), on_changed_callback,
-                              std::move(on_sync_started_callback)));
+        FROM_HERE, base::BindOnce(&WebDataServiceFake::CreateSyncableService,
+                                  base::Unretained(this), on_changed_callback,
+                                  std::move(on_sync_started_callback)));
     syncable_service_created_or_destroyed_.Wait();
   }
 
@@ -252,8 +253,8 @@ class WebDataServiceFake : public AutofillWebDataService {
     // The |autofill_profile_syncable_service_| must be destructed on the DB
     // sequence.
     db_task_runner_->PostTask(
-        FROM_HERE, base::Bind(&WebDataServiceFake::DestroySyncableService,
-                              base::Unretained(this)));
+        FROM_HERE, base::BindOnce(&WebDataServiceFake::DestroySyncableService,
+                                  base::Unretained(this)));
     syncable_service_created_or_destroyed_.Wait();
   }
 
@@ -368,6 +369,7 @@ class ProfileSyncServiceAutofillTest
     EXPECT_CALL(personal_data_manager(), LoadCreditCards());
 
     personal_data_manager_->Init(web_data_service_,
+                                 /*account_database=*/nullptr,
                                  profile_sync_service_bundle()->pref_service(),
                                  /*identity_manager=*/nullptr,
                                  /*is_off_the_record=*/false);
@@ -378,9 +380,9 @@ class ProfileSyncServiceAutofillTest
         profile_sync_service_bundle());
     builder.SetPersonalDataManager(personal_data_manager_.get());
     builder.SetSyncServiceCallback(GetSyncServiceCallback());
-    builder.SetSyncableServiceCallback(
-        base::Bind(&ProfileSyncServiceAutofillTest::GetSyncableServiceForType,
-                   base::Unretained(this)));
+    builder.SetSyncableServiceCallback(base::BindRepeating(
+        &ProfileSyncServiceAutofillTest::GetSyncableServiceForType,
+        base::Unretained(this)));
     builder.set_activate_model_creation();
     sync_client_owned_ = builder.Build();
     sync_client_ = sync_client_owned_.get();

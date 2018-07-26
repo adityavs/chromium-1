@@ -1,4 +1,4 @@
-// Copyright (c) 2018 The Chromium Authors. All rights reserved.
+// Copyright 2018 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -10,10 +10,11 @@
 #include <vector>
 
 #include "base/optional.h"
-#include "base/sequence_checker.h"
+#include "base/sequenced_task_runner.h"
 #include "base/time/time.h"
 #include "chrome/browser/media/webrtc/webrtc_event_log_manager_common.h"
 #include "chrome/browser/media/webrtc/webrtc_event_log_uploader.h"
+#include "content/public/browser/network_connection_tracker.h"
 
 // TODO(crbug.com/775415): Avoid uploading logs when Chrome shutdown imminent.
 
@@ -22,14 +23,23 @@ class URLRequestContextGetter;
 }  // namespace net
 
 class WebRtcRemoteEventLogManager final
-    : public WebRtcEventLogUploaderObserver {
+    : public content::NetworkConnectionTracker::NetworkConnectionObserver {
   using BrowserContextId = WebRtcEventLogPeerConnectionKey::BrowserContextId;
   using LogFilesMap = std::map<WebRtcEventLogPeerConnectionKey, LogFile>;
   using PeerConnectionKey = WebRtcEventLogPeerConnectionKey;
 
  public:
-  explicit WebRtcRemoteEventLogManager(WebRtcRemoteEventLogsObserver* observer);
+  WebRtcRemoteEventLogManager(
+      WebRtcRemoteEventLogsObserver* observer,
+      scoped_refptr<base::SequencedTaskRunner> task_runner);
   ~WebRtcRemoteEventLogManager() override;
+
+  // Sets a content::NetworkConnectionTracker which will be used to track
+  // network connectivity.
+  // Must not be called more than once.
+  // Must be called before any call to EnableForBrowserContext().
+  void SetNetworkConnectionTracker(
+      content::NetworkConnectionTracker* network_connection_tracker);
 
   // Sets a net::URLRequestContextGetter which will be used for uploads.
   // Must not be called more than once.
@@ -120,9 +130,8 @@ class WebRtcRemoteEventLogManager final
   // were associated with the renderer process.
   void RenderProcessHostExitedDestroyed(int render_process_id);
 
-  // WebRtcEventLogUploaderObserver implementation.
-  void OnWebRtcEventLogUploadComplete(const base::FilePath& file_path,
-                                      bool upload_successful) override;
+  // content::NetworkConnectionTracker::NetworkConnectionObserver implementation
+  void OnConnectionChanged(network::mojom::ConnectionType type) override;
 
   // Unit tests may use this to inject null uploaders, or ones which are
   // directly controlled by the unit test (succeed or fail according to the
@@ -133,6 +142,10 @@ class WebRtcRemoteEventLogManager final
   // any BrowserContext with pending log files in its directory.
   void SetWebRtcEventLogUploaderFactoryForTesting(
       std::unique_ptr<WebRtcEventLogUploader::Factory> uploader_factory);
+
+  // Exposes UploadConditionsHold() to unit tests. See WebRtcEventLogManager's
+  // documentation for the rationale.
+  void UploadConditionsHoldForTesting(base::OnceCallback<void(bool)> callback);
 
  private:
   // Checks whether a browser context has already been enabled via a call to
@@ -233,22 +246,35 @@ class WebRtcRemoteEventLogManager final
   // to limitations on the numbers active and pending logs).
   bool AdditionalActiveLogAllowed(BrowserContextId browser_context_id) const;
 
-  // Initiating a new upload is only allowed when there are no active peer
-  // connection which might be adversely affected by the bandwidth consumption
-  // of the upload.
+  // Uploading suppressed while active peer connections exist (unless
+  // suppression) is turned off from the command line.
+  bool UploadSuppressed() const;
 
-  // This can be overridden by a command line flag - see
-  // kWebRtcRemoteEventLogUploadNoSuppression.
-  // TODO(crbug.com/775415): Add support for pausing/resuming an upload when
-  // peer connections are added/removed after an upload was already initiated.
-  bool UploadingAllowed() const;
+  // Check whether all the conditions necessary for uploading log files are
+  // currently satisfied.
+  // 1. There may be no active peer connections which might be adversely
+  //    affected by the bandwidth consumption of the upload.
+  // 2. Chrome has a network connection, and that conneciton is either a wired
+  //    one, or WiFi. (That is, not 3G, etc.)
+  // 3. Naturally, a file pending upload must exist.
+  bool UploadConditionsHold() const;
 
-  // If no upload is in progress, and if uploading is currently permissible,
-  // start a new upload.
+  // When the conditions necessary for uploading first hold, schedule a delayed
+  // task to upload (MaybeStartUploading). If they ever stop holding, void it.
+  void ManageUploadSchedule();
+
+  // Posted as a delayed task by ManageUploadSchedule. If not voided until
+  // executed, will initiate an upload of the next log file.
   void MaybeStartUploading();
 
+  // Callback for the success/failure of an upload.
   // When an upload is complete, it might be time to upload the next file.
-  void OnWebRtcEventLogUploadCompleteInternal();
+  // Note: |log_file| and |upload_successful| are ignored in production; they
+  // are used in unit tests, so we keep them here to make things simpler, so
+  // that this method would match WebRtcEventLogUploader::UploadResultCallback
+  // without adaptation.
+  void OnWebRtcEventLogUploadComplete(const base::FilePath& log_file,
+                                      bool upload_successful);
 
   // Given a renderer process ID and peer connection ID (a string naming the
   // peer connection), find the peer connection to which they refer.
@@ -266,19 +292,19 @@ class WebRtcRemoteEventLogManager final
       int render_process_id,
       const std::string& peer_connection_id) const;
 
-  // This object is expected to be created and destroyed on the UI thread,
-  // but live on its owner's internal, IO-capable task queue.
-  SEQUENCE_CHECKER(io_task_sequence_checker_);
-
   // Normally, uploading is suppressed while there are active peer connections.
   // This may be disabled from the command line.
   const bool upload_suppression_disabled_;
 
-  // Proactive pruning will be done only if this has a value, in which case,
+  // Proactive pruning will be done only if this is non-zero, in which case,
   // every |proactive_prune_scheduling_delta_|, pending logs will be pruned.
   // This avoids them staying around on disk for longer than their expiration
   // if no event occurs which triggers reactive pruning.
-  const base::Optional<base::TimeDelta> proactive_prune_scheduling_delta_;
+  const base::TimeDelta proactive_prune_scheduling_delta_;
+
+  // The conditions for upload must hold for this much time, uninterrupted,
+  // before an upload may be initiated.
+  const base::TimeDelta upload_delay_;
 
   // Proactive pruning, if enabled, starts with the first enabled browser
   // context. To avoid unnecessary complexity, if that browser context is
@@ -310,10 +336,32 @@ class WebRtcRemoteEventLogManager final
   // currently busy uploading it to a remote server.
   std::unique_ptr<WebRtcEventLogUploader> uploader_;
 
+  // Provides notifications of network changes.
+  content::NetworkConnectionTracker* network_connection_tracker_;
+
+  // Whether the network we are currently connected to, if any, is one over
+  // which we may upload.
+  bool uploading_supported_for_connection_type_;
+
+  // If the conditions for initiating an upload do not hold, this will be
+  // set to an empty base::TimeTicks.
+  // If the conditions were found to hold, this will record the time when they
+  // started holding. (It will be set back to 0 if they ever cease holding.)
+  base::TimeTicks time_when_upload_conditions_met_;
+
+  // This is a vehicle for DCHECKs to ensure code sanity. It counts the number
+  // of scheduled tasks of MaybeStartUploading(), and proves that we never
+  // end up with a scheduled upload that never occurs.
+  size_t scheduled_upload_tasks_;
+
   // Producer of uploader objects. (In unit tests, this would create
   // null-implementation uploaders, or uploaders whose behavior is controlled
   // by the unit test.)
   std::unique_ptr<WebRtcEventLogUploader::Factory> uploader_factory_;
+
+  // |this| is created and destroyed on the UI thread, but operates on the
+  // following IO-capable sequenced task runner.
+  scoped_refptr<base::SequencedTaskRunner> task_runner_;
 
   DISALLOW_COPY_AND_ASSIGN(WebRtcRemoteEventLogManager);
 };

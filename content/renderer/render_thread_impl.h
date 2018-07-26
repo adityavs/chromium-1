@@ -59,7 +59,7 @@
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "services/viz/public/interfaces/compositing/compositing_mode_watcher.mojom.h"
 #include "third_party/blink/public/mojom/dom_storage/storage_partition_service.mojom.h"
-#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
+#include "third_party/blink/public/platform/scheduler/web_rail_mode_observer.h"
 #include "third_party/blink/public/platform/web_connection_type.h"
 #include "third_party/blink/public/web/web_memory_statistics.h"
 #include "ui/gfx/native_widget_types.h"
@@ -87,10 +87,6 @@ class BeginFrameSource;
 class LayerTreeFrameSink;
 class SyntheticBeginFrameSource;
 class TaskGraphRunner;
-}
-
-namespace device {
-class Gamepads;
 }
 
 namespace discardable_memory {
@@ -168,7 +164,7 @@ class StreamTextureFactory;
 class CONTENT_EXPORT RenderThreadImpl
     : public RenderThread,
       public ChildThreadImpl,
-      public blink::scheduler::WebThreadScheduler::RAILModeObserver,
+      public blink::scheduler::WebRAILModeObserver,
       public base::MemoryCoordinatorClient,
       public mojom::Renderer,
       public viz::mojom::CompositingModeWatcher,
@@ -248,17 +244,22 @@ class CONTENT_EXPORT RenderThreadImpl
   bool IsPartialRasterEnabled() override;
   bool IsGpuMemoryBufferCompositorResourcesEnabled() override;
   bool IsElasticOverscrollEnabled() override;
+  bool IsUseZoomForDSFEnabled() override;
   scoped_refptr<base::SingleThreadTaskRunner>
   GetCompositorMainThreadTaskRunner() override;
   scoped_refptr<base::SingleThreadTaskRunner>
   GetCompositorImplThreadTaskRunner() override;
   blink::scheduler::WebThreadScheduler* GetWebMainThreadScheduler() override;
   cc::TaskGraphRunner* GetTaskGraphRunner() override;
-  bool IsThreadedAnimationEnabled() override;
   bool IsScrollAnimatorEnabled() override;
   std::unique_ptr<cc::UkmRecorderFactory> CreateUkmRecorderFactory() override;
+#ifdef OS_ANDROID
+  bool UsingSynchronousCompositing() override;
+#endif
 
-  // blink::scheduler::WebThreadScheduler::RAILModeObserver implementation.
+  bool IsThreadedAnimationEnabled();
+
+  // blink::scheduler::WebRAILModeObserver implementation.
   void OnRAILModeChanged(v8::RAILMode rail_mode) override;
 
   // viz::mojom::CompositingModeWatcher implementation.
@@ -278,12 +279,12 @@ class CONTENT_EXPORT RenderThreadImpl
   gpu::GpuMemoryBufferManager* GetGpuMemoryBufferManager();
 
   using LayerTreeFrameSinkCallback =
-      base::Callback<void(std::unique_ptr<cc::LayerTreeFrameSink>)>;
+      base::OnceCallback<void(std::unique_ptr<cc::LayerTreeFrameSink>)>;
   void RequestNewLayerTreeFrameSink(
       int routing_id,
       scoped_refptr<FrameSwapMessageQueue> frame_swap_message_queue,
       const GURL& url,
-      const LayerTreeFrameSinkCallback& callback,
+      LayerTreeFrameSinkCallback callback,
       mojom::RenderFrameMetadataObserverClientRequest
           render_frame_metadata_observer_client_request,
       mojom::RenderFrameMetadataObserverPtr render_frame_metadata_observer_ptr);
@@ -301,6 +302,14 @@ class CONTENT_EXPORT RenderThreadImpl
   void set_layout_test_dependencies(
       std::unique_ptr<LayoutTestDependencies> deps) {
     layout_test_deps_ = std::move(deps);
+  }
+  // Returns whether we are running layout tests with display compositor for
+  // pixel dump enabled. It is meant to disable feature that require display
+  // compositor while it is not enabled by default.
+  // This should only be called if currently running in layout tests.
+  bool LayoutTestModeUsesDisplayCompositorPixelDump() const {
+    DCHECK(layout_test_deps_);
+    return layout_test_deps_->UseDisplayCompositorPixelDump();
   }
 
   discardable_memory::ClientDiscardableSharedMemoryManager*
@@ -468,9 +477,6 @@ class CONTENT_EXPORT RenderThreadImpl
   HistogramCustomizer* histogram_customizer() {
     return &histogram_customizer_;
   }
-
-  // Retrieve current gamepad data.
-  void SampleGamepads(device::Gamepads* data);
 
   // Called by a RenderWidget when it is created or destroyed. This
   // allows the process to know when there are no visible widgets.
@@ -738,6 +744,7 @@ class CONTENT_EXPORT RenderThreadImpl
   bool is_gpu_memory_buffer_compositor_resources_enabled_;
   bool is_partial_raster_enabled_;
   bool is_elastic_overscroll_enabled_;
+  bool is_zoom_for_dsf_enabled_;
   bool is_threaded_animation_enabled_;
   bool is_scroll_animator_enabled_;
 

@@ -309,7 +309,11 @@ AutomationRichEditableText.prototype = {
     // During continuous read, skip speech (which gets handled in
     // CommandHandler). We use the speech end callback to trigger additional
     // speech.
-    if (ChromeVoxState.isReadingContinuously) {
+    // Also, skip speech based on the predicate.
+    if (ChromeVoxState.isReadingContinuously ||
+        AutomationPredicate.shouldOnlyOutputSelectionChangeInBraille(
+            this.node_) ||
+        (!DesktopAutomationHandler.announceActions && eventFrom == 'action')) {
       this.brailleCurrentRichLine_();
       this.updateIntraLineState_(cur);
       return;

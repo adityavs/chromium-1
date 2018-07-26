@@ -40,6 +40,9 @@
       Listę dostępnych zmiennych znajdziesz na stronie https://www.chromium.org/administrators/policy-list-3/user-data-directory-variables.
 
       W przypadku nieskonfigurowania tej zasady będzie używany domyślny katalog pamięci podręcznej, a użytkownik będzie mógł zmienić to ustawienie za pomocą parametru wiersza polecenia „--disk-cache-dir”.</translation>
+<translation id="1135264353752122851">Umożliwia wybranie układów klawiatury dozwolonych w sesjach użytkownika <ph name="PRODUCT_OS_NAME" />.
+
+      Jeśli ta zasada jest ustawiona, użytkownik może wybrać tylko jedną z metod wprowadzania wskazanych w tej zasadzie. Jeśli zasada nie jest skonfigurowana lub jej wartością jest pusta lista, użytkownik może wybrać wszystkie obsługiwane metody wprowadzania. Jeśli bieżąca metoda wprowadzania nie jest dozwolona przez tę zasadę, zostanie przełączona na odpowiadającą układowi klawiatury fizycznej (jeśli jest dozwolona) lub pierwszą poprawną metodę z tej listy. Wszystkie niepoprawne lub nieobsługiwane metody wprowadzania z tej listy będą ignorowane.</translation>
 <translation id="1138294736309071213">Ta zasada jest aktywna tylko w trybie sklepu.
 
       W przypadku urządzeń w trybie sklepu określa czas, po upływie którego na ekranie logowania jest wyświetlany wygaszacz ekranu.
@@ -67,6 +70,7 @@
 <translation id="1221359380862872747">Załaduj podane URL-e przy logowaniu demonstracyjnym</translation>
 <translation id="1223789468190631420">Włącz Bezpieczne przeglądanie dla zaufanych źródeł</translation>
 <translation id="123081309365616809">Włącz przesyłanie treści na urządzenie</translation>
+<translation id="1243570869342663665">Ustaw filtrowanie treści dla dorosłych SafeSites.</translation>
 <translation id="1257550411839719984">Ustaw domyślny katalog pobierania</translation>
 <translation id="1265053460044691532">Ograniczenie czasu, przez który użytkownik uwierzytelniony za pomocą SAML może logować się offline</translation>
 <translation id="1291880496936992484">Ostrzeżenie: RC4 zostanie całkowicie usunięty z <ph name="PRODUCT_NAME" /> po wersji 52 (około września 2016 r.) i wtedy ta zasada przestanie działać.
@@ -126,11 +130,6 @@
 
       Jeśli nie ustawisz tej zasady, wartość domyślna „MultiProfileUserBehaviorMustBePrimary” jest stosowana do użytkowników zarządzanych w firmie, a wartość „MultiProfileUserBehaviorUnrestricted” – do niezarządzanych.</translation>
 <translation id="1465619815762735808">Kliknij, by uruchomić</translation>
-<translation id="1466133662354365542">Włącza funkcję autouzupełniania w <ph name="PRODUCT_NAME" />, umożliwiając użytkownikom automatyczne wprowadzanie wcześniej zapisanych danych karty kredytowej i adresu w formularzach na stronach internetowych.
-
-      Jeśli wyłączysz to ustawienie, autouzupełnianie nie będzie podpowiadać ani wypełniać danych karty kredytowej, jak też nie będzie zapisywać dodatkowych danych karty kredytowej, które użytkownik może podawać na stronach internetowych.
-
-      Jeśli ustawienie jest włączone lub nieskonfigurowane, użytkownik może samodzielnie skonfigurować autouzupełnianie (w tym wpisać dane kart kredytowych) w interfejsie.</translation>
 <translation id="1468307069016535757">Ustawia domyślny stan funkcji ułatwień dostępu w postaci trybu wysokiego kontrastu na ekranie logowania.
 
           Jeśli ta zasada ma wartość „prawda”, po wyświetleniu ekranu logowania tryb wysokiego kontrastu jest włączony.
@@ -215,12 +214,6 @@
       Zasada powinna określać URL, z którego <ph name="PRODUCT_OS_NAME" /> może pobrać Warunki korzystania z usługi. Dokument ten musi mieć postać zwykłego tekstu (MIME) bez żadnych znaczników.</translation>
 <translation id="1750315445671978749">Blokuj pobieranie wszystkich plików</translation>
 <translation id="1781356041596378058">Ta zasada kontroluje też dostęp do Opcji programisty Androida. Jej włączenie powoduje odebranie użytkownikom dostępu do Opcji programisty. Gdy jest wyłączona lub nieskonfigurowana, użytkownicy mogą uzyskać dostęp do Opcji programisty, klikając siedem razy numer kompilacji w aplikacji Ustawienia Androida.</translation>
-<translation id="178832255504524723">Konfigurowanie adresu URL do zmiany hasła (tylko schematy HTTP i HTTPS). Usługa ochrony haseł będzie kierować użytkowników na stronę pod tym adresem URL, by zmienili hasło, gdy staną się ofiarami phishingu.
-      Jeśli <ph name="PRODUCT_NAME" /> ma poprawnie rejestrować odciski cyfrowe nowych haseł na stronie zmiany hasła, powinna ona być zgodna z wytycznymi podanymi na stronie https://www.chromium.org/developers/design-documents/create-amazing-password-forms
-
-      Jeśli to ustawienie jest włączone, usługa ochrony haseł kieruje użytkowników na stronę pod tym adresem URL, by zmienili hasło, gdy staną się ofiarami phishingu.
-      Jeśli to ustawienie jest wyłączone lub nieskonfigurowane, usługa ochrony haseł kieruje użytkowników na stronę https://myaccounts.google.com, by zmienili hasło.
-      Ta zasada nie jest dostępna w systemach Windows niepołączonych z domeną <ph name="MS_AD_NAME" />.</translation>
 <translation id="1797233582739332495">Wyświetlaj cyklicznie komunikat o tym, że wymagane jest ponowne uruchomienie</translation>
 <translation id="1803646570632580723">Lista przypiętych aplikacji pokazywanych w programie uruchamiającym</translation>
 <translation id="1808715480127969042">Blokuj pliki cookie w tych witrynach</translation>
@@ -243,6 +236,13 @@
       Jeśli utrzymanie zgodności z wadliwie działającym serwerem jest konieczne, można wybrać „tls1.1”. To jednak tylko rozwiązanie tymczasowe – serwer trzeba jak najszybciej naprawić.</translation>
 <translation id="1864269674877167562">Jeśli ta zasada jest pusta lub nieskonfigurowana, <ph name="PRODUCT_OS_NAME" /> nie będzie wyświetlać opcji autouzupełniania podczas logowania użytkownika.
       Jeśli zasada jest ustawiona na nazwę domeny, <ph name="PRODUCT_OS_NAME" /> będzie wyświetlać opcję autouzupełniania podczas logowania użytkownika, umożliwiając mu wpisanie tylko jego nazwy, bez konieczności podawania rozszerzenia nazwy domeny. Użytkownik będzie mógł zastąpić rozszerzenie nazwy domeny.</translation>
+<translation id="1864382791685519617">Włącza przewidywanie działań sieciowych w <ph name="PRODUCT_NAME" /> i uniemożliwia użytkownikom zmianę tego ustawienia.
+
+      Ta zasada kontroluje wstępne pobieranie DNS, wstępne łączenie przez TCP i SSL oraz wstępne renderowanie stron internetowych.
+
+      Jeśli ustawisz tę zasadę, użytkownicy nie będą mogli zmienić ani zastąpić tego ustawienia w <ph name="PRODUCT_NAME" />.
+
+      Jeśli ta zasada pozostanie nieustawiona, przewidywanie działań sieciowych zostanie włączone, ale użytkownicy będą mogli to zmienić.</translation>
 <translation id="1865417998205858223">Uprawnienia klucza</translation>
 <translation id="186719019195685253">Działanie, jakie ma zostać podjęte po osiągnięciu opóźnienia bezczynności przy zasilaniu prądem zmiennym</translation>
 <translation id="187819629719252111">Umożliwia dostęp do plików lokalnych na komputerze, zezwalając <ph name="PRODUCT_NAME" /> na wyświetlanie okien dialogowych wyboru pliku. Po włączeniu tego ustawienia użytkownicy mogą w normalny sposób otwierać okna dialogowe wyboru pliku. Jeśli wyłączysz ustawienie, w momencie wykonania przez użytkownika czynności powodującej wywołanie okna dialogowego wyboru pliku (np. zaimportowanie zakładek, przesłanie plików, zapisanie linków itp.) zostanie wyświetlony komunikat, a działanie przeglądarki będzie kontynuowane, tak jakby użytkownik kliknął przycisk Anuluj w oknie dialogowym wyboru pliku. Jeśli ustawienie jest nieskonfigurowane, użytkownicy mogą w normalny sposób otwierać okna dialogowe wyboru pliku.</translation>
@@ -255,6 +255,7 @@
       Format wartości musi być zgodny z nazwami stref czasowych w bazie danych stref czasowych IANA (patrz: „http://en.wikipedia.org/wiki/List_of_tz_database_time_zones” – strona w języku angielskim). To oznacza, że większość stref czasowych można podawać w formacie „kontynent/duże_miasto” lub „ocean/duże_miasto”.
 
       Ustawienie tej zasady całkowicie wyłącza zmienianie strefy czasowej na podstawie lokalizacji urządzenia. Zastępuje ona również zasadę SystemTimezoneAutomaticDetection.</translation>
+<translation id="1885782360784839335">Włącz wyświetlanie treści promocyjnych na całej karcie</translation>
 <translation id="1888871729456797026">Token rejestracji zasad dotyczących chmury na komputerze</translation>
 <translation id="1897365952389968758">Zezwalaj na wykonywanie kodu JavaScript we wszystkich witrynach</translation>
 <translation id="1906888171268104594">Określa, czy statystyki użytkowania i dane diagnostyczne (w tym raporty o awariach) mają być przesyłane do Google.
@@ -368,6 +369,7 @@ Format jest taki sam jak w słowniku NativePrinters. Dodatkowo w przypadku każd
       a użytkownik może ją zmienić. Jeśli tak zrobi, zmieniona wartość nie zostanie ponownie
       zastosowana po ponownym uruchomieniu urządzenia.</translation>
 <translation id="2156132677421487971">Pozwala skonfigurować zasady dotyczące <ph name="PRODUCT_NAME" /> – funkcji, która umożliwia użytkownikom przesyłanie zawartości kart, stron i pulpitu z przeglądarki do zdalnych wyświetlaczy i systemów audio.</translation>
+<translation id="2166472654199325139">Nie filtruj witryn pod kątem treści dla dorosłych</translation>
 <translation id="2168397434410358693">Opóźnienie bezczynności przy zasilaniu sieciowym</translation>
 <translation id="2170233653554726857">Włącz optymalizację WPAD</translation>
 <translation id="2176565653304920879">Gdy zasada jest ustawiona, proces automatycznego wykrywania strefy czasowej przebiega na jeden z tych sposobów, zależnie od ustawionej wartości:
@@ -516,6 +518,12 @@ Format jest taki sam jak w słowniku NativePrinters. Dodatkowo w przypadku każd
 <translation id="2466131534462628618">Uwierzytelnianie w portalu przechwytującym ignoruje serwer proxy</translation>
 <translation id="2482676533225429905">Wiadomości natywne</translation>
 <translation id="2483146640187052324">Przewiduj działania w sieci dla każdego połączenia sieciowego</translation>
+<translation id="2484208301968418871">Ta zasada steruje stosowaniem filtra adresów URL SafeSites.
+      Ten filtr używa interfejsu API usługi Google Safe Search do klasyfikowania adresów URL jako pornograficznych i pozostałych.
+
+      Gdy ta zasada nie jest skonfigurowana lub ma ustawienie „Nie filtruj witryn pod kątem treści dla dorosłych”, witryny nie będą filtrowane.
+
+      Gdy ta zasada ma ustawienie „Filtruj witryny najwyższego poziomu pod kątem treści dla dorosłych”, witryny sklasyfikowane jako pornograficzne będą filtrowane.</translation>
 <translation id="2485721741875148980">Jeśli włączysz tę zasadę, użytkownik będzie musiał logować się w <ph name="PRODUCT_NAME" /> przy użyciu swojego profilu, by skorzystać z przeglądarki. Domyślnie wartość zasady BrowserGuestModeEnabled zostanie przy tym ustawiona na fałsz. Pamiętaj, że po włączeniu tej zasady istniejące niepodpisane profile zostaną zablokowane i staną się niedostępne. Więcej informacji znajdziesz w artykule w Centrum pomocy.
 
       Jeśli nie włączysz tej zasady lub jej nie skonfigurujesz, użytkownik będzie mógł używać przeglądarki bez logowania się w <ph name="PRODUCT_NAME" />.</translation>
@@ -666,18 +674,24 @@ Format jest taki sam jak w słowniku NativePrinters. Dodatkowo w przypadku każd
 
       Jeśli włączysz to ustawienie, w podglądzie wydruku zostanie wybrana domyślna drukarka systemowa.</translation>
 <translation id="2867699958489427143">Cofnięcie i pozostawienie docelowej wersji systemu operacyjnego, jeśli zainstalowana jest wersja nowsza niż docelowa. W trakcie tego procesu zostanie wykonana pełna procedura Powerwash.</translation>
-<translation id="286802604195763750">Umożliwia sterowanie wyzwalaniem ostrzeżenia dotyczącego ochrony hasłem. 
-Alerty dotyczące ochrony hasłem ostrzegają użytkowników, gdy chcą oni stosować chronione hasła w potencjalnie niebezpiecznych witrynach.
-
-      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOff”, nie wyświetli się żadne ostrzeżenie dotyczące ochrony hasłem.
-      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOnPasswordReuse”, ostrzeżenie dotyczące ochrony hasłem wyświetli się, gdy użytkownicy będą stosować hasła do kont Google w witrynach, które nie znajdują się na białej liście.
-      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOnPhishingReuse”, ostrzeżenie dotyczące ochrony hasłem wyświetli się, gdy użytkownicy będą stosować hasła do kont Google w witrynach wyłudzających informacje.
-      Jeśli zasada nie jest skonfigurowana, ostrzeżenie dotyczące ochrony hasłem wyświetli się, gdy użytkownicy będą stosować hasła do kont Google w witrynach wyłudzających informacje, ale użytkownik może zmienić to ustawienie.</translation>
 <translation id="2872961005593481000">Wyłącz</translation>
 <translation id="2874209944580848064">Uwaga dotycząca urządzeń z <ph name="PRODUCT_OS_NAME" /> obsługujących aplikacje na Androida:</translation>
 <translation id="2877225735001246144">Wyłącz wyszukiwanie rekordu CNAME podczas negocjowania uwierzytelniania Kerberos</translation>
 <translation id="2893546967669465276">Wysyłaj dzienniki systemowe na serwer zarządzania</translation>
 <translation id="2899002520262095963">Aplikacje na Androida mogą używać konfiguracji sieci i certyfikatów CA ustawianych przez tę zasadę, ale nie mają dostępu do niektórych opcji konfiguracji.</translation>
+<translation id="290002216614278247">Umożliwia blokowanie sesji użytkownika na podstawie godziny na kliencie lub dziennego limitu użytkowania.
+
+          |time_window_limit| określa przedział czasu, w którym sesja użytkownika ma być zablokowana. Możliwe jest określenie tylko jednej reguły dla każdego dnia tygodnia, więc tablica |entries| może mieć od 0 do 7 elementów. |starts_at| i |ends_at| to początek i koniec przedziału czasu – jeśli godzina |ends_at| jest wcześniejsza niż |starts_at|, przedział czasu |time_limit_window| kończy się następnego dnia. |last_updated_millis| to sygnatura czasowa UTC ostatniej modyfikacji tej pozycji – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą.
+
+          |time_usage_limit| określa dzienny limit użytkowania. Gdy użytkownik go przekroczy, jego sesja zostaje zablokowana. Każdemu dniu tygodnia odpowiada odrębna właściwość, którą należy ustawić tylko w przypadku, gdy danego dnia ma obowiązywać limit. |usage_quota_mins| to czas, przez który można używać urządzenia zarządzanego w danym dniu, a |reset_at| to godzina odnowienia limitu. Domyślną wartością |reset_at| jest północ ({'hour': 0, 'minute': 0}). |last_updated_millis| to sygnatura czasowa UTC ostatniej modyfikacji tej pozycji – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą.
+
+          |overrides| umożliwia tymczasowe unieważnienie jednej lub wielu wcześniej określonych reguł.
+          * Jeśli oba limity – time_window_limit i time_usage_limit – są nieaktywne, urządzenie można zablokować za pomocą parametru |LOCK|.
+          * |LOCK| tymczasowo blokuje sesję użytkownika do momentu rozpoczęcia najbliższego przedziału czasu określonego przez time_window_limit lub time_usage_limit.
+          * |UNLOCK| odblokowuje sesję użytkownika zablokowaną przez time_window_limit lub time_usage_limit.
+          |created_time_millis| to sygnatura czasowa UTC utworzenia pozycji |overrides| – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą. Jest używana do ustalenia, czy ta pozycja nadal obowiązuje. Jeśli aktywny obecnie limit (na podstawie czasu użytkowania lub przedziału czasu) rozpoczął się już po utworzeniu tej pozycji, nie będzie ona stosowana. Nie będzie też używana, jeśli została utworzona przed ostatnią zmianą aktywnego limitu time_window_limit lub time_usage_window.
+
+          Można wysłać wiele unieważnień – zastosowane zostanie najnowsze poprawne.</translation>
 <translation id="2906874737073861391">Lista rozszerzeń z pakietu aplikacji</translation>
 <translation id="2907992746861405243">Steruje tym, które drukarki określone w zasadzie <ph name="BULK_PRINTERS_POLICY" /> są dostępne dla użytkowników.
 
@@ -686,6 +700,7 @@ Alerty dotyczące ochrony hasłem ostrzegają użytkowników, gdy chcą oni stos
       Jeśli ta zasada nie została skonfigurowana, domyślnie stosowana jest opcja <ph name="PRINTERS_ALLOW_ALL" />.
       </translation>
 <translation id="2908277604670530363">Maksymalna liczba jednoczesnych połączeń z serwerem proxy</translation>
+<translation id="2951386431828317490">Włącz autouzupełnianie dla profili</translation>
 <translation id="2956777931324644324">Ta zasada została wycofana w wersji 36 <ph name="PRODUCT_NAME" />.
 
       Określa, czy ma być włączone rozszerzenie certyfikatów TLS powiązanych z domeną.
@@ -694,6 +709,7 @@ Alerty dotyczące ochrony hasłem ostrzegają użytkowników, gdy chcą oni stos
 <translation id="2957506574938329824">Nie pozwalaj żadnym witrynom na wysyłanie żądań dostępu do urządzeń Bluetooth poprzez interfejs API Web Bluetooth</translation>
 <translation id="2957513448235202597">Rodzaj konta na potrzeby uwierzytelniania <ph name="HTTP_NEGOTIATE" /></translation>
 <translation id="2959898425599642200">Reguły omijania serwera proxy</translation>
+<translation id="2960128438010718932">Harmonogram etapowego wdrażania nowej aktualizacji</translation>
 <translation id="2960691910306063964">Włącz lub wyłącz uwierzytelnianie hostów dostępu zdalnego bez kodu PIN</translation>
 <translation id="2976002782221275500">Określa, po jakim czasie nieaktywności użytkownika przyciemniany jest ekran przy zasilaniu z baterii.
 
@@ -731,6 +747,7 @@ Alerty dotyczące ochrony hasłem ostrzegają użytkowników, gdy chcą oni stos
       Bez względu na to, czy i jak ta zasada jest skonfigurowana, użytkownicy nie mogą jej zmienić.</translation>
 <translation id="3072045631333522102">Wygaszacz ekranu używany na ekranie logowania w trybie sklepu</translation>
 <translation id="3072847235228302527">Określ Warunki korzystania z usługi dla lokalnego konta na urządzeniu</translation>
+<translation id="3077183141551274418">Włącza lub wyłącza cykle życia kart</translation>
 <translation id="3086995894968271156">Konfigurowanie odbiornika Cast (<ph name="PRODUCT_NAME" />).</translation>
 <translation id="3088796212846734853">Umożliwia skonfigurowanie listy wzorców adresów URL określających witryny, w których mogą być wyświetlane obrazy.
 
@@ -1277,6 +1294,11 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
       Takie propozycje są pobierane zdalnie z serwerów Google.
 
       Jeśli to ustawienie ma wartość fałsz, propozycje nie będą pobierane ani wyświetlane.</translation>
+<translation id="4788252609789586009">Włącza funkcję autouzupełniania w <ph name="PRODUCT_NAME" />, umożliwiając użytkownikom automatyczne wprowadzanie wcześniej zapisanych danych karty kredytowej w formularzach na stronach internetowych.
+
+      Jeśli to ustawienie jest wyłączone, autouzupełnianie nie będzie podpowiadać ani wypełniać danych karty kredytowej, nie będzie też zapisywać dodatkowych danych karty kredytowej, które użytkownik może podawać na stronach internetowych.
+
+      Jeśli to ustawienie jest włączone lub nieskonfigurowane, użytkownik może samodzielnie skonfigurować autouzupełnianie dla kart kredytowych w interfejsie.</translation>
 <translation id="4791031774429044540">Włącza funkcję ułatwień dostępu w postaci dużego kursora.
 
           Jeśli ta zasada ma wartość „prawda”, duży kursor jest zawsze włączony.
@@ -1313,6 +1335,7 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
 
       Jeśli ta zasada pozostanie nieustawiona lub pusta, każdy użytkownik będzie mógł zalogować się w <ph name="PRODUCT_NAME" />.</translation>
 <translation id="4858735034935305895">Zezwalaj na tryb pełnoekranowy</translation>
+<translation id="4861767323695239729">Skonfiguruj metody wprowadzania dozwolone w sesji użytkownika</translation>
 <translation id="4869787217450099946">Określa, czy jest dozwolona blokada uśpienia ekranu. Blokady takie mogą być żądane przez rozszerzenia poprzez interfejs API zarządzania energią.
 
           Jeśli ta zasada ma ustawienie Prawda lub nie jest ustawiona, blokada uśpienia ekranu będzie respektowana w celu zarządzania energią.
@@ -1400,6 +1423,11 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
       Kiedy ta zasada jest włączona, <ph name="PRODUCT_OS_NAME" /> uniemożliwia urządzeniu uruchomienie się w trybie programisty. Gdy tryb przełączania programisty zostanie włączony, system zablokuje uruchomienie i wyświetli ekran błędu.
 
       Kiedy ta zasada jest wyłączona, tryb programisty jest normalnie dostępny na urządzeniu.</translation>
+<translation id="520403427390290017">Funkcja cykli życia kart odzyskuje zasoby procesora, a później zasoby pamięci powiązane z działającymi kartami, które nie były używane od długiego czasu. Najpierw ogranicza szybkość działania kart, później zamraża je, a na koniec zamyka.
+
+      Jeśli zasada ma ustawienie fałsz, to cykle życia kart są wyłączone i wszystkie karty będą cały czas działać normalnie.
+
+      Jeśli zasada ma ustawienie prawda lub jest nieskonfigurowana, to cykle życia kart są włączone.</translation>
 <translation id="5208240613060747912">Umożliwia skonfigurowanie listy wzorcowych URL-i określających witryny, w których nie mogą być wyświetlane powiadomienia. Jeśli ta zasada nie zostanie skonfigurowana, dla wszystkich witryn będzie używana globalna wartość domyślna pochodząca z zasady „DefaultNotificationsSetting” (jeśli została skonfigurowana) lub z osobistej konfiguracji użytkownika.</translation>
 <translation id="5219844027738217407">W przypadku aplikacji na Androida ta zasada wpływa tylko na mikrofon. Gdy jest ona włączona, mikrofon jest wyłączony dla wszystkich aplikacji na Androida bez żadnych wyjątków.</translation>
 <translation id="523505283826916779">Ustawienia ułatwień dostępu</translation>
@@ -1445,6 +1473,11 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
 
           Jeśli ta zasada jest ustawiona na wartość fałsz, użytkownicy nie mogą przesyłać treści na urządzenie. Jeśli jest ustawiona na wartość prawda – mogą to robić. Jeśli ta zasada nie jest ustawiona, użytkownicy nie mogą przesyłać treści na zarejestrowane urządzenia z Chrome OS. Mogą przesyłać treści na urządzenia niezarejestrowane.</translation>
 <translation id="5330684698007383292">Zezwalaj <ph name="PRODUCT_FRAME_NAME" /> na obsługę tych typów treści</translation>
+<translation id="5360146044009867539">Włącza funkcję autouzupełniania w <ph name="PRODUCT_NAME" /> i umożliwia użytkownikom automatyczne wprowadzanie wcześniej zapisanych informacji profilowych i adresowych w formularzach na stronach internetowych.
+
+      Jeśli to ustawienie jest wyłączone, autouzupełnianie nie będzie podpowiadać ani wypełniać adresu, nie będzie też zapisywać dodatkowych informacji adresowych, które użytkownik może podawać na stronach internetowych.
+
+      Jeśli to ustawienie jest włączone lub nieskonfigurowane, użytkownik może samodzielnie skonfigurować autouzupełnianie dla adresów w interfejsie.</translation>
 <translation id="5365946944967967336">Pokaż przycisk strony startowej na pasku narzędzi</translation>
 <translation id="5366745336748853475">Umożliwia określenie listy wzorców adresu URL definiujących witryny, dla których jest automatycznie wybierany certyfikat klienta na ekranie logowania w ramce obsługującej proces SAML, jeśli witryna zażąda certyfikatu. Przykładowe użycie to skonfigurowanie certyfikatu dla całego urządzenia, który będzie okazywany dostawcy tożsamości SAML.
 
@@ -1725,6 +1758,12 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
 <translation id="6155936611791017817">Ustaw domyślny stan dużego kursora na ekranie logowania</translation>
 <translation id="6157537876488211233">Lista rozdzielonych przecinkami reguł omijania serwera proxy</translation>
 <translation id="6158324314836466367">Nazwa firmowego sklepu internetowego (wycofana)</translation>
+<translation id="6164955668342404660">Wycofana w wersji M69. Zamiast niej użyj OverrideSecurityRestrictionsOnInsecureOrigin.
+
+Ta zasada określa listę źródeł (adresów URL), które będą traktowane jako bezpieczne konteksty. Dzięki temu organizacje mogą skonfigurować wewnętrzny serwer do testowania własnych stron internetowych, a programiści mają możliwość testowania funkcji, które wymagają bezpiecznych kontekstów, bez wdrażania zabezpieczeń TLS na serwerze testowym.
+      Określenie listy adresów URL w tej zasadzie działa tak samo jak podanie tych adresów, oddzielonych przecinkami, we fladze wiersza poleceń „--unsafely-treat-insecure-origin-as-secure”. Jeśli ta zasada jest skonfigurowana, zastępuje flagę wiersza poleceń.
+      Więcej informacji o bezpiecznych kontekstach znajdziesz na stronie https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6181608880636987460">Pozwala utworzyć listę wzorców URL-i określających witryny, które nie mogą uruchamiać wtyczki <ph name="FLASH_PLUGIN_NAME" />.
 
           Jeśli ta zasada nie zostanie skonfigurowana, będzie używana wartość domyślna pobrana z zasady „DefaultPluginsSetting” (jeśli jest określona) lub z osobistej konfiguracji użytkownika.</translation>
@@ -1841,13 +1880,6 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
 
       Jeśli ta zasada pozostanie nieustawiona lub lista jest pusta, wszystkie schematy są dostępne w <ph name="PRODUCT_NAME" />.</translation>
 <translation id="6652197835259177259">Ustawienia użytkowników zarządzanych lokalnie</translation>
-<translation id="6654559957643809067">Włącza przewidywanie działań sieciowych w <ph name="PRODUCT_NAME" /> i uniemożliwia użytkownikom zmianę tego ustawienia.
-
-      Ta zasada steruje wstępnym pobieraniem DNS, wstępnym łączeniem przez TCP i SSL oraz wstępnym renderowaniem stron internetowych.
-
-      Jeśli ustawisz tę zasadę na „Zawsze”, „Nigdy” lub „Tylko Wi-Fi”, użytkownicy nie będą mogli zmienić ani nadpisać tego ustawienia w <ph name="PRODUCT_NAME" />.
-
-      Jeśli ta zasada pozostanie nieustawiona, przewidywanie działań sieciowych zostanie włączone, ale użytkownicy będą mogli je zmienić.</translation>
 <translation id="6658245400435704251">Określa, o ile sekund urządzenie może losowo opóźnić pobranie aktualizacji w stosunku do czasu jej opublikowania na serwerze. Urządzenie może odczekać część tego okresu, licząc w sekundach zegara, a pozostałą część, licząc w testach dostępności aktualizacji. Tak czy inaczej okres opóźnienia jest ograniczony z góry, by urządzenie nigdy nie utknęło w stanie oczekiwania na pobranie aktualizacji.</translation>
 <translation id="6665670272107384733">Określ, jak często użytkownik musi podawać hasło, by używać szybkiego odblokowania</translation>
 <translation id="6681229465468164801">Pozwala utworzyć listę wzorców adresów URL określających witryny, które nie mogą prosić użytkownika o przyznanie dostępu do urządzeń USB.
@@ -1862,6 +1894,7 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
       Jeśli nie włączysz tej zasady lub jej nie skonfigurujesz, używane będą tylko zwykłe profile lokalne.
 
       Zasada <ph name="SYNC_DISABLED_POLICY_NAME" /> powoduje wyłączenie wszystkich synchronizacji danych i zastępuje zasadę RoamingProfileSupportEnabled.</translation>
+<translation id="6731757988219967594">Filtruj witryny najwyższego poziomu (ale nie osadzone elementy iframe) pod kątem treści dla dorosłych</translation>
 <translation id="6735701345096330595">Wymuś włączenie sprawdzania pisowni</translation>
 <translation id="673699536430961464">To ustawienie pozwala użytkownikom zalogowanym na urządzeniu z <ph name="PRODUCT_OS_NAME" /> przełączać konta Google w obszarze treści okna przeglądarki
 
@@ -1884,12 +1917,24 @@ Zwykle ta zasada jest wyłączona w celu ochrony przed phishingiem. W przypadku 
 <translation id="6757438632136860443">Pozwala utworzyć listę wzorców URL-i określających witryny, które mogą uruchamiać wtyczkę <ph name="FLASH_PLUGIN_NAME" />.
 
           Jeśli ta zasada nie zostanie skonfigurowana, będzie używana wartość domyślna pobrana z zasady „DefaultPluginsSetting” (jeśli jest określona) lub z osobistej konfiguracji użytkownika.</translation>
+<translation id="6762235610019366960">Pozwala na kontrolowanie wyświetlania treści promocyjnych lub informacyjnych na całej karcie w <ph name="PRODUCT_NAME" />.
+
+      Jeśli zasada jest włączona (ustawienie prawda) lub nie jest skonfigurowana, <ph name="PRODUCT_NAME" /> może wyświetlać użytkownikom informacje o przeglądarce na całej karcie.
+
+      Jeśli zasada jest wyłączona (ustawienie fałsz), <ph name="PRODUCT_NAME" /> nie będzie wyświetlać użytkownikom informacji o przeglądarce na całej karcie.
+
+      To ustawienie kontroluje wyświetlanie stron powitalnych pomagających użytkownikom zalogować się w <ph name="PRODUCT_NAME" />, ustawić domyślną przeglądarkę czy informować o innych funkcjach przeglądarki.</translation>
 <translation id="6766216162565713893">Zezwól, by strony prosiły użytkownika o przyznanie dostępu do urządzeń Bluetooth w pobliżu</translation>
 <translation id="6770454900105963262">Informuj o aktywnych sesjach kiosku</translation>
 <translation id="6786747875388722282">Rozszerzenia</translation>
 <translation id="6786967369487349613">Ustaw katalog profilu przenośnego</translation>
 <translation id="6810445994095397827">Blokuj kod JavaScript w tych witrynach</translation>
 <translation id="681446116407619279">Obsługiwane schematy uwierzytelniania</translation>
+<translation id="6832455357698286434">
+      Ta zasada określa listę źródeł (adresów URL) lub wzorców nazw hosta (np. „*.example.com”), które będą traktowane jako bezpieczne konteksty. Dzięki temu organizacje mogą skonfigurować wewnętrzny serwer do testowania własnych stron internetowych, a programiści mają możliwość testowania funkcji, które wymagają bezpiecznych kontekstów, bez wdrażania zabezpieczeń TLS na serwerze testowym.
+      Określenie listy adresów URL w tej zasadzie działa tak samo jak podanie tych adresów, oddzielonych przecinkami, we fladze wiersza poleceń „--unsafely-treat-insecure-origin-as-secure”. Jeśli ta zasada jest skonfigurowana, zastępuje flagę wiersza poleceń.
+      Więcej informacji o bezpiecznych kontekstach znajdziesz na stronie https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6835883744948188639">Wyświetlaj cyklicznie komunikat o tym, że zalecane jest ponowne uruchomienie</translation>
 <translation id="6838056959556423778">Zastępuje reguły wybierania domyślnej drukarki w <ph name="PRODUCT_NAME" />.
 
@@ -2113,6 +2158,15 @@ Wyniki czyszczenia będą przesyłane do Google, a użytkownik nie będzie pytan
 
           Jeśli to ustawienie jest wyłączone, ta funkcja nie będzie dostępna.</translation>
 <translation id="7275334191706090484">Zakładki zarządzane</translation>
+<translation id="729492886167634859">Ta zasada zawiera listę wartości procentowych określających, ile urządzeń z <ph name="PRODUCT_OS_NAME" /> w OU ma być aktualizowanych tygodniowo, począwszy od dnia wykrycia aktualizacji. Moment wykrycia jest późniejszy niż moment opublikowania, ponieważ może minąć trochę czasu pomiędzy opublikowaniem aktualizacji a sprawdzeniem jej dostępności przez urządzenie.
+
+      Kolejne wartości na tej liście określają procent urządzeń, których aktualizacja do nowej wersji powinna zakończyć się w n-tym tygodniu po wykryciu aktualizacji. Na przykład: jeśli aktualizacja zostanie wykryta dzisiaj, pierwsza wartość na tej liście określa procent urządzeń w tej jednostce OU, które powinny zostać zaktualizowane do tej wersji w ciągu tygodnia, licząc od dzisiaj. Druga wartość określa procent urządzeń w tej jednostce OU, które powinny zostać zaktualizowane do tej wersji w ciągu dwóch tygodni, licząc od dzisiaj itd.
+
+      Jeśli zasada zawiera jakąś wartość, aktualizacje będą ignorować zasadę <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" /> i zamiast niej stosować tę zasadę.
+
+      Jeśli ta lista jest pusta, wdrażanie etapowe nie będzie stosowane, a aktualizacje będą instalowane zgodnie z innymi zasadami dotyczącymi urządzeń.
+
+      Ta zasada nie ma zastosowania do przełączania kanałów.</translation>
 <translation id="7295019613773647480">Włącz obsługę nadzorowanych użytkowników</translation>
 <translation id="7301543427086558500">Określa listę alternatywnych URL-i, które umożliwiają uzyskanie wyników haseł z wyszukiwarki. Adresy URL powinny zawierać łańcuch <ph name="SEARCH_TERM_MARKER" /> używany do wskazania haseł do wyszukania.
 
@@ -2189,17 +2243,6 @@ Wyniki czyszczenia będą przesyłane do Google, a użytkownik nie będzie pytan
 <translation id="7511361072385293666">Jeśli ta zasada jest włączona lub nieustawiona, użycie protokołu QUIC w <ph name="PRODUCT_NAME" /> jest dozwolone.
       Jeśli zasada jest wyłączona, użycie protokołu QUIC jest niedozwolone.</translation>
 <translation id="7519251620064708155">Zezwalaj na generowanie kluczy w tych witrynach</translation>
-<translation id="7529083451528428240">Umożliwia blokowanie sesji użytkownika na podstawie godziny na kliencie lub dziennego limitu użytkowania.
-
-          |time_window_limit| określa przedział czasu, w którym sesja użytkownika ma być zablokowana. Możliwe jest określenie tylko jednej reguły dla każdego dnia tygodnia, więc tablica |entries| może mieć od 0 do 7 elementów. |starts_at| i |ends_at| to początek i koniec przedziału czasu – jeśli godzina |ends_at| jest wcześniejsza niż |starts_at|, przedział czasu |time_limit_window| kończy się następnego dnia. |last_updated_millis| to sygnatura czasowa UTC ostatniej modyfikacji tej pozycji – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą.
-
-          |time_usage_limit| określa dzienny limit użytkowania. Gdy użytkownik go przekroczy, jego sesja zostaje zablokowana. Każdemu dniu tygodnia odpowiada odrębna właściwość, którą należy ustawić tylko w przypadku, gdy danego dnia ma obowiązywać limit. |usage_quota_mins| to czas, przez który można używać urządzenia zarządzanego w danym dniu, a |reset_at| to godzina odnowienia limitu. Domyślną wartością |reset_at| jest północ ({'hour': 0, 'minute': 0}). |last_updated_millis| to sygnatura czasowa UTC ostatniej modyfikacji tej pozycji – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą.
-
-          |overrides| umożliwia tymczasowe unieważnienie jednej lub wielu wcześniej określonych reguł.
-          * Jeśli oba limity – time_window_limit i time_usage_limit – nie są aktywne, urządzenie można zablokować za pomocą |LOCK|.
-          * |LOCK| tymczasowo blokuje sesję użytkownika do momentu rozpoczęcia najbliższego przedziału czasu określonego przez time_window_limit lub time_usage_limit.
-          * |UNLOCK| odblokowuje sesję użytkownika zablokowaną przez time_window_limit lub time_usage_limit.
-          |created_time_millis| to sygnatura czasowa UTC utworzenia pozycji |overrides| – jest to ciąg znaków, ponieważ sygnatura czasowa jest zbyt duża, aby zapisać ją jako liczbę całkowitą. Jest używana do ustalania, czy ta pozycja nadal obowiązuje. Jeśli aktywny obecnie limit (na podstawie czasu użytkowania lub przedziału czasu) rozpoczął się już po utworzeniu tej pozycji, nie będzie ona stosowana. Nie będzie też stosowana, jeśli została utworzona przed ostatnią zmianą aktywnego limitu time_window_limit lub time_usage_window.</translation>
 <translation id="7529100000224450960">Umożliwia skonfigurowanie listy wzorcowych URL-i określających witryny, w których mogą być otwierane wyskakujące okienka. Jeśli ta zasada nie zostanie skonfigurowana, dla wszystkich witryn będzie używana globalna wartość domyślna pochodząca z zasady „DefaultPopupsSetting” (jeśli została skonfigurowana) lub z osobistej konfiguracji użytkownika.</translation>
 <translation id="7529144158022474049">Współczynnik rozkładania automatycznych aktualizacji w czasie</translation>
 <translation id="7534199150025803530">Ta zasada nie ma wpływu na aplikację Dysk Google na Androida. Aby uniemożliwić używanie Dysku Google przez połączenia komórkowe, należy wyłączyć możliwość zainstalowania tej aplikacji.</translation>
@@ -2234,6 +2277,7 @@ Wyniki czyszczenia będą przesyłane do Google, a użytkownik nie będzie pytan
 <translation id="7617319494457709698">Ta zasada określa dozwolone rozszerzenia do użycia z funkcją <ph name="CHALLENGE_USER_KEY_FUNCTION" /> interfejsu <ph name="ENTERPRISE_PLATFORM_KEYS_API" />. Rozszerzenia muszą zostać dodane do tej listy, by były używane z interfejsem API.
 
           Jeśli rozszerzenie nie znajduje się na liście lub lista nie jest ustawiona, wywołanie interfejsu API zakończy się błędem.</translation>
+<translation id="7620300057302654932">Źródła lub wzorce nazw hosta, które mają być traktowane jako bezpieczny kontekst.</translation>
 <translation id="7625444193696794922">Określa kanał wersji, z którym to urządzenie powinno być powiązane na stałe.</translation>
 <translation id="7632724434767231364">Nazwa biblioteki GSSAPI</translation>
 <translation id="7635471475589566552">Pozwala skonfigurować język w przeglądarce <ph name="PRODUCT_NAME" /> i uniemożliwia użytkownikom jego zmianę. Jeśli włączysz to ustawienie, w <ph name="PRODUCT_NAME" /> będzie używany określony język. W przypadku, gdy skonfigurowany język nie jest obsługiwany, wybierana jest opcja „en-US”. Jeśli ustawienie jest wyłączone lub nieskonfigurowane, w <ph name="PRODUCT_NAME" /> używany jest preferowany język określony przez użytkownika (jeśli został skonfigurowany), język ustawiony w systemie lub zastępcza opcja „en-US”.</translation>
@@ -2580,6 +2624,12 @@ Zalecamy skonfigurowanie zasady w systemie Windows przy użyciu obiektu zasad gr
 
           Przykładowe wzorce znajdziesz na https://www.chromium.org/developers/how-tos/chrome-frame-getting-started</translation>
 <translation id="8493645415242333585">Wyłącz zapisywanie historii przeglądarki</translation>
+<translation id="8498293625012059298">Konfigurowanie adresu URL do zmiany hasła (tylko schematy HTTP i HTTPS). Usługa ochrony haseł będzie kierować użytkowników na stronę pod tym adresem URL, by zmienili hasło, po wyświetleniu ostrzeżenia w przeglądarce.
+      Jeśli <ph name="PRODUCT_NAME" /> ma poprawnie rejestrować odciski cyfrowe nowych haseł na stronie zmiany hasła, strona powinna być zgodna z wytycznymi podanymi na https://www.chromium.org/developers/design-documents/create-amazing-password-forms
+
+      Jeśli to ustawienie jest włączone, po wyświetleniu ostrzeżenia w przeglądarce usługa ochrony haseł kieruje użytkowników na stronę pod tym adresem URL, by zmienili hasło.
+      Jeśli to ustawienie jest wyłączone lub nieskonfigurowane, usługa ochrony haseł kieruje użytkowników na stronę https://myaccounts.google.com, by zmienili hasło.
+      Ta zasada nie jest dostępna w systemach Windows niepołączonych z domeną <ph name="MS_AD_NAME" />.</translation>
 <translation id="8499172469244085141">Ustawienia domyślne (użytkownicy mogą zmienić)</translation>
 <translation id="8507835864888987300">Ustawia wersję docelową dla automatycznych aktualizacji.
 
@@ -2634,6 +2684,15 @@ Jeśli bieżąca wersja stanie się przestarzała podczas sesji użytkownika, je
       Jeśli zmienisz wartość tej zasady na Fałsz, nie będzie można uruchamiać nowych maszyn wirtualnych, ale już działające maszyny nie zostaną zamknięte.
       Jeśli zasada nie jest ustawiona na urządzeniu zarządzanym, nie można na nim uruchamiać maszyn wirtualnych.
       Na urządzeniach niezarządzanych można uruchamiać maszyny wirtualne.</translation>
+<translation id="8669669491594628013">Umożliwia sterowanie wyzwalaniem ostrzeżenia dotyczącego ochrony hasła. 
+Alerty dotyczące ochrony hasła ostrzegają użytkowników, gdy użyją swojego chronionego hasła na potencjalnie niebezpiecznych stronach.
+
+      Zasady „PasswordProtectionLoginURLs” i „PasswordProtectionChangePasswordURL” umożliwiają wskazanie hasła, które ma być chronione.
+
+      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOff”, nie będą wyświetlane żadne ostrzeżenia dotyczące ochrony hasła.
+      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOnPasswordReuse”, ostrzeżenie dotyczące ochrony hasła wyświetli się, gdy użytkownik użyje swojego chronionego hasła na stronie, której nie ma na białej liście.
+      Jeśli ta zasada jest ustawiona na „PasswordProtectionWarningOnPhishingReuse”, ostrzeżenie dotyczące ochrony hasła wyświetli się, gdy użytkownik użyje chronionego hasła na stronie wyłudzającej informacje.
+      Jeśli zasada nie jest skonfigurowana, usługa ochrony haseł będzie chronić tylko hasła do kont Google, a użytkownik może zmienić to ustawienie.</translation>
 <translation id="8672321184841719703">Wersja docelowa automatycznych aktualizacji</translation>
 <translation id="867410340948518937">U2F (Uniwersalne uwierzytelnianie dwuskładnikowe)</translation>
 <translation id="8685024486845674965">Ostrzeżenie dotyczące ochrony hasłem jest wyzwalane przez użycie tego samego hasła w innym miejscu</translation>
@@ -2696,11 +2755,6 @@ Jeśli bieżąca wersja stanie się przestarzała podczas sesji użytkownika, je
       Jeśli ustawienie pozostanie nieskonfigurowane, użytkownik może sam zdecydować, czy będzie korzystać z tej funkcji.</translation>
 <translation id="8870318296973696995">Strona startowa</translation>
 <translation id="8882006618241293596">Blokuj uruchamianie wtyczki <ph name="FLASH_PLUGIN_NAME" /> w tych witrynach</translation>
-<translation id="8894962626537183708">
-      Ta zasada określa listę źródeł (adresów URL), które będą traktowane jako bezpieczny kontekst. Dzięki temu organizacje mogą skonfigurować wewnętrzny serwer do testowania własnych stron internetowych, a programiści mają możliwość testowania funkcji, które wymagają bezpiecznego kontekstu, bez wdrażania zabezpieczeń TLS na serwerze testowym.
-      Określenie listy adresów URL w tej zasadzie działa tak samo jak flaga wiersza poleceń „--unsafely-treat-insecure-origin-as-secure” na oddzielonej przecinkami liście zawierającej te same adresy URL. Ta zasada zastępuje flagę wiersza poleceń, jeśli jest skonfigurowana.
-      Więcej informacji o bezpiecznym kontekście znajdziesz na stronie https://www.w3.org/TR/secure-contexts/
-      </translation>
 <translation id="890403179930035128">Wymusza włączenie sprawdzania pisowni. Nierozpoznane języki z tej listy będą ignorowane.
 
       Jeśli ta zasada jest włączona, sprawdzanie pisowni będzie dostępne także dla wskazanych języków, a nie tylko dla tych, dla których funkcję tę włączył użytkownik.

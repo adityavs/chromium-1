@@ -38,6 +38,7 @@
 #include "third_party/blink/renderer/core/frame/dom_timer.h"
 #include "third_party/blink/renderer/core/frame/event_handler_registry.h"
 #include "third_party/blink/renderer/core/frame/frame_console.h"
+#include "third_party/blink/renderer/core/frame/link_highlights.h"
 #include "third_party/blink/renderer/core/frame/local_frame_client.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/page_scale_constraints.h"
@@ -45,6 +46,7 @@
 #include "third_party/blink/renderer/core/frame/remote_frame.h"
 #include "third_party/blink/renderer/core/frame/remote_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/geometry/dom_rect_list.h"
 #include "third_party/blink/renderer/core/html/media/html_media_element.h"
@@ -66,6 +68,7 @@
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
+#include "third_party/blink/renderer/core/svg/graphics/svg_image_chrome_client.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/plugins/plugin_data.h"
@@ -143,6 +146,7 @@ Page* Page::CreateOrdinary(PageClients& page_clients, Page* opener) {
 
 Page::Page(PageClients& page_clients)
     : SettingsDelegate(Settings::Create()),
+      main_frame_(nullptr),
       animator_(PageAnimator::Create(*this)),
       autoscroll_controller_(AutoscrollController::Create(*this)),
       chrome_client_(page_clients.chrome_client),
@@ -159,12 +163,8 @@ Page::Page(PageClients& page_clients)
       visual_viewport_(VisualViewport::Create(*this)),
       overscroll_controller_(
           OverscrollController::Create(GetVisualViewport(), GetChromeClient())),
-      main_frame_(nullptr),
+      link_highlights_(LinkHighlights::Create(*this)),
       plugin_data_(nullptr),
-      use_counter_(page_clients.chrome_client &&
-                           page_clients.chrome_client->IsSVGImageChromeClient()
-                       ? UseCounter::kSVGImageContext
-                       : UseCounter::kDefaultContext),
       opened_by_dom_(false),
       tab_key_cycles_through_elements_(true),
       paused_(false),
@@ -201,7 +201,8 @@ ViewportDescription Page::GetViewportDescription() const {
                  DeprecatedLocalMainFrame()->GetDocument()
              ? DeprecatedLocalMainFrame()
                    ->GetDocument()
-                   ->GetViewportDescription()
+                   ->GetViewportData()
+                   .GetViewportDescription()
              : ViewportDescription();
 }
 
@@ -261,6 +262,10 @@ OverscrollController& Page::GetOverscrollController() {
 
 const OverscrollController& Page::GetOverscrollController() const {
   return *overscroll_controller_;
+}
+
+LinkHighlights& Page::GetLinkHighlights() {
+  return *link_highlights_;
 }
 
 DOMRectList* Page::NonFastScrollableRectsForTesting(const LocalFrame* frame) {
@@ -342,6 +347,14 @@ void Page::ResetPluginData() {
       page->plugin_data_->ResetPluginData();
       page->NotifyPluginsChanged();
     }
+  }
+}
+
+static void RestoreSVGImageAnimations() {
+  for (const Page* page : AllPages()) {
+    if (auto* svg_image_chrome_client =
+            ToSVGImageChromeClientOrNull(page->GetChromeClient()))
+      svg_image_chrome_client->RestoreAnimationIfNeeded();
   }
 }
 
@@ -456,11 +469,15 @@ void Page::SetVisibilityState(mojom::PageVisibilityState visibility_state,
     return;
   visibility_state_ = visibility_state;
 
-  if (!is_initial_state)
-    NotifyPageVisibilityChanged();
+  if (is_initial_state)
+    return;
+  NotifyPageVisibilityChanged();
 
-  if (!is_initial_state && main_frame_)
+  if (main_frame_) {
+    if (IsPageVisible())
+      RestoreSVGImageAnimations();
     main_frame_->DidChangeVisibilityState();
+  }
 }
 
 mojom::PageVisibilityState Page::VisibilityState() const {
@@ -531,7 +548,10 @@ void Page::SettingsChanged(SettingsDelegate::ChangeType change_type) {
       break;
     case SettingsDelegate::kViewportDescriptionChange:
       if (MainFrame() && MainFrame()->IsLocalFrame()) {
-        DeprecatedLocalMainFrame()->GetDocument()->UpdateViewportDescription();
+        DeprecatedLocalMainFrame()
+            ->GetDocument()
+            ->GetViewportData()
+            .UpdateViewportDescription();
         // The text autosizer has dependencies on the viewport.
         if (TextAutosizer* text_autosizer =
                 DeprecatedLocalMainFrame()->GetDocument()->GetTextAutosizer())
@@ -667,9 +687,8 @@ void Page::UpdateAcceleratedCompositingSettings() {
 void Page::DidCommitLoad(LocalFrame* frame) {
   if (main_frame_ == frame) {
     GetConsoleMessageStorage().Clear();
-    GetUseCounter().DidCommitLoad(frame);
-    // TODO(rbyers): Most of this doesn't appear to take into account that each
-    // SVGImage gets it's own Page instance.
+    // TODO(loonybear): Most of this doesn't appear to take into account that
+    // each SVGImage gets it's own Page instance.
     GetDeprecation().ClearSuppression();
     GetVisualViewport().SendUMAMetrics();
     // Need to reset visual viewport position here since before commit load we
@@ -679,6 +698,7 @@ void Page::DidCommitLoad(LocalFrame* frame) {
     GetVisualViewport().SetScrollOffset(ScrollOffset(), kProgrammaticScroll);
     hosts_using_features_.UpdateMeasurementsAndClear();
   }
+  GetLinkHighlights().ResetForPageNavigation();
 }
 
 void Page::AcceptLanguagesChanged() {
@@ -712,10 +732,10 @@ void Page::Trace(blink::Visitor* visitor) {
   visitor->Trace(global_root_scroller_controller_);
   visitor->Trace(visual_viewport_);
   visitor->Trace(overscroll_controller_);
+  visitor->Trace(link_highlights_);
   visitor->Trace(main_frame_);
   visitor->Trace(plugin_data_);
   visitor->Trace(validation_message_client_);
-  visitor->Trace(use_counter_);
   visitor->Trace(plugins_changed_observers_);
   visitor->Trace(next_related_page_);
   visitor->Trace(prev_related_page_);
@@ -727,12 +747,14 @@ void Page::LayerTreeViewInitialized(WebLayerTreeView& layer_tree_view,
                                     LocalFrameView* view) {
   if (GetScrollingCoordinator())
     GetScrollingCoordinator()->LayerTreeViewInitialized(layer_tree_view, view);
+  GetLinkHighlights().LayerTreeViewInitialized(layer_tree_view);
 }
 
 void Page::WillCloseLayerTreeView(WebLayerTreeView& layer_tree_view,
                                   LocalFrameView* view) {
   if (scrolling_coordinator_)
     scrolling_coordinator_->WillCloseLayerTreeView(layer_tree_view, view);
+  GetLinkHighlights().WillCloseLayerTreeView(layer_tree_view);
 }
 
 void Page::WillBeDestroyed() {
@@ -798,9 +820,9 @@ void Page::ReportIntervention(const String& text) {
   }
 }
 
-void Page::RequestBeginMainFrameNotExpected(bool new_state) {
+bool Page::RequestBeginMainFrameNotExpected(bool new_state) {
   if (!main_frame_ || !main_frame_->IsLocalFrame())
-    return;
+    return false;
 
   base::debug::StackTrace main_frame_created_trace =
       main_frame_->CreateStackForDebugging();
@@ -813,8 +835,10 @@ void Page::RequestBeginMainFrameNotExpected(bool new_state) {
     if (WebLayerTreeView* layer_tree_view =
             chrome_client_->GetWebLayerTreeView(main_frame)) {
       layer_tree_view->RequestBeginMainFrameNotExpected(new_state);
+      return true;
     }
   }
+  return false;
 }
 
 ukm::UkmRecorder* Page::GetUkmRecorder() {

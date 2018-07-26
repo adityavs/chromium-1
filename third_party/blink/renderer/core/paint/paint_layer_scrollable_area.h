@@ -262,6 +262,7 @@ class CORE_EXPORT PaintLayerScrollableArea final
     return scrollbar_manager_.VerticalScrollbar();
   }
 
+  bool IsThrottled() const override;
   PlatformChromeClient* GetChromeClient() const override;
 
   SmoothScrollSequencer* GetSmoothScrollSequencer() const override;
@@ -439,15 +440,6 @@ class CORE_EXPORT PaintLayerScrollableArea final
   void UpdateNeedsCompositedScrolling(bool layer_has_been_composited = false);
   bool NeedsCompositedScrolling() const { return needs_composited_scrolling_; }
 
-  // Sets whether there is a PaintLayer whose ScrollParent() is the
-  // owner of this PaintLayerScrollableArea.
-  void SetHasPaintLayerScrollChild(bool val) {
-    has_paint_layer_scroll_child_ = val;
-  }
-  bool HasPaintLayerScrollChild() const {
-    return has_paint_layer_scroll_child_;
-  }
-
   IntRect ResizerCornerRect(const IntRect&, ResizerHitTestType) const;
 
   PaintLayer* Layer() const override;
@@ -548,6 +540,8 @@ class CORE_EXPORT PaintLayerScrollableArea final
   void DidScrollWithScrollbar(ScrollbarPart, ScrollbarOrientation) override;
   CompositorElementId GetCompositorElementId() const override;
 
+  bool VisualViewportSuppliesScrollbars() const override;
+
   void Trace(blink::Visitor*) override;
 
  private:
@@ -555,7 +549,6 @@ class CORE_EXPORT PaintLayerScrollableArea final
 
   bool HasHorizontalOverflow() const;
   bool HasVerticalOverflow() const;
-  bool VisualViewportSuppliesScrollbars() const;
 
   bool NeedsScrollbarReconstruction() const;
 
@@ -590,7 +583,7 @@ class CORE_EXPORT PaintLayerScrollableArea final
   bool SetHasHorizontalScrollbar(bool has_scrollbar);
   bool SetHasVerticalScrollbar(bool has_scrollbar);
 
-  void SnapAfterScrollbarDragging(ScrollbarOrientation) override;
+  void SnapAfterScrollbarScrolling(ScrollbarOrientation) override;
 
   void UpdateScrollCornerStyle();
   LayoutSize MinimumSizeForResizing(float zoom_factor);
@@ -657,7 +650,6 @@ class CORE_EXPORT PaintLayerScrollableArea final
   unsigned needs_relayout_ : 1;
   unsigned had_horizontal_scrollbar_before_relayout_ : 1;
   unsigned had_vertical_scrollbar_before_relayout_ : 1;
-  unsigned has_paint_layer_scroll_child_ : 1;
   unsigned scroll_origin_changed_ : 1;
 
   // There are 6 possible combinations of writing mode and direction. Scroll

@@ -10,6 +10,7 @@
 
 #include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/trace_event/process_memory_dump.h"
 #include "base/trace_event/trace_event.h"
 #include "cc/base/histograms.h"
 #include "cc/paint/display_item_list.h"
@@ -33,6 +34,7 @@
 #include "third_party/skia/include/gpu/GrContext.h"
 #include "ui/gfx/geometry/axis_transform2d.h"
 #include "ui/gl/trace_util.h"
+#include "url/gurl.h"
 
 namespace cc {
 namespace {
@@ -138,11 +140,11 @@ static void RasterizeSourceOOP(
 
   // TODO(enne): Use the |texture_target|? GpuMemoryBuffer backed textures don't
   // use GL_TEXTURE_2D.
-  ri->BeginRasterCHROMIUM(texture_id, raster_source->background_color(),
-                          msaa_sample_count, playback_settings.use_lcd_text,
+  ri->BeginRasterCHROMIUM(raster_source->background_color(), msaa_sample_count,
+                          playback_settings.use_lcd_text,
                           viz::ResourceFormatToClosestSkColorType(
                               /*gpu_compositing=*/true, resource_format),
-                          playback_settings.raster_color_space);
+                          playback_settings.raster_color_space, mailbox.name);
   float recording_to_raster_scale =
       transform.scale() / raster_source->recording_scale_factor();
   gfx::Size content_size = raster_source->GetContentSize(transform.scale());
@@ -268,15 +270,20 @@ class GpuRasterBufferProvider::GpuRasterBacking
       gl->DeleteTextures(1, &texture_id);
   }
 
-  base::trace_event::MemoryAllocatorDumpGuid MemoryDumpGuid(
-      uint64_t tracing_process_id) override {
+  void OnMemoryDump(
+      base::trace_event::ProcessMemoryDump* pmd,
+      const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
+      uint64_t tracing_process_id,
+      int importance) const override {
     if (!storage_allocated)
-      return {};
-    return gl::GetGLTextureClientGUIDForTracing(
+      return;
+
+    auto texture_tracing_guid = gl::GetGLTextureClientGUIDForTracing(
         compositor_context_provider->ContextSupport()->ShareGroupTracingGUID(),
         texture_id);
+    pmd->CreateSharedGlobalAllocatorDump(texture_tracing_guid);
+    pmd->AddOwnershipEdge(buffer_dump_guid, texture_tracing_guid, importance);
   }
-  base::UnguessableToken SharedMemoryGuid() override { return {}; }
 
   // The ContextProvider used to clean up the texture id.
   viz::ContextProvider* compositor_context_provider = nullptr;
@@ -322,7 +329,8 @@ void GpuRasterBufferProvider::RasterBufferImpl::Playback(
     const gfx::Rect& raster_dirty_rect,
     uint64_t new_content_id,
     const gfx::AxisTransform2d& transform,
-    const RasterSource::PlaybackSettings& playback_settings) {
+    const RasterSource::PlaybackSettings& playback_settings,
+    const GURL& url) {
   TRACE_EVENT0("cc", "GpuRasterBuffer::Playback");
   // The |before_raster_sync_token_| passed in here was created on the
   // compositor thread, or given back with the texture for reuse. This call
@@ -333,7 +341,7 @@ void GpuRasterBufferProvider::RasterBufferImpl::Playback(
       texture_storage_allocated_, before_raster_sync_token_, resource_size_,
       resource_format_, color_space_, resource_has_previous_content_,
       raster_source, raster_full_rect, raster_dirty_rect, new_content_id,
-      transform, playback_settings);
+      transform, playback_settings, url);
   texture_storage_allocated_ = true;
 }
 
@@ -477,9 +485,10 @@ gpu::SyncToken GpuRasterBufferProvider::PlaybackOnWorkerThread(
     const gfx::Rect& raster_dirty_rect,
     uint64_t new_content_id,
     const gfx::AxisTransform2d& transform,
-    const RasterSource::PlaybackSettings& playback_settings) {
+    const RasterSource::PlaybackSettings& playback_settings,
+    const GURL& url) {
   viz::RasterContextProvider::ScopedRasterContextLock scoped_context(
-      worker_context_provider_);
+      worker_context_provider_, url.possibly_invalid_spec().c_str());
   gpu::raster::RasterInterface* ri = scoped_context.RasterInterface();
   DCHECK(ri);
 

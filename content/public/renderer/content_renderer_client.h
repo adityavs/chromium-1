@@ -169,13 +169,6 @@ class CONTENT_EXPORT ContentRendererClient {
   // the content layer will provide an engine.
   virtual blink::WebThemeEngine* OverrideThemeEngine();
 
-  // Allows the embedder to provide a WebSocketHandshakeThrottle. If it returns
-  // NULL then none will be used.
-  // TODO(nhiroki): Remove this once the off-main-thread WebSocket is enabled by
-  // default (https://crbug.com/825740).
-  virtual std::unique_ptr<blink::WebSocketHandshakeThrottle>
-  CreateWebSocketHandshakeThrottle();
-
   // Allows the embedder to provide a WebSocketHandshakeThrottleProvider. If it
   // returns NULL then none will be used.
   virtual std::unique_ptr<WebSocketHandshakeThrottleProvider>
@@ -388,7 +381,11 @@ class CONTENT_EXPORT ContentRendererClient {
 
   // Whether the renderer allows idle media players to be automatically
   // suspended after a period of inactivity.
-  virtual bool AllowIdleMediaSuspend();
+  virtual bool IsIdleMediaSuspendEnabled();
+
+  // Whether the renderer should automatically suspend media playback on
+  // background tabs.
+  virtual bool IsBackgroundMediaSuspendEnabled();
 
   // Called when a resource at |url| is loaded using an otherwise-valid legacy
   // Symantec certificate that will be distrusted in future. Allows the embedder

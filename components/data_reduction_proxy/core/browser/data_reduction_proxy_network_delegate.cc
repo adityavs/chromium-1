@@ -145,8 +145,6 @@ void RecordContentLengthHistograms(bool is_https,
                                    is_video, request_type,
                                    original_content_length);
 
-  UMA_HISTOGRAM_COUNTS_1M("Net.HttpOriginalContentLength",
-                          original_content_length);
   UMA_HISTOGRAM_CUSTOM_COUNTS("Net.HttpContentFreshnessLifetime",
                               freshness_lifetime.InSeconds(),
                               base::TimeDelta::FromHours(1).InSeconds(),
@@ -278,19 +276,6 @@ void DataReductionProxyNetworkDelegate::InitIODataAndUMA(
   DCHECK(bypass_stats);
   data_reduction_proxy_io_data_ = io_data;
   data_reduction_proxy_bypass_stats_ = bypass_stats;
-}
-
-void DataReductionProxyNetworkDelegate::OnBeforeURLRequestInternal(
-    net::URLRequest* request,
-    GURL* new_url) {
-  DCHECK(thread_checker_.CalledOnValidThread());
-
-  if (data_reduction_proxy_io_data_ &&
-      data_reduction_proxy_io_data_->lofi_decider() &&
-      data_reduction_proxy_io_data_->IsEnabled()) {
-    data_reduction_proxy_io_data_->lofi_decider()->MaybeApplyAMPPreview(
-        request, new_url, data_reduction_proxy_io_data_->previews_decider());
-  }
 }
 
 void DataReductionProxyNetworkDelegate::OnBeforeStartTransactionInternal(
@@ -577,21 +562,41 @@ void DataReductionProxyNetworkDelegate::CalculateAndRecordDataUsage(
   if (request.response_headers())
     request.response_headers()->GetMimeType(&mime_type);
 
-  AccumulateDataUsage(data_used, original_size, request_type, mime_type);
+  AccumulateDataUsage(
+      data_used, original_size, request_type, mime_type,
+      data_use_measurement::DataUseMeasurement::IsUserRequest(request),
+      data_use_measurement::DataUseMeasurement::GetContentTypeForRequest(
+          request),
+      request.traffic_annotation().unique_id_hash_code);
+
+  if (params::IsDataSaverSiteBreakdownUsingPLMEnabled() &&
+      data_reduction_proxy_io_data_ &&
+      data_reduction_proxy_io_data_->resource_type_provider() &&
+      data_reduction_proxy_io_data_->resource_type_provider()
+          ->IsNonContentInitiatedRequest(request)) {
+    // Record non-content initiated traffic to the Other bucket for data saver
+    // site-breakdown.
+    data_reduction_proxy_io_data_->UpdateDataUseForHost(
+        data_used, original_size, util::GetSiteBreakdownOtherHostName());
+  }
 }
 
 void DataReductionProxyNetworkDelegate::AccumulateDataUsage(
     int64_t data_used,
     int64_t original_size,
     DataReductionProxyRequestType request_type,
-    const std::string& mime_type) {
+    const std::string& mime_type,
+    bool is_user_traffic,
+    data_use_measurement::DataUseUserData::DataUseContentType content_type,
+    int32_t service_hash_code) {
   DCHECK(thread_checker_.CalledOnValidThread());
   DCHECK_GE(data_used, 0);
   DCHECK_GE(original_size, 0);
   if (data_reduction_proxy_io_data_) {
     data_reduction_proxy_io_data_->UpdateContentLengths(
         data_used, original_size, data_reduction_proxy_io_data_->IsEnabled(),
-        request_type, mime_type);
+        request_type, mime_type, is_user_traffic, content_type,
+        service_hash_code);
   }
 }
 

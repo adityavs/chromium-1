@@ -6,13 +6,11 @@
 #define ASH_APP_MENU_NOTIFICATION_MENU_CONTROLLER_H_
 
 #include "ash/app_menu/app_menu_export.h"
+#include "ash/app_menu/notification_menu_view.h"
 #include "base/scoped_observer.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/message_center_observer.h"
-
-namespace ui {
-class SimpleMenuModel;
-}
+#include "ui/message_center/views/slide_out_controller.h"
 
 namespace views {
 class MenuItemView;
@@ -20,24 +18,37 @@ class MenuItemView;
 
 namespace ash {
 
-class NotificationMenuView;
+class AppMenuModelAdapter;
 
 // Handles adding/removing NotificationMenuView from the root MenuItemView,
 // adding the container model entry, and updating the NotificationMenuView
 // as notifications come and go.
 class APP_MENU_EXPORT NotificationMenuController
-    : public message_center::MessageCenterObserver {
+    : public message_center::MessageCenterObserver,
+      public message_center::SlideOutController::Delegate,
+      public NotificationMenuView::Delegate {
  public:
   NotificationMenuController(const std::string& app_id,
                              views::MenuItemView* root_menu,
-                             ui::SimpleMenuModel* model);
+                             AppMenuModelAdapter* app_menu_model_adapter);
 
   ~NotificationMenuController() override;
 
   // message_center::MessageCenterObserver overrides:
   void OnNotificationAdded(const std::string& notification_id) override;
+  void OnNotificationUpdated(const std::string& notification_id) override;
   void OnNotificationRemoved(const std::string& notification_id,
                              bool by_user) override;
+
+  // message_center::SlideOutController::Delegate overrides:
+  ui::Layer* GetSlideOutLayer() override;
+  void OnSlideChanged() override;
+  void OnSlideOut() override;
+
+  // NotificationMenuView::Delegate overrides:
+  void OnOverflowAddedOrRemoved() override;
+  void ActivateNotificationAndClose(
+      const std::string& notification_id) override;
 
  private:
   // Adds a container MenuItemView to |root_menu_|, adds NOTIFICATION_CONTAINER
@@ -51,8 +62,8 @@ class APP_MENU_EXPORT NotificationMenuController
   // The top level MenuItemView. Owned by |AppMenuModelAdapter::menu_runner_|.
   views::MenuItemView* const root_menu_;
 
-  // Owned by AppMenuModelAdapter.
-  ui::SimpleMenuModel* const model_;
+  // Manages showing the menu. Owned by the view requesting a menu.
+  AppMenuModelAdapter* const app_menu_model_adapter_;
 
   // The view which shows all active notifications for |app_id_|. Owned by the
   // views hierarchy.

@@ -4,6 +4,8 @@
 
 #include "components/feed/core/feed_storage_database.h"
 
+#include <unordered_set>
+
 #include "base/bind.h"
 #include "base/files/file_path.h"
 #include "base/strings/string_util.h"
@@ -45,20 +47,42 @@ std::string FormatJournalKeyToStorageKey(const std::string& journal_key) {
   return kJournalStoragePrefix + journal_key;
 }
 
+// Check if the |storage_key| is with |prefix|.
+bool IsKeywithPrefix(const std::string& storage_key, const char prefix[]) {
+  return base::StartsWith(storage_key, prefix, base::CompareCase::SENSITIVE);
+}
+
 // Check if the |storage_key| is for content data.
 bool IsValidContentKey(const std::string& storage_key) {
-  return base::StartsWith(storage_key, kContentStoragePrefix,
-                          base::CompareCase::SENSITIVE);
+  return IsKeywithPrefix(storage_key, kContentStoragePrefix);
+}
+
+// Check if the |storage_key| is for journal data.
+bool IsValidJournalKey(const std::string& storage_key) {
+  return IsKeywithPrefix(storage_key, kJournalStoragePrefix);
+}
+
+// Help function |ParseContentKey| and |ParseJournalKey| to parse storage key by
+// remove |prefix| from |storage_key|.
+std::string ParseKeyHelper(const std::string& storage_key,
+                           const char prefix[]) {
+  if (!IsKeywithPrefix(storage_key, prefix)) {
+    return std::string();
+  }
+
+  return storage_key.substr(strlen(prefix));
 }
 
 // Parse content key from storage key. Return an empty string if |storage_key|
 // is not recognized as content key. ex. journal's storage key.
 std::string ParseContentKey(const std::string& storage_key) {
-  if (!IsValidContentKey(storage_key)) {
-    return std::string();
-  }
+  return ParseKeyHelper(storage_key, kContentStoragePrefix);
+}
 
-  return storage_key.substr(strlen(kContentStoragePrefix));
+// Parse journal key from storage key. Return an empty string if |storage_key|
+// is not recognized as journal key. ex. content's storage key.
+std::string ParseJournalKey(const std::string& storage_key) {
+  return ParseKeyHelper(storage_key, kJournalStoragePrefix);
 }
 
 bool DatabaseKeyFilter(const std::unordered_set<std::string>& key_set,
@@ -73,13 +97,13 @@ bool DatabasePrefixFilter(const std::string& key_prefix,
 
 }  // namespace
 
-FeedStorageDatabase::FeedStorageDatabase(
-    const base::FilePath& database_folder,
-    const scoped_refptr<base::SequencedTaskRunner>& task_runner)
+FeedStorageDatabase::FeedStorageDatabase(const base::FilePath& database_folder)
     : FeedStorageDatabase(
           database_folder,
           std::make_unique<leveldb_proto::ProtoDatabaseImpl<FeedStorageProto>>(
-              task_runner)) {}
+              base::CreateSequencedTaskRunnerWithTraits(
+                  {base::MayBlock(), base::TaskPriority::BACKGROUND,
+                   base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN}))) {}
 
 FeedStorageDatabase::FeedStorageDatabase(
     const base::FilePath& database_folder,
@@ -212,12 +236,21 @@ void FeedStorageDatabase::LoadJournal(const std::string& key,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void FeedStorageDatabase::LoadAllJournals(LoadAllJournalsCallback callback) {
+void FeedStorageDatabase::DoesJournalExist(const std::string& key,
+                                           ConfirmationCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  storage_database_->LoadEntriesWithFilter(
-      base::BindRepeating(&DatabasePrefixFilter, kJournalStoragePrefix),
-      base::BindOnce(&FeedStorageDatabase::OnLoadEntriesForLoadAllJournals,
+  storage_database_->GetEntry(
+      FormatJournalKeyToStorageKey(key),
+      base::BindOnce(&FeedStorageDatabase::OnGetEntryForDoesJournalExist,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void FeedStorageDatabase::LoadAllJournalKeys(JournalLoadCallback callback) {
+  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  storage_database_->LoadKeys(
+      base::BindOnce(&FeedStorageDatabase::OnLoadKeysForLoadAllJournalKeys,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
@@ -342,9 +375,17 @@ void FeedStorageDatabase::OnGetEntryForLoadJournal(
   std::move(callback).Run(std::move(results));
 }
 
+void FeedStorageDatabase::OnGetEntryForDoesJournalExist(
+    ConfirmationCallback callback,
+    bool success,
+    std::unique_ptr<FeedStorageProto> journal) {
+  DVLOG_IF(1, !success) << "FeedStorageDatabase load journal failed.";
+  std::move(callback).Run(journal != nullptr);
+}
+
 void FeedStorageDatabase::OnGetEntryAppendToJournal(
     ConfirmationCallback callback,
-    std::string key,
+    const std::string& key,
     std::vector<std::string> entries,
     bool success,
     std::unique_ptr<FeedStorageProto> journal) {
@@ -376,7 +417,7 @@ void FeedStorageDatabase::OnGetEntryAppendToJournal(
 
 void FeedStorageDatabase::OnGetEntryForCopyJournal(
     ConfirmationCallback callback,
-    std::string to_key,
+    const std::string& to_key,
     bool success,
     std::unique_ptr<FeedStorageProto> journal) {
   if (!success || !journal) {
@@ -396,27 +437,22 @@ void FeedStorageDatabase::OnGetEntryForCopyJournal(
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void FeedStorageDatabase::OnLoadEntriesForLoadAllJournals(
-    LoadAllJournalsCallback callback,
+void FeedStorageDatabase::OnLoadKeysForLoadAllJournalKeys(
+    JournalLoadCallback callback,
     bool success,
-    std::unique_ptr<std::vector<FeedStorageProto>> entries) {
-  std::vector<std::vector<std::string>> results;
+    std::unique_ptr<std::vector<std::string>> keys) {
+  std::vector<std::string> results;
 
-  if (!success || !entries) {
-    DVLOG_IF(1, !success) << "FeedStorageDatabase load journals failed.";
+  if (!success || !keys) {
+    DVLOG_IF(1, !success) << "FeedStorageDatabase load journal keys failed.";
     std::move(callback).Run(std::move(results));
     return;
   }
 
-  for (const auto& entry : *entries) {
-    DCHECK(entry.has_key());
-    DCHECK_NE(entry.journal_data_size(), 0);
-
-    std::vector<std::string> journal;
-    for (int i = 0; i < entry.journal_data_size(); ++i) {
-      journal.emplace_back(entry.journal_data(i));
-    }
-    results.push_back(journal);
+  // Filter out content keys, only keep journal keys.
+  for (const std::string& key : *keys) {
+    if (IsValidJournalKey(key))
+      results.emplace_back(ParseJournalKey(key));
   }
 
   std::move(callback).Run(std::move(results));

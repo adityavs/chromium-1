@@ -300,7 +300,9 @@ NotifierSettingsView::NotifierButton::NotifierButton(
       notifier_id_(notifier_ui_data.notifier_id),
       icon_view_(new views::ImageView()),
       name_view_(new views::Label(notifier_ui_data.name)),
-      checkbox_(new views::Checkbox(base::string16(), true /* force_md */)) {
+      checkbox_(new views::Checkbox(base::string16(),
+                                    this /* listener */,
+                                    true /* force_md */)) {
   name_view_->SetAutoColorReadabilityEnabled(false);
   name_view_->SetEnabledColor(features::IsSystemTrayUnifiedEnabled()
                                   ? kUnifiedMenuTextColor
@@ -311,7 +313,6 @@ NotifierSettingsView::NotifierButton::NotifierButton(
       gfx::FontList().DeriveWithSizeDelta(kLabelFontSizeDelta));
 
   checkbox_->SetChecked(notifier_ui_data.enabled);
-  checkbox_->set_listener(this);
   checkbox_->SetFocusBehavior(FocusBehavior::NEVER);
   checkbox_->SetAccessibleName(notifier_ui_data.name);
 
@@ -489,13 +490,14 @@ NotifierSettingsView::NotifierSettingsView()
   no_notifiers_view_ = new EmptyNotifierView();
   AddChildView(no_notifiers_view_);
 
-  SetNotifierList({});
-  Shell::Get()->message_center_controller()->SetNotifierSettingsListener(this);
+  OnNotifierListUpdated({});
+  Shell::Get()->message_center_controller()->AddNotifierSettingsListener(this);
+  Shell::Get()->message_center_controller()->RequestNotifierSettingsUpdate();
 }
 
 NotifierSettingsView::~NotifierSettingsView() {
-  Shell::Get()->message_center_controller()->SetNotifierSettingsListener(
-      nullptr);
+  Shell::Get()->message_center_controller()->RemoveNotifierSettingsListener(
+      this);
 }
 
 bool NotifierSettingsView::IsScrollable() {
@@ -523,8 +525,13 @@ void NotifierSettingsView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
       IDS_ASH_MESSAGE_CENTER_SETTINGS_DIALOG_DESCRIPTION));
 }
 
-void NotifierSettingsView::SetNotifierList(
+void NotifierSettingsView::OnNotifierListUpdated(
     const std::vector<mojom::NotifierUiDataPtr>& ui_data) {
+  // TODO(tetsui): currently notifier settings list doesn't update after once
+  // it's loaded, in order to retain scroll position.
+  if (scroller_->contents() && buttons_.size() > 0)
+    return;
+
   buttons_.clear();
 
   views::View* contents_view = new ScrollContentsView();
@@ -633,6 +640,7 @@ void NotifierSettingsView::ButtonPressed(views::Button* sender,
   button->SetChecked(!button->checked());
   Shell::Get()->message_center_controller()->SetNotifierEnabled(
       button->notifier_id(), button->checked());
+  Shell::Get()->message_center_controller()->RequestNotifierSettingsUpdate();
 }
 
 }  // namespace ash

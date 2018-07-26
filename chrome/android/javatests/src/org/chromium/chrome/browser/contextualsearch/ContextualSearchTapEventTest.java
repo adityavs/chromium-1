@@ -85,7 +85,7 @@ public class ContextualSearchTapEventTest {
             selectionPopupController.setSelectionClient(this.getContextualSearchSelectionClient());
             MockContextualSearchPolicy policy = new MockContextualSearchPolicy();
             setContextualSearchPolicy(policy);
-            mTranslateController = new MockedCSTranslateController(activity, policy, null);
+            mTranslateController = new MockedCSTranslateController(policy, null);
         }
 
         @Override
@@ -112,7 +112,7 @@ public class ContextualSearchTapEventTest {
     // --------------------------------------------------------------------------------------------
 
     /**
-     * Selection controller that mocks out anything to do with a ContentViewCore.
+     * Selection controller that mocks out anything to do with a WebContents.
      */
     private static class MockCSSelectionController extends ContextualSearchSelectionController {
         private StubbedSelectionPopupController mPopupController;
@@ -138,9 +138,9 @@ public class ContextualSearchTapEventTest {
         private static final String ENGLISH_TARGET_LANGUAGE = "en";
         private static final String ENGLISH_ACCEPT_LANGUAGES = "en-US,en";
 
-        MockedCSTranslateController(ChromeActivity activity, ContextualSearchPolicy policy,
-                ContextualSearchTranslateInterface hostInterface) {
-            super(activity, policy, hostInterface);
+        MockedCSTranslateController(
+                ContextualSearchPolicy policy, ContextualSearchTranslateInterface hostInterface) {
+            super(policy, hostInterface);
         }
 
         @Override

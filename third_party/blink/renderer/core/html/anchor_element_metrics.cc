@@ -5,10 +5,12 @@
 #include "third_party/blink/renderer/core/html/anchor_element_metrics.h"
 
 #include "base/metrics/histogram_macros.h"
-#include "services/service_manager/public/cpp/interface_provider.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/mojom/loader/navigation_predictor.mojom-blink.h"
+#include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
+#include "third_party/blink/renderer/core/html/anchor_element_metrics_sender.h"
 #include "third_party/blink/renderer/core/html/html_anchor_element.h"
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
 #include "third_party/blink/renderer/core/layout/layout_object.h"
@@ -17,6 +19,7 @@
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
 #include "third_party/blink/renderer/platform/histogram.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
+#include "third_party/blink/renderer/platform/wtf/vector.h"
 
 namespace blink {
 
@@ -132,7 +135,12 @@ IntRect AbsoluteElementBoundingBoxRect(const LayoutObject* layout_object) {
 
 }  // anonymous namespace
 
-base::Optional<AnchorElementMetrics> AnchorElementMetrics::CreateFrom(
+// Webpage with more than |kMaxAnchorElementMetricsSize| anchor element metrics
+// to report will be ignored, so it should be large enough to cover most pages.
+const int AnchorElementMetrics::kMaxAnchorElementMetricsSize = 40;
+
+// static
+base::Optional<AnchorElementMetrics> AnchorElementMetrics::Create(
     const HTMLAnchorElement* anchor_element) {
   LocalFrame* local_frame = anchor_element->GetDocument().GetFrame();
   LayoutObject* layout_object = anchor_element->GetLayoutObject();
@@ -196,49 +204,112 @@ base::Optional<AnchorElementMetrics> AnchorElementMetrics::CreateFrom(
       IsSameHost(*anchor_element), IsUrlIncrementedByOne(*anchor_element));
 }
 
-void AnchorElementMetrics::SendMetricsToBrowser() const {
-  LocalFrame* frame = anchor_element_->GetDocument().GetFrame();
-  DCHECK(frame);
+// static
+base::Optional<AnchorElementMetrics>
+AnchorElementMetrics::MaybeReportClickedMetricsOnClick(
+    const HTMLAnchorElement* anchor_element) {
+  if (!base::FeatureList::IsEnabled(features::kRecordAnchorMetricsClicked) ||
+      !anchor_element->Href().ProtocolIsInHTTPFamily())
+    return base::nullopt;
 
-  if (!anchor_element_->Href().ProtocolIsInHTTPFamily())
-    return;
+  auto anchor_metrics = Create(anchor_element);
+  if (anchor_metrics.has_value()) {
+    anchor_metrics.value().RecordMetricsOnClick();
 
-  mojom::blink::AnchorElementMetricsHostPtr service_;
-  frame->LocalFrameRoot().GetInterfaceProvider().GetInterface(
-      mojo::MakeRequest(&service_));
+    // Send metrics of the anchor element to the browser process.
+    AnchorElementMetricsSender::From(*GetRootDocument(*anchor_element))
+        ->SendClickedAnchorMetricsToBrowser(
+            anchor_metrics.value().CreateMetricsPtr());
+  }
 
-  auto metrics = mojom::blink::AnchorElementMetrics::New();
-  metrics->ratio_area = ratio_area_;
-  metrics->ratio_distance_root_top = ratio_distance_root_top_;
-  metrics->ratio_distance_center_to_visible_top =
-      ratio_distance_center_to_visible_top_;
-  metrics->target_url = anchor_element_->Href();
-
-  service_->UpdateAnchorElementMetrics(std::move(metrics));
+  return anchor_metrics;
 }
 
-void AnchorElementMetrics::RecordMetrics() const {
+// static
+void AnchorElementMetrics::MaybeReportViewportMetricsOnLoad(
+    Document& document) {
+  DCHECK(document.GetFrame());
+  if (!base::FeatureList::IsEnabled(features::kRecordAnchorMetricsVisible) ||
+      document.ParentDocument() || !document.View() ||
+      !document.BaseURL().ProtocolIsInHTTPFamily()) {
+    return;
+  }
+
+  Vector<mojom::blink::AnchorElementMetricsPtr> anchor_elements_metrics;
+  AnchorElementMetricsSender* sender =
+      AnchorElementMetricsSender::From(document);
+  for (const auto& member_element : sender->GetAnchorElements()) {
+    const HTMLAnchorElement& anchor_element = *member_element;
+
+    // We ignore anchor elements that are not in the visual viewport.
+    if (!anchor_element.Href().ProtocolIsInHTTPFamily() ||
+        anchor_element.VisibleBoundsInVisualViewport().IsEmpty()) {
+      continue;
+    }
+
+    base::Optional<AnchorElementMetrics> anchor_metric =
+        Create(&anchor_element);
+    if (!anchor_metric.has_value())
+      continue;
+
+    anchor_elements_metrics.push_back(anchor_metric.value().CreateMetricsPtr());
+
+    if (anchor_elements_metrics.size() > kMaxAnchorElementMetricsSize)
+      return;
+  }
+
+  if (anchor_elements_metrics.IsEmpty())
+    return;
+
+  sender->SendAnchorMetricsVectorToBrowser(std::move(anchor_elements_metrics));
+}
+
+mojom::blink::AnchorElementMetricsPtr AnchorElementMetrics::CreateMetricsPtr()
+    const {
+  auto metrics = mojom::blink::AnchorElementMetrics::New();
+  metrics->ratio_area = ratio_area_;
+  metrics->ratio_visible_area = ratio_visible_area_;
+  metrics->ratio_distance_top_to_visible_top =
+      ratio_distance_top_to_visible_top_;
+  metrics->ratio_distance_center_to_visible_top =
+      ratio_distance_center_to_visible_top_;
+  metrics->ratio_distance_root_top = ratio_distance_root_top_;
+  metrics->ratio_distance_root_bottom = ratio_distance_root_bottom_;
+  metrics->is_in_iframe = is_in_iframe_;
+  metrics->contains_image = contains_image_;
+  metrics->is_same_host = is_same_host_;
+  metrics->is_url_incremented_by_one = is_url_incremented_by_one_;
+
+  metrics->source_url = GetRootDocument(*anchor_element_)->Url();
+  metrics->target_url = anchor_element_->Href();
+
+  return metrics;
+}
+
+void AnchorElementMetrics::RecordMetricsOnClick() const {
   UMA_HISTOGRAM_PERCENTAGE("AnchorElementMetrics.Clicked.RatioArea",
-                           int(ratio_area_ * 100));
+                           static_cast<int>(ratio_area_ * 100));
 
   UMA_HISTOGRAM_PERCENTAGE("AnchorElementMetrics.Clicked.RatioVisibleArea",
-                           int(ratio_visible_area_ * 100));
+                           static_cast<int>(ratio_visible_area_ * 100));
 
   UMA_HISTOGRAM_PERCENTAGE(
       "AnchorElementMetrics.Clicked.RatioDistanceTopToVisibleTop",
-      int(std::min(ratio_distance_top_to_visible_top_, 1.0f) * 100));
+      static_cast<int>(std::min(ratio_distance_top_to_visible_top_, 1.0f) *
+                       100));
 
   UMA_HISTOGRAM_PERCENTAGE(
       "AnchorElementMetrics.Clicked.RatioDistanceCenterToVisibleTop",
-      int(std::min(ratio_distance_center_to_visible_top_, 1.0f) * 100));
+      static_cast<int>(std::min(ratio_distance_center_to_visible_top_, 1.0f) *
+                       100));
 
   UMA_HISTOGRAM_COUNTS_10000(
       "AnchorElementMetrics.Clicked.RatioDistanceRootTop",
-      int(std::min(ratio_distance_root_top_, 100.0f) * 100));
+      static_cast<int>(std::min(ratio_distance_root_top_, 100.0f) * 100));
 
   UMA_HISTOGRAM_COUNTS_10000(
       "AnchorElementMetrics.Clicked.RatioDistanceRootBottom",
-      int(std::min(ratio_distance_root_bottom_, 100.0f) * 100));
+      static_cast<int>(std::min(ratio_distance_root_bottom_, 100.0f) * 100));
 
   UMA_HISTOGRAM_BOOLEAN("AnchorElementMetrics.Clicked.IsInIFrame",
                         is_in_iframe_);

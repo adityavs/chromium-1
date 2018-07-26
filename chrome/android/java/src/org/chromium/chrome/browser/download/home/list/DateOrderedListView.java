@@ -84,8 +84,10 @@ class DateOrderedListView {
                 mModel.getProperties(), mView, propertyViewBinder));
 
         // Do the final hook up to the underlying data adapter.
-        mView.setAdapter(new DateOrderedListViewAdapter(
-                mModel, new ModelChangeProcessor(mModel), ListItemViewHolder::create));
+        DateOrderedListViewAdapter adapter = new DateOrderedListViewAdapter(
+                mModel, new ModelChangeProcessor(mModel), ListItemViewHolder::create);
+        mView.setAdapter(adapter);
+        mView.post(() -> adapter.notifyDataSetChanged());
     }
 
     /** @return The Android {@link View} representing this widget. */
@@ -107,7 +109,12 @@ class DateOrderedListView {
 
             int availableWidth = getWidth() - mImagePaddingPx;
             int columnWidth = mImageWidthPx - mImagePaddingPx;
-            setSpanCount(Math.max(1, availableWidth / columnWidth));
+
+            int easyFitSpan = availableWidth / columnWidth;
+            double remaining =
+                    ((double) (availableWidth - easyFitSpan * columnWidth)) / columnWidth;
+            if (remaining > 0.5) easyFitSpan++;
+            setSpanCount(Math.max(1, easyFitSpan));
 
             super.onLayoutChildren(recycler, state);
         }
@@ -129,13 +136,13 @@ class DateOrderedListView {
             if (position < 0 || position >= mModel.size()) return;
 
             switch (ListUtils.getViewTypeForItem(mModel.get(position))) {
-                case ListUtils.IMAGE:
+                case ListUtils.ViewType.IMAGE:
                     outRect.left = mImagePaddingPx;
                     outRect.right = mImagePaddingPx;
                     outRect.top = mImagePaddingPx;
                     outRect.bottom = mImagePaddingPx;
                     break;
-                case ListUtils.PREFETCH:
+                case ListUtils.ViewType.PREFETCH:
                     outRect.left = mPrefetchHorizontalPaddingPx;
                     outRect.right = mPrefetchHorizontalPaddingPx;
                     outRect.top = mPrefetchVerticalPaddingPx / 2;

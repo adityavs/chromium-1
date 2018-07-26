@@ -329,6 +329,20 @@ base::string16 AXPlatformNodeBase::GetRangeValueText() {
   return value;
 }
 
+AXPlatformNodeBase* AXPlatformNodeBase::GetSelectionContainer() const {
+  if (!delegate_)
+    return nullptr;
+  AXPlatformNodeBase* container = const_cast<AXPlatformNodeBase*>(this);
+  while (container &&
+         !IsContainerWithSelectableChildrenRole(container->GetData().role)) {
+    gfx::NativeViewAccessible parent_accessible = container->GetParent();
+    AXPlatformNodeBase* parent = FromNativeViewAccessible(parent_accessible);
+
+    container = parent;
+  }
+  return container;
+}
+
 AXPlatformNodeBase* AXPlatformNodeBase::GetTable() const {
   if (!delegate_)
     return nullptr;
@@ -503,6 +517,35 @@ bool AXPlatformNodeBase::IsChildOfLeaf() {
   }
 
   return false;
+}
+
+bool AXPlatformNodeBase::IsScrollable() const {
+  return (HasIntAttribute(ax::mojom::IntAttribute::kScrollXMin) &&
+          HasIntAttribute(ax::mojom::IntAttribute::kScrollXMax) &&
+          HasIntAttribute(ax::mojom::IntAttribute::kScrollX)) ||
+         (HasIntAttribute(ax::mojom::IntAttribute::kScrollYMin) &&
+          HasIntAttribute(ax::mojom::IntAttribute::kScrollYMax) &&
+          HasIntAttribute(ax::mojom::IntAttribute::kScrollY));
+}
+
+bool AXPlatformNodeBase::IsHorizontallyScrollable() const {
+  DCHECK_GE(GetIntAttribute(ax::mojom::IntAttribute::kScrollXMin), 0)
+      << "Pixel sizes should be non-negative.";
+  DCHECK_GE(GetIntAttribute(ax::mojom::IntAttribute::kScrollXMax), 0)
+      << "Pixel sizes should be non-negative.";
+  return IsScrollable() &&
+         GetIntAttribute(ax::mojom::IntAttribute::kScrollXMin) <
+             GetIntAttribute(ax::mojom::IntAttribute::kScrollXMax);
+}
+
+bool AXPlatformNodeBase::IsVerticallyScrollable() const {
+  DCHECK_GE(GetIntAttribute(ax::mojom::IntAttribute::kScrollYMin), 0)
+      << "Pixel sizes should be non-negative.";
+  DCHECK_GE(GetIntAttribute(ax::mojom::IntAttribute::kScrollYMax), 0)
+      << "Pixel sizes should be non-negative.";
+  return IsScrollable() &&
+         GetIntAttribute(ax::mojom::IntAttribute::kScrollYMin) <
+             GetIntAttribute(ax::mojom::IntAttribute::kScrollYMax);
 }
 
 base::string16 AXPlatformNodeBase::GetText() {

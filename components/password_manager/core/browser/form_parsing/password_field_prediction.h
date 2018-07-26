@@ -11,7 +11,6 @@
 #include "components/autofill/core/browser/field_types.h"
 
 namespace autofill {
-struct FormData;
 class FormStructure;
 }  // namespace autofill
 
@@ -30,12 +29,9 @@ enum class CredentialFieldType {
 CredentialFieldType DeriveFromServerFieldType(autofill::ServerFieldType type);
 
 // Contains server predictions for a field.
-// This is the struct rather than using because it will be expanded soon with
-// additional information.
-// TODO(https://crbug.com/831123): Remove comment about struct usage purposes as
-// soon as additional fields added.
 struct PasswordFieldPrediction {
   autofill::ServerFieldType type;
+  bool may_use_prefilled_placeholder = false;
 };
 
 // Contains server predictions for a form. Keys are unique renderer ids of
@@ -43,9 +39,7 @@ struct PasswordFieldPrediction {
 using FormPredictions = std::map<uint32_t, PasswordFieldPrediction>;
 
 // Extracts all password related server predictions from |form_structure|.
-// |observed_form| and |form_structure| must correspond to the same form.
 FormPredictions ConvertToFormPredictions(
-    const autofill::FormData& observed_form,
     const autofill::FormStructure& form_structure);
 
 }  // namespace password_manager

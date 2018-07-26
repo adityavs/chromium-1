@@ -29,10 +29,6 @@
 #include "ui/display/screen.h"
 #include "url/gurl.h"
 
-#if defined(OS_ANDROID)
-#include "chromecast/browser/android/cast_web_contents_surface_helper.h"
-#endif  // defined(OS_ANDROID)
-
 #if defined(USE_AURA)
 #include "ui/aura/window.h"
 #endif
@@ -82,6 +78,9 @@ CastWebViewDefault::CastWebViewDefault(
   DCHECK(window_);
   content::WebContentsObserver::Observe(web_contents_.get());
   web_contents_->SetDelegate(this);
+#if defined(USE_AURA)
+  web_contents_->GetNativeView()->SetName(params.activity_id);
+#endif
 
 #if BUILDFLAG(IS_ANDROID_THINGS)
 // Configure the ducking multiplier for AThings speakers. When CMA backend is
@@ -274,15 +273,6 @@ CastWebViewDefault::RunBluetoothChooser(
              ? std::move(chooser)
              : WebContentsDelegate::RunBluetoothChooser(frame, event_handler);
 }
-
-#if defined(OS_ANDROID)
-base::android::ScopedJavaLocalRef<jobject>
-CastWebViewDefault::GetContentVideoViewEmbedder() {
-  DCHECK(web_contents_);
-  auto* helper = shell::CastWebContentsSurfaceHelper::Get(web_contents_.get());
-  return helper->GetContentVideoViewEmbedder();
-}
-#endif  // defined(OS_ANDROID)
 
 void CastWebViewDefault::RenderProcessGone(base::TerminationStatus status) {
   LOG(INFO) << "APP_ERROR_CHILD_PROCESS_CRASHED";

@@ -964,12 +964,12 @@ void GLES2Implementation::GetFramebufferAttachmentParameteriv(GLenum target,
                                                               GLint* params) {
   GPU_CLIENT_SINGLE_THREAD_CHECK();
   GPU_CLIENT_VALIDATE_DESTINATION_INITALIZATION(GLint, params);
-  GPU_CLIENT_LOG("[" << GetLogPrefix()
-                     << "] glGetFramebufferAttachmentParameteriv("
-                     << GLES2Util::GetStringFramebufferTarget(target) << ", "
-                     << GLES2Util::GetStringAttachmentQuery(attachment) << ", "
-                     << GLES2Util::GetStringFramebufferParameter(pname) << ", "
-                     << static_cast<const void*>(params) << ")");
+  GPU_CLIENT_LOG(
+      "[" << GetLogPrefix() << "] glGetFramebufferAttachmentParameteriv("
+          << GLES2Util::GetStringFramebufferTarget(target) << ", "
+          << GLES2Util::GetStringAttachmentQuery(attachment) << ", "
+          << GLES2Util::GetStringFramebufferAttachmentParameter(pname) << ", "
+          << static_cast<const void*>(params) << ")");
   TRACE_EVENT0("gpu",
                "GLES2Implementation::GetFramebufferAttachmentParameteriv");
   if (GetFramebufferAttachmentParameterivHelper(target, attachment, pname,
@@ -3023,6 +3023,28 @@ void GLES2Implementation::BindVertexArrayOES(GLuint array) {
     return;
   }
   BindVertexArrayOESHelper(array);
+  CheckGLError();
+}
+
+void GLES2Implementation::FramebufferParameteri(GLenum target,
+                                                GLenum pname,
+                                                GLint param) {
+  GPU_CLIENT_SINGLE_THREAD_CHECK();
+  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glFramebufferParameteri("
+                     << GLES2Util::GetStringFramebufferTarget(target) << ", "
+                     << GLES2Util::GetStringFramebufferParameter(pname) << ", "
+                     << param << ")");
+  helper_->FramebufferParameteri(target, pname, param);
+  CheckGLError();
+}
+
+void GLES2Implementation::DispatchCompute(GLuint num_groups_x,
+                                          GLuint num_groups_y,
+                                          GLuint num_groups_z) {
+  GPU_CLIENT_SINGLE_THREAD_CHECK();
+  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glDispatchCompute(" << num_groups_x
+                     << ", " << num_groups_y << ", " << num_groups_z << ")");
+  helper_->DispatchCompute(num_groups_x, num_groups_y, num_groups_z);
   CheckGLError();
 }
 

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// Next MinVersion: 34
+// Next MinVersion: 36
 
 module arc.mojom;
 
@@ -22,6 +22,7 @@ struct AppInfo {
   string activity;
   [MinVersion=2] bool sticky;  // true if the app cannot be uninstalled
   [MinVersion=7] bool notifications_enabled;
+  [MinVersion=35] bool suspended;
 };
 
 // Describes ARC package.
@@ -272,7 +273,7 @@ interface AppHost {
 };
 
 // TODO(lhchavez): Migrate all request/response messages to Mojo.
-// Next method ID: 26
+// Next method ID: 27
 interface AppInstance {
   // DEPRECATED: Please use Init@21 instead.
   InitDeprecated@0(AppHost host_ptr);
@@ -364,8 +365,13 @@ interface AppInstance {
   // happens) is ignored, and uninstall option should appear in the UI.
   [MinVersion=2] UninstallPackage@5(string package_name);
 
-  // Sends a request to ARC to get app shortcuts for app with |package_name|. If
-  // |package_name| is empty, it will query for all launchable activities.
+  // Sends a request to ARC to get app shortcuts for apps in global scope that
+  // match a |query|. Limits the results to only return |max_results|.
+  [MinVersion=34] GetAppShortcutGlobalQueryItems@26(
+      string query, int32 max_results) =>
+          (array<AppShortcutItem> shortcut_items);
+
+  // Sends a request to ARC to get app shortcuts for app with |package_name|.
   [MinVersion=29] GetAppShortcutItems@23(string package_name) =>
       (array<AppShortcutItem> shortcut_items);
 

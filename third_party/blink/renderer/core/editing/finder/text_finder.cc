@@ -37,7 +37,7 @@
 #include "third_party/blink/public/web/web_find_options.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/public/web/web_view_client.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache_base.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache_base.h"
 #include "third_party/blink/renderer/core/dom/range.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
@@ -122,9 +122,11 @@ static void ScrollToVisible(Range* match) {
       smooth_find_enabled ? kScrollBehaviorSmooth : kScrollBehaviorAuto;
   first_node.GetLayoutObject()->ScrollRectToVisible(
       LayoutRect(match->BoundingBox()),
-      WebScrollIntoViewParams(ScrollAlignment::kAlignCenterIfNeeded,
-                              ScrollAlignment::kAlignCenterIfNeeded,
-                              kUserScroll, false, scroll_behavior, true));
+      WebScrollIntoViewParams(
+          ScrollAlignment::kAlignCenterIfNeeded,
+          ScrollAlignment::kAlignCenterIfNeeded, kUserScroll,
+          true /* make_visible_in_visual_viewport */, scroll_behavior,
+          true /* is_for_scroll_sequence */));
   first_node.GetDocument().SetSequentialFocusNavigationStartingPoint(
       const_cast<Node*>(&first_node));
 }
@@ -341,7 +343,7 @@ void TextFinder::StopFindingAndClearSelection() {
 
   // Remove all markers for matches found and turn off the highlighting.
   OwnerFrame().GetFrame()->GetDocument()->Markers().RemoveMarkersOfTypes(
-      DocumentMarker::kTextMatch);
+      DocumentMarker::MarkerTypes::TextMatch());
   OwnerFrame().GetFrame()->GetEditor().SetMarkedTextMatchesAreHighlighted(
       false);
   ClearFindMatchesCache();
@@ -441,7 +443,7 @@ void TextFinder::ScopeStringMatches(int identifier,
   const double kMaxScopingDuration = 0.1;  // seconds
 
   int match_count = 0;
-  bool timed_out = false;
+  bool full_range_searched = false;
   double start_time = CurrentTime();
   PositionInFlatTree next_scoping_start;
   do {
@@ -455,6 +457,7 @@ void TextFinder::ScopeStringMatches(int identifier,
                       search_text, options.match_case ? 0 : kCaseInsensitive);
     if (result.IsCollapsed()) {
       // Not found.
+      full_range_searched = true;
       break;
     }
     Range* result_range = Range::Create(
@@ -514,8 +517,7 @@ void TextFinder::ScopeStringMatches(int identifier,
     search_start = result.EndPosition();
 
     next_scoping_start = search_start;
-    timed_out = (CurrentTime() - start_time) >= kMaxScopingDuration;
-  } while (!timed_out);
+  } while (CurrentTime() - start_time < kMaxScopingDuration);
 
   if (next_scoping_start.IsNotNull()) {
     resume_scoping_from_range_ =
@@ -538,7 +540,7 @@ void TextFinder::ScopeStringMatches(int identifier,
     IncreaseMatchCount(identifier, match_count);
   }
 
-  if (timed_out) {
+  if (!full_range_searched) {
     // If we found anything during this pass, we should redraw. However, we
     // don't want to spam too much if the page is extremely long, so if we
     // reach a certain point we start throttling the redraw requests.
@@ -598,20 +600,17 @@ void TextFinder::IncreaseMatchCount(int identifier, int count) {
   total_match_count_ += count;
 
   // Update the UI with the latest findings.
-  if (OwnerFrame().Client()) {
-    OwnerFrame().Client()->ReportFindInPageMatchCount(
-        identifier, total_match_count_, !frame_scoping_ || !total_match_count_);
-  }
+  OwnerFrame().ReportFindInPageMatchCount(
+      identifier, total_match_count_, !frame_scoping_ || !total_match_count_);
 }
 
 void TextFinder::ReportFindInPageSelection(const WebRect& selection_rect,
                                            int active_match_ordinal,
                                            int identifier) {
   // Update the UI with the latest selection rect.
-  if (OwnerFrame().Client()) {
-    OwnerFrame().Client()->ReportFindInPageSelection(
-        identifier, active_match_ordinal, selection_rect);
-  }
+  OwnerFrame().ReportFindInPageSelection(identifier, active_match_ordinal,
+                                         selection_rect,
+                                         false /* final_update */);
   // Update accessibility too, so if the user commits to this query
   // we can move accessibility focus to this result.
   ReportFindInPageResultToAccessibility(identifier);
@@ -826,7 +825,7 @@ void TextFinder::UnmarkAllTextMatches() {
   if (frame && frame->GetPage() &&
       frame->GetEditor().MarkedTextMatchesAreHighlighted()) {
     frame->GetDocument()->Markers().RemoveMarkersOfTypes(
-        DocumentMarker::kTextMatch);
+        DocumentMarker::MarkerTypes::TextMatch());
   }
 }
 

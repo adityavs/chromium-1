@@ -39,10 +39,9 @@
 #include "third_party/blink/renderer/platform/bindings/v8_binding_macros.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/bindings/v8_value_cache.h"
-#include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
+#include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/atomic_string.h"
-#include "third_party/blink/renderer/platform/wtf/text/string_view.h"
 #include "v8/include/v8.h"
 
 namespace blink {
@@ -289,6 +288,14 @@ inline v8::Local<v8::Value> V8StringOrNull(v8::Isolate* isolate,
     return v8::Null(isolate);
   return V8PerIsolateData::From(isolate)->GetStringCache()->V8ExternalString(
       isolate, string.Impl());
+}
+
+inline v8::Local<v8::String> V8String(v8::Isolate* isolate,
+                                      const MovableString& string) {
+  if (string.IsNull())
+    return v8::String::Empty(isolate);
+  return V8PerIsolateData::From(isolate)->GetStringCache()->V8ExternalString(
+      isolate, string);
 }
 
 inline v8::Local<v8::String> V8AtomicString(v8::Isolate* isolate,

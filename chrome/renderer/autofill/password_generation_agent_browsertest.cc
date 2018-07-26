@@ -11,13 +11,13 @@
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/test/metrics/histogram_tester.h"
-#include "base/test/scoped_feature_list.h"
-#include "chrome/renderer/autofill/fake_content_password_manager_driver.h"
+#include "chrome/renderer/autofill/fake_mojo_password_manager_driver.h"
 #include "chrome/renderer/autofill/fake_password_manager_client.h"
 #include "chrome/renderer/autofill/password_generation_test_utils.h"
 #include "chrome/test/base/chrome_render_view_test.h"
 #include "components/autofill/content/renderer/autofill_agent.h"
 #include "components/autofill/content/renderer/form_autofill_util.h"
+#include "components/autofill/content/renderer/test_password_autofill_agent.h"
 #include "components/autofill/content/renderer/test_password_generation_agent.h"
 #include "components/autofill/core/common/autofill_switches.h"
 #include "components/autofill/core/common/form_data.h"
@@ -47,24 +47,45 @@ class PasswordGenerationAgentTest : public ChromeRenderViewTest {
   PasswordGenerationAgentTest() {}
 
   void RegisterMainFrameRemoteInterfaces() override {
-    // We only use the fake driver for main frame
-    // because our test cases only involve the main frame.
-    service_manager::InterfaceProvider* remote_interfaces =
-        view_->GetMainRenderFrame()->GetRemoteInterfaces();
-    service_manager::InterfaceProvider::TestApi test_api(remote_interfaces);
-    test_api.SetBinderForName(
-        mojom::PasswordManagerDriver::Name_,
-        base::Bind(&PasswordGenerationAgentTest::BindPasswordManagerDriver,
-                   base::Unretained(this)));
-
     // Because the test cases only involve the main frame in this test,
     // the fake password client is only used for the main frame.
     blink::AssociatedInterfaceProvider* remote_associated_interfaces =
         view_->GetMainRenderFrame()->GetRemoteAssociatedInterfaces();
     remote_associated_interfaces->OverrideBinderForTesting(
         mojom::PasswordManagerClient::Name_,
-        base::Bind(&PasswordGenerationAgentTest::BindPasswordManagerClient,
-                   base::Unretained(this)));
+        base::BindRepeating(
+            &PasswordGenerationAgentTest::BindPasswordManagerClient,
+            base::Unretained(this)));
+    remote_associated_interfaces->OverrideBinderForTesting(
+        mojom::PasswordManagerDriver::Name_,
+        base::BindRepeating(
+            &PasswordGenerationAgentTest::BindPasswordManagerDriver,
+            base::Unretained(this)));
+  }
+
+  void SetUp() override {
+    ChromeRenderViewTest::SetUp();
+
+    // TODO(crbug/862989): Remove workaround preventing non-test classes to bind
+    // fake_driver_ or fake_pw_client_.
+    password_autofill_agent_->GetPasswordManagerDriver();
+    password_generation_->RequestPasswordManagerClientForTesting();
+    base::RunLoop().RunUntilIdle();  // Executes binding the interfaces.
+    // Reject all requests to bind driver/client to anything but the test class:
+    view_->GetMainRenderFrame()
+        ->GetRemoteAssociatedInterfaces()
+        ->OverrideBinderForTesting(
+            mojom::PasswordManagerClient::Name_,
+            base::BindRepeating([](mojo::ScopedInterfaceEndpointHandle handle) {
+              handle.reset();
+            }));
+    view_->GetMainRenderFrame()
+        ->GetRemoteAssociatedInterfaces()
+        ->OverrideBinderForTesting(
+            mojom::PasswordManagerDriver::Name_,
+            base::BindRepeating([](mojo::ScopedInterfaceEndpointHandle handle) {
+              handle.reset();
+            }));
   }
 
   void TearDown() override {
@@ -136,12 +157,12 @@ class PasswordGenerationAgentTest : public ChromeRenderViewTest {
 
   void SelectGenerationFallbackInContextMenu(const char* element_id) {
     SimulateElementRightClick(element_id);
-    password_generation_->UserSelectedManualGenerationOption();
+    password_generation_->UserTriggeredGeneratePassword();
   }
 
-  void BindPasswordManagerDriver(mojo::ScopedMessagePipeHandle handle) {
+  void BindPasswordManagerDriver(mojo::ScopedInterfaceEndpointHandle handle) {
     fake_driver_.BindRequest(
-        mojom::PasswordManagerDriverRequest(std::move(handle)));
+        mojom::PasswordManagerDriverAssociatedRequest(std::move(handle)));
   }
 
   void BindPasswordManagerClient(mojo::ScopedInterfaceEndpointHandle handle) {
@@ -149,17 +170,10 @@ class PasswordGenerationAgentTest : public ChromeRenderViewTest {
         mojom::PasswordManagerClientAssociatedRequest(std::move(handle)));
   }
 
-  void EnableManualGenerationFallback() {
-    scoped_feature_list_.InitAndEnableFeature(
-        password_manager::features::kManualFallbacksGeneration);
-  }
-
-  FakeContentPasswordManagerDriver fake_driver_;
+  FakeMojoPasswordManagerDriver fake_driver_;
   FakePasswordManagerClient fake_pw_client_;
 
  private:
-  base::test::ScopedFeatureList scoped_feature_list_;
-
   DISALLOW_COPY_AND_ASSIGN(PasswordGenerationAgentTest);
 };
 
@@ -348,20 +362,8 @@ TEST_F(PasswordGenerationAgentTest, DetectionTest) {
 TEST_F(PasswordGenerationAgentTest, DetectionTestNoForm) {
   LoadHTMLWithUserGesture(kAccountCreationNoForm);
   SetNotBlacklistedMessage(password_generation_, kAccountCreationNoForm);
-  std::vector<blink::WebElement> fieldsets;
-  std::vector<blink::WebFormControlElement> control_elements =
-      form_util::GetUnownedFormFieldElements(
-          GetMainFrame()->GetDocument().All(), &fieldsets);
-  autofill::FormData form_data;
-  UnownedPasswordFormElementsAndFieldSetsToFormData(
-      fieldsets, control_elements, nullptr, GetMainFrame()->GetDocument(),
-      nullptr /* field_value_and_properties_map */, form_util::EXTRACT_NONE,
-      &form_data, nullptr /* FormFieldData */);
-  std::vector<autofill::PasswordFormGenerationData> forms;
-  forms.push_back(autofill::PasswordFormGenerationData{
-      CalculateFormSignature(form_data),
-      CalculateFieldSignatureForField(form_data.fields[1])});
-  password_generation_->FoundFormsEligibleForGeneration(forms);
+  SetAccountCreationFormsDetectedMessageForUnownedInputs(
+      password_generation_, GetMainFrame()->GetDocument());
 
   ExpectAutomaticGenerationAvailable("first_password", true);
   ExpectAutomaticGenerationAvailable("second_password", false);
@@ -523,63 +525,74 @@ TEST_F(PasswordGenerationAgentTest, AccountCreationFormsDetectedTest) {
 }
 
 TEST_F(PasswordGenerationAgentTest, MaximumOfferSize) {
-  base::HistogramTester histogram_tester;
+  for (size_t maximum_offer_size : {0, 5}) {
+    SCOPED_TRACE(testing::Message()
+                 << "maximum_offer_size = " << maximum_offer_size);
+    password_generation_->set_maximum_offer_size_for_testing(
+        maximum_offer_size);
+    EXPECT_EQ(maximum_offer_size, password_generation_->maximum_offer_size());
 
-  LoadHTMLWithUserGesture(kAccountCreationFormHTML);
-  SetNotBlacklistedMessage(password_generation_, kAccountCreationFormHTML);
-  SetAccountCreationFormsDetectedMessage(password_generation_,
-                                         GetMainFrame()->GetDocument(), 0, 1);
-  ExpectAutomaticGenerationAvailable("first_password", true);
+    base::HistogramTester histogram_tester;
 
-  WebDocument document = GetMainFrame()->GetDocument();
-  WebElement element =
-      document.GetElementById(WebString::FromUTF8("first_password"));
-  ASSERT_FALSE(element.IsNull());
-  WebInputElement first_password_element = element.To<WebInputElement>();
+    LoadHTMLWithUserGesture(kAccountCreationFormHTML);
+    SetNotBlacklistedMessage(password_generation_, kAccountCreationFormHTML);
+    SetAccountCreationFormsDetectedMessage(password_generation_,
+                                           GetMainFrame()->GetDocument(), 0, 1);
+    // There should now be a message to show the UI.
+    ExpectAutomaticGenerationAvailable("first_password", true);
 
-  // Make a password just under maximum offer size.
-  SimulateUserInputChangeForElement(
-      &first_password_element,
-      std::string(password_generation_->kMaximumOfferSize - 1, 'a'));
-  // There should now be a message to show the UI.
-  EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
-  fake_pw_client_.reset_called_automatic_generation_status_changed_true();
+    WebDocument document = GetMainFrame()->GetDocument();
+    WebElement element =
+        document.GetElementById(WebString::FromUTF8("first_password"));
+    ASSERT_FALSE(element.IsNull());
+    WebInputElement first_password_element = element.To<WebInputElement>();
 
-  fake_pw_client_.reset_called_password_generation_rejected_by_typing();
-  // Simulate a user typing a password just over maximum offer size.
-  SimulateUserTypingASCIICharacter('a', false);
-  SimulateUserTypingASCIICharacter('a', true);
-  // There should now be a message that generation was rejected.
-  fake_pw_client_.Flush();
-  EXPECT_TRUE(fake_pw_client_.called_password_generation_rejected_by_typing());
-  fake_pw_client_.reset_called_show_manual_pw_generation_popup();
+    // Make a password just under maximum offer size.
+    if (password_generation_->maximum_offer_size() > 0) {
+      SimulateUserInputChangeForElement(
+          &first_password_element,
+          std::string(password_generation_->maximum_offer_size(), 'a'));
 
-  // Simulate the user deleting characters. The generation popup should be shown
-  // again.
-  SimulateUserTypingASCIICharacter(ui::VKEY_BACK, true);
-  // There should now be a message to show the UI.
-  EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
-  fake_pw_client_.reset_called_automatic_generation_status_changed_true();
+      // There should still be a message to show the UI.
+      EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
+      fake_pw_client_.reset_called_automatic_generation_status_changed_true();
+      fake_pw_client_.reset_called_password_generation_rejected_by_typing();
+    }
 
-  // Change focus. Bubble should be hidden, but that is handled by AutofilAgent,
-  // so no messages are sent.
-  ExecuteJavaScriptForTests("document.getElementById('username').focus();");
-  EXPECT_FALSE(GetCalledAutomaticGenerationStatusChangedTrue());
+    // Simulate a user typing a password just over maximum offer size.
+    SimulateUserTypingASCIICharacter('a', true);
+    // There should now be a message that generation was rejected.
+    fake_pw_client_.Flush();
+    EXPECT_TRUE(
+        fake_pw_client_.called_password_generation_rejected_by_typing());
+    fake_pw_client_.reset_called_show_manual_pw_generation_popup();
 
-  // Focusing the password field will bring up the generation UI again.
-  ExecuteJavaScriptForTests(
-      "document.getElementById('first_password').focus();");
-  EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
-  fake_pw_client_.reset_called_automatic_generation_status_changed_true();
+    // Simulate the user deleting characters. The generation popup should be
+    // shown again.
+    SimulateUserTypingASCIICharacter(ui::VKEY_BACK, true);
+    // There should now be a message to show the UI.
+    EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
+    fake_pw_client_.reset_called_automatic_generation_status_changed_true();
 
-  // Loading a different page triggers UMA stat upload. Verify that only one
-  // display event is sent.
-  LoadHTMLWithUserGesture(kSigninFormHTML);
+    // Change focus. Bubble should be hidden, but that is handled by
+    // AutofilAgent, so no messages are sent.
+    ExecuteJavaScriptForTests("document.getElementById('username').focus();");
+    EXPECT_FALSE(GetCalledAutomaticGenerationStatusChangedTrue());
 
-  histogram_tester.ExpectBucketCount(
-      "PasswordGeneration.Event",
-      autofill::password_generation::GENERATION_POPUP_SHOWN,
-      1);
+    // Focusing the password field will bring up the generation UI again.
+    ExecuteJavaScriptForTests(
+        "document.getElementById('first_password').focus();");
+    EXPECT_TRUE(GetCalledAutomaticGenerationStatusChangedTrue());
+    fake_pw_client_.reset_called_automatic_generation_status_changed_true();
+
+    // Loading a different page triggers UMA stat upload. Verify that only one
+    // display event is sent.
+    LoadHTMLWithUserGesture(kSigninFormHTML);
+
+    histogram_tester.ExpectBucketCount(
+        "PasswordGeneration.Event",
+        autofill::password_generation::GENERATION_POPUP_SHOWN, 1);
+  }
 }
 
 TEST_F(PasswordGenerationAgentTest, DynamicFormTest) {
@@ -797,7 +810,7 @@ TEST_F(PasswordGenerationAgentTest, FallbackForSaving) {
                   fake_driver_.called_show_manual_fallback_for_saving_count());
       }));
   password_generation_->GeneratedPasswordAccepted(password);
-  base::RunLoop().RunUntilIdle();
+  fake_driver_.Flush();
   // Two fallback requests are expected because generation changes either new
   // password and confirmation fields.
   EXPECT_EQ(2, fake_driver_.called_show_manual_fallback_for_saving_count());
@@ -944,7 +957,7 @@ TEST_F(PasswordGenerationAgentTest, GenerationFallback_NoFocusedElement) {
   // Checks the fallback doesn't cause a crash just in case no password element
   // had focus so far.
   LoadHTMLWithUserGesture(kAccountCreationFormHTML);
-  password_generation_->UserSelectedManualGenerationOption();
+  password_generation_->UserTriggeredGeneratePassword();
 }
 
 TEST_F(PasswordGenerationAgentTest, AutofillToGenerationField) {
@@ -966,66 +979,64 @@ TEST_F(PasswordGenerationAgentTest, AutofillToGenerationField) {
 }
 
 TEST_F(PasswordGenerationAgentTestForHtmlAnnotation, AnnotateForm) {
-  LoadHTMLWithUserGesture(kAccountCreationFormHTML);
-  SetNotBlacklistedMessage(password_generation_, kAccountCreationFormHTML);
-  SetAccountCreationFormsDetectedMessage(password_generation_,
-                                         GetMainFrame()->GetDocument(), 0, 1);
-  ExpectAutomaticGenerationAvailable("first_password", true);
-  WebDocument document = GetMainFrame()->GetDocument();
+  for (bool has_form_tag : {false, true}) {
+    SCOPED_TRACE(testing::Message() << "has_form_tag = " << has_form_tag);
+    const char* kHtmlForm =
+        has_form_tag ? kAccountCreationFormHTML : kAccountCreationNoForm;
+    LoadHTMLWithUserGesture(kHtmlForm);
+    SetNotBlacklistedMessage(password_generation_, kHtmlForm);
+    if (has_form_tag) {
+      SetAccountCreationFormsDetectedMessage(
+          password_generation_, GetMainFrame()->GetDocument(), 0, 1);
+    } else {
+      SetAccountCreationFormsDetectedMessageForUnownedInputs(
+          password_generation_, GetMainFrame()->GetDocument());
+    }
+    ExpectAutomaticGenerationAvailable("first_password", true);
+    WebDocument document = GetMainFrame()->GetDocument();
 
-  // Check the form signature is set.
-  blink::WebElement form_element =
-      document.GetElementById(blink::WebString::FromUTF8("blah"));
-  ASSERT_FALSE(form_element.IsNull());
-  blink::WebString form_signature =
-      form_element.GetAttribute(blink::WebString::FromUTF8("form_signature"));
-  ASSERT_FALSE(form_signature.IsNull());
-  EXPECT_EQ("3524919054660658462", form_signature.Ascii());
+    const char* kFormSignature =
+        has_form_tag ? "3524919054660658462" : "7671707438749847833";
+    if (has_form_tag) {
+      // Check the form signature is set in the <form> tag.
+      blink::WebElement form_element =
+          document.GetElementById(blink::WebString::FromUTF8("blah"));
+      ASSERT_FALSE(form_element.IsNull());
+      blink::WebString form_signature = form_element.GetAttribute(
+          blink::WebString::FromUTF8("form_signature"));
+      ASSERT_FALSE(form_signature.IsNull());
+      EXPECT_EQ(kFormSignature, form_signature.Ascii());
+    }
 
-  // Check field signatures are set.
-  blink::WebElement username_element =
-      document.GetElementById(blink::WebString::FromUTF8("username"));
-  ASSERT_FALSE(username_element.IsNull());
-  blink::WebString username_signature = username_element.GetAttribute(
-      blink::WebString::FromUTF8("field_signature"));
-  ASSERT_FALSE(username_signature.IsNull());
-  EXPECT_EQ("239111655", username_signature.Ascii());
+    // Check field signatures and form signature are set in the <input>s.
+    blink::WebElement username_element =
+        document.GetElementById(blink::WebString::FromUTF8("username"));
+    ASSERT_FALSE(username_element.IsNull());
+    blink::WebString username_signature = username_element.GetAttribute(
+        blink::WebString::FromUTF8("field_signature"));
+    ASSERT_FALSE(username_signature.IsNull());
+    EXPECT_EQ("239111655", username_signature.Ascii());
+    blink::WebString form_signature_in_username = username_element.GetAttribute(
+        blink::WebString::FromUTF8("form_signature"));
+    EXPECT_EQ(kFormSignature, form_signature_in_username.Ascii());
 
-  blink::WebElement password_element =
-      document.GetElementById(blink::WebString::FromUTF8("first_password"));
-  ASSERT_FALSE(password_element.IsNull());
-  blink::WebString password_signature = password_element.GetAttribute(
-      blink::WebString::FromUTF8("field_signature"));
-  ASSERT_FALSE(password_signature.IsNull());
-  EXPECT_EQ("3933215845", password_signature.Ascii());
+    blink::WebElement password_element =
+        document.GetElementById(blink::WebString::FromUTF8("first_password"));
+    ASSERT_FALSE(password_element.IsNull());
+    blink::WebString password_signature = password_element.GetAttribute(
+        blink::WebString::FromUTF8("field_signature"));
+    ASSERT_FALSE(password_signature.IsNull());
+    EXPECT_EQ("3933215845", password_signature.Ascii());
+    blink::WebString form_signature_in_password = password_element.GetAttribute(
+        blink::WebString::FromUTF8("form_signature"));
+    EXPECT_EQ(kFormSignature, form_signature_in_password.Ascii());
 
-  // Check the generation element is marked.
-  blink::WebString generation_mark = password_element.GetAttribute(
-      blink::WebString::FromUTF8("password_creation_field"));
-  ASSERT_FALSE(generation_mark.IsNull());
-  EXPECT_EQ("1", generation_mark.Utf8());
-}
-
-TEST_F(PasswordGenerationAgentTestForHtmlAnnotation, AnnotateUnownedFields) {
-  LoadHTMLWithUserGesture(kAccountCreationNoForm);
-  WebDocument document = GetMainFrame()->GetDocument();
-
-  // Check field signatures are set.
-  blink::WebElement username_element =
-      document.GetElementById(blink::WebString::FromUTF8("username"));
-  ASSERT_FALSE(username_element.IsNull());
-  blink::WebString username_signature = username_element.GetAttribute(
-      blink::WebString::FromUTF8("field_signature"));
-  ASSERT_FALSE(username_signature.IsNull());
-  EXPECT_EQ("239111655", username_signature.Ascii());
-
-  blink::WebElement password_element =
-      document.GetElementById(blink::WebString::FromUTF8("first_password"));
-  ASSERT_FALSE(password_element.IsNull());
-  blink::WebString password_signature = password_element.GetAttribute(
-      blink::WebString::FromUTF8("field_signature"));
-  ASSERT_FALSE(password_signature.IsNull());
-  EXPECT_EQ("3933215845", password_signature.Ascii());
+    // Check the generation element is marked.
+    blink::WebString generation_mark = password_element.GetAttribute(
+        blink::WebString::FromUTF8("password_creation_field"));
+    ASSERT_FALSE(generation_mark.IsNull());
+    EXPECT_EQ("1", generation_mark.Utf8());
+  }
 }
 
 }  // namespace autofill

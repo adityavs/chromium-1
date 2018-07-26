@@ -35,11 +35,7 @@ source_set("run_all_service_tests") {
   ]
 
   if (is_android) {
-    deps += [ "//mojo/android:libsystem_java" ]
-  }
-
-  if (use_ozone) {
-    deps += [ "//ui/ozone" ]
+    deps += [ "//mojo/public/java/system:native_support" ]
   }
 }
 

@@ -134,7 +134,8 @@ Polymer({
       type: Boolean,
       value: false,
       computed: 'computeSyncSectionDisabled_(' +
-          'unifiedConsentEnabled, syncStatus.signedIn)',
+          'unifiedConsentEnabled, syncStatus.signedIn, syncStatus.disabled, ' +
+          'syncStatus.hasError, syncStatus.statusAction)',
     },
 
     /** @private */
@@ -147,6 +148,14 @@ Polymer({
     syncSectionOpened_: {
       type: Boolean,
       value: true,
+    },
+
+    /** @private */
+    driveSuggestAvailable_: {
+      type: Boolean,
+      value: function() {
+        return loadTimeData.getBoolean('driveSuggestAvailable');
+      }
     },
 
     // <if expr="not chromeos">
@@ -216,7 +225,11 @@ Polymer({
    * @private
    */
   computeSyncSectionDisabled_() {
-    return this.unifiedConsentEnabled && !this.syncStatus.signedIn;
+    return !!this.unifiedConsentEnabled &&
+        (!this.syncStatus.signedIn || !!this.syncStatus.disabled ||
+         (!!this.syncStatus.hasError &&
+          this.syncStatus.statusAction ===
+              settings.StatusAction.REAUTHENTICATE));
   },
 
   /** @protected */
@@ -575,6 +588,39 @@ Polymer({
         !!this.syncStatus.syncSystemEnabled && !!this.syncStatus.signinAllowed;
   },
   // </if>
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  shouldShowExistingPassphraseBelowAccount_: function() {
+    return !!this.unifiedConsentEnabled && !!this.syncPrefs.passphraseRequired;
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  shouldShowExistingPassphraseInSyncSection_: function() {
+    return !this.unifiedConsentEnabled && !!this.syncPrefs.passphraseRequired;
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  shouldShowSyncControls_: function() {
+    return !!this.unifiedConsentEnabled && !this.syncStatus.disabled;
+  },
+
+  /**
+   * @return {boolean}
+   * @private
+   */
+  shouldShowUnifiedConsentToggle_: function() {
+    return !!this.unifiedConsentEnabled && !this.syncStatus.disabled &&
+        !!this.syncStatus.signedIn;
+  },
 });
 
 })();

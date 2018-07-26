@@ -50,8 +50,8 @@
   <message name="IDS_WALLPAPER_MANAGER_ACCESS_FAIL" desc="The string displayed to user when access wallpaper server failed.">
     Chrome cannot access wallpapers. Please connect to a network.
   </message>
-  <message name="IDS_WALLPAPER_MANAGER_NETWORK_ERROR" desc="The string displayed to user when access wallpaper server failed on the new wallpaper picker.">
-    The images are currently not available. Please reconnect to view the collections.
+  <message name="IDS_WALLPAPER_MANAGER_NETWORK_ERROR" desc="The string displayed when user can't use wallpaper picker because they're not connected to the internet.">
+    The images are currently not available. Please reconnect to the internet to see wallpaper collections.
   </message>
   <message name="IDS_WALLPAPER_MANAGER_DOWNLOAD_FAIL" desc="The string displayed to user when downloading the wallpaper failed.">
     Chrome cannot download this wallpaper.
@@ -196,8 +196,8 @@
   </message>
 
   <!-- File Manager -->
-  <message name="IDS_FILE_BROWSER_ANDROID_FILES_ROOT_LABEL" desc="A label for the 'Play Files' root which shows Android files. 'Play' in this label is an abbreviation of 'Google Play', so it should not be translated.">
-    Play Files
+  <message name="IDS_FILE_BROWSER_ANDROID_FILES_ROOT_LABEL" desc="A label for the 'Play files' root which shows Android files. 'Play' in this label is an abbreviation of 'Google Play', so it should not be translated. Use sentence case.">
+    Play files
   </message>
   <message name="IDS_FILE_BROWSER_SHOW_ALL_ANDROID_FOLDERS_OPTION" desc="A label for an option menu item to show all Android folders. By default, only several folders are visible to users, and users will click this option menu item to show all folders. 'Play' in this label is an abbreviation of 'Google Play', so it should not be translated.">
     Show all Play folders
@@ -253,8 +253,11 @@
   <message name="IDS_FILE_BROWSER_DOWNLOADS_DIRECTORY_LABEL" desc="Downloads local directory label.">
     Downloads
   </message>
-  <message name="IDS_FILE_BROWSER_LINUX_FILES_ROOT_LABEL" desc="A label for the 'Linux Files' root which shows crostini files.">
-    Linux Files
+  <message name="IDS_FILE_BROWSER_LINUX_FILES_ROOT_LABEL" desc="A label for the 'Linux files' root which shows crostini files. Use sentence case.">
+    Linux files
+  </message>
+  <message name="IDS_FILE_BROWSER_MY_FILES_ROOT_LABEL" desc="A label for the 'My files' root which is parent of Downloads, Linux and Android files. Use sentence case.">
+    My files
   </message>
   <message name="IDS_FILE_BROWSER_MEDIA_VIEW_IMAGES_ROOT_LABEL" desc="A label for the 'Images' root of media views.">
     Images
@@ -453,6 +456,28 @@
   </message>
   <message name="IDS_FILE_BROWSER_TASK_LISTEN" desc="Title of the action to play an audio file.">
     Listen
+  </message>
+  <message name="IDS_FILE_BROWSER_TASK_INSTALL_LINUX_PACKAGE" desc="Title of the action to install a Linux package.">
+    Install with Linux (Beta)
+  </message>
+
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_TITLE" desc="In the File Manager, the title shown in the dialog for installing a Linux application.">
+    Install app with Linux (Beta)
+  </message>
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_DESCRIPTION" desc="In the File Manager, the message shown in the dialog for installing a Linux application.">
+    The Linux application will be available within your Terminal and may also show an icon in your Launcher.
+  </message>
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_INSTALL_BUTTON" desc="In the File Manager, the label on the button to begin installing a Linux application. ">
+    Install
+  </message>
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_INSTALLATION_STARTED" desc="In the File Manager, the dialog message when a Linux application installation successfully starts.">
+    Installation successfully started.
+  </message>
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_ERROR_TITLE" desc="In the File Manager, the title shown in the dialog for installing a Linux application when an error occurs.">
+    Error installing Linux application
+  </message>
+  <message name="IDS_FILE_BROWSER_INSTALL_LINUX_PACKAGE_ERROR_DESCRIPTION" desc="In the File Manager, the dialog message when a Linux application installation fails.">
+    An error occured during installation of your Linux application.
   </message>
 
   <message name="IDS_FILE_BROWSER_GALLERY_NO_IMAGES" desc="In the Gallery, the message that there are no images in this directory.">
@@ -1636,9 +1661,6 @@
   <message name="IDS_ENTERPRISE_ENROLLMENT_WORKING_MESSAGE" desc="Message to show while enrollment is in progress">
     Enrolling device...
   </message>
-  <message name="IDS_NETWORK_SELECTION_TITLE" desc="Welcome title shown on network selection screen">
-    Let's get started
-  </message>
   <message name="IDS_OOBE_ASSET_ID_LABEL" desc="Chrome OS OOBE: label for asset identifier.">
     Asset ID: <ph name="ASSET_ID">$1<ex>None specified</ex></ph>
   </message>
@@ -1687,10 +1709,10 @@
   <message name="IDS_HID_DETECTION_CONTINUE_BUTTON" desc="Text shown on continue button" meaning="Continue button label of HID detection screen.">
     Continue
   </message>
-  <message name="IDS_NETWORK_SELECTION_CONTINUE_BUTTON" desc="Text shown on continue button" meaning="Continue button label of welcome screen.">
+  <message name="IDS_WELCOME_SELECTION_CONTINUE_BUTTON" desc="Text shown on continue button" meaning="Continue button label of welcome screen.">
     Continue
   </message>
-  <message name="IDS_NETWORK_ENABLE_DEV_FEATURES_LINK" desc="Text shown on continue button" meaning="Link shown on OOBE screens that opens enable debugging features dialog">
+  <message name="IDS_WELCOME_ENABLE_DEV_FEATURES_LINK" desc="Link shown on welcome screen" meaning="Link shown on OOBE screens that opens enable debugging features dialog">
     Enable debugging features
   </message>
   <message name="IDS_LANGUAGE_DROPDOWN_TITLE" desc="Title of language selection dropdown menu" meaning="Small title near language dropdown menu suggesting that this is a language selector.">
@@ -1717,10 +1739,10 @@
   <message name="IDS_ACCESSIBILITY_SECTION_HINT" desc="Under-title line on the accessibility options screen" meaning="A hint to the user what these settings do and how to update them later.">
     You can customize this device to fit your needs. These accessibility features can be changed later in Settings.
   </message>
-  <message name="IDS_NETWORK_SECTION_TITLE" desc="Title of network selection screen" meaning="A title of the dialog where user should select network to connect to Internet">
+  <message name="IDS_NETWORK_SELECTION_TITLE" desc="Title of network selection screen" meaning="A title of the dialog where user should select network to connect to Internet">
     Connect to network
   </message>
-  <message name="IDS_NETWORK_SECTION_HINT" desc="Under-title line on the network selection screen" meaning="A hint to the user why device should be connected to the network">
+  <message name="IDS_NETWORK_SELECTION_HINT" desc="Under-title line on the network selection screen" meaning="A hint to the user why device should be connected to the network">
     To restore your data, you need an Internet connection.
   </message>
   <message name="IDS_NETWORK_SELECTION_ERROR" desc="Error shown when connection to network failed or timed out.">
@@ -1810,6 +1832,12 @@
   <message name="IDS_OOBE_EULA_ACCEPT_AND_CONTINUE_BUTTON_TEXT" desc="Label on a button on the Title of Terms of Service OOBE screen to accept EULA and continue.">
     Accept and continue
   </message>
+  <message name="IDS_OOBE_DEMO_SETUP_PREFERENCES_SCREEN_TITLE" desc="The title of the dialog that allows to choose demo setup preferences.">
+    Choose your demo preferences
+  </message>
+  <message name="IDS_OOBE_DEMO_SETUP_PREFERENCES_SCREEN_NEXT_BUTTON_LABEL" desc="The label of the button that is shown on preferences screen and that confirms chosen configuration and shows next demo setup screen.">
+    OK
+  </message>
   <message name="IDS_OOBE_DEMO_SETUP_PROGRESS_SCREEN_TITLE" desc="The title of the dialog that is shown when demo mode setup is in progress.">
     Starting demo mode
   </message>
@@ -1895,7 +1923,7 @@
     Install apps from your other devices
   </message>
   <message name="IDS_LOGIN_RECOMMEND_APPS_SCREEN_DESCRIPTION" desc="The description of the 'Recommend Apps' section">
-    There are <ph name="NUMBER_OF_APPS">$1<ex>10</ex></ph> apps connected to your account that are optimized for Chromebook.
+    We found <ph name="NUMBER_OF_APPS">$1<ex>10</ex></ph> apps connected to your account that are optimized for this device.
   </message>
   <message name="IDS_LOGIN_RECOMMEND_APPS_SKIP" desc="The label on the button that skips installing any recommended apps">
     Skip
@@ -1907,16 +1935,37 @@
     Retry
   </message>
   <message name="IDS_LOGIN_RECOMMEND_APPS_SCREEN_LOADING" desc="Message shown while the recommended app list is being downloaded.">
-    Loading...
+    Please wait...
   </message>
   <message name="IDS_LOGIN_RECOMMEND_APPS_SCREEN_ERROR" desc="Load error message of the Recommend Apps OOBE dialog.">
     The list of apps cannot be loaded. Please retry.
+  </message>
+  <message name="IDS_LOGIN_APP_DOWNLOADING_SCREEN_TITLE" desc="The title of the dialog that tells the user the selected Android Apps are downloading.">
+    Apps downloading
+  </message>
+  <message name="IDS_LOGIN_APP_DOWNLOADING_SCREEN_DESCRIPTION" desc="The description of the 'App Downloading' section">
+    We’ll install those apps for you. You can find more apps for your device in the Play Store.
+  </message>
+  <message name="IDS_LOGIN_APP_DOWNLOADING_CONTINUE_SETUP" desc="The label on the button that continues the setup flow.">
+    Continue setup
   </message>
   <message name="IDS_DISABLED_ADD_USER_TOOLTIP" desc="Tooltip over disabled Add user button">
     The owner of this device has disabled new users from being added
   </message>
   <message name="IDS_DISABLED_ADD_USER_TOOLTIP_ENTERPRISE" desc="Tooltip over disabled Add user button">
     The administrator of this device has disabled new users from being added
+  </message>
+  <message name="IDS_DISCOVER_WELCOME_GET_STARTED" desc="Label on a button that starts a long device setup process.">
+    Get started
+  </message>
+  <message name="IDS_DISCOVER_WELCOME_LATER" desc="Label on a button that closes a device setup dialog, suggesting that user can get back to it later.">
+    Later
+  </message>
+  <message name="IDS_DISCOVER_WELCOME_TITLE" desc="A title of the dialog that starts initial device setup process.">
+    Let's get your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> ready for you
+  </message>
+  <message name="IDS_DISCOVER_WELCOME_SUBTITLE" desc="A subtitle title of the dialog that starts initial device setup process, explaining the benefits of going throug this process.">
+    Set up your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> just as you want it and discover all the amazing capabilities at your fingertips.
   </message>
   <message name="IDS_APP_START_NETWORK_WAIT_MESSAGE" desc="Message displayed while installing and/or launching web application in kiosk mode.">
     Waiting for network connection...
@@ -4228,7 +4277,7 @@
     Unlock
   </message>
   <message name="IDS_AD_UNLOCK_CONFIG_PASSWORD" desc="Admin-facing. Label for unlocking password input field on the Active Directory domain join screen.">
-    Unlocking password
+    Password to unlock
   </message>
   <message name="IDS_AD_UNLOCK_INCORRECT_PASSWORD" desc="Admin-facing. Error that is shown when incorrect unlocking password was entered.">
     Incorrect password
@@ -4287,7 +4336,7 @@
   <message name="IDS_AD_OU_DOES_NOT_EXIST" desc="Admin-facing alert message.  Admin entered the name of the organizational unit incorrectly.">
     Can’t find an organizational unit with that name. Please try again.
   </message>
-  <message name="IDS_AD_OU_ACCESS_DENIED" desc="Admin-facing alert message. The admin is using an account that doesn’t have privileges to add devices to the organizational unit.">
+  <message name="IDS_AD_OU_ACCESS_DENIED" desc="Admin-facing alert message. The admin is using an account that doesn’t have privileges to add devices to the organizational unit.">
     Can't join the device to the domain. Check your account to make sure you have privileges to add devices.
   </message>
   <message name="IDS_AD_OU_SETTING_FAILED" desc="Admin-facing alert message. Settings for the organizational unit are incorrect.">
@@ -4572,6 +4621,9 @@
   <message name="IDS_ARC_OPT_IN_GOOGLE_SERVICE_CONFIRMATION" desc="Message in the opt-in dialog for Accepting Google services.">
     By clicking the "I Agree" button, you agree to the processing described above for these Google services.
   </message>
+  <message name="IDS_ARC_OPT_IN_ACCEPT_AND_CONTINUE_GOOGLE_SERVICE_CONFIRMATION" desc="Message in the opt-in dialog for accepting Google services and continuing the setup.">
+    By clicking the "Accept and continue" button, you agree to the processing described above for these Google services.
+  </message>
   <message name="IDS_ARC_OPT_IN_LEARN_MORE_CLOSE" desc="Text for close button in learn more dialog">
     Close
   </message>
@@ -4657,7 +4709,10 @@
   <message name="IDS_ARC_OOBE_TERMS_LOAD_ERROR" desc="Load error message of the Arc Terms OOBE dialog.">
     Google Play Terms of Service cannot be loaded. Please retry.
   </message>
-  <message name="IDS_ARC_OOBE_TERMS_BUTTON_ACCEPT" desc="Accept button of the Arc Terms OOBE dialog.">
+  <message name="IDS_ARC_OOBE_TERMS_BUTTON_ACCEPT_AND_CONTINUE" desc="Accept and continue button of the Arc Terms OOBE dialog.">
+    Accept and continue
+  </message>
+    <message name="IDS_ARC_OOBE_TERMS_BUTTON_ACCEPT" desc="Accept button of the Arc Terms OOBE dialog.">
     I Agree
   </message>
   <message name="IDS_ARC_OOBE_TERMS_BUTTON_SKIP" desc="Skip button of the Arc Terms OOBE dialog.">
@@ -4689,6 +4744,21 @@
   </message>
   <message name="IDS_HATS_DONE_BUTTON_LABEL" desc="Label used for the done button at the end of survey">
     Done
+  </message>
+  <message name="IDS_ARC_CHILD_TRANSITION_TITLE" desc="Title of the toast shown when the user tries to activate ARC app and transition from child to regular user or from regular to child user is not completed.">
+    Action not available
+  </message>
+  <message name="IDS_ARC_CHILD_TRANSITION_MESSAGE" desc="Message of the toast shown when the user tries to activate ARC app and transition from child to regular user or from regular to child user is not completed.">
+    Please try again in a few moments
+  </message>
+  <message name="IDS_ARC_DATA_REMOVAL_CONFIRMATION_HEADING" desc="Heading text in the content area of the confirmation for data removal in case ARC comes to wrong state.">
+    To use apps from Google Play, you must first restore your apps. Some data may have been lost.
+  </message>
+  <message name="IDS_ARC_DATA_REMOVAL_CONFIRMATION_OK_BUTTON" desc="Text for the OK button of the confirmation for data removal in case ARC comes to wrong state.">
+    Restore apps
+  </message>
+  <message name="IDS_ARC_DATA_REMOVAL_CONFIRMATION_TITLE" desc="Title of the confirmation for data removal in case in case ARC comes to wrong state.">
+    Something went wrong
   </message>
   <message name="IDS_ARC_MIGRATE_ENCRYPTION_NOTIFICATION_TITLE" desc="Title of the notification to navigate the user to first update the device encryption before running Android apps.">
     Install critical update
@@ -4746,6 +4816,12 @@
   </message>
   <message name="IDS_VOICE_INTERACTION_LOGO" desc="Logo label for voice interaction.">
     Google assistant logo
+  </message>
+  <message name="IDS_ASSISTANT_HOTWORD_TITLE" desc="Title for assistant hotword optin.">
+    OK Google
+  </message>
+  <message name="IDS_ASSISTANT_HOTWORD_DESC" desc="Description for assistant hotword optin.">
+    Access your Assistant anytime you say "OK Google" when your device is awake and unlocked.
   </message>
   <message name="IDS_ASSISTANT_SCREEN_CONTEXT_TITLE" desc="Title for assistant screen context optin.">
     Get info for what's on screen
@@ -4948,6 +5024,12 @@
   <message name="IDS_INTERNAL_APP_SETTINGS" desc="The name of Settings.">
     Settings
   </message>
+  <message name="IDS_INTERNAL_APP_CONTINUOUS_READING" desc="The default title of Chrome browser to allow users to seamlessly continue reading a web page when they switch from phones or tablets to Chromebook.">
+    Continue reading in Chrome
+  </message>
+  <message name="IDS_INTERNAL_APP_CAMERA" desc="The name of the Camera app in the app list.">
+    Camera
+  </message>
 
   <!-- Launcher Settings shortcuts -->
   <message name="IDS_LAUNCHER_SHORTCUTS_BLUETOOTH" desc="The name of bluetooth shortcut.">
@@ -4955,20 +5037,16 @@
   </message>
 
   <message name="IDS_CROSTINI_INSTALLER_TITLE" desc="Title of the Crostini installer, a dialog for installing Linux.">
-    Set up Linux on your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>
+    Set up Linux (Beta) on your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>
   </message>
   <message name="IDS_CROSTINI_INSTALLER_BODY" desc="Description for the Crostini installer, a dialog for installing Linux.">
-    Get tools for developing websites, Android apps, and more. Learn more
-
-Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of data.
+    Get tools for developing websites, Android apps, and more. Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of data.
   </message>
   <message name="IDS_CROSTINI_INSTALLER_INSTALL_BUTTON" desc="Label for the button in the Crostini installer dialog to begin installing Linux.">
     Install
   </message>
   <message name="IDS_CROSTINI_INSTALLER_INSTALLING" desc="Text shown in the Crostini installer dialog while  Linux is installing.">
-    Installing Linux... 
-
-    This process may take a few minutes.
+    Installing Linux...
   </message>
   <message name="IDS_CROSTINI_INSTALLER_ERROR_TITLE" desc="Title of the Crostini installer when an error occurs.">
     Error installing Linux...
@@ -4977,19 +5055,22 @@ Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of
     Linux installation is complete.
   </message>
     <message name="IDS_CROSTINI_INSTALLER_LOAD_TERMINA_MESSAGE" desc="Text shown in the Crostini installer dialog when the VM component is loading">
-    Downloading the virtual machine.
+    This process may take a few minutes. Downloading the virtual machine.
   </message>
   <message name="IDS_CROSTINI_INSTALLER_START_CONCIERGE_MESSAGE" desc="Text shown in the Crostini installer dialog when the VM service is starting">
-    Starting the virtual machine.
+    This process may take a few minutes. Starting the virtual machine.
   </message>
   <message name="IDS_CROSTINI_INSTALLER_CREATE_DISK_IMAGE_MESSAGE" desc="Text shown in the Crostini installer dialog when the disk image is being created">
-    Starting the virtual machine.
+    This process may take a few minutes. Starting the virtual machine.
   </message>
   <message name="IDS_CROSTINI_INSTALLER_START_TERMINA_VM_MESSAGE" desc="Text shown in the Crostini installer dialog when the VM itself is starting">
-    Starting the virtual machine.
+    This process may take a few minutes. Starting the virtual machine.
   </message>
   <message name="IDS_CROSTINI_INSTALLER_START_CONTAINER_MESSAGE" desc="Text shown in the Crostini installer dialog when the container inside the VM is starting">
-    Starting the Linux container.
+    This process may take a few minutes. Starting the Linux container.
+  </message>
+  <message name="IDS_CROSTINI_INSTALLER_RETRY_BUTTON" desc="Retry button of the Crostini installer dialog that starts the install steps again.">
+    Retry
   </message>
   <message name="IDS_CROSTINI_INSTALLER_OFFLINE_ERROR" desc="Text shown in the Crostini installer dialog when there is no internet connection">
     <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> is offline. Connect to the Internet and try again.
@@ -5010,7 +5091,7 @@ Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of
     The Linux container didn't start. Please try again.
   </message>
   <message name="IDS_CROSTINI_UNINSTALLER_TITLE" desc="Title of the Crostini uninstaller, a dialog for uninstalling Linux, the associated VM and Linux files.">
-    Delete Linux
+    Delete Linux (Beta)
   </message>
   <message name="IDS_CROSTINI_UNINSTALLER_BODY" desc="Description for the Crostini uninstaller, a dialog for uninstalling Linux, the associated VM and Linux files.">
     Delete all Linux applications and data in your Linux Files folder from this <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>?
@@ -5024,6 +5105,33 @@ Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of
   <message name="IDS_CROSTINI_UNINSTALLER_ERROR" desc="Text shown in the Crostini uninstaller dialog when the Linux uninstall process fails.">
     Error uninstalling Linux. Please try again.
   </message>
+  <message name="IDS_CROSTINI_SHUT_DOWN_LINUX_MENU_ITEM" desc="Text shown in the context menu for the Linux terminal app, allowing users to shut down the Linux virtual machine.">
+    Shut Down Linux (Beta)
+  </message>
+  <message name="IDS_CROSTINI_TERMINA_UPDATE_REQUIRED" desc="Text shown in the Crostini update dialog when the VM component needs updating.">
+    Linux (Beta) update required
+  </message>
+  <message name="IDS_CROSTINI_TERMINA_UPDATE_OFFLINE" desc="Text shown in the Crostini update dialog when the VM component needs updating but the user is offline.">
+    Please connect to the internet and try again.
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_DISPLAY_SOURCE" desc="Source of the Notification for Linux package installation.">
+    Linux installer
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_IN_PROGRESS_TITLE" desc="Title of the Notification for an in-progress Linux package installation.">
+    Installation in progress
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_COMPLETED_TITLE" desc="Title of the Notification for Linux package installation once installation has completed successfully.">
+    Installation complete
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_COMPLETED_MESSAGE" desc="Message in the Notification for Linux package installation once installation has completed successfully.">
+    App is available in your terminal. There may also be an icon in your Launcher.
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_ERROR_TITLE" desc="Title of the Notification for Linux package installation when there is an error during installation.">
+    Error while installing
+  </message>
+  <message name="IDS_CROSTINI_PACKAGE_INSTALL_NOTIFICATION_ERROR_MESSAGE" desc="Message in the Notification for Linux package installation when there is an error during installation.">
+    An error occurred during installation of your Linux application.
+  </message>
 
   <!-- Time limit notification -->
   <message name="IDS_SCREEN_TIME_NOTIFICATION_TITLE" desc="The title of the notification when screen usage limit reaches before locking the device.">
@@ -5034,5 +5142,248 @@ Installing Linux will download <ph name="DOWNLOAD_SIZE">$1<ex>300MB</ex></ph> of
   </message>
   <message name="IDS_TIME_LIMIT_NOTIFICATION_DISPLAY_SOURCE" desc="The string shown as the display source of the bedtime or screen time notifications.">
     Family Link
+  </message>
+
+  <!-- Easy Unlock strings -->
+  <!-- Strings for the Easy Unlock promo notification -->
+  <message name="IDS_EASY_UNLOCK_SETUP_NOTIFICATION_TITLE" desc="Title for the notification inviting the user to use the Easy Unlock feature.">
+    Automatically unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_NOTIFICATION_MESSAGE" desc="The body text for the notification inviting the user to use the Easy Unlock feature.">
+    Try Smart Lock to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> without a password when your phone is nearby.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_NOTIFICATION_TITLE_ALTERNATE" desc="Title for the notification inviting the user to use the Easy Unlock feature.">
+    Screen lock required
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_NOTIFICATION_MESSAGE_ALTERNATE" desc="The body text for the notification inviting the user to use the Easy Unlock feature.">
+    Make your phone more secure before connecting your Chromebook. <ph name="LINK_BEGIN">&lt;a href="$1<ex>www.google.com</ex>"&gt;</ph>Learn more<ph name="LINK_END">&lt;/a&gt;</ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_NOTIFICATION_BUTTON_TITLE" desc="The text to show on the button in the notification inviting the user to use the Easy Unlock feature.">
+    Start setup
+  </message>
+  <!-- Strings for notification shown when the Chromebook is added to Easy Unlock -->
+  <message name="IDS_EASY_UNLOCK_CHROMEBOOK_ADDED_NOTIFICATION_TITLE" desc="Title for notification shown when this Chromebook is added to Easy Unlock as an additional Easy Unlock device.">
+    Smart Lock is turned on
+  </message>
+  <message name="IDS_EASY_UNLOCK_CHROMEBOOK_ADDED_NOTIFICATION_MESSAGE" desc="Message for the notification shown when this Chromebook is added to Easy Unlock as an additional Easy Unlock device.">
+    Next time, your phone will unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Turn off Smart Lock in Settings.
+  </message>
+  <message name="IDS_EASY_UNLOCK_CHROMEBOOK_ADDED_NOTIFICATION_ABOUT_BUTTON" desc="Label of a button on the new chrome notification to bring user to smart lock settings.">
+    Change settings
+  </message>
+  <!-- Strings for the phone changed (aka old Chromebook setup) notification -->
+  <message name="IDS_EASY_UNLOCK_PAIRING_CHANGED_NOTIFICATION_TITLE" desc="Title for notification shown when the paired phone is changed.">
+    Smart Lock phone changed
+  </message>
+  <message name="IDS_EASY_UNLOCK_PAIRING_CHANGED_NOTIFICATION_MESSAGE" desc="Message for notification shown when the paired phone is changed.">
+    Next time, a new phone will unlock this <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Turn off Smart Lock in Settings.
+  </message>
+  <message name="IDS_EASY_UNLOCK_PAIRING_CHANGED_NOTIFICATION_UPDATE_BUTTON" desc="Label of a button on the notification shown when the paired phone is changed to update Smart lock now.">
+    Update now
+  </message>
+  <message name="IDS_EASY_UNLOCK_NOTIFICATION_LEARN_MORE_BUTTON" desc="Label of a button on the notification to show Smart lock settings.">
+    Change settings
+  </message>
+  <!-- Strings for the phone change applied notification -->
+  <message name="IDS_EASY_UNLOCK_PAIRING_CHANGE_APPLIED_NOTIFICATION_TITLE" desc="Title for notification shown when the pairing change is applied.">
+    Phone change updated
+  </message>
+  <message name="IDS_EASY_UNLOCK_PAIRING_CHANGE_APPLIED_NOTIFICATION_MESSAGE" desc="Message for notification shown when the pairing change is applied.">
+    Your <ph name="PHONE_NAME">$1<ex>Moto X</ex></ph> can now unlock this <ph name="DEVICE_TYPE">$2<ex>Chromebook</ex></ph> too.
+  </message>
+  <!-- Other -->
+  <message name="IDS_EASY_UNLOCK_DESCRIPTION" desc="Description of feature that automatically unlocks the user's Chromebook when their phone is nearby.">
+    Use your phone to unlock your <ph name="DEVICE_TYPE">$2<ex>Chromebook</ex></ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_ON" desc="Tells the user they now have turned on the Smart Lock feature.">
+    Smart Lock is on
+  </message>
+
+  <!-- Strings for the Easy Unlock setup dialog -->
+  <!-- Step 1: Intro -->
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_HEADER_TITLE" desc="The text to show as the header title of the Easy Unlock dialog during the first, introductory step.">
+    Set up Smart Lock for your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_HEADER_TEXT" desc="The text to show as the header body text of the Easy Unlock dialog during the first, introductory step. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Make sure your phone is nearby. To find your phone, Bluetooth will be turned on for all devices that have your account. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_FIND_PHONE_BUTTON_LABEL" desc="The text to show as the 'Find phone' button label in the Easy Unlock dialog. This button is visible during the first, introductory step.">
+    Find your phone
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_FINDING_PHONE_BUTTON_LABEL" desc="The text to show as the 'Finding phone...' button label in the Easy Unlock dialog. This button is visible during the first, introductory step.">
+    Finding your phone
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_RETRY_FIND_PHONE_BUTTON_LABEL" desc="The text to show as a label for the button in Easy Unlock setup dialog when the setup app fails to find any phones to be used. Finding a phone is the first setup step. Clicking the button restarts the setup flow.">
+    Retry
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_CLOSE_FIND_PHONE_BUTTON_LABEL" desc="The text to show as a label for the button in Easy Unlock setup dialog when the setup app finds only phones with out-of-date software. Finding a phone is the first setup step. Clicking the button closes the setup dialog.">
+    Close
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_INTRO_HOW_IS_THIS_SECURE_LINK_TEXT" desc="The displayed text for the link that explains how the Easy Unlock feature is secure. This link is visible during the first, introductory step of the Easy Unlock setup dialog.">
+    How this is secure
+  </message>
+  <!-- Step 1.5: "Secure this phone to continue" -->
+  <message name="IDS_EASY_UNLOCK_SETUP_SECURE_PHONE_HEADER_TITLE" desc="The text to show as the header title of the Easy Unlock dialog after a phone has been found but is not secured by a lock screen.">
+    Set a screen lock for safety
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_SECURE_PHONE_HEADER_TEXT" desc="The text to show as the header body text of the Easy Unlock dialog after a suitable phone has been found but is not secured by a lock screen. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    The phone you used to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> needs a screen lock for security. Usually, that’s a PIN, pattern, or password. Already have a screen lock? Select Check again to verify and continue setup.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_SECURE_PHONE_BUTTON_LABEL" desc="The text to show as the 'How to secure the phone' button label in the Easy Unlock dialog. This button is visible during step 1.5, if the user is prompted to secure their phone.">
+    Set a Screen Lock
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_SECURE_PHONE_LINK_TEXT" desc="The text to show for the link to check the phone again, after the user has enabled a secure lock screen. This button is visible during the 1.5th step of the Easy Unlock dialog, when the user is prompted to secure their phone.">
+    Check again
+  </message>
+  <!-- Step 2: Phone Found -->
+  <message name="IDS_EASY_UNLOCK_SETUP_FOUND_PHONE_HEADER_TITLE" desc="The text to show as the header title of the Easy Unlock dialog during the second step, after a suitable phone has been found.">
+    Choose a phone to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_FOUND_PHONE_HEADER_TEXT" desc="The text to show as the header body text of the Easy Unlock dialog during the second step, after a suitable phone has been found. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    You’ll get a notification on this phone so keep the phone nearby.
+  </message>
+  <!-- TODO(isherman): Remove this duplicate string once proximity work is completed. -->
+  <message name="IDS_EASY_UNLOCK_SETUP_FOUND_PHONE_USE_THIS_PHONE_BUTTON_LABEL" desc="The text to show as the 'Use this phone' button label in the Easy Unlock dialog. This button is visible during the second step, after a suitable phone is found.">
+    Use this phone
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_FOUND_PHONE_DEVICE_FORMATTED_BUTTON_LABEL" desc="The text to show as the 'Use [insert_phone_name]' button label in the Easy Unlock dialog. This button is visible during the second step, after a suitable phone is found.">
+    <ph name="PHONE_NAME">$1<ex>Nexus 6</ex></ph>
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_FOUND_PHONE_SWITCH_PHONE_LINK_LABEL" desc="The text to show for the link to switch phones in the Easy Unlock dialog. This button is visible during the second step, after serveral suitable phones are found.">
+    Show another phone
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_PAIRING_PHONE_FAILED_BUTTON_LABEL" desc="Text to show as a label for the button in Easy Unlock setup dialog when pairing Chrome with the phone detected during setup fails. Pairing is the second step in the setup. Clicking the button restarts the whole setup flow.">
+    Restart
+  </message>
+  <!-- Step 2.5: "Recommended: Set up Smart Lock for Android" -->
+  <message name="IDS_EASY_UNLOCK_SETUP_ANDROID_SMART_LOCK_HEADER_TITLE" desc="The text to show as the header title of the Easy Unlock dialog to encourage the user to enable Smart Lock for Android if it is not currently enabled.">
+    Set up Smart Lock for Android
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ANDROID_SMART_LOCK_HEADER_TEXT" desc="The text to show as the header body text of the Easy Unlock dialog to encourage the user to enable Smart Lock for Android if it is not currently enabled. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Update your phone's screen lock so it turns off when you're nearby. You'll unlock the phone faster, and enjoy a better Smart Lock experience on your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ANDROID_SMART_LOCK_DONE_BUTTON_LABEL" desc="The text to show as the button label in the Easy Unlock dialog step for encouraging the user to enable Smart Lock for Android. Clicking this button advances the dialog to step 3.">
+    Next
+  </message>
+  <!-- Step 3: "You're all set" -->
+  <message name="IDS_EASY_UNLOCK_SETUP_COMPLETE_HEADER_TITLE" desc="The text to show as the header title of the Easy Unlock dialog during the penultimate step, confirming success.">
+    Smart Lock is all set
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_COMPLETE_HEADER_TEXT" desc="The text to show as the header body text of the Easy Unlock dialog during the penultimate step, confirming success.">
+    Your phone also unlocks your other <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>s because they are automatically synced.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_COMPLETE_TRY_IT_OUT_BUTTON_LABEL" desc="The text to show as the 'Try it out' button label in the Easy Unlock dialog. This button is visible during the penultimate step, once the Easy Unlock setup succeeds.">
+    Try Smart Lock
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_COMPLETE_SETTINGS_LINK_TEXT" desc="The text to show as the link text to access Easy Unlock settings. This button is visible during the penultimate step, once the Easy Unlock setup succeeds.">
+    Settings
+  </message>
+  <!-- Step 4: Post Lock Screen -->
+  <message name="IDS_EASY_UNLOCK_SETUP_POST_LOCK_DISMISS_BUTTON_LABEL" desc="The text to show as the button label in the Easy Unlock dialog during the post lockscreen step. Clicking this button dismisses the dialog.">
+    Done
+  </message>
+  <!-- Error strings for the Easy Unlock setup dialog -->
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_BLUETOOTH_UNAVAILBLE" desc="The error message to display when the user's Chromebook might not have Bluetooth functionality during Easy Unlock setup. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Can’t find your phone. Make sure your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>'s Bluetooth is turned on. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_OFFLINE" desc="The error message to display when the user's Chromebook appears to be offline during Easy Unlock setup. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Can’t find your phone. Make sure your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> is connected to Wi-Fi or a mobile network. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_REMOTE_SOFTWARE_OUT_OF_DATE" desc="The error message to display when the user's phone software is too old for compatibility with Easy Unlock. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Found your <ph name="PHONE_TYPE">$1<ex>LGE Nexus 5</ex></ph>. But Smart Lock only works on devices with Android 5.0 and up. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_REMOTE_SOFTWARE_OUT_OF_DATE_GENERIC" desc="The generic error message to display when the user's phone software is too old for compatibility with Easy Unlock. This is only shown when the user's phone type is not known. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Found your phone. But Smart Lock only works on devices with Android 5.0 and up. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_FINDING_PHONE" desc="A generic catch-all error message to display when something goes wrong after the user clicks 'Find my phone' during Easy Unlock setup. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Can’t find your phone. Make sure you’re using a compatible Android phone that’s turned on and handy. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_SYNC_PHONE_STATE_FAILED" desc="The error message to display when the Chromebook fails to sync the phone's state.">
+    Smart Lock is currently unavailable. Please try again later.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SETUP_ERROR_CONNECTING_TO_PHONE" desc="A generic catch-all error message to display when something goes wrong after the user clicks 'Use this phone' during Easy Unlock setup. Note that the &lt;a&gt; element surrounds a link; these HTML elements should be preserved in the translation.">
+    Can't connect to your phone. Make sure you’re using a compatible Android phone that is turned on and handy. &lt;a&gt;Learn more&lt;/a&gt;
+  </message>
+  <!-- Easy Unlock strings shown on the lock screen -->
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_NO_BLUETOOTH" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when the Chromebook doesn't have Bluetooth enabled.">
+    Bluetooth is off on this <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Enter your password, and turn on Bluetooth.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_NO_PHONE" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook cannot be found.">
+    Can’t find your phone. Make sure it’s handy and Bluetooth is turned on.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PHONE_NOT_AUTHENTICATED" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when no phones eligible to unlock the Chromebook can be authenticated.">
+    Unable to unlock. Enter your password.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PHONE_LOCKED" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook is detected, but it's locked and thus not allowed to unlock the Chromebook.">
+    Your phone is locked. Unlock it to enter.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PHONE_UNLOCKABLE" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook is detected, but it does not have lock screen enabled, in which case it is not allowed to unlock Chromebooks.">
+    To keep your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> safe, Smart Lock requires a screen lock on your phone.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_RSSI_TOO_LOW" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook is detected, but it's not in the Chromebook's proximity (> 30 feet away).">
+    Bring your phone closer to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PHONE_LOCKED_AND_RSSI_TOO_LOW" desc="Tooltip for an icon on a user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook is detected, but it's both (a) locked and (b) not in the Chromebook's proximity (> 1 foot away).">
+    Unlock your phone and bring it closer to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_INITIAL_AUTHENTICATED" desc="Tooltip text shown on lock screen when a phone eligible to unlock the Chromebook via Easy Unlock is detected and authenticated for the first time.">
+    When your phone is unlocked and nearby, just select to unlock. Otherwise, enter your password or PIN.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_HARDLOCK_INSTRUCTIONS" desc="Tooltip for an icon on user's lock screen pod shown by Easy Unlock when a phone eligible to unlock the Chromebook is detected and authenticated. The tooltip shows instructions for hard-locking the Chromebook.">
+    If you click this icon, you will manually lock this <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Next time, you’ll need to type your password to enter.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PASSWORD_REAUTH" desc="Tooltip for an icon on user's lock screen pod shown by EasyUnlock when the user must enter their password instead of using EasyUnlock, because too much time has passed since their last password entry.">
+    For added security, Smart Lock will ask you to enter your password after 20 hours.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_PASSWORD_REQUIRED_FOR_LOGIN" desc="Tooltip for an icon on user's lock screen pod shown by EasyUnlock when a password is required to login to the Chromebook.">
+    To start Smart Lock, enter your password. Next time, you can use your phone to unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_UNSUPPORTED_ANDROID_VERSION" desc="Tooltip for the icon on user's lock screen pod shown by Easy Unlock when a phone set up to unlock the Chromebook is detected, but has an unsupported Android version. The user is asked to update the phone.">
+    Please update your phone to a newer version of Android to unlock this <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_HARDLOCK_USER" desc="Tooltip text shown on a user's lock screen pod when Easy Unlock feature is enabled for the user, but the user hard locked the device. Hard lock is done by clicking the Easy Unlock icon on the user's pod. When a device is hard locked by a user, the Easy Unlock cannot be used to unlock the device as that user. A password has to be entered to unlock the device.">
+    Your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph> is locked for security. Manually enter your password to continue.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_HARDLOCK_PAIRING_CHANGED" desc="Tooltip text shown on a user's lock screen pod when Easy Unlock feature is enabled for the user, but the pairing data is changed. A password has to be entered to unlock the device.">
+    Smart Lock phone changed. Enter your password to update Smart Lock. Next time, your phone will unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Turn off Smart Lock in Settings.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_HARDLOCK_PAIRING_ADDED" desc="Tooltip text shown on a user's lock screen pod when Easy Unlock pairing data is synced on a new Chromebook.">
+    Enter your password to turn on Smart Lock. Next time, your phone will unlock your <ph name="DEVICE_TYPE">$1<ex>Chromebook</ex></ph>. Turn off Smart Lock in Settings.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_TOOLTIP_LOGIN_FAILURE" desc="Tooltip text shown on a user's lock screen when Smart Lock signin attempt fails.">
+    Smart Lock couldn’t verify your account. Type your password to enter.
+  </message>
+  <message name="IDS_SMART_LOCK_SCREENLOCK_TOOLTIP_HARDLOCK_REAUTH_USER" desc="Tooltip text shown on a user's lock screen pod to reauthenticate the user before setting up Smart Lock. A password has to be entered to unlock the device.">
+    To set up Smart Lock for Chromebook, Google needs to make sure it’s you—type your password to get started.
+  </message>
+  <message name="IDS_EASY_UNLOCK_SCREENLOCK_USER_POD_AUTH_VALUE" desc="Message on lock screen user pod shown in place of password field when Easy Unlock is enabled and a phone that can unlock the Chromebook is detected in proximity.">
+    Click your photo
+  </message>
+  <message name="IDS_SMART_LOCK_SPINNER_ACCESSIBILITY_LABEL" desc="Label for the spinner icon used for accessibility purposes. This label is needed because this state does not have a tooltip.">
+    Finding your phone
+  </message>
+
+  <!-- User Image Selection Dialog -->
+  <message name="IDS_USER_IMAGE_SCREEN_TITLE" desc="String to be displayed in the title bar of the oobe/login user image selection dialog">
+    Set your profile picture
+  </message>
+  <message name="IDS_USER_IMAGE_SCREEN_DESCRIPTION" desc="Description text for the oobe/login user image selection dialog.">
+    Take a new photo or choose an existing photo or icon.
+    <ph name="LINE_BREAK">&lt;br&gt;&lt;br&gt;</ph>
+    This picture will show up on the Chromebook sign in screen and lock screen.
+  </message>
+
+  <!-- Strings for ARC intent picker -->
+  <message name="IDS_INTENT_PICKER_BUBBLE_VIEW_OPEN_WITH" desc="Message contained in a label used as a header for a list of applications from which the user will pick one.">
+    Open with
+  </message>
+  <message name="IDS_INTENT_PICKER_BUBBLE_VIEW_REMEMBER_SELECTION" desc="Message contained in a checkbox that must be marked in order for the intent picker to not be shown again for a similar URL.">
+    Remember my choice
+  </message>
+  <message name="IDS_INTENT_PICKER_BUBBLE_VIEW_USE_APP" desc="Message contained in a button to continue the navigation in an ARC app selected by the user.">
+    Use app
+  </message>
+  <message name="IDS_INTENT_PICKER_BUBBLE_VIEW_STAY_IN_CHROME" desc="Message contained in a button to continue the navigation within Chrome.">
+    Stay in Chrome
   </message>
 </grit-part>

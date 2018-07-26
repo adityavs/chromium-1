@@ -10,6 +10,7 @@
 #include "services/service_manager/public/mojom/interface_provider.mojom-blink.h"
 #include "third_party/blink/public/platform/dedicated_worker_factory.mojom-blink.h"
 #include "third_party/blink/public/platform/web_content_settings_client.h"
+#include "third_party/blink/public/platform/web_layer_tree_view.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/renderer/core/core_initializer.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -81,6 +82,9 @@ DedicatedWorker* DedicatedWorker::Create(ExecutionContext* context,
         "(see https://crbug.com/680046)");
     return nullptr;
   }
+
+  if (context->IsWorkerGlobalScope())
+    UseCounter::Count(context, WebFeature::kNestedDedicatedWorker);
 
   DedicatedWorker* worker = new DedicatedWorker(context, script_url, options);
   worker->Start();
@@ -161,8 +165,8 @@ void DedicatedWorker::Start() {
     // Specify empty source code here because module scripts will be fetched on
     // the worker thread as opposed to classic scripts that are fetched on the
     // main thread.
-    FetchClientSettingsObjectSnapshot outside_settings_object(
-        *GetExecutionContext());
+    auto* outside_settings_object =
+        new FetchClientSettingsObjectSnapshot(*GetExecutionContext());
     context_proxy_->StartWorkerGlobalScope(
         CreateGlobalScopeCreationParams(), options_, script_url_,
         outside_settings_object, stack_id, String() /* source_code */);
@@ -182,14 +186,16 @@ BeginFrameProviderParams DedicatedWorker::CreateBeginFrameProviderParams() {
   // won't be initialized. If that's the case, the Worker will initialize it by
   // itself later.
   BeginFrameProviderParams begin_frame_provider_params;
-  if (GetExecutionContext()->IsDocument()) {
+  if (GetExecutionContext() && GetExecutionContext()->IsDocument()) {
     LocalFrame* frame = ToDocument(GetExecutionContext())->GetFrame();
     WebLayerTreeView* layer_tree_view = nullptr;
-    if (frame) {
+    if (frame && frame->GetPage()) {
       layer_tree_view =
           frame->GetPage()->GetChromeClient().GetWebLayerTreeView(frame);
-      begin_frame_provider_params.parent_frame_sink_id =
-          layer_tree_view->GetFrameSinkId();
+      if (layer_tree_view) {
+        begin_frame_provider_params.parent_frame_sink_id =
+            layer_tree_view->GetFrameSinkId();
+      }
     }
     begin_frame_provider_params.frame_sink_id =
         Platform::Current()->GenerateFrameSinkId();
@@ -257,8 +263,8 @@ void DedicatedWorker::OnFinished(const v8_inspector::V8StackTraceId& stack_id) {
     std::unique_ptr<GlobalScopeCreationParams> creation_params =
         CreateGlobalScopeCreationParams();
     creation_params->referrer_policy = referrer_policy;
-    FetchClientSettingsObjectSnapshot outside_settings_object(
-        *GetExecutionContext());
+    auto* outside_settings_object =
+        new FetchClientSettingsObjectSnapshot(*GetExecutionContext());
     context_proxy_->StartWorkerGlobalScope(
         std::move(creation_params), options_, script_url_,
         outside_settings_object, stack_id,

@@ -28,8 +28,10 @@ class DevToolsSession : public protocol::FrontendChannel,
                   DevToolsAgentHostClient* client,
                   bool restricted);
   ~DevToolsSession() override;
+  void Dispose();
 
   bool restricted() { return restricted_; }
+  DevToolsAgentHost* agent_host() { return agent_host_; };
   DevToolsAgentHostClient* client() { return client_; };
 
   // Browser-only sessions do not talk to mojom::DevToolsAgent, but instead
@@ -41,7 +43,9 @@ class DevToolsSession : public protocol::FrontendChannel,
   void SetRenderer(int process_host_id, RenderFrameHostImpl* frame_host);
 
   void AttachToAgent(const blink::mojom::DevToolsAgentAssociatedPtr& agent);
-  void DispatchProtocolMessage(const std::string& message);
+  void DispatchProtocolMessage(
+      const std::string& message,
+      std::unique_ptr<base::DictionaryValue> parsed_message);
   void SuspendSendingMessagesToAgent();
   void ResumeSendingMessagesToAgent();
 
@@ -66,6 +70,8 @@ class DevToolsSession : public protocol::FrontendChannel,
   void DispatchProtocolMessageToAgent(int call_id,
                                       const std::string& method,
                                       const std::string& message);
+  void HandleCommand(std::unique_ptr<base::DictionaryValue> parsed_message,
+                     const std::string& message);
 
   // protocol::FrontendChannel implementation.
   void sendProtocolResponse(
@@ -74,6 +80,9 @@ class DevToolsSession : public protocol::FrontendChannel,
   void sendProtocolNotification(
       std::unique_ptr<protocol::Serializable> message) override;
   void flushProtocolNotifications() override;
+  void fallThrough(int call_id,
+                   const std::string& method,
+                   const std::string& message) override;
 
   // blink::mojom::DevToolsSessionHost implementation.
   void DispatchProtocolResponse(

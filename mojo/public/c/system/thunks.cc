@@ -35,10 +35,25 @@ base::ProtectedMemory<MojoGetSystemThunksFunction> g_get_thunks;
 
 PROTECTED_MEMORY_SECTION base::ProtectedMemory<MojoSystemThunks> g_thunks;
 
+MojoResult NotImplemented(const char* name) {
+  DLOG(ERROR) << "Function 'Mojo" << name
+              << "()' not supported in this version of Mojo Core.";
+  return MOJO_RESULT_UNIMPLEMENTED;
+}
+
 }  // namespace
 
-#define INVOKE_THUNK(name, ...) \
-  base::UnsanitizedCfiCall(g_thunks, &MojoSystemThunks::name)(__VA_ARGS__)
+// Macro to verify that the thunk symbol |name| is actually present in the
+// runtime version of Mojo Core that is currently in use.
+#define FUNCTION_IS_IMPLEMENTED(name)                                       \
+  (reinterpret_cast<uintptr_t>(static_cast<const void*>(&g_thunks->name)) - \
+       reinterpret_cast<uintptr_t>(static_cast<const void*>(&g_thunks)) <   \
+   g_thunks->size)
+
+#define INVOKE_THUNK(name, ...)                                              \
+  FUNCTION_IS_IMPLEMENTED(name)                                              \
+  ? base::UnsanitizedCfiCall(g_thunks, &MojoSystemThunks::name)(__VA_ARGS__) \
+  : NotImplemented(#name)
 
 namespace mojo {
 
@@ -288,12 +303,10 @@ MojoResult MojoRemoveTrigger(MojoHandle trap_handle,
 
 MojoResult MojoArmTrap(MojoHandle trap_handle,
                        const MojoArmTrapOptions* options,
-                       uint32_t* num_ready_triggers,
-                       uintptr_t* ready_triggers,
-                       MojoResult* ready_results,
-                       MojoHandleSignalsState* ready_signals_states) {
-  return INVOKE_THUNK(ArmTrap, trap_handle, options, num_ready_triggers,
-                      ready_triggers, ready_results, ready_signals_states);
+                       uint32_t* num_blocking_events,
+                       MojoTrapEvent* blocking_events) {
+  return INVOKE_THUNK(ArmTrap, trap_handle, options, num_blocking_events,
+                      blocking_events);
 }
 
 MojoResult MojoCreateMessage(const MojoCreateMessageOptions* options,
@@ -440,16 +453,31 @@ MojoResult MojoAcceptInvitation(
                       invitation_handle);
 }
 
+MojoResult MojoSetQuota(MojoHandle handle,
+                        MojoQuotaType type,
+                        uint64_t limit,
+                        const MojoSetQuotaOptions* options) {
+  return INVOKE_THUNK(SetQuota, handle, type, limit, options);
+}
+
+MojoResult MojoQueryQuota(MojoHandle handle,
+                          MojoQuotaType type,
+                          const MojoQueryQuotaOptions* options,
+                          uint64_t* limit,
+                          uint64_t* usage) {
+  return INVOKE_THUNK(QueryQuota, handle, type, options, limit, usage);
+}
+
 }  // extern "C"
 
 void MojoEmbedderSetSystemThunks(const MojoSystemThunks* thunks) {
-  // Assume embedders will always use matching versions of the EDK and public
-  // APIs.
+  // Assume embedders will always use matching versions of the Mojo Core and
+  // public APIs.
   DCHECK_EQ(thunks->size, sizeof(*g_thunks));
 
   // This should only have to check that the |g_thunks->size| is zero, but we
-  // have multiple EDK initializations in some test suites still. For now we
-  // allow double calls as long as they're the same thunks as before.
+  // have multiple Mojo Core initializations in some test suites still. For now
+  // we allow double calls as long as they're the same thunks as before.
   DCHECK(g_thunks->size == 0 || !memcmp(&*g_thunks, thunks, sizeof(*g_thunks)))
       << "Cannot set embedder thunks after Mojo API calls have been made.";
 

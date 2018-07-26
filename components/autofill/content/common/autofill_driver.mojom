@@ -50,7 +50,8 @@ interface AutofillDriver {
   QueryFormFieldAutofill(int32 id,
                          FormData form,
                          FormFieldData field,
-                         gfx.mojom.RectF bounding_box);
+                         gfx.mojom.RectF bounding_box,
+                         bool autoselect_first_suggestion);
 
   // Instructs the browser to hide the Autofill popup if it is open.
   HidePopup();
@@ -123,12 +124,6 @@ interface PasswordManagerDriver {
                           mojo_base.mojom.String16 typed_username,
                           int32 options, gfx.mojom.RectF bounds);
 
-  // Instructs the browser to show a suggestion, which will redirect the user to
-  // the list of all saved passwords. The popup will use |text_direction| for
-  // displaying text.
-  ShowManualFallbackSuggestion(mojo_base.mojom.TextDirection text_direction,
-                           gfx.mojom.RectF bounds);
-
   // Sends the outcome of HTML parsing based form classifier that detects the
   // forms where password generation should be available.
   SaveGenerationFieldDetectedByClassifier(
@@ -138,6 +133,10 @@ interface PasswordManagerDriver {
   // username/password field is on.
   CheckSafeBrowsingReputation(
       url.mojom.Url form_action, url.mojom.Url frame_url);
+
+  // The focus changed to a different input in the same frame (e.g. tabbed from
+  // email to password field).
+  FocusedInputChanged(bool is_fillable, bool is_password_field);
 };
 
 // There is one instance of this interface per web contents in the browser

@@ -151,8 +151,10 @@ void ToolbarView::Init() {
   }
 
   back_ = new ToolbarButton(
-      this, std::make_unique<BackForwardMenuModel>(
-                browser_, BackForwardMenuModel::ModelType::kBackward));
+      this,
+      std::make_unique<BackForwardMenuModel>(
+          browser_, BackForwardMenuModel::ModelType::kBackward),
+      browser_->tab_strip_model());
   back_->set_hide_ink_drop_when_showing_context_menu(false);
   back_->set_triggerable_event_flags(
       ui::EF_LEFT_MOUSE_BUTTON | ui::EF_MIDDLE_MOUSE_BUTTON);
@@ -165,8 +167,10 @@ void ToolbarView::Init() {
   back_->Init();
 
   forward_ = new ToolbarButton(
-      this, std::make_unique<BackForwardMenuModel>(
-                browser_, BackForwardMenuModel::ModelType::kForward));
+      this,
+      std::make_unique<BackForwardMenuModel>(
+          browser_, BackForwardMenuModel::ModelType::kForward),
+      browser_->tab_strip_model());
   forward_->set_hide_ink_drop_when_showing_context_menu(false);
   forward_->set_triggerable_event_flags(
       ui::EF_LEFT_MOUSE_BUTTON | ui::EF_MIDDLE_MOUSE_BUTTON);
@@ -262,11 +266,6 @@ void ToolbarView::Update(WebContents* tab) {
     browser_actions_->RefreshToolbarActionViews();
   if (reload_)
     reload_->set_menu_enabled(chrome::IsDebuggerAttachedToCurrentTab(browser_));
-}
-
-void ToolbarView::RevertUrl() {
-  if (location_bar_)
-    location_bar_->Revert();
 }
 
 void ToolbarView::ResetTabState(WebContents* tab) {
@@ -601,9 +600,11 @@ void ToolbarView::Layout() {
   if (maximized)
     app_menu_width += end_padding;
 
+  // Set trailing margin before updating the bounds so OnBoundsChange can use
+  // the trailing margin.
+  app_menu_button_->SetTrailingMargin(maximized ? end_padding : 0);
   app_menu_button_->SetBounds(next_element_x, toolbar_button_y, app_menu_width,
                               toolbar_button_height);
-  app_menu_button_->SetTrailingMargin(maximized ? end_padding : 0);
 }
 
 void ToolbarView::OnPaintBackground(gfx::Canvas* canvas) {
@@ -704,6 +705,19 @@ PageActionIconContainerView* ToolbarView::GetPageActionIconContainerView() {
 
 AppMenuButton* ToolbarView::GetAppMenuButton() {
   return app_menu_button_;
+}
+
+gfx::Rect ToolbarView::GetFindBarBoundingBox(int contents_height) const {
+  if (!browser_->SupportsWindowFeature(Browser::FEATURE_LOCATIONBAR))
+    return gfx::Rect();
+
+  if (!location_bar_->IsDrawn())
+    return gfx::Rect();
+
+  gfx::Rect bounds =
+      location_bar_->ConvertRectToWidget(location_bar_->GetLocalBounds());
+  return gfx::Rect(bounds.x(), bounds.bottom(), bounds.width(),
+                   contents_height);
 }
 
 void ToolbarView::FocusToolbar() {

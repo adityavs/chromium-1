@@ -881,6 +881,7 @@ NSString* const kTransitionToolbarAnimationKey =
   // the last time the stack view was shown.
   _gestureStateTracker = [[GestureStateTracker alloc] init];
 
+  [self.dispatcher setIncognitoContentVisible:(_otrCardSet.cards.count > 0)];
   [super viewWillAppear:animated];
 }
 
@@ -2084,7 +2085,8 @@ NSString* const kTransitionToolbarAnimationKey =
   [NSObject cancelPreviousPerformRequestsWithTarget:self];
 
   [_delegate tabSwitcher:self
-      shouldFinishWithActiveModel:_activeCardSet.tabModel];
+      shouldFinishWithActiveModel:_activeCardSet.tabModel
+                     focusOmnibox:NO];
 
   [self animateTransitionWithStyle:STACK_TRANSITION_STYLE_DISMISSING];
 }
@@ -2199,7 +2201,8 @@ NSString* const kTransitionToolbarAnimationKey =
   [_activeCardSet.tabModel setCurrentTab:tab];
 
   [_delegate tabSwitcher:self
-      shouldFinishWithActiveModel:_activeCardSet.tabModel];
+      shouldFinishWithActiveModel:_activeCardSet.tabModel
+                     focusOmnibox:NO];
 
   CGFloat statusBarHeight = StatusBarHeight();
   CGRect viewBounds, remainder;
@@ -2864,7 +2867,7 @@ NSString* const kTransitionToolbarAnimationKey =
 
 - (void)openNewTab:(OpenNewTabCommand*)command {
   // Ensure that the right mode is showing.
-  if ([self isCurrentSetIncognito] != command.incognito)
+  if ([self isCurrentSetIncognito] != command.inIncognito)
     [self setActiveCardSet:[self inactiveCardSet]];
 
   // Either send or don't send the "New Tab Opened" or "Incognito Tab Opened" to
@@ -3115,6 +3118,7 @@ NSString* const kTransitionToolbarAnimationKey =
     }
   }
   [CATransaction commit];
+  [self.dispatcher setIncognitoContentVisible:(_otrCardSet.cards.count > 0)];
 }
 
 - (void)cardSet:(CardSet*)cardSet displayedCard:(StackCard*)card {

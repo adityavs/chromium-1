@@ -38,6 +38,7 @@
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/web_contents_delegate.h"
 #include "content/public/browser/web_contents_observer.h"
+#include "content/public/common/bindings_policy.h"
 #include "content/public/common/browser_side_navigation_policy.h"
 #include "content/public/common/page_state.h"
 #include "content/public/common/page_type.h"
@@ -1010,7 +1011,7 @@ TEST_F(NavigationControllerTest, LoadURL_PrivilegedPending) {
       kExistingURL1, Referrer(), ui::PAGE_TRANSITION_TYPED, std::string());
   int entry_id = controller.GetPendingEntry()->GetUniqueID();
   // Pretend it has bindings so we can tell if we incorrectly copy it.
-  main_test_rfh()->AllowBindings(2);
+  main_test_rfh()->AllowBindings(BINDINGS_POLICY_MOJO_WEB_UI);
   main_test_rfh()->PrepareForCommit();
   main_test_rfh()->SendNavigate(entry_id, true, kExistingURL1);
   EXPECT_EQ(1U, navigation_entry_committed_counter_);
@@ -1305,7 +1306,7 @@ TEST_F(NavigationControllerTest, LoadURL_WithBindings) {
   int entry_id = controller.GetPendingEntry()->GetUniqueID();
   orig_rfh->PrepareForCommit();
   TestRenderFrameHost* new_rfh = contents()->GetPendingMainFrame();
-  new_rfh->AllowBindings(1);
+  new_rfh->AllowBindings(BINDINGS_POLICY_WEB_UI);
   new_rfh->SendNavigate(entry_id, true, url2);
 
   // The second load should be committed, and bindings should be remembered.
@@ -1505,49 +1506,6 @@ TEST_F(NavigationControllerTest, ReloadOriginalRequestURL) {
   EXPECT_FALSE(controller.GetPendingEntry());
   EXPECT_FALSE(controller.CanGoBack());
   EXPECT_FALSE(controller.CanGoForward());
-}
-
-TEST_F(NavigationControllerTest,
-       ReloadDisablePreviewReloadsOriginalRequestURL) {
-  NavigationControllerImpl& controller = controller_impl();
-
-  const GURL original_url("http://foo1");
-  const GURL final_url("http://foo2");
-  auto set_original_url_callback = base::Bind(SetOriginalURL, original_url);
-
-  // Load up the original URL, but get redirected.
-  controller.LoadURL(original_url, Referrer(), ui::PAGE_TRANSITION_TYPED,
-                     std::string());
-  int entry_id = controller.GetPendingEntry()->GetUniqueID();
-  EXPECT_EQ(0U, navigation_entry_changed_counter_);
-  EXPECT_EQ(0U, navigation_list_pruned_counter_);
-  main_test_rfh()->PrepareForCommitWithServerRedirect(final_url);
-  main_test_rfh()->SendNavigateWithModificationCallback(
-      entry_id, true, final_url, std::move(set_original_url_callback));
-  EXPECT_EQ(1U, navigation_entry_committed_counter_);
-  navigation_entry_committed_counter_ = 0;
-  entry_id = controller.GetLastCommittedEntry()->GetUniqueID();
-
-  // The NavigationEntry should save both the original URL and the final
-  // redirected URL.
-  EXPECT_EQ(original_url,
-            controller.GetVisibleEntry()->GetOriginalRequestURL());
-  EXPECT_EQ(final_url, controller.GetVisibleEntry()->GetURL());
-
-  // Reload with previews disabled.
-  controller.Reload(ReloadType::DISABLE_PREVIEWS, false);
-  EXPECT_EQ(0U, navigation_entry_changed_counter_);
-  EXPECT_EQ(0U, navigation_list_pruned_counter_);
-
-  // The reload is pending.  The request should point to the original URL.
-  EXPECT_EQ(original_url, navigated_url());
-  EXPECT_EQ(controller.GetEntryCount(), 1);
-  EXPECT_EQ(controller.GetLastCommittedEntryIndex(), 0);
-  EXPECT_EQ(controller.GetPendingEntryIndex(), 0);
-  EXPECT_TRUE(controller.GetLastCommittedEntry());
-  EXPECT_TRUE(controller.GetPendingEntry());
-  EXPECT_TRUE(HasNavigationRequest());
-  EXPECT_EQ(content::PREVIEWS_NO_TRANSFORM, GetLastNavigationPreviewsState());
 }
 
 // Test that certain non-persisted NavigationEntryImpl values get reset after
@@ -5329,7 +5287,14 @@ TEST_F(NavigationControllerTest, MainFrameNavigationUIData) {
   controller.LoadURLWithParams(params);
   int entry_id = controller.GetPendingEntry()->GetUniqueID();
 
+  NavigationRequest* request =
+      main_test_rfh()->frame_tree_node()->navigation_request();
+  CHECK(request);
+
   main_test_rfh()->PrepareForCommit();
+  main_test_rfh()->SimulateCommitProcessed(
+      request->navigation_handle()->GetNavigationId(),
+      true /* was_successful */);
   main_test_rfh()->SendNavigate(entry_id, true, url1);
 
   EXPECT_TRUE(observer.is_main_frame());

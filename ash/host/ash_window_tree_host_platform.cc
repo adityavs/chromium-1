@@ -84,7 +84,7 @@ void AshWindowTreeHostPlatform::SetCursorConfig(
   float scale = display.device_scale_factor();
 
   if (!display.IsInternal())
-    scale *= ui::mojom::kCursorMultiplierForExternalDisplays;
+    scale *= 1.2;
 
   ui::CursorController::GetInstance()->SetCursorConfigForWindow(
       GetAcceleratedWidget(), rotation, scale);
@@ -170,7 +170,7 @@ void AshWindowTreeHostPlatform::DispatchEvent(ui::Event* event) {
 }
 
 void AshWindowTreeHostPlatform::InitInputMethodIfNecessary() {
-  if (!base::FeatureList::IsEnabled(features::kOopAsh))
+  if (!base::FeatureList::IsEnabled(features::kMash))
     return;
 
   input_method_ = std::make_unique<aura::InputMethodMus>(this, this);

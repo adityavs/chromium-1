@@ -10,6 +10,7 @@
 
 #include "ash/public/interfaces/assistant_controller.mojom.h"
 #include "ash/public/interfaces/session_controller.mojom.h"
+#include "ash/public/interfaces/voice_interaction_controller.mojom.h"
 #include "base/callback.h"
 #include "base/memory/weak_ptr.h"
 #include "base/optional.h"
@@ -41,10 +42,17 @@ class AssistantSettingsManager;
 class Service : public service_manager::Service,
                 public chromeos::PowerManagerClient::Observer,
                 public ash::mojom::SessionActivationObserver,
-                public mojom::AssistantPlatform {
+                public mojom::AssistantPlatform,
+                public ash::mojom::VoiceInteractionObserver {
  public:
   Service();
   ~Service() override;
+
+  mojom::Client* client() { return client_.get(); }
+  mojom::DeviceActions* device_actions() { return device_actions_.get(); }
+  ash::mojom::AssistantController* assistant_controller() {
+    return assistant_controller_.get();
+  }
 
   void SetIdentityManagerForTesting(
       identity::mojom::IdentityManagerPtr identity_manager);
@@ -75,6 +83,16 @@ class Service : public service_manager::Service,
   void OnSessionActivated(bool activated) override;
   void OnLockStateChanged(bool locked) override;
 
+  // ash::mojom::VoiceInteractionObserver:
+  void OnVoiceInteractionStatusChanged(
+      ash::mojom::VoiceInteractionState state) override {}
+  void OnVoiceInteractionSettingsEnabled(bool enabled) override {}
+  void OnVoiceInteractionContextEnabled(bool enabled) override {}
+  void OnVoiceInteractionHotwordEnabled(bool enabled) override;
+  void OnVoiceInteractionSetupCompleted(bool completed) override {}
+  void OnAssistantFeatureAllowedChanged(
+      ash::mojom::AssistantAllowedState state) override {}
+
   void BindAssistantSettingsManager(
       mojom::AssistantSettingsManagerRequest request);
 
@@ -94,6 +112,8 @@ class Service : public service_manager::Service,
 
   void UpdateListeningState();
 
+  void CreateAssistantManagerService(bool enable_hotword);
+
   void FinalizeAssistantManagerService();
 
   void RetryRefreshToken();
@@ -105,6 +125,7 @@ class Service : public service_manager::Service,
   mojo::Binding<ash::mojom::SessionActivationObserver>
       session_observer_binding_;
   mojom::ClientPtr client_;
+  mojom::DeviceActionsPtr device_actions_;
 
   identity::mojom::IdentityManagerPtr identity_manager_;
 
@@ -124,6 +145,9 @@ class Service : public service_manager::Service,
   bool locked_ = false;
 
   ash::mojom::AssistantControllerPtr assistant_controller_;
+  ash::mojom::VoiceInteractionControllerPtr voice_interaction_controller_;
+  mojo::Binding<ash::mojom::VoiceInteractionObserver>
+      voice_interaction_observer_binding_;
 
   base::WeakPtrFactory<Service> weak_ptr_factory_;
 

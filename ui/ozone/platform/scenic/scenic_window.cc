@@ -40,7 +40,7 @@ int KeyModifiersToFlags(int modifiers) {
 ScenicWindow::ScenicWindow(
     ScenicWindowManager* window_manager,
     PlatformWindowDelegate* delegate,
-    fidl::InterfaceRequest<fuchsia::ui::views_v1_token::ViewOwner>
+    fidl::InterfaceRequest<fuchsia::ui::viewsv1token::ViewOwner>
         view_owner_request)
     : manager_(window_manager),
       delegate_(delegate),
@@ -191,7 +191,7 @@ void ScenicWindow::UpdateSize() {
 }
 
 void ScenicWindow::OnPropertiesChanged(
-    fuchsia::ui::views_v1::ViewProperties properties,
+    fuchsia::ui::viewsv1::ViewProperties properties,
     OnPropertiesChangedCallback callback) {
   if (properties.view_layout) {
     size_dips_.SetSize(properties.view_layout->size.width,
@@ -259,7 +259,7 @@ void ScenicWindow::OnEvent(fuchsia::ui::input::InputEvent event,
 }
 
 void ScenicWindow::OnViewError() {
-  VLOG(1) << "views_v1::View connection was closed.";
+  VLOG(1) << "viewsv1::View connection was closed.";
   delegate_->OnClosed();
 }
 
@@ -290,7 +290,8 @@ bool ScenicWindow::OnMouseEvent(const fuchsia::ui::input::PointerEvent& event) {
     case fuchsia::ui::input::PointerEventPhase::CANCEL:
     case fuchsia::ui::input::PointerEventPhase::ADD:
     case fuchsia::ui::input::PointerEventPhase::REMOVE:
-      NOTREACHED() << "Unexpected mouse phase " << event.phase;
+      NOTREACHED() << "Unexpected mouse phase "
+                   << fidl::ToUnderlying(event.phase);
       return false;
   }
 
@@ -340,7 +341,7 @@ bool ScenicWindow::OnKeyboardEvent(
   if (event.code_point)
     dom_key = DomKey::FromCharacter(event.code_point);
 
-  KeyEvent key_event(ET_KEY_PRESSED, key_code, dom_code,
+  KeyEvent key_event(event_type, key_code, dom_code,
                      KeyModifiersToFlags(event.modifiers), dom_key,
                      base::TimeTicks::FromZxTime(event.event_time));
   delegate_->DispatchEvent(&key_event);

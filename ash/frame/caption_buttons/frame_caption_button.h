@@ -25,11 +25,17 @@ namespace ash {
 class ASH_EXPORT FrameCaptionButton : public views::Button {
  public:
   enum Animate { ANIMATE_YES, ANIMATE_NO };
-  enum class ColorMode { kDefault, kThemed };
+
+  enum class ColorMode {
+    kDefault,  // Most windows.
+    kThemed,   // Windows that have been themed by PWA manifest.
+  };
 
   static const char kViewClassName[];
 
-  FrameCaptionButton(views::ButtonListener* listener, CaptionButtonIcon icon);
+  FrameCaptionButton(views::ButtonListener* listener,
+                     CaptionButtonIcon icon,
+                     int hit_test_type);
   ~FrameCaptionButton() override;
 
   // Gets the color to use for a frame caption button while a theme color is

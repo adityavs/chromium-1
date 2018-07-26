@@ -387,7 +387,7 @@ class CORE_EXPORT ContentSecurityPolicy
   // Called when mixed content is detected on a page; will trigger a violation
   // report if the 'block-all-mixed-content' directive is specified for a
   // policy.
-  void ReportMixedContent(const KURL& mixed_url, RedirectStatus);
+  void ReportMixedContent(const KURL& mixed_url, RedirectStatus) const;
 
   void ReportBlockedScriptExecutionToInspector(
       const String& directive_text) const;
@@ -460,6 +460,8 @@ class CORE_EXPORT ContentSecurityPolicy
   // (before installing the document that this CSP will bind to) when
   // there is no execution context to enforce the sandbox flags.
   SandboxFlags GetSandboxMask() const { return sandbox_mask_; }
+
+  bool HasPolicyFromSource(ContentSecurityPolicyHeaderSource) const;
 
  private:
   FRIEND_TEST_ALL_PREFIXES(ContentSecurityPolicyTest, NonceInline);

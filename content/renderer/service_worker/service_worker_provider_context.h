@@ -21,7 +21,7 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_object.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_provider_type.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider_client.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_client.h"
 
 namespace base {
 class SingleThreadTaskRunner;
@@ -154,9 +154,9 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
   // S13nServiceWorker:
   // For service worker clients. Creates a ServiceWorkerContainerHostPtrInfo
   // which can be bound to a ServiceWorkerContainerHostPtr in a (dedicated or
-  // shared) worker thread. WorkerFetchContextImpl will use the host pointer to
-  // get the controller service worker by GetControllerServiceWorker() and send
-  // FetchEvents to the service worker.
+  // shared) worker thread. WebWorkerFetchContextImpl will use the host pointer
+  // to get the controller service worker by GetControllerServiceWorker() and
+  // send FetchEvents to the service worker.
   mojom::ServiceWorkerContainerHostPtrInfo CloneContainerHostPtrInfo();
 
   // For service worker clients. Returns the registration object described by
@@ -190,6 +190,11 @@ class CONTENT_EXPORT ServiceWorkerProviderContext
   // Pings the container host and calls |callback| once a pong arrived. Useful
   // for waiting for all messages the host sent thus far to arrive.
   void PingContainerHost(base::OnceClosure callback);
+
+  // Called when blink::IdlenessDetector emits its network idle signal. Tells
+  // the browser process that this page is quiet soon after page load, as a
+  // hint to start the service worker update check.
+  void DispatchNetworkQuiet();
 
  private:
   friend class base::DeleteHelper<ServiceWorkerProviderContext>;

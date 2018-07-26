@@ -7,14 +7,14 @@
 #include <memory>
 
 #include "base/memory/scoped_refptr.h"
+#include "base/task/sequence_manager/sequence_manager.h"
+#include "base/task/sequence_manager/task_queue.h"
+#include "base/task/sequence_manager/test/sequence_manager_for_test.h"
+#include "base/task/sequence_manager/test/test_task_queue.h"
+#include "base/task/sequence_manager/test/test_task_time_observer.h"
 #include "base/test/scoped_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/scheduler/base/sequence_manager_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/task_queue_manager_for_test.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/test_task_queue.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/test_task_time_observer.h"
 
 namespace blink {
 namespace scheduler {
@@ -47,7 +47,7 @@ class IdleTimeEstimatorTest : public testing::Test {
   ~IdleTimeEstimatorTest() override = default;
 
   void SetUp() override {
-    manager_ = base::sequence_manager::TaskQueueManagerForTest::Create(
+    manager_ = base::sequence_manager::SequenceManagerForTest::Create(
         nullptr, task_environment_.GetMainThreadTaskRunner(),
         task_environment_.GetMockTickClock());
     compositor_task_queue_ =

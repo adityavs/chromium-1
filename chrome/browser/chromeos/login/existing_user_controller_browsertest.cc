@@ -41,7 +41,7 @@
 #include "chromeos/chromeos_switches.h"
 #include "chromeos/dbus/fake_auth_policy_client.h"
 #include "chromeos/dbus/fake_session_manager_client.h"
-#include "chromeos/login/auth/authpolicy_login_helper.h"
+#include "chromeos/dbus/util/tpm_util.h"
 #include "chromeos/login/auth/key.h"
 #include "chromeos/login/auth/mock_url_fetchers.h"
 #include "chromeos/login/auth/user_context.h"
@@ -228,9 +228,12 @@ class ExistingUserControllerTest : public policy::DevicePolicyCrosBrowserTest {
   }
 
   void SetUpOnMainThread() override {
-    existing_user_controller_.reset(
-        new ExistingUserController(mock_login_display_host_.get()));
+    existing_user_controller_ = std::make_unique<ExistingUserController>();
+    EXPECT_CALL(*mock_login_display_host_, GetExistingUserController())
+        .Times(AnyNumber())
+        .WillRepeatedly(Return(existing_user_controller_.get()));
     ASSERT_EQ(existing_user_controller(), existing_user_controller_.get());
+
     existing_user_controller_->Init(user_manager::UserList());
 
     chromeos::test::UserSessionManagerTestApi session_manager_test_api(
@@ -837,8 +840,8 @@ class ExistingUserControllerActiveDirectoryTest
   void SetUpInProcessBrowserTestFixture() override {
     ExistingUserControllerTest::SetUpInProcessBrowserTestFixture();
     fake_authpolicy_client()->DisableOperationDelayForTesting();
-    ASSERT_TRUE(AuthPolicyLoginHelper::LockDeviceActiveDirectoryForTesting(
-        kActiveDirectoryRealm));
+    ASSERT_TRUE(
+        tpm_util::LockDeviceActiveDirectoryForTesting(kActiveDirectoryRealm));
     RefreshDevicePolicy();
     EXPECT_CALL(policy_provider_, IsInitializationComplete(_))
         .WillRepeatedly(Return(true));
@@ -972,8 +975,9 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
 
 // Tests if DisabledAuthNegotiateCnameLookup changes trigger updating user
 // Kerberos files.
+// Disabled due to flakiness, see https://crbug.com/865206.
 IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       PolicyChangeTriggersFileUpdate) {
+                       DISABLED_PolicyChangeTriggersFileUpdate) {
   LoginAdOnline();
 
   ApplyPolicyAndWaitFilesChanged(false /* enable_dns_cname_lookup */);
@@ -985,8 +989,10 @@ IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
 
 // Tests if user Kerberos files changed D-Bus signal triggers updating user
 // Kerberos files.
-IN_PROC_BROWSER_TEST_F(ExistingUserControllerActiveDirectoryTest,
-                       UserKerberosFilesChangedSignalTriggersFileUpdate) {
+// Disabled due to flakiness, see https://crbug.com/865206.
+IN_PROC_BROWSER_TEST_F(
+    ExistingUserControllerActiveDirectoryTest,
+    DISABLED_UserKerberosFilesChangedSignalTriggersFileUpdate) {
   LoginAdOnline();
   KerberosFilesChangeWaiter files_change_waiter(true /* files_must_exist */);
   fake_authpolicy_client()->SetUserKerberosFiles("new_kerberos_creds",

@@ -4,6 +4,7 @@
 
 #include "chrome/browser/resource_coordinator/test_lifecycle_unit.h"
 
+#include "chrome/browser/resource_coordinator/lifecycle_unit_source.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace resource_coordinator {
@@ -11,13 +12,17 @@ namespace resource_coordinator {
 TestLifecycleUnit::TestLifecycleUnit(base::TimeTicks last_focused_time,
                                      base::ProcessHandle process_handle,
                                      bool can_discard)
-    : LifecycleUnitBase(content::Visibility::VISIBLE),
+    : LifecycleUnitBase(nullptr, content::Visibility::VISIBLE, nullptr),
       last_focused_time_(last_focused_time),
       process_handle_(process_handle),
       can_discard_(can_discard) {}
 
-TestLifecycleUnit::TestLifecycleUnit(content::Visibility visibility)
-    : LifecycleUnitBase(visibility) {}
+TestLifecycleUnit::TestLifecycleUnit(content::Visibility visibility,
+                                     UsageClock* usage_clock)
+    : LifecycleUnitBase(nullptr, visibility, usage_clock) {}
+
+TestLifecycleUnit::TestLifecycleUnit(LifecycleUnitSourceBase* source)
+    : LifecycleUnitBase(source, content::Visibility::VISIBLE, nullptr) {}
 
 TestLifecycleUnit::~TestLifecycleUnit() {
   OnLifecycleUnitDestroyed();
@@ -124,7 +129,10 @@ void ExpectCanDiscardFalseTrivial(const LifecycleUnit* lifecycle_unit,
   DecisionDetails decision_details;
   EXPECT_FALSE(lifecycle_unit->CanDiscard(discard_reason, &decision_details));
   EXPECT_FALSE(decision_details.IsPositive());
-  EXPECT_TRUE(decision_details.reasons().empty());
+  // |reasons()| will either contain the status for the 4 local site features
+  // heuristics or be empty if the database doesn't track this lifecycle unit.
+  EXPECT_TRUE(decision_details.reasons().empty() ||
+              (decision_details.reasons().size() == 4));
 }
 
 void ExpectCanDiscardFalseTrivialAllReasons(

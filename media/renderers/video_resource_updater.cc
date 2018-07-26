@@ -675,7 +675,6 @@ void VideoResourceUpdater::CopyHardwarePlane(
       hardware_resource->mailbox(), GL_LINEAR, GL_TEXTURE_2D, sync_token);
   transferable_resource.color_space = resource_color_space;
   transferable_resource.format = copy_resource_format;
-  transferable_resource.buffer_format = viz::BufferFormat(copy_resource_format);
   external_resources->resources.push_back(std::move(transferable_resource));
 
   external_resources->release_callbacks.push_back(base::BindOnce(
@@ -705,6 +704,7 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForHardwarePlanes(
   external_resources.type = ExternalResourceTypeForHardwarePlanes(
       video_frame->format(), target, video_frame->NumTextures(), &buffer_format,
       use_stream_video_draw_quad_);
+
   if (external_resources.type == VideoFrameResourceType::NONE) {
     DLOG(ERROR) << "Unsupported Texture format"
                 << VideoPixelFormatToString(video_frame->format());
@@ -734,7 +734,8 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForHardwarePlanes(
       transfer_resource.read_lock_fences_enabled =
           video_frame->metadata()->IsTrue(
               VideoFrameMetadata::READ_LOCK_FENCES_ENABLED);
-      transfer_resource.buffer_format = buffer_format;
+      transfer_resource.format = viz::GetResourceFormat(buffer_format);
+
 #if defined(OS_ANDROID)
       transfer_resource.is_backed_by_surface_texture =
           video_frame->metadata()->IsTrue(VideoFrameMetadata::TEXTURE_OWNER);
@@ -871,14 +872,16 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
         size_t bytes_per_row = viz::ResourceSizes::CheckedWidthInBytes<size_t>(
             video_frame->coded_size().width(), viz::ResourceFormat::RGBA_8888);
         size_t needed_size = bytes_per_row * video_frame->coded_size().height();
-        if (upload_pixels_.size() < needed_size) {
-          // Clear before resizing to avoid memcpy.
-          upload_pixels_.clear();
-          upload_pixels_.resize(needed_size);
+        if (upload_pixels_size_ < needed_size) {
+          // Free the existing data first so that the memory can be reused,
+          // if possible. Note that the new array is purposely not initialized.
+          upload_pixels_.reset();
+          upload_pixels_.reset(new uint8_t[needed_size]);
+          upload_pixels_size_ = needed_size;
         }
 
         PaintCanvasVideoRenderer::ConvertVideoFrameToRGBPixels(
-            video_frame.get(), &upload_pixels_[0], bytes_per_row);
+            video_frame.get(), upload_pixels_.get(), bytes_per_row);
 
         // Copy pixels into texture.
         auto* gl = context_provider_->ContextGL();
@@ -888,7 +891,7 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
         gl->TexSubImage2D(
             hardware_resource->texture_target(), 0, 0, 0, plane_size.width(),
             plane_size.height(), GLDataFormat(viz::ResourceFormat::RGBA_8888),
-            GLDataType(viz::ResourceFormat::RGBA_8888), &upload_pixels_[0]);
+            GLDataType(viz::ResourceFormat::RGBA_8888), upload_pixels_.get());
       }
       plane_resource->SetUniqueId(video_frame->unique_id(), 0);
     }
@@ -915,8 +918,6 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
 
     transferable_resource.color_space = output_color_space;
     transferable_resource.format = viz::ResourceFormat::RGBA_8888;
-    transferable_resource.buffer_format =
-        viz::BufferFormat(viz::ResourceFormat::RGBA_8888);
     external_resources.resources.push_back(std::move(transferable_resource));
     external_resources.release_callbacks.push_back(base::BindOnce(
         &VideoResourceUpdater::RecycleResource, weak_ptr_factory_.GetWeakPtr(),
@@ -998,10 +999,12 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
       // Avoid malloc for each frame/plane if possible.
       const size_t needed_size =
           upload_image_stride * resource_size_pixels.height();
-      if (upload_pixels_.size() < needed_size) {
-        // Clear before resizing to avoid memcpy.
-        upload_pixels_.clear();
-        upload_pixels_.resize(needed_size);
+      if (upload_pixels_size_ < needed_size) {
+        // Free the existing data first so that the memory can be reused,
+        // if possible. Note that the new array is purposely not initialized.
+        upload_pixels_.reset();
+        upload_pixels_.reset(new uint8_t[needed_size]);
+        upload_pixels_size_ = needed_size;
       }
 
       if (plane_resource_format == viz::LUMINANCE_F16) {
@@ -1018,7 +1021,7 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
         const int scale = 0x10000 >> (bits_per_channel - 8);
         libyuv::Convert16To8Plane(
             reinterpret_cast<uint16_t*>(video_frame->data(i)),
-            video_stride_bytes / 2, upload_pixels_.data(), upload_image_stride,
+            video_stride_bytes / 2, upload_pixels_.get(), upload_image_stride,
             scale, bytes_per_row, resource_size_pixels.height());
       } else {
         // Make a copy to reconcile stride, size and format being equal.
@@ -1026,12 +1029,12 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
         DCHECK(plane_resource_format == viz::LUMINANCE_8 ||
                plane_resource_format == viz::RED_8);
         libyuv::CopyPlane(video_frame->data(i), video_stride_bytes,
-                          upload_pixels_.data(), upload_image_stride,
+                          upload_pixels_.get(), upload_image_stride,
                           resource_size_pixels.width(),
                           resource_size_pixels.height());
       }
 
-      pixels = &upload_pixels_[0];
+      pixels = upload_pixels_.get();
     }
 
     // Copy pixels into texture. TexSubImage2D() is applicable because
@@ -1039,6 +1042,7 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
     auto* gl = context_provider_->ContextGL();
     gl->BindTexture(plane_resource->texture_target(),
                     plane_resource->texture_id());
+    DCHECK(GLSupportsFormat(plane_resource_format));
     gl->TexSubImage2D(
         plane_resource->texture_target(), 0, 0, 0, resource_size_pixels.width(),
         resource_size_pixels.height(), GLDataFormat(plane_resource_format),
@@ -1059,8 +1063,6 @@ VideoFrameExternalResources VideoResourceUpdater::CreateForSoftwarePlanes(
         plane_resource->overlay_candidate());
     transferable_resource.color_space = output_color_space;
     transferable_resource.format = output_resource_format;
-    transferable_resource.buffer_format =
-        viz::BufferFormat(output_resource_format);
     external_resources.resources.push_back(std::move(transferable_resource));
     external_resources.release_callbacks.push_back(base::BindOnce(
         &VideoResourceUpdater::RecycleResource, weak_ptr_factory_.GetWeakPtr(),

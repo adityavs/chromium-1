@@ -48,6 +48,7 @@
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loader.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_loading_log.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_timing_info.h"
+#include "third_party/blink/renderer/platform/loader/fetch/stale_revalidation_resource_client.h"
 #include "third_party/blink/renderer/platform/loader/fetch/unique_identifier.h"
 #include "third_party/blink/renderer/platform/mhtml/archive_resource.h"
 #include "third_party/blink/renderer/platform/mhtml/mhtml_archive.h"
@@ -370,6 +371,8 @@ ResourceFetcher::~ResourceFetcher() {
 }
 
 Resource* ResourceFetcher::CachedResource(const KURL& resource_url) const {
+  if (resource_url.IsEmpty())
+    return nullptr;
   KURL url = MemoryCache::RemoveFragmentIdentifierIfNeeded(resource_url);
   const WeakMember<Resource>& resource = cached_resources_map_.at(url);
   return resource.Get();
@@ -596,6 +599,11 @@ void ResourceFetcher::UpdateMemoryCacheStats(Resource* resource,
   if (is_static_data)
     return;
 
+  DEFINE_THREAD_SAFE_STATIC_LOCAL(
+      BooleanHistogram, resource_histogram,
+      ("Blink.ResourceFetcher.StaleWhileRevalidate"));
+  resource_histogram.Count(params.IsStaleRevalidation());
+
   if (params.IsSpeculativePreload() || params.IsLinkPreload()) {
     DEFINE_RESOURCE_HISTOGRAM("Preload.");
   } else {
@@ -646,7 +654,7 @@ base::Optional<ResourceRequestBlockedReason> ResourceFetcher::PrepareRequest(
           : SecurityViolationReportingPolicy::kReport;
 
   // Note that resource_request.GetRedirectStatus() may return kFollowedRedirect
-  // here since e.g. DocumentThreadableLoader may create a new Resource from
+  // here since e.g. ThreadableLoader may create a new Resource from
   // a ResourceRequest that originates from the ResourceRequest passed to
   // the redirect handling callback.
 
@@ -682,6 +690,18 @@ base::Optional<ResourceRequestBlockedReason> ResourceFetcher::PrepareRequest(
   if (resource_type == Resource::kLinkPrefetch)
     resource_request.SetHTTPHeaderField(HTTPNames::Purpose, "prefetch");
 
+  // Indicate whether the network stack can return a stale resource. If a
+  // stale resource is returned a StaleRevalidation request will be scheduled.
+  // Explicitly disallow stale responses for fetchers that don't have SWR
+  // enabled (via origin trial), non-GET requests and resource requests that
+  // are raw. We are explicitly excluding RawResources here to avoid
+  // unintentional SWR, as bugs around RawResources tend to be complicated and
+  // critical.
+  resource_request.SetAllowStaleResponse(
+      stale_while_revalidate_enabled_ &&
+      resource_request.HttpMethod() == HTTPNames::GET &&
+      !IsRawResource(resource_type) && !params.IsStaleRevalidation());
+
   Context().AddAdditionalRequestHeaders(
       resource_request, (resource_type == Resource::kMainResource)
                             ? kFetchMainResource
@@ -693,7 +713,7 @@ base::Optional<ResourceRequestBlockedReason> ResourceFetcher::PrepareRequest(
   KURL url = MemoryCache::RemoveFragmentIdentifierIfNeeded(params.Url());
   base::Optional<ResourceRequestBlockedReason> blocked_reason =
       Context().CanRequest(resource_type, resource_request, url, options,
-                           reporting_policy, params.GetOriginRestriction(),
+                           reporting_policy,
                            resource_request.GetRedirectStatus());
 
   if (Context().IsAdResource(url, resource_type,
@@ -795,7 +815,8 @@ Resource* ResourceFetcher::RequestResource(
 
   bool is_data_url = resource_request.Url().ProtocolIsData();
   bool is_static_data = is_data_url || substitute_data.IsValid() || archive_;
-  if (is_static_data) {
+  bool is_stale_revalidation = params.IsStaleRevalidation();
+  if (!is_stale_revalidation && is_static_data) {
     resource = ResourceForStaticData(params, factory, substitute_data);
     if (resource) {
       policy =
@@ -810,7 +831,7 @@ Resource* ResourceFetcher::RequestResource(
     }
   }
 
-  if (!resource) {
+  if (!is_stale_revalidation && !resource) {
     resource = MatchPreload(params, resource_type);
     if (resource) {
       policy = kUse;
@@ -840,6 +861,11 @@ Resource* ResourceFetcher::RequestResource(
       InitializeRevalidation(resource_request, resource);
       break;
     case kUse:
+      if (resource_request.AllowsStaleResponse() &&
+          resource->ShouldRevalidateStaleResponse()) {
+        ScheduleStaleRevalidate(resource);
+      }
+
       if (resource->IsLinkPreload() && !params.IsLinkPreload())
         resource->SetLinkPreload(false);
       break;
@@ -872,8 +898,10 @@ Resource* ResourceFetcher::RequestResource(
   // If only the fragment identifiers differ, it is the same resource.
   DCHECK(EqualIgnoringFragmentIdentifier(resource->Url(), params.Url()));
   RequestLoadStarted(identifier, resource, params, policy, is_static_data);
-  cached_resources_map_.Set(
-      MemoryCache::RemoveFragmentIdentifierIfNeeded(params.Url()), resource);
+  if (!is_stale_revalidation) {
+    cached_resources_map_.Set(
+        MemoryCache::RemoveFragmentIdentifierIfNeeded(params.Url()), resource);
+  }
   document_resources_.insert(resource);
 
   // Returns with an existing resource if the resource does not need to start
@@ -959,7 +987,7 @@ Resource* ResourceFetcher::CreateResourceForLoading(
     const FetchParameters& params,
     const ResourceFactory& factory) {
   const String cache_identifier = GetCacheIdentifier();
-  DCHECK(!IsMainThread() ||
+  DCHECK(!IsMainThread() || params.IsStaleRevalidation() ||
          !GetMemoryCache()->ResourceForURL(params.GetResourceRequest().Url(),
                                            cache_identifier));
 
@@ -1074,6 +1102,7 @@ void ResourceFetcher::InsertAsPreloadIfNecessary(Resource* resource,
                                                  Resource::Type type) {
   if (!params.IsSpeculativePreload() && !params.IsLinkPreload())
     return;
+  DCHECK(!params.IsStaleRevalidation());
   // CSP layout tests verify that preloads are subject to access checks by
   // seeing if they are in the `preload started` list. Therefore do not add
   // them to the list if the load is immediately denied.
@@ -1268,7 +1297,7 @@ ResourceFetcher::DetermineRevalidationPolicyInternal(
   // example).
   if (request.GetCacheMode() == mojom::FetchCacheMode::kValidateCache ||
       existing_resource.MustRevalidateDueToCacheHeaders(
-          false /* allow_stale */) ||
+          request.AllowsStaleResponse()) ||
       request.CacheControlContainsNoCache()) {
     // Revalidation is harmful for non-matched preloads because it may lead to
     // sharing one preloaded resource among multiple ResourceFetchers.
@@ -1409,18 +1438,14 @@ void ResourceFetcher::ClearPreloads(ClearPreloadsPolicy policy) {
   matched_preloads_.clear();
 }
 
-void ResourceFetcher::WarnUnusedPreloads() {
+Vector<KURL> ResourceFetcher::GetUrlsOfUnusedPreloads() {
+  Vector<KURL> urls;
   for (const auto& pair : preloads_) {
     Resource* resource = pair.value;
-    if (resource && resource->IsLinkPreload() && resource->IsUnusedPreload()) {
-      Context().AddWarningConsoleMessage(
-          "The resource " + resource->Url().GetString() +
-              " was preloaded using link preload but not used within a few " +
-              "seconds from the window's load event. Please make sure it has " +
-              "an appropriate `as` value and it is preloaded intentionally.",
-          FetchContext::kJSSource);
-    }
+    if (resource && resource->IsLinkPreload() && resource->IsUnusedPreload())
+      urls.push_back(resource->Url());
   }
+  return urls;
 }
 
 ArchiveResource* ResourceFetcher::CreateArchive(Resource* resource) {
@@ -1516,8 +1541,21 @@ void ResourceFetcher::HandleLoaderFinish(Resource* resource,
       resource->Identifier(), finish_time, encoded_data_length,
       resource->GetResponse().DecodedBodyLength(), should_report_corb_blocking);
 
-  if (type == kDidFinishLoading)
+  if (type == kDidFinishLoading) {
     resource->Finish(finish_time, Context().GetLoadingTaskRunner().get());
+
+    // Since this resource came from the network stack we only schedule a stale
+    // while revalidate request if the network asked us to. If we called
+    // ShouldRevalidateStaleResponse here then the resource would be checking
+    // the freshness based on current time. It is possible that the resource
+    // is fresh at the time of the network stack handling but not at the time
+    // handling here and we should not be forcing a revalidation in that case.
+    // eg. network stack returning a resource with max-age=0.
+    if (resource->GetResourceRequest().AllowsStaleResponse() &&
+        resource->StaleRevalidationRequested()) {
+      ScheduleStaleRevalidate(resource);
+    }
+  }
 
   HandleLoadCompletion(resource);
 }
@@ -1702,6 +1740,11 @@ String ResourceFetcher::GetCacheIdentifier() const {
   return MemoryCache::DefaultCacheIdentifier();
 }
 
+void ResourceFetcher::OnNetworkQuiet() {
+  Context().DispatchNetworkQuiet();
+  scheduler_->OnNetworkQuiet();
+}
+
 void ResourceFetcher::EmulateLoadStartedForInspector(
     Resource* resource,
     const KURL& url,
@@ -1717,7 +1760,6 @@ void ResourceFetcher::EmulateLoadStartedForInspector(
   Context().CanRequest(resource->GetType(), resource->LastResourceRequest(),
                        resource->LastResourceRequest().Url(), params.Options(),
                        SecurityViolationReportingPolicy::kReport,
-                       params.GetOriginRestriction(),
                        resource->LastResourceRequest().GetRedirectStatus());
   RequestLoadStarted(resource->Identifier(), resource, params, kUse);
 }
@@ -1758,6 +1800,28 @@ void ResourceFetcher::StopFetchingInternal(StopFetchingTarget target) {
 
 void ResourceFetcher::StopFetchingIncludingKeepaliveLoaders() {
   StopFetchingInternal(StopFetchingTarget::kIncludingKeepaliveLoaders);
+}
+
+void ResourceFetcher::ScheduleStaleRevalidate(Resource* stale_resource) {
+  if (stale_resource->StaleRevalidationStarted())
+    return;
+  stale_resource->SetStaleRevalidationStarted();
+  Context().GetLoadingTaskRunner()->PostTask(
+      FROM_HERE,
+      WTF::Bind(&ResourceFetcher::RevalidateStaleResource,
+                WrapWeakPersistent(this), WrapPersistent(stale_resource)));
+}
+
+void ResourceFetcher::RevalidateStaleResource(Resource* stale_resource) {
+  // Creating FetchParams from Resource::GetResourceRequest doesn't create
+  // the exact same request as the original one, while for revalidation
+  // purpose this is probably fine.
+  // TODO(dtapuska): revisit this when we have a better way to re-dispatch
+  // requests.
+  FetchParameters params(stale_resource->GetResourceRequest());
+  params.SetStaleRevalidation(true);
+  RawResource::Fetch(params, this,
+                     new StaleRevalidationResourceClient(stale_resource));
 }
 
 void ResourceFetcher::Trace(blink::Visitor* visitor) {

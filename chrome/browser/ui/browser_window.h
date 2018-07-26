@@ -41,6 +41,8 @@ class StatusBubble;
 class ToolbarActionsBar;
 
 namespace autofill {
+class LocalCardMigrationBubbleController;
+class LocalCardMigrationBubble;
 class SaveCardBubbleController;
 class SaveCardBubbleView;
 }
@@ -182,9 +184,6 @@ class BrowserWindow : public ui::BaseWindow {
   // Updates the toolbar with the state for the specified |contents|.
   virtual void UpdateToolbar(content::WebContents* contents) = 0;
 
-  // Reverts user modifications to the omnibox text.
-  virtual void RevertToolbarUrl() = 0;
-
   // Resets the toolbar's tab state for |contents|.
   virtual void ResetToolbarTabState(content::WebContents* contents) = 0;
 
@@ -257,6 +256,12 @@ class BrowserWindow : public ui::BaseWindow {
   virtual autofill::SaveCardBubbleView* ShowSaveCreditCardBubble(
       content::WebContents* contents,
       autofill::SaveCardBubbleController* controller,
+      bool is_user_gesture) = 0;
+
+  // Shows the local card migration bubble.
+  virtual autofill::LocalCardMigrationBubble* ShowLocalCardMigrationBubble(
+      content::WebContents* contents,
+      autofill::LocalCardMigrationBubbleController* controller,
       bool is_user_gesture) = 0;
 
   // Shows the translate bubble.

@@ -27,6 +27,7 @@
 #include "base/metrics/field_trial.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/metrics/user_metrics.h"
+#include "base/path_service.h"
 #include "base/pending_task.h"
 #include "base/power_monitor/power_monitor.h"
 #include "base/power_monitor/power_monitor_device_source.h"
@@ -84,6 +85,7 @@
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/service_manager/service_manager_context.h"
 #include "content/browser/speech/speech_recognition_manager_impl.h"
+#include "content/browser/startup_data_impl.h"
 #include "content/browser/startup_task_runner.h"
 #include "content/browser/tracing/background_tracing_manager_impl.h"
 #include "content/browser/tracing/tracing_controller_impl.h"
@@ -117,8 +119,8 @@
 #include "media/media_buildflags.h"
 #include "media/midi/midi_service.h"
 #include "media/mojo/buildflags.h"
-#include "mojo/edk/embedder/embedder.h"
-#include "mojo/edk/embedder/scoped_ipc_support.h"
+#include "mojo/core/embedder/embedder.h"
+#include "mojo/core/embedder/scoped_ipc_support.h"
 #include "mojo/public/cpp/bindings/sync_call_restrictions.h"
 #include "net/base/network_change_notifier.h"
 #include "net/socket/client_socket_factory.h"
@@ -203,8 +205,7 @@
 #endif
 
 #if defined(OS_FUCHSIA)
-#include <zircon/process.h>
-#include <zircon/syscalls.h>
+#include <lib/zx/job.h>
 
 #include "base/fuchsia/default_job.h"
 #include "base/fuchsia/fuchsia_logging.h"
@@ -231,6 +232,10 @@
 
 #if defined(USE_NSS_CERTS)
 #include "crypto/nss_util.h"
+#endif
+
+#if defined(ENABLE_IPC_FUZZER) && defined(OS_MACOSX)
+#include "base/mac/foundation_util.h"
 #endif
 
 // One of the linux specific headers defines this as a macro.
@@ -390,12 +395,46 @@ constexpr base::TimeDelta kSwapMetricsInterval =
 // Create and register the job which will contain all child processes
 // of the browser process as well as their descendents.
 void InitDefaultJob() {
-  base::ScopedZxHandle handle;
-  zx_status_t result = zx_job_create(zx_job_default(), 0, handle.receive());
+  zx::job job;
+  zx_status_t result = zx::job::create(*zx::job::default_job(), 0, &job);
   ZX_CHECK(ZX_OK == result, result) << "zx_job_create";
-  base::SetDefaultJob(std::move(handle));
+  base::SetDefaultJob(std::move(job));
 }
 #endif  // defined(OS_FUCHSIA)
+
+#if defined(ENABLE_IPC_FUZZER)
+bool GetBuildDirectory(base::FilePath* result) {
+  if (!base::PathService::Get(base::DIR_EXE, result))
+    return false;
+
+#if defined(OS_MACOSX)
+  if (base::mac::AmIBundled()) {
+    // The bundled app executables (Chromium, TestShell, etc) live three
+    // levels down from the build directory, eg:
+    // Chromium.app/Contents/MacOS/Chromium
+    *result = result->DirName().DirName().DirName();
+  }
+#endif
+  return true;
+}
+
+void SetFileUrlPathAliasForIpcFuzzer() {
+  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kFileUrlPathAlias))
+    return;
+
+  base::FilePath build_directory;
+  if (!GetBuildDirectory(&build_directory)) {
+    LOG(ERROR) << "Failed to get build directory for /gen path alias.";
+    return;
+  }
+
+  const base::CommandLine::StringType alias_switch =
+      FILE_PATH_LITERAL("/gen=") + build_directory.AppendASCII("gen").value();
+  base::CommandLine::ForCurrentProcess()->AppendSwitchNative(
+      switches::kFileUrlPathAlias, alias_switch);
+}
+#endif
 
 }  // namespace
 
@@ -519,13 +558,20 @@ BrowserMainLoop::~BrowserMainLoop() {
   g_current_browser_main_loop = nullptr;
 }
 
-void BrowserMainLoop::Init(
-    std::unique_ptr<BrowserProcessSubThread> service_manager_thread) {
+void BrowserMainLoop::Init() {
   TRACE_EVENT0("startup", "BrowserMainLoop::Init");
 
-  // This is always invoked before |io_thread_| is initialized (i.e. never
-  // resets it).
-  io_thread_ = std::move(service_manager_thread);
+  // |startup_data| is optional. If set, the thread owned by the data
+  // will be registered as BrowserThread::IO in CreateThreads() instead of
+  // creating a brand new thread.
+  if (parameters_.startup_data) {
+    StartupDataImpl* startup_data =
+        static_cast<StartupDataImpl*>(parameters_.startup_data);
+    // This is always invoked before |io_thread_| is initialized (i.e. never
+    // resets it).
+    io_thread_ = std::move(startup_data->thread);
+  }
+
   parts_.reset(
       GetContentClient()->browser()->CreateBrowserMainParts(parameters_));
 }
@@ -591,6 +637,17 @@ int BrowserMainLoop::EarlyInitialization() {
         command_line->GetSwitchValueASCII(switches::kEnableFeatures),
         command_line->GetSwitchValueASCII(switches::kDisableFeatures));
   }
+
+#if defined(OS_ANDROID) || defined(OS_CHROMEOS)
+  // Up the priority of the UI thread unless it was already high (since recent
+  // versions of Android (O+) do this automatically).
+  if (base::PlatformThread::GetCurrentThreadPriority() <
+          base::ThreadPriority::DISPLAY ||
+      base::FeatureList::IsEnabled(features::kOverrideUIThreadPriority)) {
+    base::PlatformThread::SetCurrentThreadPriority(
+        base::ThreadPriority::DISPLAY);
+  }
+#endif  // defined(OS_ANDROID) || defined(OS_CHROMEOS)
 
 #if defined(OS_MACOSX) || defined(OS_LINUX) || defined(OS_CHROMEOS) || \
     defined(OS_ANDROID)
@@ -1192,10 +1249,6 @@ int BrowserMainLoop::BrowserThreadsStarted() {
 #endif
 
   HistogramSynchronizer::GetInstance();
-#if defined(OS_ANDROID) || defined(OS_CHROMEOS)
-  // Up the priority of the UI thread.
-  base::PlatformThread::SetCurrentThreadPriority(base::ThreadPriority::DISPLAY);
-#endif
 
   // cc assumes a single client name for metrics in a process, which is
   // is inconsistent with single process mode where both the renderer and
@@ -1422,6 +1475,9 @@ int BrowserMainLoop::BrowserThreadsStarted() {
   media::SetMediaDrmBridgeClient(GetContentClient()->GetMediaDrmBridgeClient());
 #endif
 
+#if defined(ENABLE_IPC_FUZZER)
+  SetFileUrlPathAliasForIpcFuzzer();
+#endif
   return result_code_;
 }
 
@@ -1528,15 +1584,15 @@ void BrowserMainLoop::InitializeMojo() {
     mojo::SyncCallRestrictions::DisallowSyncCall();
   }
 
-  mojo_ipc_support_.reset(new mojo::edk::ScopedIPCSupport(
+  mojo_ipc_support_.reset(new mojo::core::ScopedIPCSupport(
       BrowserThread::GetTaskRunnerForThread(BrowserThread::IO),
-      mojo::edk::ScopedIPCSupport::ShutdownPolicy::FAST));
+      mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST));
 
   service_manager_context_.reset(
       new ServiceManagerContext(io_thread_->task_runner()));
   ServiceManagerContext::StartBrowserConnection();
 #if defined(OS_MACOSX)
-  mojo::edk::SetMachPortProvider(MachBroker::GetInstance());
+  mojo::core::SetMachPortProvider(MachBroker::GetInstance());
 #endif  // defined(OS_MACOSX)
   GetContentClient()->OnServiceManagerConnected(
       ServiceManagerConnection::GetForProcess());

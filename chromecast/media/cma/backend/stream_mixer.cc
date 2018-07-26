@@ -20,6 +20,7 @@
 #include "build/build_config.h"
 #include "chromecast/base/chromecast_switches.h"
 #include "chromecast/media/base/audio_device_ids.h"
+#include "chromecast/media/cma/backend/audio_output_redirector.h"
 #include "chromecast/media/cma/backend/cast_audio_json.h"
 #include "chromecast/media/cma/backend/filter_group.h"
 #include "chromecast/media/cma/backend/post_processing_pipeline_impl.h"
@@ -272,6 +273,56 @@ StreamMixer::StreamMixer(
   }
 }
 
+void StreamMixer::ResetPostProcessors() {
+  POST_THROUGH_INPUT_THREAD(&StreamMixer::ResetPostProcessorsOnThread);
+}
+
+void StreamMixer::ResetPostProcessorsOnThread() {
+  DCHECK(mixer_task_runner_->BelongsToCurrentThread());
+
+  // Detach inputs.
+  for (const auto& input : inputs_) {
+    input.second->SetFilterGroup(nullptr);
+  }
+
+  // Re-create post processors.
+  filter_groups_.clear();
+  default_filter_ = nullptr;
+
+  PostProcessingPipelineParser parser;
+  CreatePostProcessors(&parser);
+
+  if (state_ == kStateRunning) {
+    for (auto&& filter_group : filter_groups_) {
+      filter_group->Initialize(output_samples_per_second_);
+    }
+  }
+
+  // Re-attach inputs.
+  for (const auto& input : inputs_) {
+    MixerInput::Source* input_source = input.first;
+
+    FilterGroup* input_filter_group = default_filter_;
+    for (auto&& filter_group : filter_groups_) {
+      if (filter_group->CanProcessInput(input_source->device_id())) {
+        input_filter_group = filter_group.get();
+        break;
+      }
+    }
+
+    if (input_filter_group) {
+      LOG(INFO) << "Re-attach input of type " << input_source->device_id()
+                << " to " << input_filter_group->name();
+      input.second->SetFilterGroup(input_filter_group);
+    } else {
+      NOTREACHED() << "Could not find a filter group to re-attach "
+                   << input_source->device_id();
+    }
+  }
+
+  UpdatePlayoutChannel();
+}
+
 void StreamMixer::ResetPostProcessorsForTest(
     std::unique_ptr<PostProcessingPipelineFactory> pipeline_factory,
     const std::string& pipeline_json) {
@@ -445,6 +496,10 @@ void StreamMixer::Start() {
     filter_group->Initialize(output_samples_per_second_);
   }
 
+  for (auto& redirector : audio_output_redirectors_) {
+    redirector.second->Start(output_samples_per_second_);
+  }
+
   state_ = kStateRunning;
 
   // Write one buffer of silence to get correct rendering delay in the
@@ -466,6 +521,10 @@ void StreamMixer::Stop() {
 
   if (output_) {
     output_->Stop();
+  }
+
+  for (auto& redirector : audio_output_redirectors_) {
+    redirector.second->Stop();
   }
 
   state_ = kStateStopped;
@@ -569,6 +628,10 @@ void StreamMixer::AddInputOnThread(MixerInput::Source* input_source) {
     input->SetMuted(volume_info_[type].muted);
   }
 
+  for (auto& redirector : audio_output_redirectors_) {
+    redirector.second->AddInput(input.get());
+  }
+
   inputs_[input_source] = std::move(input);
   UpdatePlayoutChannel();
 }
@@ -583,7 +646,14 @@ void StreamMixer::RemoveInputOnThread(MixerInput::Source* input_source) {
 
   LOG(INFO) << "Remove input " << input_source;
 
-  inputs_.erase(input_source);
+  auto it = inputs_.find(input_source);
+  if (it != inputs_.end()) {
+    for (auto& redirector : audio_output_redirectors_) {
+      redirector.second->RemoveInput(it->second.get());
+    }
+    inputs_.erase(it);
+  }
+
   ignored_inputs_.erase(input_source);
   UpdatePlayoutChannel();
 
@@ -663,6 +733,10 @@ void StreamMixer::PlaybackLoop() {
 }
 
 void StreamMixer::WriteOneBuffer() {
+  for (auto& redirector : audio_output_redirectors_) {
+    redirector.second->PrepareNextBuffer(frames_per_write_);
+  }
+
   // Recursively mix and filter each group.
   MediaPipelineBackend::AudioDecoder::RenderingDelay rendering_delay =
       output_->GetRenderingDelay();
@@ -676,6 +750,11 @@ void StreamMixer::WriteOneBuffer() {
                              rendering_delay.delay_microseconds +
                              linearize_filter_->GetRenderingDelayMicroseconds();
   }
+
+  for (auto& redirector : audio_output_redirectors_) {
+    redirector.second->FinishBuffer();
+  }
+
   WriteMixedPcm(frames_per_write_, expected_playback_time);
 }
 
@@ -745,7 +824,6 @@ void StreamMixer::AddLoopbackAudioObserver(
 
 void StreamMixer::AddLoopbackAudioObserverOnShimThread(
     CastMediaShlib::LoopbackAudioObserver* observer) {
-  VLOG(1) << __func__;
   DCHECK(shim_task_runner_->BelongsToCurrentThread());
   DCHECK(observer);
   loopback_observers_.insert(observer);
@@ -760,10 +838,44 @@ void StreamMixer::RemoveLoopbackAudioObserver(
 
 void StreamMixer::RemoveLoopbackAudioObserverOnShimThread(
     CastMediaShlib::LoopbackAudioObserver* observer) {
-  VLOG(1) << __func__;
   DCHECK(shim_task_runner_->BelongsToCurrentThread());
   loopback_observers_.erase(observer);
   observer->OnRemoved();
+}
+
+void StreamMixer::AddAudioOutputRedirector(
+    std::unique_ptr<AudioOutputRedirector> redirector) {
+  VLOG(1) << __func__;
+  POST_THROUGH_INPUT_THREAD(&StreamMixer::AddAudioOutputRedirectorOnThread,
+                            std::move(redirector));
+}
+
+void StreamMixer::AddAudioOutputRedirectorOnThread(
+    std::unique_ptr<AudioOutputRedirector> redirector) {
+  DCHECK(mixer_task_runner_->BelongsToCurrentThread());
+  DCHECK(redirector);
+  AudioOutputRedirector* key = redirector.get();
+  audio_output_redirectors_[key] = std::move(redirector);
+
+  for (const auto& input : inputs_) {
+    key->AddInput(input.second.get());
+  }
+  if (state_ == kStateRunning) {
+    key->Start(output_samples_per_second_);
+  }
+}
+
+void StreamMixer::RemoveAudioOutputRedirector(
+    AudioOutputRedirector* redirector) {
+  VLOG(1) << __func__;
+  POST_THROUGH_INPUT_THREAD(&StreamMixer::RemoveAudioOutputRedirectorOnThread,
+                            redirector);
+}
+
+void StreamMixer::RemoveAudioOutputRedirectorOnThread(
+    AudioOutputRedirector* redirector) {
+  DCHECK(mixer_task_runner_->BelongsToCurrentThread());
+  audio_output_redirectors_.erase(redirector);
 }
 
 void StreamMixer::PostLoopbackData(int64_t expected_playback_time,

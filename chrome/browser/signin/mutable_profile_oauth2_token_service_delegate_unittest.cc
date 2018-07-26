@@ -23,6 +23,7 @@
 #include "components/signin/core/browser/profile_oauth2_token_service.h"
 #include "components/signin/core/browser/signin_buildflags.h"
 #include "components/signin/core/browser/signin_error_controller.h"
+#include "components/signin/core/browser/signin_manager_base.h"
 #include "components/signin/core/browser/signin_pref_names.h"
 #include "components/signin/core/browser/test_signin_client.h"
 #include "components/signin/core/browser/webdata/token_web_data.h"
@@ -68,6 +69,16 @@ AccountInfo CreateTestAccountInfo(const std::string& name,
 }
 #endif
 
+class TestSigninClientWithDeviceId : public TestSigninClient {
+ public:
+  explicit TestSigninClientWithDeviceId(PrefService* prefs)
+      : TestSigninClient(prefs) {}
+
+  std::string GetSigninScopedDeviceId() override {
+    return GetOrCreateScopedDeviceIdPref(GetPrefs());
+  }
+};
+
 }  // namespace
 
 class MutableProfileOAuth2TokenServiceDelegateTest
@@ -76,8 +87,7 @@ class MutableProfileOAuth2TokenServiceDelegateTest
       public OAuth2TokenService::Observer {
  public:
   MutableProfileOAuth2TokenServiceDelegateTest()
-      : factory_(NULL),
-        signin_error_controller_(
+      : signin_error_controller_(
             SigninErrorController::AccountMode::ANY_ACCOUNT),
         access_token_success_count_(0),
         access_token_failure_count_(0),
@@ -93,9 +103,6 @@ class MutableProfileOAuth2TokenServiceDelegateTest
   void SetUp() override {
     OSCryptMocker::SetUp();
 
-    factory_.SetFakeResponse(GaiaUrls::GetInstance()->oauth2_revoke_url(), "",
-                             net::HTTP_OK, net::URLRequestStatus::SUCCESS);
-
     MutableProfileOAuth2TokenServiceDelegate::RegisterProfilePrefs(
         pref_service_.registry());
     pref_service_.registry()->RegisterListPref(
@@ -103,7 +110,8 @@ class MutableProfileOAuth2TokenServiceDelegateTest
     pref_service_.registry()->RegisterIntegerPref(
         prefs::kAccountIdMigrationState,
         AccountTrackerService::MIGRATION_NOT_STARTED);
-    client_.reset(new TestSigninClient(&pref_service_));
+    SigninManagerBase::RegisterProfilePrefs(pref_service_.registry());
+    client_.reset(new TestSigninClientWithDeviceId(&pref_service_));
     client_->SetURLRequestContext(new net::TestURLRequestContextGetter(
         base::ThreadTaskRunnerHandle::Get()));
     client_->test_url_loader_factory()->AddResponse(
@@ -209,7 +217,6 @@ class MutableProfileOAuth2TokenServiceDelegateTest
 
  protected:
   base::MessageLoop message_loop_;
-  net::FakeURLFetcherFactory factory_;
   std::unique_ptr<TestSigninClient> client_;
   std::unique_ptr<MutableProfileOAuth2TokenServiceDelegate>
       oauth2_service_delegate_;
@@ -299,6 +306,46 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, PersistenceDBUpgrade) {
   EXPECT_EQ(2, end_batch_changes_);
 }
 
+#if !defined(OS_CHROMEOS)
+TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, DeviceID) {
+  CreateOAuth2ServiceDelegate(signin::AccountConsistencyMethod::kDisabled);
+  // Ensure DB is clean.
+  oauth2_service_delegate_->RevokeAllCredentials();
+
+  std::string device_id = client_->GetSigninScopedDeviceId();
+  ASSERT_FALSE(device_id.empty());
+
+  oauth2_service_delegate_->LoadCredentials("");
+  base::RunLoop().RunUntilIdle();
+  EXPECT_EQ(OAuth2TokenServiceDelegate::LOAD_CREDENTIALS_FINISHED_WITH_SUCCESS,
+            oauth2_service_delegate_->GetLoadCredentialsState());
+
+  // Loading empty accounts list recreates the device ID.
+  EXPECT_NE(device_id, client_->GetSigninScopedDeviceId());
+  device_id = client_->GetSigninScopedDeviceId();
+
+  std::string account_id_1 = "account_id_1";
+  std::string refresh_token_1 = "refresh_token_1";
+  std::string account_id_2 = "account_id_2";
+  std::string refresh_token_2 = "refresh_token_2";
+  oauth2_service_delegate_->UpdateCredentials(account_id_1, refresh_token_1);
+  oauth2_service_delegate_->UpdateCredentials(account_id_2, refresh_token_2);
+  oauth2_service_delegate_->UpdateAuthError(
+      account_id_2,
+      GoogleServiceAuthError(GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS));
+
+  EXPECT_EQ(device_id, client_->GetSigninScopedDeviceId());
+
+  // Revoking one account does not recreate the device ID.
+  oauth2_service_delegate_->RevokeCredentials(account_id_1);
+  EXPECT_EQ(device_id, client_->GetSigninScopedDeviceId());
+
+  // The device ID is recreated when the last token is revoked.
+  oauth2_service_delegate_->RevokeCredentials(account_id_2);
+  EXPECT_NE(device_id, client_->GetSigninScopedDeviceId());
+}
+#endif
+
 TEST_F(MutableProfileOAuth2TokenServiceDelegateTest,
        PersistenceRevokeCredentials) {
   CreateOAuth2ServiceDelegate(signin::AccountConsistencyMethod::kDisabled);
@@ -380,7 +427,16 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest,
   EXPECT_EQ(1, start_batch_changes_);
   EXPECT_EQ(1, end_batch_changes_);
   EXPECT_EQ(1, auth_error_changed_count_);
-  ExpectOneTokensLoadedNotification();
+
+  // A"tokens loaded" notification should have been fired.
+  EXPECT_EQ(1, tokens_loaded_count_);
+
+  // As the delegate puts the primary account into the token map with an invalid
+  // token in the case of loading from an empty TB, a "token available"
+  // notification should have been fired as well.
+  EXPECT_EQ(1, token_available_count_);
+
+  ResetObserverCounts();
 
   // LoadCredentials() guarantees that the account given to it as argument
   // is in the refresh_token map.
@@ -666,13 +722,21 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest,
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(1, tokens_loaded_count_);
-  EXPECT_EQ(0, token_available_count_);
   EXPECT_EQ(1, token_revoked_count_);
   EXPECT_EQ(1, start_batch_changes_);
   EXPECT_EQ(1, end_batch_changes_);
   EXPECT_EQ(1, auth_error_changed_count_);
+
+  // After having revoked the primary account's token during loading, the
+  // delegate should have noticed that it had no token for the primary account
+  // when the load was complete and inserted an invalid token for that account.
+  EXPECT_EQ(1, token_available_count_);
   EXPECT_TRUE(oauth2_service_delegate_->RefreshTokenIsAvailable(
       primary_account.account_id));
+  EXPECT_EQ(
+      MutableProfileOAuth2TokenServiceDelegate::kInvalidRefreshToken,
+      oauth2_service_delegate_->refresh_tokens_[primary_account.account_id]
+          ->refresh_token());
   EXPECT_EQ(
       GoogleServiceAuthError::InvalidGaiaCredentialsReason::CREDENTIALS_MISSING,
       oauth2_service_delegate_->GetAuthError(primary_account.account_id)
@@ -696,9 +760,10 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, RevokeOnUpdate) {
   EXPECT_TRUE(oauth2_service_delegate_->server_revokes_.empty());
   ExpectOneTokenAvailableNotification();
 
-  // Update the token.
+  // Updating the token does not revoke the old one.
+  // Regression test for http://crbug.com/865189
   oauth2_service_delegate_->UpdateCredentials("account_id", "refresh_token2");
-  EXPECT_EQ(1u, oauth2_service_delegate_->server_revokes_.size());
+  EXPECT_TRUE(oauth2_service_delegate_->server_revokes_.empty());
   ExpectOneTokenAvailableNotification();
 
   // Flush the server revokes.
@@ -874,8 +939,7 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, FetchPersistentError) {
   scope_list.push_back("scope");
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher(
       oauth2_service_delegate_->CreateAccessTokenFetcher(
-          kEmail, oauth2_service_delegate_->GetRequestContext(),
-          oauth2_service_delegate_->GetURLLoaderFactory(), this));
+          kEmail, oauth2_service_delegate_->GetURLLoaderFactory(), this));
   fetcher->Start("foo", "bar", scope_list);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0, access_token_success_count_);
@@ -907,8 +971,7 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, RetryBackoff) {
   scope_list.push_back("scope");
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher1(
       oauth2_service_delegate_->CreateAccessTokenFetcher(
-          kEmail, oauth2_service_delegate_->GetRequestContext(),
-          oauth2_service_delegate_->GetURLLoaderFactory(), this));
+          kEmail, oauth2_service_delegate_->GetURLLoaderFactory(), this));
   fetcher1->Start("foo", "bar", scope_list);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0, access_token_success_count_);
@@ -922,8 +985,7 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, RetryBackoff) {
       base::TimeTicks());
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher2(
       oauth2_service_delegate_->CreateAccessTokenFetcher(
-          kEmail, oauth2_service_delegate_->GetRequestContext(),
-          oauth2_service_delegate_->GetURLLoaderFactory(), this));
+          kEmail, oauth2_service_delegate_->GetURLLoaderFactory(), this));
   fetcher2->Start("foo", "bar", scope_list);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1, access_token_success_count_);
@@ -955,20 +1017,18 @@ TEST_F(MutableProfileOAuth2TokenServiceDelegateTest, ResetBackoff) {
   scope_list.push_back("scope");
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher1(
       oauth2_service_delegate_->CreateAccessTokenFetcher(
-          kEmail, oauth2_service_delegate_->GetRequestContext(),
-          oauth2_service_delegate_->GetURLLoaderFactory(), this));
+          kEmail, oauth2_service_delegate_->GetURLLoaderFactory(), this));
   fetcher1->Start("foo", "bar", scope_list);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(0, access_token_success_count_);
   EXPECT_EQ(1, access_token_failure_count_);
 
   // Notify of network change and ensure that request now runs.
-  oauth2_service_delegate_->OnNetworkChanged(
-      net::NetworkChangeNotifier::CONNECTION_WIFI);
+  oauth2_service_delegate_->OnConnectionChanged(
+      network::mojom::ConnectionType::CONNECTION_WIFI);
   std::unique_ptr<OAuth2AccessTokenFetcher> fetcher2(
       oauth2_service_delegate_->CreateAccessTokenFetcher(
-          kEmail, oauth2_service_delegate_->GetRequestContext(),
-          oauth2_service_delegate_->GetURLLoaderFactory(), this));
+          kEmail, oauth2_service_delegate_->GetURLLoaderFactory(), this));
   fetcher2->Start("foo", "bar", scope_list);
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1, access_token_success_count_);

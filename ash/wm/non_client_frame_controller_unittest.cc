@@ -9,8 +9,6 @@
 #include "ash/shell.h"
 #include "ash/test/ash_test_base.h"
 #include "ash/test/ash_test_helper.h"
-#include "ash/window_manager.h"
-#include "ash/window_manager_service.h"
 #include "ash/wm/top_level_window_factory.h"
 #include "base/strings/utf_string_conversions.h"
 #include "cc/base/math_util.h"
@@ -20,12 +18,15 @@
 #include "services/ui/public/interfaces/window_tree_constants.mojom.h"
 #include "services/ui/ws2/test_change_tracker.h"
 #include "services/ui/ws2/test_window_tree_client.h"
+#include "ui/accessibility/ax_enums.mojom.h"
+#include "ui/accessibility/ax_node_data.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/compositor/compositor.h"
 #include "ui/compositor/test/draw_waiter_for_test.h"
 #include "ui/compositor/test/fake_context_factory.h"
+#include "ui/views/mus/ax_remote_host.h"
 #include "ui/views/widget/widget.h"
 
 namespace ash {
@@ -111,15 +112,13 @@ class NonClientFrameControllerMashTest : public AshTestBase {
 };
 
 TEST_F(NonClientFrameControllerMashTest, ContentRegionNotDrawnForClient) {
-  if (Shell::GetAshConfig() != Config::MASH)
+  if (Shell::GetAshConfig() != Config::MASH_DEPRECATED)
     return;  // TODO: decide if this test should be made to work with ws2.
 
   std::map<std::string, std::vector<uint8_t>> properties;
-  auto* window_manager =
-      ash_test_helper()->window_manager_service()->window_manager();
   std::unique_ptr<aura::Window> window(CreateAndParentTopLevelWindow(
-      window_manager, ui::mojom::WindowType::WINDOW,
-      window_manager->property_converter(), &properties));
+      ui::mojom::WindowType::WINDOW,
+      /* property_converter */ nullptr, &properties));
   ASSERT_TRUE(window);
 
   NonClientFrameController* controller =
@@ -213,19 +212,30 @@ TEST_F(NonClientFrameControllerTest, WindowTitle) {
   NonClientFrameController* non_client_frame_controller =
       NonClientFrameController::Get(window.get());
   ASSERT_TRUE(non_client_frame_controller);
-  views::WidgetDelegate* widget_delegate =
-      static_cast<views::WidgetDelegate*>(non_client_frame_controller);
-  EXPECT_TRUE(widget_delegate->ShouldShowWindowTitle());
-  EXPECT_TRUE(widget_delegate->GetWindowTitle().empty());
+  EXPECT_TRUE(non_client_frame_controller->ShouldShowWindowTitle());
+  EXPECT_TRUE(non_client_frame_controller->GetWindowTitle().empty());
 
   // Verify GetWindowTitle() mirrors window->SetTitle().
   const base::string16 title = base::ASCIIToUTF16("X");
   window->SetTitle(title);
-  EXPECT_EQ(title, widget_delegate->GetWindowTitle());
+  EXPECT_EQ(title, non_client_frame_controller->GetWindowTitle());
 
   // ShouldShowWindowTitle() mirrors |aura::client::kTitleShownKey|.
   window->SetProperty(aura::client::kTitleShownKey, false);
-  EXPECT_FALSE(widget_delegate->ShouldShowWindowTitle());
+  EXPECT_FALSE(non_client_frame_controller->ShouldShowWindowTitle());
+}
+
+TEST_F(NonClientFrameControllerTest, ExposesChildTreeIdToAccessibility) {
+  std::unique_ptr<aura::Window> window = CreateTestWindow();
+  NonClientFrameController* non_client_frame_controller =
+      NonClientFrameController::Get(window.get());
+  views::View* contents_view = non_client_frame_controller->GetContentsView();
+  ui::AXNodeData ax_node_data;
+  contents_view->GetAccessibleNodeData(&ax_node_data);
+  EXPECT_EQ(
+      views::AXRemoteHost::kRemoteAXTreeID,
+      ax_node_data.GetIntAttribute(ax::mojom::IntAttribute::kChildTreeId));
+  EXPECT_EQ(ax::mojom::Role::kClient, ax_node_data.role);
 }
 
 }  // namespace ash

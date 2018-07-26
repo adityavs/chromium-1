@@ -74,6 +74,7 @@
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
+#include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
 #include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/get_ptr.h"
@@ -8115,9 +8116,8 @@ static void measureAsSameValueOverloadedMethodMethod(const v8::FunctionCallbackI
 }
 
 static void ceReactionsNotOverloadedMethodMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  CEReactionsScope ceReactionsScope;
-
   ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestObject", "ceReactionsNotOverloadedMethod");
+  CEReactionsScope ce_reactions_scope;
 
   TestObject* impl = V8TestObject::ToImpl(info.Holder());
 
@@ -8141,9 +8141,8 @@ static void ceReactionsOverloadedMethod1Method(const v8::FunctionCallbackInfo<v8
 }
 
 static void ceReactionsOverloadedMethod2Method(const v8::FunctionCallbackInfo<v8::Value>& info) {
-  CEReactionsScope ceReactionsScope;
-
   ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestObject", "ceReactionsOverloadedMethod");
+  CEReactionsScope ce_reactions_scope;
 
   TestObject* impl = V8TestObject::ToImpl(info.Holder());
 

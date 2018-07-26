@@ -24,16 +24,6 @@
 #include "ui/views/layout/grid_layout.h"
 #include "ui/views/widget/widget.h"
 
-namespace {
-
-// Background color of the bottom part of the prompt.
-constexpr SkColor kFooterBackgroundColor = gfx::kGoogleGrey050;
-
-// Color of the separator between the password and help sections.
-constexpr SkColor kSeparatorColor = gfx::kGoogleGrey200;
-
-}  // namespace
-
 // Class that shows the generated password and associated UI (currently an
 // explanatory text).
 class PasswordGenerationPopupViewViews::GeneratedPasswordBox
@@ -140,11 +130,10 @@ void PasswordGenerationPopupViewViews::PasswordSelectionUpdated() {
   if (controller_->password_selected())
     NotifyAccessibilityEvent(ax::mojom::Event::kSelection, true);
 
-  password_view_->SetBackground(views::CreateThemedSolidBackground(
-      password_view_,
-      controller_->password_selected()
-          ? ui::NativeTheme::kColorId_ResultsTableHoveredBackground
-          : ui::NativeTheme::kColorId_ResultsTableNormalBackground));
+  password_view_->SetBackground(views::CreateSolidBackground(
+      controller_->password_selected() ? kSelectedBackgroundColor
+                                       : kBackgroundColor));
+  SchedulePaint();
 }
 
 bool PasswordGenerationPopupViewViews::IsPointInPasswordBounds(
@@ -184,12 +173,6 @@ void PasswordGenerationPopupViewViews::CreateLayoutAndChildren() {
       new views::StyledLabel(controller_->HelpText(), this);
   help_label->SetTextContext(ChromeTextContext::CONTEXT_BODY_TEXT_LARGE);
   help_label->SetDefaultTextStyle(STYLE_SECONDARY);
-
-  views::StyledLabel::RangeStyleInfo link_style =
-      views::StyledLabel::RangeStyleInfo::CreateForLink();
-  link_style.disable_line_wrapping = false;
-  help_label->AddStyleRange(controller_->HelpTextLinkRange(), link_style);
-
   help_label->SetBackground(
       views::CreateSolidBackground(kFooterBackgroundColor));
   help_label->SetBorder(

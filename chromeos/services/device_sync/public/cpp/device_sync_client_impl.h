@@ -80,6 +80,8 @@ class DeviceSyncClientImpl : public DeviceSyncClient,
   DeviceSyncClientImpl(service_manager::Connector* connector,
                        scoped_refptr<base::TaskRunner> task_runner);
 
+  void AttemptToBecomeReady();
+
   void LoadSyncedDevices();
   void LoadLocalDeviceMetadata();
 
@@ -90,7 +92,7 @@ class DeviceSyncClientImpl : public DeviceSyncClient,
       const base::Optional<cryptauth::RemoteDevice>& local_device_metadata);
   void OnFindEligibleDevicesCompleted(
       FindEligibleDevicesCallback callback,
-      const base::Optional<std::string>& error_code,
+      mojom::NetworkRequestResult result_code,
       mojom::FindEligibleDevicesResponsePtr response);
 
   mojom::DeviceSyncObserverPtr GenerateInterfacePtr();
@@ -101,7 +103,12 @@ class DeviceSyncClientImpl : public DeviceSyncClient,
   mojo::Binding<mojom::DeviceSyncObserver> binding_;
   std::unique_ptr<cryptauth::ExpiringRemoteDeviceCache> expiring_device_cache_;
 
-  bool waiting_for_local_device_metadata_ = false;
+  bool waiting_for_synced_devices_ = true;
+  bool waiting_for_local_device_metadata_ = true;
+
+  bool pending_notify_enrollment_finished_ = false;
+  bool pending_notify_new_synced_devices_ = false;
+
   base::Optional<std::string> local_device_id_;
 
   base::WeakPtrFactory<DeviceSyncClientImpl> weak_ptr_factory_;

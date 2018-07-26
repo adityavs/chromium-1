@@ -47,7 +47,7 @@ std::unique_ptr<gpu::GLInProcessContext> CreateGLInProcessContext(
   attribs.bind_generates_resource = false;
   attribs.enable_oop_rasterization = oop_raster;
 
-  auto context = gpu::GLInProcessContext::CreateWithoutInit();
+  auto context = std::make_unique<gpu::GLInProcessContext>();
   auto result = context->Initialize(
       nullptr, nullptr, is_offscreen, gpu::kNullSurfaceHandle, attribs,
       gpu::SharedMemoryLimits(), gpu_memory_buffer_manager, image_factory,
@@ -66,7 +66,9 @@ std::unique_ptr<gpu::GLInProcessContext> CreateTestInProcessContext() {
 
 TestInProcessContextProvider::TestInProcessContextProvider(
     bool enable_oop_rasterization,
-    bool support_locking) {
+    bool support_locking,
+    gpu::raster::GrShaderCache* gr_shader_cache,
+    gpu::GpuProcessActivityFlags* activity_flags) {
   if (support_locking)
     context_lock_.emplace();
 
@@ -81,7 +83,8 @@ TestInProcessContextProvider::TestInProcessContextProvider(
     auto result = raster_context_->Initialize(
         /*service=*/nullptr, attribs, gpu::SharedMemoryLimits(),
         &gpu_memory_buffer_manager_, &image_factory_,
-        /*gpu_channel_manager_delegate=*/nullptr);
+        /*gpu_channel_manager_delegate=*/nullptr, gr_shader_cache,
+        activity_flags);
     DCHECK_EQ(result, gpu::ContextResult::kSuccess);
 
     cache_controller_.reset(

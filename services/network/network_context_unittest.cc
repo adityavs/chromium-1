@@ -22,6 +22,7 @@
 #include "base/strings/string_split.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/synchronization/waitable_event.h"
+#include "base/test/bind_test_util.h"
 #include "base/test/gtest_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/mock_entropy_provider.h"
@@ -58,11 +59,13 @@
 #include "net/proxy_resolution/proxy_config.h"
 #include "net/proxy_resolution/proxy_info.h"
 #include "net/proxy_resolution/proxy_resolution_service.h"
+#include "net/socket/transport_client_socket_pool.h"
 #include "net/ssl/channel_id_service.h"
 #include "net/ssl/channel_id_store.h"
 #include "net/test/cert_test_util.h"
 #include "net/test/embedded_test_server/controllable_http_response.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
+#include "net/test/embedded_test_server/embedded_test_server_connection_listener.h"
 #include "net/test/test_data_directory.h"
 #include "net/traffic_annotation/network_traffic_annotation_test_helper.h"
 #include "net/url_request/http_user_agent_settings.h"
@@ -190,6 +193,20 @@ class NetworkContextTest : public testing::Test,
   }
 
   void OnSSLConfigChanged() override { ++ssl_config_changed_count_; }
+
+  // Looks up a value with the given name from the NetworkContext's
+  // TransportSocketPool info dictionary.
+  int GetSocketPoolInfo(NetworkContext* context, base::StringPiece name) {
+    int value;
+    context->url_request_context()
+        ->http_transaction_factory()
+        ->GetSession()
+        ->GetTransportSocketPool(
+            net::HttpNetworkSession::SocketPoolType::NORMAL_SOCKET_POOL)
+        ->GetInfoAsValue("", "", false)
+        ->GetInteger(name, &value);
+    return value;
+  }
 
  protected:
   base::test::ScopedTaskEnvironment scoped_task_environment_;
@@ -1086,6 +1103,37 @@ TEST_F(NetworkContextTest, MultipleClearHttpCacheCalls) {
   // If all the callbacks were invoked, we should terminate.
 }
 
+TEST_F(NetworkContextTest, CountHttpCache) {
+  // Just ensure that a couple of concurrent calls go through, and produce
+  // the expected "it's empty!" result. More detailed testing is left to
+  // HttpCacheDataCounter unit tests.
+
+  mojom::NetworkContextParamsPtr context_params = CreateContextParams();
+  context_params->http_cache_enabled = true;
+
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(std::move(context_params));
+
+  int responses = 0;
+  base::RunLoop run_loop;
+
+  auto callback =
+      base::BindLambdaForTesting([&](bool upper_bound, int64_t size_or_error) {
+        // Don't expect approximation for full range.
+        EXPECT_EQ(false, upper_bound);
+        EXPECT_EQ(0, size_or_error);
+        ++responses;
+        if (responses == 2)
+          run_loop.Quit();
+      });
+
+  network_context->ComputeHttpCacheSize(base::Time(), base::Time::Max(),
+                                        callback);
+  network_context->ComputeHttpCacheSize(base::Time(), base::Time::Max(),
+                                        callback);
+  run_loop.Run();
+}
+
 TEST_F(NetworkContextTest, ClearChannelIds) {
   std::unique_ptr<NetworkContext> network_context =
       CreateContextWithParams(CreateContextParams());
@@ -1501,7 +1549,8 @@ TEST_F(NetworkContextTest, ClearReportingCacheReports) {
       reporting_service.get());
 
   GURL domain("http://google.com");
-  reporting_service->QueueReport(domain, "group", "type", nullptr, 0);
+  reporting_service->QueueReport(domain, "Mozilla/1.0", "group", "type",
+                                 nullptr, 0);
 
   std::vector<const net::ReportingReport*> reports;
   reporting_cache->GetReports(&reports);
@@ -1530,9 +1579,11 @@ TEST_F(NetworkContextTest, ClearReportingCacheReportsWithFilter) {
       reporting_service.get());
 
   GURL domain1("http://google.com");
-  reporting_service->QueueReport(domain1, "group", "type", nullptr, 0);
+  reporting_service->QueueReport(domain1, "Mozilla/1.0", "group", "type",
+                                 nullptr, 0);
   GURL domain2("http://chromium.org");
-  reporting_service->QueueReport(domain2, "group", "type", nullptr, 0);
+  reporting_service->QueueReport(domain2, "Mozilla/1.0", "group", "type",
+                                 nullptr, 0);
 
   std::vector<const net::ReportingReport*> reports;
   reporting_cache->GetReports(&reports);
@@ -1567,9 +1618,11 @@ TEST_F(NetworkContextTest,
       reporting_service.get());
 
   GURL domain1("http://192.168.0.1");
-  reporting_service->QueueReport(domain1, "group", "type", nullptr, 0);
+  reporting_service->QueueReport(domain1, "Mozilla/1.0", "group", "type",
+                                 nullptr, 0);
   GURL domain2("http://192.168.0.2");
-  reporting_service->QueueReport(domain2, "group", "type", nullptr, 0);
+  reporting_service->QueueReport(domain2, "Mozilla/1.0", "group", "type",
+                                 nullptr, 0);
 
   std::vector<const net::ReportingReport*> reports;
   reporting_cache->GetReports(&reports);
@@ -1750,6 +1803,7 @@ TEST_F(NetworkContextTest, ClearNetworkErrorLogging) {
 
   GURL domain("https://google.com");
   logging_service->OnHeader(url::Origin::Create(domain),
+                            net::IPAddress(192, 168, 0, 1),
                             "{\"report_to\":\"group\",\"max_age\":86400}");
 
   ASSERT_EQ(1u, logging_service->GetPolicyOriginsForTesting().size());
@@ -1774,9 +1828,11 @@ TEST_F(NetworkContextTest, ClearNetworkErrorLoggingWithFilter) {
 
   GURL domain1("https://google.com");
   logging_service->OnHeader(url::Origin::Create(domain1),
+                            net::IPAddress(192, 168, 0, 1),
                             "{\"report_to\":\"group\",\"max_age\":86400}");
   GURL domain2("https://chromium.org");
   logging_service->OnHeader(url::Origin::Create(domain2),
+                            net::IPAddress(192, 168, 0, 1),
                             "{\"report_to\":\"group\",\"max_age\":86400}");
 
   ASSERT_EQ(2u, logging_service->GetPolicyOriginsForTesting().size());
@@ -2430,6 +2486,235 @@ TEST_F(NetworkContextTest, CanGetCookiesTrueIfCookiesAllowed) {
   EXPECT_TRUE(
       network_context->url_request_context()->network_delegate()->CanGetCookies(
           *request, {}, true));
+}
+
+// Gets notified by the EmbeddedTestServer on incoming connections being
+// accepted or read from, keeps track of them and exposes that info to
+// the tests.
+// A port being reused is currently considered an error.  If a test
+// needs to verify multiple connections are opened in sequence, that will need
+// to be changed.
+class ConnectionListener
+    : public net::test_server::EmbeddedTestServerConnectionListener {
+ public:
+  ConnectionListener()
+      : task_runner_(base::ThreadTaskRunnerHandle::Get()),
+        num_accepted_connections_needed_(0),
+        num_accepted_connections_loop_(nullptr) {}
+
+  ~ConnectionListener() override {}
+
+  // Get called from the EmbeddedTestServer thread to be notified that
+  // a connection was accepted.
+  void AcceptedSocket(const net::StreamSocket& connection) override {
+    base::AutoLock lock(lock_);
+    uint16_t socket = GetPort(connection);
+    EXPECT_TRUE(sockets_.find(socket) == sockets_.end());
+
+    sockets_[socket] = SOCKET_ACCEPTED;
+    CheckAccepted();
+  }
+
+  // Get called from the EmbeddedTestServer thread to be notified that
+  // a connection was read from.
+  void ReadFromSocket(const net::StreamSocket& connection, int rv) override {
+    EXPECT_EQ(net::OK, rv);
+  }
+
+  // Wait for exactly |n| items in |sockets_|. |n| must be greater than 0.
+  void WaitForAcceptedConnections(size_t num_connections) {
+    DCHECK(!num_accepted_connections_loop_);
+    DCHECK_GT(num_connections, 0u);
+    base::RunLoop run_loop;
+    {
+      base::AutoLock lock(lock_);
+      EXPECT_GE(num_connections, sockets_.size());
+      num_accepted_connections_loop_ = &run_loop;
+      num_accepted_connections_needed_ = num_connections;
+      CheckAccepted();
+    }
+    // Note that the previous call to CheckAccepted can quit this run loop
+    // before this call, which will make this call a no-op.
+    run_loop.Run();
+
+    // Grab the mutex again and make sure that the number of accepted sockets is
+    // indeed |num_connections|.
+    base::AutoLock lock(lock_);
+    EXPECT_EQ(num_connections, sockets_.size());
+  }
+
+  // Helper function to stop the waiting for sockets to be accepted for
+  // WaitForAcceptedConnections. |num_accepted_connections_loop_| spins
+  // until |num_accepted_connections_needed_| sockets are accepted by the test
+  // server. The values will be null/0 if the loop is not running.
+  void CheckAccepted() {
+    lock_.AssertAcquired();
+    // |num_accepted_connections_loop_| null implies
+    // |num_accepted_connections_needed_| == 0.
+    DCHECK(num_accepted_connections_loop_ ||
+           num_accepted_connections_needed_ == 0);
+    if (!num_accepted_connections_loop_ ||
+        num_accepted_connections_needed_ != sockets_.size()) {
+      return;
+    }
+
+    task_runner_->PostTask(FROM_HERE,
+                           num_accepted_connections_loop_->QuitClosure());
+    num_accepted_connections_needed_ = 0;
+    num_accepted_connections_loop_ = nullptr;
+  }
+
+ private:
+  static uint16_t GetPort(const net::StreamSocket& connection) {
+    // Get the remote port of the peer, since the local port will always be the
+    // port the test server is listening on. This isn't strictly correct - it's
+    // possible for multiple peers to connect with the same remote port but
+    // different remote IPs - but the tests here assume that connections to the
+    // test server (running on localhost) will always come from localhost, and
+    // thus the peer port is all thats needed to distinguish two connections.
+    // This also would be problematic if the OS reused ports, but that's not
+    // something to worry about for these tests.
+    net::IPEndPoint address;
+    EXPECT_EQ(net::OK, connection.GetPeerAddress(&address));
+    return address.port();
+  }
+
+  enum SocketStatus { SOCKET_ACCEPTED, SOCKET_READ_FROM };
+
+  scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
+
+  // This lock protects all the members below, which each are used on both the
+  // IO and UI thread. Members declared after the lock are protected by it.
+  mutable base::Lock lock_;
+  typedef std::map<uint16_t, SocketStatus> SocketContainer;
+  SocketContainer sockets_;
+
+  // If |num_accepted_connections_needed_| is non zero, then the object is
+  // waiting for |num_accepted_connections_needed_| sockets to be accepted
+  // before quitting the |num_accepted_connections_loop_|.
+  size_t num_accepted_connections_needed_;
+  base::RunLoop* num_accepted_connections_loop_;
+
+  DISALLOW_COPY_AND_ASSIGN(ConnectionListener);
+};
+
+TEST_F(NetworkContextTest, PreconnectOne) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  network_context->PreconnectSockets(1, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+  connection_listener.WaitForAcceptedConnections(1u);
+}
+
+TEST_F(NetworkContextTest, PreconnectZero) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  network_context->PreconnectSockets(0, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+  base::RunLoop().RunUntilIdle();
+
+  int num_sockets =
+      GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  ASSERT_EQ(num_sockets, 0);
+  int num_connecting_sockets =
+      GetSocketPoolInfo(network_context.get(), "connecting_socket_count");
+  ASSERT_EQ(num_connecting_sockets, 0);
+}
+
+TEST_F(NetworkContextTest, PreconnectTwo) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  network_context->PreconnectSockets(2, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+  connection_listener.WaitForAcceptedConnections(2u);
+
+  int num_sockets =
+      GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  ASSERT_EQ(num_sockets, 2);
+}
+
+TEST_F(NetworkContextTest, PreconnectFour) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  network_context->PreconnectSockets(4, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+
+  connection_listener.WaitForAcceptedConnections(4u);
+
+  int num_sockets =
+      GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  ASSERT_EQ(num_sockets, 4);
+}
+
+TEST_F(NetworkContextTest, PreconnectMax) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  int max_num_sockets =
+      GetSocketPoolInfo(network_context.get(), "max_sockets_per_group");
+  EXPECT_GT(76, max_num_sockets);
+
+  network_context->PreconnectSockets(76, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+  base::RunLoop().RunUntilIdle();
+
+  int num_sockets =
+      GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  ASSERT_EQ(num_sockets, max_num_sockets);
+}
+
+TEST_F(NetworkContextTest, CloseAllConnections) {
+  std::unique_ptr<NetworkContext> network_context =
+      CreateContextWithParams(CreateContextParams());
+
+  ConnectionListener connection_listener;
+  net::EmbeddedTestServer test_server;
+  test_server.SetConnectionListener(&connection_listener);
+  ASSERT_TRUE(test_server.Start());
+
+  network_context->PreconnectSockets(2, test_server.base_url(),
+                                     net::LOAD_NORMAL, true);
+  connection_listener.WaitForAcceptedConnections(2u);
+
+  int num_sockets =
+      GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  EXPECT_EQ(num_sockets, 2);
+
+  base::RunLoop run_loop;
+  network_context->CloseAllConnections(run_loop.QuitClosure());
+  run_loop.Run();
+
+  num_sockets = GetSocketPoolInfo(network_context.get(), "idle_socket_count");
+  EXPECT_EQ(num_sockets, 0);
 }
 
 }  // namespace

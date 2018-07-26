@@ -66,6 +66,7 @@
 #include "components/infobars/core/infobar.h"
 #include "ui/android/window_android.h"
 #else  // !OS_ANDROID
+#include "chrome/browser/ui/autofill/local_card_migration_bubble_controller_impl.h"
 #include "chrome/browser/ui/autofill/save_card_bubble_controller_impl.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
@@ -190,6 +191,26 @@ void ChromeAutofillClient::OnUnmaskVerificationResult(
   unmask_controller_.OnVerificationResult(result);
 }
 
+void ChromeAutofillClient::ShowLocalCardMigrationPrompt(
+    base::OnceClosure closure) {
+#if !defined(OS_ANDROID)
+  autofill::LocalCardMigrationBubbleControllerImpl::CreateForWebContents(
+      web_contents());
+  autofill::LocalCardMigrationBubbleControllerImpl* controller =
+      autofill::LocalCardMigrationBubbleControllerImpl::FromWebContents(
+          web_contents());
+  controller->ShowBubble(std::move(closure));
+#endif
+}
+
+void ChromeAutofillClient::ConfirmSaveAutofillProfile(
+    const AutofillProfile& profile,
+    base::OnceClosure callback) {
+  // Since there is no confirmation needed to save an Autofill Profile,
+  // running |callback| will proceed with saving |profile|.
+  std::move(callback).Run();
+}
+
 void ChromeAutofillClient::ConfirmSaveCreditCardLocally(
     const CreditCard& card,
     const base::Closure& callback) {
@@ -273,6 +294,7 @@ void ChromeAutofillClient::ShowAutofillPopup(
     const gfx::RectF& element_bounds,
     base::i18n::TextDirection text_direction,
     const std::vector<autofill::Suggestion>& suggestions,
+    bool autoselect_first_suggestion,
     base::WeakPtr<AutofillPopupDelegate> delegate) {
   // TODO(https://crbug.com/779126): We currently don't support rendering popups
   // while in VR, so we just don't show it.
@@ -293,7 +315,7 @@ void ChromeAutofillClient::ShowAutofillPopup(
                                                element_bounds_in_screen_space,
                                                text_direction);
 
-  popup_controller_->Show(suggestions);
+  popup_controller_->Show(suggestions, autoselect_first_suggestion);
 }
 
 void ChromeAutofillClient::UpdateAutofillPopupDataListValues(

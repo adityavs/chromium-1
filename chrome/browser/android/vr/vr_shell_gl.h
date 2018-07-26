@@ -68,7 +68,7 @@ class GraphicsDelegate;
 class MailboxToSurfaceBridge;
 class ScopedGpuTrace;
 class SlidingTimeDeltaAverage;
-class Ui;
+class UiInterface;
 class VrController;
 class VrShell;
 
@@ -264,10 +264,11 @@ class WebXrPresentationState {
 
 // This class manages all GLThread owned objects and GL rendering for VrShell.
 // It is not threadsafe and must only be used on the GL thread.
-class VrShellGl : public device::mojom::VRPresentationProvider {
+class VrShellGl : public device::mojom::XRPresentationProvider,
+                  public device::mojom::XRFrameDataProvider {
  public:
   VrShellGl(GlBrowserInterface* browser_interface,
-            std::unique_ptr<Ui> ui,
+            std::unique_ptr<UiInterface> ui,
             gvr_context* gvr_api,
             bool reprojected_rendering,
             bool daydream_support,
@@ -309,8 +310,6 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
       device::mojom::VRDisplayInfoPtr display_info,
       device::mojom::XRDeviceRuntimeSessionOptionsPtr options);
 
-  void set_is_exiting(bool exiting) { is_exiting_ = exiting; }
-
   void OnSwapContents(int new_content_id);
 
   void EnableAlertDialog(PlatformInputHandler* input_handler,
@@ -333,7 +332,7 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
  private:
   void GvrInit(gvr_context* gvr_api);
 
-  device::mojom::VRDisplayFrameTransportOptionsPtr
+  device::mojom::XRPresentationTransportOptionsPtr
   GetWebVrFrameTransportOptions(
       const device::mojom::XRDeviceRuntimeSessionOptionsPtr&);
 
@@ -357,13 +356,11 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
   bool ShouldDrawWebVr();
   void DrawWebVr();
   void DrawContentQuad(bool draw_overlay_texture);
-  bool ShouldSendGesturesToWebVr();
   bool WebVrPoseByteIsValid(int pose_index_byte);
 
   void UpdateController(const RenderInfo& render_info,
                         base::TimeTicks current_time);
 
-  void SendImmediateExitRequestIfNecessary();
   void HandleControllerInput(const gfx::Point3F& laser_origin,
                              const RenderInfo& render_info,
                              base::TimeTicks current_time);
@@ -387,9 +384,11 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
 
   bool IsSubmitFrameExpected(int16_t frame_index);
 
-  // VRPresentationProvider
-  void GetFrameData(device::mojom::VRPresentationProvider::GetFrameDataCallback
+  // XRFrameDataProvider
+  void GetFrameData(device::mojom::XRFrameDataProvider::GetFrameDataCallback
                         callback) override;
+
+  // XRPresentationProvider
   void SubmitFrameMissing(int16_t frame_index, const gpu::SyncToken&) override;
   void SubmitFrame(int16_t frame_index,
                    const gpu::MailboxHolder& mailbox,
@@ -524,14 +523,13 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
 
   std::unique_ptr<WebXrPresentationState> webxr_ = nullptr;
 
-  std::unique_ptr<Ui> ui_;
+  std::unique_ptr<UiInterface> ui_;
 
   bool web_vr_mode_ = false;
   bool ready_to_draw_ = false;
   bool paused_ = true;
   const bool surfaceless_rendering_;
   bool daydream_support_;
-  bool is_exiting_ = false;
   bool content_paused_;
   bool cardboard_trigger_pressed_ = false;
   bool cardboard_trigger_clicked_ = false;
@@ -551,20 +549,16 @@ class VrShellGl : public device::mojom::VRPresentationProvider {
   // updated in OnVSync and used as the rAF animation timer in SendVSync.
   base::TimeTicks pending_time_;
   bool pending_vsync_ = false;
-  device::mojom::VRPresentationProvider::GetFrameDataCallback
+  device::mojom::XRFrameDataProvider::GetFrameDataCallback
       get_frame_data_callback_;
 
-  mojo::Binding<device::mojom::VRPresentationProvider> binding_;
-  device::mojom::VRSubmitFrameClientPtr submit_client_;
+  mojo::Binding<device::mojom::XRPresentationProvider> presentation_binding_;
+  mojo::Binding<device::mojom::XRFrameDataProvider> frame_data_binding_;
+  device::mojom::XRPresentationClientPtr submit_client_;
 
   GlBrowserInterface* browser_;
 
   uint64_t webvr_frames_received_ = 0;
-
-  // Attributes for gesture detection while holding app button.
-  gfx::Vector3dF controller_start_direction_;
-  base::TimeTicks app_button_down_time_;
-  bool app_button_long_pressed_ = false;
 
   FPSMeter vr_ui_fps_meter_;
   FPSMeter webvr_fps_meter_;

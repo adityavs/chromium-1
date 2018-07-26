@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">स्थानीयकरण का उपयोग किया गया, लेकिन default_locale को मालसूची में निर्दिष्ट नहीं किया गया था.</translation>
 <translation id="2576842806987913196">इस नाम वाली CRX फ़ाइल पहले से ही मौजूद है.</translation>
 <translation id="2753617847762399167">गलत पथ (पूर्ण या '..' से संबंधित): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">य‍ह एक्‍सटेंशन, नेटवर्क अनुरोध संशोधित करने में विफल रहा क्‍योंकि संशोधन का अन्‍य एक्‍सटेंशन के साथ विरोध हुआ.</translation>
 <translation id="2785530881066938471">सामग्री स्क्रिप्ट के लिए '<ph name="RELATIVE_PATH" />' फ़ाइल लोड नहीं कर सका. यह UTF-8 एनकोड नहीं है.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (एक्सटेंशन आईडी "<ph name="EXTENSION_ID" />") को व्यवस्थापक ने अवरोधित किया है. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">पैकेज इंस्टॉल नहीं कर सका: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529"><ph name="VENDOR_NAME" /> की ओर से अज्ञात <ph name="PRODUCT_ID" /> उत्पाद</translation>
 <translation id="7068383018033524534">मेनिफ़ेस्ट फ़ाइल अमान्य है</translation>
 <translation id="7217838517480956708">इस मशीन का व्यवस्थापक चाहता है कि <ph name="EXTENSION_NAME" /> इंस्टॉल किया हुआ हो. इसे निकाला या संशोधित नहीं किया जा सकता.</translation>
+<translation id="7939686037314084444">एक्सटेंशन ठीक से लोड नहीं हो पाया. शायद वह नेटवर्क अनुरोधों को बीच में रोक नहीं पाए.</translation>
 <translation id="7972881773422714442">विकल्‍प: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">सामने वाला कैमरा</translation>
 <translation id="8047248493720652249">यह एक्सटेंशन "<ph name="ATTEMPTED_FILENAME" />" डाउनलोड को नाम देने में विफल रहा क्योंकि किसी अन्य एक्सटेंशन (<ph name="EXTENSION_NAME" />) ने एक भिन्न फ़ाइलनाम "<ph name="ACTUAL_FILENAME" />" निर्धारित कर लिया है.</translation>

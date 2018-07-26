@@ -19,6 +19,7 @@
 #include "base/test/scoped_command_line.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/scoped_task_environment.h"
+#include "base/time/default_clock.h"
 #include "build/build_config.h"
 #include "chrome/browser/flag_descriptions.h"
 #include "chrome/browser/net/nqe/ui_network_quality_estimator_service.h"
@@ -30,7 +31,7 @@
 #include "chrome/test/base/testing_profile.h"
 #include "chrome/test/base/testing_profile_manager.h"
 #include "components/blacklist/opt_out_blacklist/opt_out_blacklist_data.h"
-#include "components/previews/content/previews_io_data.h"
+#include "components/previews/content/previews_decider_impl.h"
 #include "components/previews/content/previews_ui_service.h"
 #include "components/previews/core/previews_features.h"
 #include "components/previews/core/previews_logger.h"
@@ -212,11 +213,14 @@ class TestUINetworkQualityEstimatorService
 };
 
 // A dummy class to setup PreviewsUIService.
-class TestPreviewsIOData : public previews::PreviewsIOData {
+class TestPreviewsDeciderImpl : public previews::PreviewsDeciderImpl {
  public:
-  TestPreviewsIOData() : PreviewsIOData(nullptr, nullptr) {}
+  TestPreviewsDeciderImpl()
+      : PreviewsDeciderImpl(nullptr,
+                            nullptr,
+                            base::DefaultClock::GetInstance()) {}
 
-  // previews::PreviewsIOData:
+  // previews::PreviewsDeciderImpl:
   void Initialize(
       base::WeakPtr<previews::PreviewsUIService> previews_ui_service,
       std::unique_ptr<blacklist::OptOutStore> opt_out_store,
@@ -231,9 +235,9 @@ class TestPreviewsIOData : public previews::PreviewsIOData {
 // Mocked TestPreviewsService for testing InterventionsInternalsPageHandler.
 class TestPreviewsUIService : public previews::PreviewsUIService {
  public:
-  TestPreviewsUIService(TestPreviewsIOData* io_data,
+  TestPreviewsUIService(TestPreviewsDeciderImpl* previews_decider_impl,
                         std::unique_ptr<previews::PreviewsLogger> logger)
-      : PreviewsUIService(io_data,
+      : PreviewsUIService(previews_decider_impl,
                           nullptr, /* io_task_runner */
                           nullptr, /* previews_opt_out_store */
                           nullptr, /* previews_opt_guide */
@@ -264,7 +268,7 @@ class InterventionsInternalsPageHandlerTest : public testing::Test {
   ~InterventionsInternalsPageHandlerTest() override {}
 
   void SetUp() override {
-    TestPreviewsIOData io_data;
+    TestPreviewsDeciderImpl io_data;
     std::unique_ptr<TestPreviewsLogger> logger =
         std::make_unique<TestPreviewsLogger>();
     logger_ = logger.get();

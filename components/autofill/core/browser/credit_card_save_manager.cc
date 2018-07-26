@@ -34,6 +34,7 @@
 #include "components/autofill/core/browser/personal_data_manager.h"
 #include "components/autofill/core/browser/validation.h"
 #include "components/autofill/core/common/autofill_clock.h"
+#include "components/autofill/core/common/autofill_features.h"
 #include "components/autofill/core/common/autofill_util.h"
 #include "components/prefs/pref_service.h"
 #include "services/identity/public/cpp/identity_manager.h"
@@ -100,6 +101,10 @@ void CreditCardSaveManager::AttemptToOfferCardUploadSave(
     const FormStructure& submitted_form,
     const CreditCard& card,
     const bool uploading_local_card) {
+  // Abort the uploading if |payments_client_| is nullptr.
+  if (!payments_client_)
+    return;
+  payments_client_->SetSaveDelegate(this);
   upload_request_ = payments::PaymentsClient::UploadRequestDetails();
   upload_request_.card = card;
   uploading_local_card_ = uploading_local_card;
@@ -107,7 +112,8 @@ void CreditCardSaveManager::AttemptToOfferCardUploadSave(
   // In an ideal scenario, when uploading a card, we would have:
   //  1) Card number and expiration
   //  2) CVC
-  //  3) 1+ recently-used or modified addresses that meet validation rules
+  //  3) 1+ recently-used or modified addresses that meet validation rules (or
+  //     only the address countries if the relevant feature is enabled).
   //  4) Cardholder name or names on the address profiles
   // At a minimum, only #1 (card number and expiration) is absolutely required
   // in order to save a card to Google Payments. We perform all checks before
@@ -163,6 +169,7 @@ void CreditCardSaveManager::AttemptToOfferCardUploadSave(
   // If the user must provide cardholder name, log it and set
   // |should_request_name_from_user_| so the offer-to-save dialog know to ask
   // for it.
+  should_request_name_from_user_ = false;
   if (detected_values & DetectedValue::USER_PROVIDED_NAME) {
     upload_decision_metrics_ |=
         AutofillMetrics::USER_REQUESTED_TO_PROVIDE_CARDHOLDER_NAME;
@@ -367,14 +374,30 @@ void CreditCardSaveManager::SetProfilesForCreditCardUpload(
   if (verified_zip.empty() && !candidate_profiles.empty())
     upload_decision_metrics_ |= AutofillMetrics::UPLOAD_NOT_OFFERED_NO_ZIP_CODE;
 
+  // If the relevant feature is enabled, only send the country of the
+  // recently-used addresses.
+  if (base::FeatureList::IsEnabled(
+          features::kAutofillSendOnlyCountryInGetUploadDetails)) {
+    for (size_t i = 0; i < candidate_profiles.size(); i++) {
+      AutofillProfile country_only;
+      country_only.SetInfo(
+          ADDRESS_HOME_COUNTRY,
+          candidate_profiles[i].GetInfo(ADDRESS_HOME_COUNTRY, app_locale_),
+          app_locale_);
+      candidate_profiles[i] = std::move(country_only);
+    }
+  }
+
   // Set up |upload_request->profiles|.
   upload_request->profiles.assign(candidate_profiles.begin(),
                                   candidate_profiles.end());
-  if (!has_modified_profile)
-    for (const AutofillProfile& profile : candidate_profiles)
+  if (!has_modified_profile) {
+    for (const AutofillProfile& profile : candidate_profiles) {
       UMA_HISTOGRAM_COUNTS_1000(
           "Autofill.DaysSincePreviousUseAtSubmission.Profile",
           (profile.use_date() - profile.previous_use_date()).InDays());
+    }
+  }
 }
 
 int CreditCardSaveManager::GetDetectedValues() const {

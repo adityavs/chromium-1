@@ -82,10 +82,6 @@
 #include "chrome/common/chrome_switches.h"
 #endif
 
-#if defined(OS_WIN)
-#include "base/win/shortcut.h"
-#endif  // defined(OS_WIN)
-
 #if defined(OS_CHROMEOS)
 // gn check complains on Linux Ozone.
 #include "ash/public/cpp/shelf_model.h"  // nogncheck
@@ -194,6 +190,18 @@ void GenerateIcons(
   }
 }
 
+SkBitmap GenerateBitmap(int output_size, SkColor color, char letter) {
+  gfx::ImageSkia icon_image(
+      std::make_unique<GeneratedIconImageSource>(letter, color, output_size),
+      gfx::Size(output_size, output_size));
+  SkBitmap dst;
+  if (dst.tryAllocPixels(icon_image.bitmap()->info())) {
+    icon_image.bitmap()->readPixels(dst.info(), dst.getPixels(), dst.rowBytes(),
+                                    0, 0);
+  }
+  return dst;
+}
+
 void ReplaceWebAppIcons(
     std::map<int, BookmarkAppHelper::BitmapAndSource> bitmap_map,
     WebApplicationInfo* web_app_info) {
@@ -216,7 +224,7 @@ void ReplaceWebAppIcons(
 class BookmarkAppInstaller : public base::RefCounted<BookmarkAppInstaller>,
                              public content::WebContentsObserver {
  public:
-  BookmarkAppInstaller(ExtensionService* service,
+  BookmarkAppInstaller(extensions::ExtensionService* service,
                        const WebApplicationInfo& web_app_info)
       : service_(service), web_app_info_(web_app_info) {}
 
@@ -321,7 +329,7 @@ class BookmarkAppInstaller : public base::RefCounted<BookmarkAppInstaller>,
     installer->InstallWebApp(web_app_info_);
   }
 
-  ExtensionService* service_;
+  extensions::ExtensionService* service_;
   WebApplicationInfo web_app_info_;
 
   std::unique_ptr<content::WebContents> web_contents_;
@@ -419,14 +427,19 @@ void BookmarkAppHelper::GenerateIcon(
   if (bitmaps->count(output_size))
     return;
 
-  gfx::ImageSkia icon_image(
-      std::make_unique<GeneratedIconImageSource>(letter, color, output_size),
-      gfx::Size(output_size, output_size));
-  SkBitmap& dst = (*bitmaps)[output_size].bitmap;
-  if (dst.tryAllocPixels(icon_image.bitmap()->info())) {
-    icon_image.bitmap()->readPixels(dst.info(), dst.getPixels(), dst.rowBytes(),
-                                    0, 0);
-  }
+  (*bitmaps)[output_size].bitmap = GenerateBitmap(output_size, color, letter);
+}
+
+// static
+WebApplicationInfo::IconInfo BookmarkAppHelper::GenerateIconInfo(
+    int output_size,
+    SkColor color,
+    char letter) {
+  WebApplicationInfo::IconInfo icon_info;
+  icon_info.width = output_size;
+  icon_info.height = output_size;
+  icon_info.data = GenerateBitmap(output_size, color, letter);
+  return icon_info;
 }
 
 // static
@@ -812,7 +825,7 @@ void BookmarkAppHelper::FinishInstallation(const Extension* extension) {
 
 #if defined(OS_MACOSX)
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-                 switches::kDisableHostedAppShimCreation)) {
+          ::switches::kDisableHostedAppShimCreation)) {
     web_app::RevealAppShimInFinderForApp(current_profile, extension);
   }
 #endif
@@ -848,7 +861,7 @@ void BookmarkAppHelper::Observe(int type,
   }
 }
 
-void CreateOrUpdateBookmarkApp(ExtensionService* service,
+void CreateOrUpdateBookmarkApp(extensions::ExtensionService* service,
                                WebApplicationInfo* web_app_info) {
   scoped_refptr<BookmarkAppInstaller> installer(
       new BookmarkAppInstaller(service, *web_app_info));

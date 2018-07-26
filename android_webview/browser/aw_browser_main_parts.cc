@@ -15,7 +15,7 @@
 #include "android_webview/common/aw_paths.h"
 #include "android_webview/common/aw_resource.h"
 #include "android_webview/common/aw_switches.h"
-#include "android_webview/common/crash_reporter/aw_microdump_crash_reporter.h"
+#include "android_webview/common/crash_reporter/aw_crash_reporter_client.h"
 #include "base/android/apk_assets.h"
 #include "base/android/build_info.h"
 #include "base/android/locale_utils.h"
@@ -26,8 +26,8 @@
 #include "base/message_loop/message_loop.h"
 #include "base/message_loop/message_loop_current.h"
 #include "base/path_service.h"
+#include "components/crash/content/browser/child_exit_observer_android.h"
 #include "components/crash/content/browser/crash_dump_manager_android.h"
-#include "components/crash/content/browser/crash_dump_observer_android.h"
 #include "components/heap_profiling/supervisor.h"
 #include "components/services/heap_profiling/public/cpp/settings.h"
 #include "content/public/browser/android/synchronous_compositor.h"
@@ -58,10 +58,8 @@ AwBrowserMainParts::~AwBrowserMainParts() {
 }
 
 bool AwBrowserMainParts::ShouldContentCreateFeatureList() {
-  // If variations is enabled, the FeatureList will be created in
-  // AwFieldTrialCreator.
-  base::CommandLine* cmd = base::CommandLine::ForCurrentProcess();
-  return !cmd->HasSwitch(switches::kEnableWebViewVariations);
+  // FeatureList will be created in AwFieldTrialCreator.
+  return false;
 }
 
 int AwBrowserMainParts::PreEarlyInitialization() {
@@ -80,7 +78,6 @@ int AwBrowserMainParts::PreEarlyInitialization() {
   DCHECK(!main_message_loop_.get());
   if (!base::MessageLoopCurrent::IsSet())
     main_message_loop_.reset(new base::MessageLoopForUI);
-  base::MessageLoopCurrentForUI::Get()->Start();
   return service_manager::RESULT_CODE_NORMAL_EXIT;
 }
 
@@ -104,7 +101,7 @@ int AwBrowserMainParts::PreCreateThreads() {
 
   base::android::MemoryPressureListenerAndroid::Initialize(
       base::android::AttachCurrentThread());
-  breakpad::CrashDumpObserver::Create();
+  ::crash_reporter::ChildExitObserver::Create();
 
   // We need to create the safe browsing specific directory even if the
   // AwSafeBrowsingConfigHelper::GetSafeBrowsingEnabled() is false
@@ -128,14 +125,11 @@ int AwBrowserMainParts::PreCreateThreads() {
   if (base::CommandLine::ForCurrentProcess()->HasSwitch(
           switches::kWebViewSandboxedRenderer)) {
     // Create the renderers crash manager on the UI thread.
-    breakpad::CrashDumpObserver::GetInstance()->RegisterClient(
+    ::crash_reporter::ChildExitObserver::GetInstance()->RegisterClient(
         std::make_unique<AwBrowserTerminator>(crash_dir));
   }
 
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kEnableWebViewVariations)) {
-    aw_field_trial_creator_.SetUpFieldTrials();
-  }
+  aw_field_trial_creator_.SetUpFieldTrials();
 
   return service_manager::RESULT_CODE_NORMAL_EXIT;
 }

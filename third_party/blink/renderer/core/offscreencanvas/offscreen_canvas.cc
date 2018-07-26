@@ -7,7 +7,6 @@
 #include <memory>
 #include <utility>
 
-#include "gpu/config/gpu_feature_info.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/core/css/css_font_selector.h"
 #include "third_party/blink/renderer/core/css/offscreen_font_selector.h"
@@ -44,15 +43,16 @@ OffscreenCanvas* OffscreenCanvas::Create(unsigned width, unsigned height) {
 
 OffscreenCanvas::~OffscreenCanvas() = default;
 
-void OffscreenCanvas::Commit(scoped_refptr<StaticBitmapImage> bitmap_image,
+void OffscreenCanvas::Commit(scoped_refptr<CanvasResource> canvas_resource,
                              const SkIRect& damage_rect) {
-  if (!HasPlaceholderCanvas())
+  if (!HasPlaceholderCanvas() || !canvas_resource)
     return;
 
   base::TimeTicks commit_start_time = WTF::CurrentTimeTicks();
   current_frame_damage_rect_.join(damage_rect);
-  GetOrCreateFrameDispatcher()->DispatchFrameSync(
-      std::move(bitmap_image), commit_start_time, current_frame_damage_rect_);
+  GetOrCreateResourceDispatcher()->DispatchFrameSync(
+      std::move(canvas_resource), commit_start_time,
+      current_frame_damage_rect_);
   current_frame_damage_rect_ = SkIRect::MakeEmpty();
 }
 
@@ -60,6 +60,29 @@ void OffscreenCanvas::Dispose() {
   if (context_) {
     context_->DetachHost();
     context_ = nullptr;
+  }
+
+  if (HasPlaceholderCanvas() && GetTopExecutionContext() &&
+      GetTopExecutionContext()->IsWorkerGlobalScope()) {
+    WorkerAnimationFrameProvider* animation_frame_provider =
+        ToWorkerGlobalScope(GetTopExecutionContext())
+            ->GetAnimationFrameProvider();
+    if (animation_frame_provider) {
+      animation_frame_provider->DeregisterOffscreenCanvas(this);
+    }
+  }
+}
+
+void OffscreenCanvas::SetPlaceholderCanvasId(DOMNodeId canvas_id) {
+  placeholder_canvas_id_ = canvas_id;
+  if (GetTopExecutionContext() &&
+      GetTopExecutionContext()->IsWorkerGlobalScope()) {
+    WorkerAnimationFrameProvider* animation_frame_provider =
+        ToWorkerGlobalScope(GetTopExecutionContext())
+            ->GetAnimationFrameProvider();
+    if (animation_frame_provider) {
+      animation_frame_provider->RegisterOffscreenCanvas(this);
+    }
   }
 }
 
@@ -180,7 +203,7 @@ CanvasRenderingContext* OffscreenCanvas::GetCanvasRenderingContext(
   // Unknown type.
   if (context_type == CanvasRenderingContext::kContextTypeCount ||
       (context_type == CanvasRenderingContext::kContextXRPresent &&
-       !OriginTrials::webXREnabled(execution_context)))
+       !OriginTrials::WebXREnabled(execution_context)))
     return nullptr;
 
   CanvasRenderingContextFactory* factory =
@@ -231,7 +254,14 @@ bool OffscreenCanvas::IsAccelerated() const {
   return context_ && context_->IsAccelerated();
 }
 
-CanvasResourceDispatcher* OffscreenCanvas::GetOrCreateFrameDispatcher() {
+bool OffscreenCanvas::HasPlaceholderCanvas() const {
+  return placeholder_canvas_id_ != kInvalidDOMNodeId;
+}
+
+CanvasResourceDispatcher* OffscreenCanvas::GetOrCreateResourceDispatcher() {
+  DCHECK(HasPlaceholderCanvas());
+  // If we don't have a valid placeholder_canvas_id_, then this is a standalone
+  // OffscreenCanvas, and it should not have a placeholder.
   if (!frame_dispatcher_) {
     // The frame dispatcher connects the current thread of OffscreenCanvas
     // (either main or worker) to the browser process and remains unchanged
@@ -285,10 +315,23 @@ CanvasResourceProvider* OffscreenCanvas::GetOrCreateResourceProvider() {
       }
     }
 
+    base::WeakPtr<CanvasResourceDispatcher> dispatcher_weakptr =
+        HasPlaceholderCanvas() ? GetOrCreateResourceDispatcher()->GetWeakPtr()
+                               : nullptr;
+
     ReplaceResourceProvider(CanvasResourceProvider::Create(
         surface_size, usage, SharedGpuContext::ContextProviderWrapper(), 0,
         context_->ColorParams(), presentation_mode,
-        nullptr));  // canvas_resource_dispatcher
+        std::move(dispatcher_weakptr)));
+
+    // The fallback chain for k*CompositedResourceUsage should never fall
+    // all the way through to BitmapResourceProvider, except in unit tests.
+    // In non unit-test scenarios, it should always be possible to at least
+    // get a ResourceProviderSharedBitmap as a last resort.
+    // This CHECK verifies that we did indeed get a resource provider that
+    // supports compositing when one is required.
+    CHECK(!ResourceProvider() || !HasPlaceholderCanvas() ||
+          ResourceProvider()->SupportsDirectCompositing());
 
     if (ResourceProvider() && ResourceProvider()->IsValid()) {
       ResourceProvider()->Clear();
@@ -313,38 +356,45 @@ void OffscreenCanvas::DidDraw(const FloatRect& rect) {
   if (rect.IsEmpty())
     return;
 
-  if (!HasPlaceholderCanvas())
-    return;
-
-  GetOrCreateFrameDispatcher()->SetNeedsBeginFrame(true);
+  if (HasPlaceholderCanvas()) {
+    needs_push_frame_ = true;
+    // TODO(fserb): perhaps we could avoid requesting begin frames here in cases
+    // where the draw is call from within a worker rAF?
+    GetOrCreateResourceDispatcher()->SetNeedsBeginFrame(true);
+  }
 }
 
 void OffscreenCanvas::BeginFrame() {
-  context_->PushFrame();
-  GetOrCreateFrameDispatcher()->SetNeedsBeginFrame(false);
+  DCHECK(HasPlaceholderCanvas());
+  PushFrameIfNeeded();
+  GetOrCreateResourceDispatcher()->SetNeedsBeginFrame(false);
 }
 
-void OffscreenCanvas::PushFrame(scoped_refptr<StaticBitmapImage> image,
+void OffscreenCanvas::PushFrameIfNeeded() {
+  if (needs_push_frame_ && context_) {
+    context_->PushFrame();
+  }
+}
+
+bool OffscreenCanvas::ShouldAccelerate2dContext() const {
+  base::WeakPtr<WebGraphicsContext3DProviderWrapper> context_provider_wrapper =
+      SharedGpuContext::ContextProviderWrapper();
+  return context_provider_wrapper &&
+         context_provider_wrapper->Utils()->Accelerated2DCanvasFeatureEnabled();
+}
+
+void OffscreenCanvas::PushFrame(scoped_refptr<CanvasResource> canvas_resource,
                                 const SkIRect& damage_rect) {
+  DCHECK(needs_push_frame_);
+  needs_push_frame_ = false;
   current_frame_damage_rect_.join(damage_rect);
-  if (current_frame_damage_rect_.isEmpty())
+  if (current_frame_damage_rect_.isEmpty() || !canvas_resource)
     return;
   base::TimeTicks commit_start_time = WTF::CurrentTimeTicks();
-  GetOrCreateFrameDispatcher()->DispatchFrame(
-      std::move(image), commit_start_time, current_frame_damage_rect_);
+  GetOrCreateResourceDispatcher()->DispatchFrame(std::move(canvas_resource),
+                                                 commit_start_time,
+                                                 current_frame_damage_rect_);
   current_frame_damage_rect_ = SkIRect::MakeEmpty();
-}
-
-void OffscreenCanvas::RegisterContextToDispatch(
-    CanvasRenderingContext* context) {
-  if (!HasPlaceholderCanvas())
-    return;
-
-  if (GetExecutionContext()->IsWorkerGlobalScope()) {
-    ToWorkerGlobalScope(GetExecutionContext())
-        ->GetAnimationFrameProvider()
-        ->AddContextToDispatch(context);
-  }
 }
 
 FontSelector* OffscreenCanvas::GetFontSelector() {

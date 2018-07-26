@@ -227,8 +227,8 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
   std::unique_ptr<net::URLFetcher> fetcher =
       net::URLFetcher::Create(url, net::URLFetcher::GET, &delegate);
   net::HttpRequestHeaders headers;
-  variations::AppendVariationHeaders(url, variations::InIncognito::kNo,
-                                     variations::SignedIn::kNo, &headers);
+  variations::AppendVariationHeadersUnknownSignedIn(
+      url, variations::InIncognito::kNo, &headers);
   fetcher->SetRequestContext(browser()->profile()->GetRequestContext());
   fetcher->SetExtraRequestHeaders(headers.ToString());
   fetcher->Start();
@@ -239,29 +239,6 @@ IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
   EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl2(), "X-Client-Data"));
   EXPECT_TRUE(HasReceivedHeader(GetExampleUrl(), "Host"));
   EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
-}
-
-// Verify in an integration that that the variations header (X-Client-Data) is
-// correctly attached and stripped from network requests that are triggered via
-// the network service.
-IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
-                       TestStrippingHeadersFromNetworkService) {
-  content::StoragePartition* partition =
-      content::BrowserContext::GetDefaultStoragePartition(browser()->profile());
-  network::mojom::NetworkContext* network_context =
-      partition->GetNetworkContext();
-  EXPECT_EQ(net::OK, content::LoadBasicRequest(network_context,
-                                               GetGoogleRedirectUrl1()));
-
-  // TODO(crbug.com/794644) Once the network service stack starts injecting
-  // X-Client-Data headers, the following expectations should be used.
-  EXPECT_FALSE(HasReceivedHeader(GetGoogleRedirectUrl1(), "X-Client-Data"));
-  /*
-  EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl1(), "X-Client-Data"));
-  EXPECT_TRUE(HasReceivedHeader(GetGoogleRedirectUrl2(), "X-Client-Data"));
-  EXPECT_TRUE(HasReceivedHeader(GetExampleUrl(), "Host"));
-  EXPECT_FALSE(HasReceivedHeader(GetExampleUrl(), "X-Client-Data"));
-  */
 }
 
 IN_PROC_BROWSER_TEST_F(VariationsHttpHeadersBrowserTest,
@@ -284,9 +261,9 @@ IN_PROC_BROWSER_TEST_F(
   resource_request->url = url;
 
   std::unique_ptr<network::SimpleURLLoader> loader =
-      variations::CreateSimpleURLLoaderWithVariationsHeaders(
+      variations::CreateSimpleURLLoaderWithVariationsHeadersUnknownSignedIn(
           std::move(resource_request), variations::InIncognito::kNo,
-          variations::SignedIn::kNo, TRAFFIC_ANNOTATION_FOR_TESTS);
+          TRAFFIC_ANNOTATION_FOR_TESTS);
 
   content::StoragePartition* partition =
       content::BrowserContext::GetDefaultStoragePartition(browser()->profile());
@@ -315,9 +292,9 @@ IN_PROC_BROWSER_TEST_F(
   resource_request->url = url;
 
   std::unique_ptr<network::SimpleURLLoader> loader =
-      variations::CreateSimpleURLLoaderWithVariationsHeaders(
+      variations::CreateSimpleURLLoaderWithVariationsHeadersUnknownSignedIn(
           std::move(resource_request), variations::InIncognito::kNo,
-          variations::SignedIn::kNo, TRAFFIC_ANNOTATION_FOR_TESTS);
+          TRAFFIC_ANNOTATION_FOR_TESTS);
 
   network::SharedURLLoaderFactory* loader_factory =
       g_browser_process->system_network_context_manager()

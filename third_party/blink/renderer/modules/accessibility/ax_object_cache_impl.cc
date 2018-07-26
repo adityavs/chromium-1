@@ -33,7 +33,7 @@
 #include "third_party/blink/public/platform/modules/permissions/permission_status.mojom-blink.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/web/web_local_frame_client.h"
-#include "third_party/blink/renderer/core/dom/accessible_node.h"
+#include "third_party/blink/renderer/core/aom/accessible_node.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
@@ -81,8 +81,6 @@
 #include "third_party/blink/renderer/modules/accessibility/ax_relation_cache.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_slider.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_svg_root.h"
-#include "third_party/blink/renderer/modules/accessibility/ax_table_column.h"
-#include "third_party/blink/renderer/modules/accessibility/ax_table_header_container.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_virtual_object.h"
 #include "third_party/blink/renderer/modules/permissions/permission_utils.h"
 
@@ -465,12 +463,6 @@ AXObject* AXObjectCacheImpl::GetOrCreate(AccessibilityRole role) {
   AXObject* obj = nullptr;
 
   switch (role) {
-    case kColumnRole:
-      obj = AXTableColumn::Create(*this);
-      break;
-    case kTableHeaderContainerRole:
-      obj = AXTableHeaderContainer::Create(*this);
-      break;
     case kSliderThumbRole:
       obj = AXSliderThumb::Create(*this);
       break;
@@ -691,6 +683,10 @@ void AXObjectCacheImpl::TextChanged(AXObject* obj,
   PostNotification(obj, AXObjectCacheImpl::kAXTextChanged);
 }
 
+void AXObjectCacheImpl::DocumentTitleChanged() {
+  PostNotification(Root(), AXObjectCacheImpl::kAXDocumentTitleChanged);
+}
+
 void AXObjectCacheImpl::UpdateCacheAfterNodeIsAttached(Node* node) {
   // Calling get() will update the AX object if we had an AXNodeObject but now
   // we need an AXLayoutObject, because it was reparented to a location outside
@@ -875,6 +871,14 @@ void AXObjectCacheImpl::HandleLayoutComplete(LayoutObject* layout_object) {
 void AXObjectCacheImpl::HandleClicked(Node* node) {
   if (AXObject* obj = GetOrCreate(node))
     PostNotification(obj, kAXClicked);
+}
+
+void AXObjectCacheImpl::HandleAttributeChanged(
+    const QualifiedName& attr_name,
+    AccessibleNode* accessible_node) {
+  modification_count_++;
+  if (AXObject* obj = Get(accessible_node))
+    PostNotification(obj, kAXAriaAttributeChanged);
 }
 
 void AXObjectCacheImpl::HandleAriaExpandedChange(Node* node) {
@@ -1357,6 +1361,8 @@ STATIC_ASSERT_ENUM(kWebAXEventChildrenChanged,
 STATIC_ASSERT_ENUM(kWebAXEventClicked, AXObjectCacheImpl::kAXClicked);
 STATIC_ASSERT_ENUM(kWebAXEventDocumentSelectionChanged,
                    AXObjectCacheImpl::kAXDocumentSelectionChanged);
+STATIC_ASSERT_ENUM(kWebAXEventDocumentTitleChanged,
+                   AXObjectCacheImpl::kAXDocumentTitleChanged);
 STATIC_ASSERT_ENUM(kWebAXEventExpandedChanged,
                    AXObjectCacheImpl::kAXExpandedChanged);
 STATIC_ASSERT_ENUM(kWebAXEventFocus,

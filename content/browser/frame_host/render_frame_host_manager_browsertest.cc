@@ -653,8 +653,9 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerTest,
 
 // Test for crbug.com/116192.  Targeted links should still work after the
 // named target window has swapped processes.
+// Disabled Flaky test - crbug.com/859487
 IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerTest,
-                       AllowTargetedNavigationsAfterSwap) {
+                       DISABLED_AllowTargetedNavigationsAfterSwap) {
   StartEmbeddedServer();
 
   // Load a page with links that open in a new window.
@@ -2369,7 +2370,7 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerTest, WebUIGetsBindings) {
   GURL url1(std::string(kChromeUIScheme) + "://" +
             std::string(kChromeUIGpuHost));
   GURL url2(std::string(kChromeUIScheme) + "://" +
-            std::string(kChromeUIAccessibilityHost));
+            std::string(kChromeUIHistogramHost));
 
   // Visit a WebUI page with bindings.
   NavigateToURL(shell(), url1);
@@ -4388,6 +4389,76 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerTest, ErrorPageNavigationReload) {
           shell()->web_contents()->GetSiteInstance()->GetProcess()->GetID()));
 }
 
+// Test to verify that navigating away from an error page results in correct
+// change in SiteInstance.
+IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerTest,
+                       ErrorPageNavigationAfterError) {
+  // This test is only valid if error page isolation is enabled.
+  if (!SiteIsolationPolicy::IsErrorPageIsolationEnabled(true))
+    return;
+
+  StartEmbeddedServer();
+  GURL url(embedded_test_server()->GetURL("/title1.html"));
+  GURL error_url(embedded_test_server()->GetURL("/empty.html"));
+  std::unique_ptr<URLLoaderInterceptor> url_interceptor =
+      SetupRequestFailForURL(error_url);
+  NavigationControllerImpl& nav_controller =
+      static_cast<NavigationControllerImpl&>(
+          shell()->web_contents()->GetController());
+
+  // Start with a successful navigation to a document.
+  EXPECT_TRUE(NavigateToURL(shell(), url));
+  scoped_refptr<SiteInstance> success_site_instance =
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance();
+  EXPECT_EQ(1, nav_controller.GetEntryCount());
+
+  // Navigate to an url resulting in an error page.
+  EXPECT_FALSE(NavigateToURL(shell(), error_url));
+  EXPECT_EQ(
+      GURL(kUnreachableWebDataURL),
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+  EXPECT_EQ(
+      GURL(kUnreachableWebDataURL),
+      ChildProcessSecurityPolicyImpl::GetInstance()->GetOriginLock(
+          shell()->web_contents()->GetSiteInstance()->GetProcess()->GetID()));
+  EXPECT_EQ(2, nav_controller.GetEntryCount());
+
+  // Navigate again to the initial successful document, expecting a new
+  // navigation and new SiteInstance.
+  EXPECT_TRUE(NavigateToURL(shell(), url));
+  EXPECT_NE(
+      GURL(kUnreachableWebDataURL),
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+  EXPECT_EQ(
+      success_site_instance->GetSiteURL(),
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+  EXPECT_NE(success_site_instance,
+            shell()->web_contents()->GetMainFrame()->GetSiteInstance());
+  EXPECT_EQ(3, nav_controller.GetEntryCount());
+
+  // Repeat again using a renderer-initiated navigation for the successful one.
+  EXPECT_FALSE(NavigateToURL(shell(), error_url));
+  EXPECT_EQ(
+      GURL(kUnreachableWebDataURL),
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+  EXPECT_EQ(
+      GURL(kUnreachableWebDataURL),
+      ChildProcessSecurityPolicyImpl::GetInstance()->GetOriginLock(
+          shell()->web_contents()->GetSiteInstance()->GetProcess()->GetID()));
+  EXPECT_EQ(4, nav_controller.GetEntryCount());
+  {
+    TestNavigationObserver observer(shell()->web_contents());
+    EXPECT_TRUE(
+        ExecuteScript(shell(), "location.href = '" + url.spec() + "';"));
+    observer.Wait();
+    EXPECT_TRUE(observer.last_navigation_succeeded());
+  }
+  EXPECT_EQ(5, nav_controller.GetEntryCount());
+  EXPECT_NE(
+      GURL(kUnreachableWebDataURL),
+      shell()->web_contents()->GetMainFrame()->GetSiteInstance()->GetSiteURL());
+}
+
 // A NavigationThrottle implementation that blocks all outgoing navigation
 // requests for a specific WebContents. It is used to block navigations to
 // WebUI URLs in the following test.
@@ -4812,6 +4883,55 @@ IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerUnloadBrowserTest,
                          a_url.spec().c_str()),
       &message));
   EXPECT_EQ("bar", message);
+}
+
+// Ensure that when a pending delete RenderFrameHost's process dies, the
+// current RenderFrameHost does not lose its child frames.  See
+// https://crbug.com/867274.
+IN_PROC_BROWSER_TEST_F(RenderFrameHostManagerUnloadBrowserTest,
+                       PendingDeleteRFHProcessShutdownDoesNotRemoveSubframes) {
+  GURL first_url(embedded_test_server()->GetURL("a.com", "/title1.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), first_url));
+  FrameTreeNode* root = static_cast<WebContentsImpl*>(shell()->web_contents())
+                            ->GetFrameTree()
+                            ->root();
+  RenderFrameHostImpl* rfh = root->current_frame_host();
+
+  // Set up an unload handler which never finishes to force |rfh| to stay
+  // around in pending delete state and never receive the swapout ACK.
+  EXPECT_TRUE(
+      ExecuteScript(rfh, "window.onunload = function(e) { while(1); };\n"));
+  rfh->DisableSwapOutTimerForTesting();
+
+  // Navigate to another page with two subframes.
+  RenderFrameDeletedObserver rfh_observer(rfh);
+  GURL second_url(embedded_test_server()->GetURL(
+      "b.com", "/cross_site_iframe_factory.html?b(c,b)"));
+  EXPECT_TRUE(NavigateToURL(shell(), second_url));
+
+  // At this point, |rfh| should still be live and pending deletion.
+  EXPECT_FALSE(rfh_observer.deleted());
+  EXPECT_FALSE(rfh->is_active());
+  EXPECT_TRUE(rfh->IsRenderFrameLive());
+
+  // Meanwhile, the new page should have two subframes.
+  EXPECT_EQ(2U, root->child_count());
+
+  // Kill the pending delete RFH's process.
+  RenderProcessHostWatcher crash_observer(
+      rfh->GetProcess(), RenderProcessHostWatcher::WATCH_FOR_PROCESS_EXIT);
+  rfh->GetProcess()->Shutdown(0);
+  crash_observer.Wait();
+
+  // The process kill should simulate a swapout ACK and trigger destruction of
+  // the pending delete RFH.
+  rfh_observer.WaitUntilDeleted();
+
+  // Ensure that the process kill didn't incorrectly remove subframes from the
+  // new page.
+  ASSERT_EQ(2U, root->child_count());
+  EXPECT_TRUE(root->child_at(0)->current_frame_host()->IsRenderFrameLive());
+  EXPECT_TRUE(root->child_at(1)->current_frame_host()->IsRenderFrameLive());
 }
 
 }  // namespace content

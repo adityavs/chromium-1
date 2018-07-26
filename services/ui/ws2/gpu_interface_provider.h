@@ -23,6 +23,12 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) GpuInterfaceProvider {
   // ui::mojom::GpuRequest.
   virtual void RegisterGpuInterfaces(
       service_manager::BinderRegistry* registry) = 0;
+
+#if defined(USE_OZONE)
+  // Registers the gpu-related interfaces needed by Ozone.
+  virtual void RegisterOzoneGpuInterfaces(
+      service_manager::BinderRegistry* registry) = 0;
+#endif
 };
 
 }  // namespace ws2

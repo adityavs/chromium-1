@@ -15,13 +15,14 @@
 #include "chrome/browser/ui/views/tabs/tab_controller.h"
 #include "chrome/browser/ui/views/tabs/tab_icon.h"
 #include "chrome/grit/theme_resources.h"
+#include "chrome/test/views/chrome_views_test_base.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "ui/base/material_design/material_design_controller.h"
 #include "ui/base/models/list_selection_model.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/favicon_size.h"
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/label.h"
-#include "ui/views/test/views_test_base.h"
 #include "ui/views/widget/widget.h"
 
 using views::Widget;
@@ -59,6 +60,7 @@ class FakeTabController : public TabController {
   bool IsTabPinned(const Tab* tab) const override { return false; }
   bool IsFirstVisibleTab(const Tab* tab) const override { return false; }
   bool IsLastVisibleTab(const Tab* tab) const override { return false; }
+  bool SingleTabMode() const override { return false; }
   bool IsIncognito() const override { return false; }
   void MaybeStartDrag(
       Tab* tab,
@@ -67,10 +69,8 @@ class FakeTabController : public TabController {
   void ContinueDrag(views::View* view, const ui::LocatedEvent& event) override {
   }
   bool EndDrag(EndDragReason reason) override { return false; }
-  Tab* GetTabAt(Tab* tab, const gfx::Point& tab_in_tab_coordinates) override {
-    return nullptr;
-  }
-  Tab* GetSubsequentTab(Tab* tab) override { return nullptr; }
+  Tab* GetTabAt(const gfx::Point& point) override { return nullptr; }
+  const Tab* GetSubsequentTab(const Tab* tab) override { return nullptr; }
   void OnMouseEventInTab(views::View* source,
                          const ui::MouseEvent& event) override {}
   bool ShouldPaintTab(
@@ -95,7 +95,7 @@ class FakeTabController : public TabController {
     *custom_image = false;
     return IDR_THEME_TAB_BACKGROUND;
   }
-  gfx::Rect GetTabAnimationTargetBounds(Tab* tab) override {
+  gfx::Rect GetTabAnimationTargetBounds(const Tab* tab) override {
     return tab->bounds();
   }
   base::string16 GetAccessibleTabName(const Tab* tab) const override {
@@ -110,20 +110,28 @@ class FakeTabController : public TabController {
   DISALLOW_COPY_AND_ASSIGN(FakeTabController);
 };
 
-class TabTest : public views::ViewsTestBase {
+class TabTest : public ChromeViewsTestBase {
  public:
   TabTest() {}
   ~TabTest() override {}
+
+  static TabIcon* GetTabIcon(const Tab& tab) { return tab.icon_; }
+
+  static views::Label* GetTabTitle(const Tab& tab) { return tab.title_; }
+
+  static views::ImageButton* GetAlertIndicator(const Tab& tab) {
+    return tab.alert_indicator_button_;
+  }
 
   static views::ImageButton* GetCloseButton(const Tab& tab) {
     return tab.close_button_;
   }
 
-  static TabIcon* GetTabIcon(const Tab& tab) { return tab.icon_; }
-
   static int GetTitleWidth(const Tab& tab) {
     return tab.title_->bounds().width();
   }
+
+  static void EndTitleAnimation(Tab& tab) { tab.title_animation_.End(); }
 
   static void LayoutTab(Tab* tab) { tab->Layout(); }
 
@@ -564,4 +572,120 @@ TEST_F(TabTest, TitleHiddenWhenSmall) {
   EXPECT_GT(GetTitleWidth(tab), 0);
   tab.SetBounds(0, 0, 0, 50);
   EXPECT_EQ(0, GetTitleWidth(tab));
+}
+
+TEST_F(TabTest, FaviconDoesntMoveWhenShowingAlertIndicator) {
+  Widget widget;
+  InitWidget(&widget);
+
+  for (bool is_active_tab : {false, true}) {
+    FakeTabController controller;
+    controller.set_active_tab(is_active_tab);
+    Tab tab(&controller, nullptr);
+    widget.GetContentsView()->AddChildView(&tab);
+    tab.SizeToPreferredSize();
+
+    views::View* icon = GetTabIcon(tab);
+    int icon_x = icon->x();
+    TabRendererData data;
+    data.alert_state = TabAlertState::AUDIO_PLAYING;
+    tab.SetData(data);
+    EXPECT_EQ(icon_x, icon->x());
+  }
+}
+
+TEST_F(TabTest, SmallTabsHideCloseButton) {
+  Widget widget;
+  InitWidget(&widget);
+
+  FakeTabController controller;
+  controller.set_active_tab(false);
+  Tab tab(&controller, nullptr);
+  widget.GetContentsView()->AddChildView(&tab);
+  const int width = Tab::GetContentsInsets().width() +
+                    Tab::kMinimumContentsWidthForCloseButtons;
+  tab.SetBounds(0, 0, width, 50);
+  const views::View* close = GetCloseButton(tab);
+  EXPECT_TRUE(close->visible());
+
+  const views::View* icon = GetTabIcon(tab);
+  const int icon_x = icon->x();
+  // Shrink the tab. The close button should disappear.
+  tab.SetBounds(0, 0, width - 1, 50);
+  EXPECT_FALSE(close->visible());
+  // The favicon moves left because the extra padding disappears too.
+  EXPECT_LT(icon->x(), icon_x);
+}
+
+TEST_F(TabTest, ExtraLeftPaddingNotShownOnSmallActiveTab) {
+  Widget widget;
+  InitWidget(&widget);
+
+  FakeTabController controller;
+  controller.set_active_tab(true);
+  Tab tab(&controller, nullptr);
+  widget.GetContentsView()->AddChildView(&tab);
+  tab.SetBounds(0, 0, 200, 50);
+  const views::View* close = GetCloseButton(tab);
+  EXPECT_TRUE(close->visible());
+
+  const views::View* icon = GetTabIcon(tab);
+  const int icon_x = icon->x();
+
+  tab.SetBounds(0, 0, 40, 50);
+  EXPECT_TRUE(close->visible());
+  // The favicon moves left because the extra padding disappears.
+  EXPECT_LT(icon->x(), icon_x);
+}
+
+TEST_F(TabTest, ExtraLeftPaddingShownOnSiteWithoutFavicon) {
+  Widget widget;
+  InitWidget(&widget);
+
+  FakeTabController controller;
+  Tab tab(&controller, nullptr);
+  widget.GetContentsView()->AddChildView(&tab);
+
+  tab.SizeToPreferredSize();
+  const views::View* icon = GetTabIcon(tab);
+  const int icon_x = icon->x();
+
+  // Remove the favicon.
+  TabRendererData data;
+  data.show_icon = false;
+  tab.SetData(data);
+  EndTitleAnimation(tab);
+  EXPECT_FALSE(icon->visible());
+  // Title should be placed where the favicon was.
+  EXPECT_EQ(icon_x, GetTabTitle(tab)->x());
+}
+
+TEST_F(TabTest, ExtraAlertPaddingNotShownOnSmallActiveTab) {
+  if (!ui::MaterialDesignController::IsRefreshUi()) {
+    // Extra alert padding not shown pre-Refresh.
+    return;
+  }
+
+  Widget widget;
+  InitWidget(&widget);
+
+  FakeTabController controller;
+  controller.set_active_tab(true);
+  Tab tab(&controller, nullptr);
+  widget.GetContentsView()->AddChildView(&tab);
+  TabRendererData data;
+  data.alert_state = TabAlertState::AUDIO_PLAYING;
+  tab.SetData(data);
+
+  tab.SetBounds(0, 0, 200, 50);
+  const views::View* close = GetCloseButton(tab);
+  const views::View* alert = GetAlertIndicator(tab);
+  const int original_spacing = close->x() - alert->bounds().right();
+
+  tab.SetBounds(0, 0, 60, 50);
+  EXPECT_FALSE(GetTabIcon(tab)->visible());
+  EXPECT_TRUE(close->visible());
+  EXPECT_TRUE(alert->visible());
+  // The alert indicator moves closer because the extra padding is gone.
+  EXPECT_LT(close->x() - alert->bounds().right(), original_spacing);
 }

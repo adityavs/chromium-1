@@ -44,7 +44,7 @@ RegisterResult MachineLevelUserCloudPolicyRegisterWatcher::
 
   // We are already enrolled successfully.
   if (!token_storage->RetrieveDMToken().empty()) {
-    return RegisterResult::kEnrollmentSuccess;
+    return RegisterResult::kEnrollmentSuccessBeforeDialogDisplayed;
   }
 
   EnterpriseStartupDialog::DialogResultCallback callback = base::BindOnce(
@@ -80,6 +80,10 @@ RegisterResult MachineLevelUserCloudPolicyRegisterWatcher::
   if (is_restart_needed_)
     return RegisterResult::kRestartDueToFailure;
   return RegisterResult::kQuitDueToFailure;
+}
+
+bool MachineLevelUserCloudPolicyRegisterWatcher::IsDialogShowing() {
+  return dialog_ && dialog_->IsShowing();
 }
 
 void MachineLevelUserCloudPolicyRegisterWatcher::

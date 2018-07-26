@@ -8,6 +8,9 @@
 #include <vector>
 
 #include "base/bind.h"
+#include "base/metrics/histogram_functions.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/strings/stringprintf.h"
 #include "chrome/browser/resource_coordinator/local_site_characteristics_database.h"
 #include "chrome/browser/resource_coordinator/time.h"
 
@@ -113,21 +116,36 @@ LocalSiteCharacteristicsDataImpl::UsesNotificationsInBackground() const {
 
 void LocalSiteCharacteristicsDataImpl::NotifyUpdatesFaviconInBackground() {
   NotifyFeatureUsage(
-      site_characteristics_.mutable_updates_favicon_in_background());
+      site_characteristics_.mutable_updates_favicon_in_background(),
+      "FaviconUpdateInBackground");
 }
 
 void LocalSiteCharacteristicsDataImpl::NotifyUpdatesTitleInBackground() {
   NotifyFeatureUsage(
-      site_characteristics_.mutable_updates_title_in_background());
+      site_characteristics_.mutable_updates_title_in_background(),
+      "TitleUpdateInBackground");
 }
 
 void LocalSiteCharacteristicsDataImpl::NotifyUsesAudioInBackground() {
-  NotifyFeatureUsage(site_characteristics_.mutable_uses_audio_in_background());
+  NotifyFeatureUsage(site_characteristics_.mutable_uses_audio_in_background(),
+                     "AudioUsageInBackground");
 }
 
 void LocalSiteCharacteristicsDataImpl::NotifyUsesNotificationsInBackground() {
   NotifyFeatureUsage(
-      site_characteristics_.mutable_uses_notifications_in_background());
+      site_characteristics_.mutable_uses_notifications_in_background(),
+      "NotificationsUsageInBackground");
+}
+
+void LocalSiteCharacteristicsDataImpl::ExpireAllObservationWindowsForTesting() {
+  auto params = GetSiteCharacteristicsDatabaseParams();
+  base::TimeDelta longest_observation_window =
+      std::max({params.favicon_update_observation_window,
+                params.title_update_observation_window,
+                params.audio_usage_observation_window,
+                params.notifications_usage_observation_window});
+  for (auto* iter : GetAllFeaturesFromProto(&site_characteristics_))
+    IncrementFeatureObservationDuration(iter, longest_observation_window);
 }
 
 LocalSiteCharacteristicsDataImpl::LocalSiteCharacteristicsDataImpl(
@@ -139,7 +157,7 @@ LocalSiteCharacteristicsDataImpl::LocalSiteCharacteristicsDataImpl(
       loaded_tabs_in_background_count_(0U),
       database_(database),
       delegate_(delegate),
-      safe_to_write_to_db_(false),
+      fully_initialized_(false),
       is_dirty_(false),
       weak_factory_(this) {
   DCHECK(database_);
@@ -165,7 +183,7 @@ LocalSiteCharacteristicsDataImpl::~LocalSiteCharacteristicsDataImpl() {
 
   // TODO(sebmarchand): Some data might be lost here if the read operation has
   // not completed, add some metrics to measure if this is really an issue.
-  if (is_dirty_ && safe_to_write_to_db_) {
+  if (is_dirty_ && fully_initialized_) {
     DCHECK(site_characteristics_.IsInitialized());
     database_->WriteSiteCharacteristicsIntoDB(origin_, site_characteristics_);
   }
@@ -255,13 +273,17 @@ void LocalSiteCharacteristicsDataImpl::
   }
 
   // This object is now in a valid state and can be written in the database.
-  safe_to_write_to_db_ = true;
+  fully_initialized_ = true;
 }
 
 SiteFeatureUsage LocalSiteCharacteristicsDataImpl::GetFeatureUsage(
     const SiteCharacteristicsFeatureProto& feature_proto,
     const base::TimeDelta min_obs_time) const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+
+  UMA_HISTOGRAM_BOOLEAN(
+      "ResourceCoordinator.LocalDB.ReadHasCompletedBeforeQuery",
+      fully_initialized_);
 
   if (!feature_proto.IsInitialized())
     return SiteFeatureUsage::kSiteFeatureUsageUnknown;
@@ -281,10 +303,23 @@ SiteFeatureUsage LocalSiteCharacteristicsDataImpl::GetFeatureUsage(
 }
 
 void LocalSiteCharacteristicsDataImpl::NotifyFeatureUsage(
-    SiteCharacteristicsFeatureProto* feature_proto) {
+    SiteCharacteristicsFeatureProto* feature_proto,
+    const char* feature_name) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(IsLoaded());
   DCHECK_GT(loaded_tabs_in_background_count_, 0U);
+
+  // Report the observation time if this is the first time this feature is
+  // observed.
+  if (feature_proto->observation_duration() != 0) {
+    base::UmaHistogramCustomTimes(
+        base::StringPrintf(
+            "ResourceCoordinator.LocalDB.ObservationTimeBeforeFirstUse.%s",
+            feature_name),
+        InternalRepresentationToTimeDelta(
+            feature_proto->observation_duration()),
+        base::TimeDelta::FromSeconds(1), base::TimeDelta::FromDays(1), 100);
+  }
 
   feature_proto->set_use_timestamp(
       TimeDeltaToInternalRepresentation(GetTickDeltaSinceEpoch()));
@@ -311,7 +346,8 @@ void LocalSiteCharacteristicsDataImpl::OnInitCallback(
       // feature then there's nothing to do, otherwise update it with the values
       // from the database.
       if (!(*this_features_iter)->has_use_timestamp()) {
-        if ((*db_features_iter)->has_use_timestamp()) {
+        if ((*db_features_iter)->has_use_timestamp() &&
+            (*db_features_iter)->use_timestamp() != 0) {
           // Keep the use timestamp from the database, if any.
           (*this_features_iter)
               ->set_use_timestamp((*db_features_iter)->use_timestamp());
@@ -332,6 +368,11 @@ void LocalSiteCharacteristicsDataImpl::OnInitCallback(
               (*this_features_iter),
               InternalRepresentationToTimeDelta(
                   (*db_features_iter)->observation_duration()));
+          // Makes sure that the |use_timestamp| field gets initialized.
+          (*this_features_iter)
+              ->set_use_timestamp(
+                  LocalSiteCharacteristicsDataImpl::
+                      TimeDeltaToInternalRepresentation(base::TimeDelta()));
         }
       }
     }
@@ -346,7 +387,7 @@ void LocalSiteCharacteristicsDataImpl::OnInitCallback(
     InitWithDefaultValues(true /* only_init_uninitialized_fields */);
   }
 
-  safe_to_write_to_db_ = true;
+  fully_initialized_ = true;
   DCHECK(site_characteristics_.IsInitialized());
 }
 

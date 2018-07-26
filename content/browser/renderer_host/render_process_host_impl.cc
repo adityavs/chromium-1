@@ -149,6 +149,7 @@
 #include "content/common/view_messages.h"
 #include "content/public/browser/browser_context.h"
 #include "content/public/browser/content_browser_client.h"
+#include "content/public/browser/network_service_instance.h"
 #include "content/public/browser/notification_service.h"
 #include "content/public/browser/notification_types.h"
 #include "content/public/browser/render_process_host_factory.h"
@@ -171,7 +172,6 @@
 #include "content/public/common/service_names.mojom.h"
 #include "content/public/common/url_constants.h"
 #include "device/gamepad/gamepad_haptics_manager.h"
-#include "device/gamepad/gamepad_monitor.h"
 #include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/client/gpu_switches.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
@@ -1153,6 +1153,12 @@ void CopyFeatureSwitch(const base::CommandLine& src,
     dest->AppendSwitchASCII(switch_name, base::JoinString(features, ","));
 }
 
+void GetNetworkChangeManager(
+    network::mojom::NetworkChangeManagerRequest request) {
+  DCHECK(BrowserThread::CurrentlyOn(BrowserThread::UI));
+  GetNetworkService()->GetNetworkChangeManager(std::move(request));
+}
+
 }  // namespace
 
 // Held by the RPH and used to control an (unowned) ConnectionFilterImpl from
@@ -1458,8 +1464,14 @@ RenderProcessHostImpl::RenderProcessHostImpl(
 
   InitializeChannelProxy();
 
-  if (features::IsAshInBrowserProcess())
-    gpu_client_.reset(new GpuClientImpl(GetID()));
+  if (features::IsAshInBrowserProcess()) {
+    const int id = GetID();
+    const uint64_t tracing_id =
+        ChildProcessHostImpl::ChildProcessUniqueIdToTracingProcessId(id);
+    gpu_client_.reset(new GpuClientImpl(
+        id, tracing_id,
+        BrowserThread::GetTaskRunnerForThread(BrowserThread::IO)));
+  }
 
   GetMemoryDumpProvider().AddHost(this);
 }
@@ -1843,8 +1855,8 @@ void RenderProcessHostImpl::CreateMessageFilters() {
   AddFilter(new TextInputClientMessageFilter());
 #endif
 
-  p2p_socket_dispatcher_host_ = new P2PSocketDispatcherHost(
-      resource_context, request_context.get());
+  p2p_socket_dispatcher_host_ =
+      new P2PSocketDispatcherHost(request_context.get());
   AddFilter(p2p_socket_dispatcher_host_.get());
 
   AddFilter(new TraceMessageFilter(GetID()));
@@ -1898,10 +1910,6 @@ void RenderProcessHostImpl::DelayProcessShutdownForUnload(
 
 void RenderProcessHostImpl::RegisterMojoInterfaces() {
   auto registry = std::make_unique<service_manager::BinderRegistry>();
-
-  channel_->AddAssociatedInterfaceForIOThread(
-      base::Bind(&IndexedDBDispatcherHost::AddBinding,
-                 base::Unretained(indexed_db_factory_.get())));
 
   channel_->AddAssociatedInterfaceForIOThread(base::BindRepeating(
       &ServiceWorkerDispatcherHost::AddBinding,
@@ -1972,8 +1980,6 @@ void RenderProcessHostImpl::RegisterMojoInterfaces() {
 
   registry->AddInterface(base::Bind(&device::GamepadHapticsManager::Create));
 
-  registry->AddInterface(base::Bind(&device::GamepadMonitor::Create));
-
   registry->AddInterface(
       base::Bind(&PushMessagingManager::BindRequest,
                  base::Unretained(push_messaging_manager_.get())));
@@ -1984,6 +1990,10 @@ void RenderProcessHostImpl::RegisterMojoInterfaces() {
     registry->AddInterface(base::BindRepeating(
         &GpuClientImpl::Add, base::Unretained(gpu_client_.get())));
   }
+
+  registry->AddInterface(
+      base::BindRepeating(&IndexedDBDispatcherHost::AddBinding,
+                          base::Unretained(indexed_db_factory_.get())));
 
   registry->AddInterface(
       base::Bind(
@@ -2054,6 +2064,9 @@ void RenderProcessHostImpl::RegisterMojoInterfaces() {
 #if BUILDFLAG(ENABLE_LIBRARY_CDMS)
   registry->AddInterface(base::BindRepeating(&KeySystemSupportImpl::Create));
 #endif  // BUILDFLAG(ENABLE_LIBRARY_CDMS)
+
+  AddUIThreadInterface(registry.get(),
+                       base::BindRepeating(&GetNetworkChangeManager));
 
   // ---- Please do not register interfaces below this line ------
   //
@@ -2306,6 +2319,9 @@ void RenderProcessHostImpl::CreateURLLoaderFactory(
   network::mojom::URLLoaderFactoryParamsPtr params =
       network::mojom::URLLoaderFactoryParams::New();
   params->process_id = id_;
+  params->disable_web_security =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableWebSecurity);
   SiteIsolationPolicy::PopulateURLLoaderFactoryParamsPtrForCORB(params.get());
   storage_partition_impl_->GetNetworkContext()->CreateURLLoaderFactory(
       std::move(request), std::move(params));
@@ -2777,10 +2793,12 @@ void RenderProcessHostImpl::PropagateBrowserCommandLineToRenderer(
     switches::kEnableUseZoomForDSF,
     switches::kEnableViewport,
     switches::kEnableVtune,
+    switches::kEnableWebGL2ComputeContext,
     switches::kEnableWebGLDraftExtensions,
     switches::kEnableWebGLImageChromium,
     switches::kEnableWebVR,
     switches::kExplicitlyAllowedPorts,
+    switches::kFileUrlPathAlias,
     switches::kFMPNetworkQuietTimeout,
     switches::kForceColorProfile,
     switches::kForceDeviceScaleFactor,
@@ -3016,7 +3034,9 @@ bool RenderProcessHostImpl::FastShutdownIfPossible(size_t page_count,
 }
 
 bool RenderProcessHostImpl::Send(IPC::Message* msg) {
-  TRACE_EVENT0("renderer_host", "RenderProcessHostImpl::Send");
+  TRACE_EVENT2("renderer_host", "RenderProcessHostImpl::Send", "class",
+               IPC_MESSAGE_ID_CLASS(msg->type()), "line",
+               IPC_MESSAGE_ID_LINE(msg->type()));
 
   std::unique_ptr<IPC::Message> message(msg);
 
@@ -4047,6 +4067,13 @@ void RenderProcessHostImpl::UpdateProcessPriorityInputs() {
   }
 
   bool inputs_changed = new_visible_widgets_count != visible_clients_;
+#if defined(OS_ANDROID)
+  // OS_ANDROID in order to maintain the workaround on desktop to avoid
+  // backgrounding a new process. See the comment in OnProcessLaunched and
+  // https://crbug.com/560446. Only android uses frame_depth for now, so
+  // not a huge change.
+  inputs_changed = inputs_changed || frame_depth_ != new_frame_depth;
+#endif
   visible_clients_ = new_visible_widgets_count;
   frame_depth_ = new_frame_depth;
 #if defined(OS_ANDROID)

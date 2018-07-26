@@ -18,6 +18,7 @@ namespace chrome {
 
 const char kChromeUIAboutHost[] = "about";
 const char kChromeUIAboutURL[] = "chrome://about/";
+const char kChromeUIAccessibilityHost[] = "accessibility";
 const char kChromeUIAppLauncherPageHost[] = "apps";
 const char kChromeUIAppListStartPageURL[] = "chrome://app-list/";
 const char kChromeUIAppsURL[] = "chrome://apps/";
@@ -155,6 +156,7 @@ const char kChromeUIThumbnailHost[] = "thumb";
 const char kChromeUIThumbnailListHost[] = "thumbnails";
 const char kChromeUIThumbnailURL[] = "chrome://thumb/";
 const char kChromeUITranslateInternalsHost[] = "translate-internals";
+const char kChromeUIUkmHost[] = "ukm";
 const char kChromeUIUberHost[] = "chrome";
 const char kChromeUIUsbInternalsHost[] = "usb-internals";
 const char kChromeUIUserActionsHost[] = "user-actions";
@@ -306,6 +308,7 @@ const char kExtensionConfigureCommandsSubPage[] = "configureCommands";
 // These hosts will also be suggested by BuiltinProvider.
 const char* const kChromeHostURLs[] = {
     kChromeUIAboutHost,
+    kChromeUIAccessibilityHost,
     kChromeUIBluetoothInternalsHost,
     kChromeUIChromeURLsHost,
     kChromeUIComponentsHost,
@@ -347,7 +350,6 @@ const char* const kChromeHostURLs[] = {
     kChromeUIUsbInternalsHost,
     kChromeUIUserActionsHost,
     kChromeUIVersionHost,
-    content::kChromeUIAccessibilityHost,
     content::kChromeUIAppCacheInternalsHost,
     content::kChromeUIBlobInternalsHost,
     content::kChromeUIDinoHost,
@@ -423,25 +425,30 @@ const char* const kChromeHostURLs[] = {
 };
 const size_t kNumberOfChromeHostURLs = arraysize(kChromeHostURLs);
 
-const char* const kChromeDebugURLs[] = {content::kChromeUIBadCastCrashURL,
-                                        content::kChromeUIBrowserCrashURL,
-                                        content::kChromeUICrashURL,
-                                        content::kChromeUIDumpURL,
-                                        content::kChromeUIKillURL,
-                                        content::kChromeUIHangURL,
-                                        content::kChromeUIShorthangURL,
-                                        content::kChromeUIGpuCleanURL,
-                                        content::kChromeUIGpuCrashURL,
-                                        content::kChromeUIGpuHangURL,
-                                        content::kChromeUIMemoryExhaustURL,
-                                        content::kChromeUIPpapiFlashCrashURL,
-                                        content::kChromeUIPpapiFlashHangURL,
-#if defined(OS_ANDROID)
-                                        content::kChromeUIGpuJavaCrashURL,
-                                        kChromeUIJavaCrashURL,
+const char* const kChromeDebugURLs[] = {
+    content::kChromeUIBadCastCrashURL,
+    content::kChromeUIBrowserCrashURL,
+    content::kChromeUICrashURL,
+    content::kChromeUIDumpURL,
+    content::kChromeUIKillURL,
+    content::kChromeUIHangURL,
+    content::kChromeUIShorthangURL,
+    content::kChromeUIGpuCleanURL,
+    content::kChromeUIGpuCrashURL,
+    content::kChromeUIGpuHangURL,
+    content::kChromeUIMemoryExhaustURL,
+    content::kChromeUIPpapiFlashCrashURL,
+    content::kChromeUIPpapiFlashHangURL,
+#if defined(OS_WIN)
+    content::kChromeUIBrowserHeapCorruptionURL,
+    content::kChromeUIHeapCorruptionCrashURL,
 #endif
-                                        kChromeUIQuitURL,
-                                        kChromeUIRestartURL};
+#if defined(OS_ANDROID)
+    content::kChromeUIGpuJavaCrashURL,
+    kChromeUIJavaCrashURL,
+#endif
+    kChromeUIQuitURL,
+    kChromeUIRestartURL};
 const size_t kNumberOfChromeDebugURLs = arraysize(kChromeDebugURLs);
 
 }  // namespace chrome

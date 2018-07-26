@@ -10,8 +10,7 @@
 #include "base/logging.h"
 #include "base/numerics/math_constants.h"
 #include "base/numerics/ranges.h"
-#include "third_party/blink/public/platform/web_gesture_event.h"
-#include "third_party/blink/public/platform/web_input_event.h"
+#include "chrome/browser/vr/input_event.h"
 #include "third_party/gvr-android-sdk/src/libraries/headers/vr/gvr/capi/include/gvr.h"
 #include "third_party/gvr-android-sdk/src/libraries/headers/vr/gvr/capi/include/gvr_controller.h"
 
@@ -27,11 +26,11 @@ constexpr float kLaserStartDisplacement = 0.045;
 constexpr float kFadeDistanceFromFace = 0.34f;
 constexpr float kDeltaAlpha = 3.0f;
 
-// Very small deadzone that should be undetectable to users, but prevents the
-// head offset from being updated every frame on 3DOF devices.
+// Small deadzone for testing that prevents the controller's head offset from
+// being updated every frame on 3DOF devices.
 constexpr float kHeadOffsetDeadzone = 0.0005f;
 
-void ClampTouchpadPosition(gfx::Vector2dF* position) {
+void ClampTouchpadPosition(gfx::PointF* position) {
   position->set_x(base::ClampToRange(position->x(), 0.0f, 1.0f));
   position->set_y(base::ClampToRange(position->y(), 0.0f, 1.0f));
 }
@@ -106,8 +105,7 @@ device::GvrGamepadData VrController::GetGamepadData() {
   pad.timestamp = controller_state_->GetLastOrientationTimestamp();
 
   if (pad.connected) {
-    pad.touch_pos.set_x(TouchPosX());
-    pad.touch_pos.set_y(TouchPosY());
+    pad.touch_pos = {GetPositionInTrackpad().x(), GetPositionInTrackpad().y()};
     pad.orientation = Orientation();
 
     // Use orientation to rotate acceleration/gyro into seated space.
@@ -138,13 +136,14 @@ device::mojom::XRInputSourceStatePtr VrController::GetInputSourceState() {
   // Set the primary button state.
   state->primary_input_pressed = ButtonState(GVR_CONTROLLER_BUTTON_CLICK);
 
-  if (ButtonUpHappened(GVR_CONTROLLER_BUTTON_CLICK))
+  if (ButtonUpHappened(PlatformController::kButtonSelect))
     state->primary_input_clicked = true;
 
   state->description = device::mojom::XRInputSourceDescription::New();
 
   // It's a handheld pointing device.
-  state->description->pointer_origin = device::mojom::XRPointerOrigin::HAND;
+  state->description->target_ray_mode =
+      device::mojom::XRTargetRayMode::POINTING;
 
   // Controller uses an arm model.
   state->description->emulated_position = true;
@@ -175,41 +174,37 @@ device::mojom::XRInputSourceStatePtr VrController::GetInputSourceState() {
   return state;
 }
 
-bool VrController::IsTouching() {
-  return controller_state_->IsTouching();
-}
-
-float VrController::TouchPosX() {
-  return controller_state_->GetTouchPos().x;
-}
-
-float VrController::TouchPosY() {
-  return controller_state_->GetTouchPos().y;
-}
-
-bool VrController::IsButtonDown(PlatformController::ButtonType type) const {
+bool VrController::IsButtonDown(ButtonType type) const {
   return controller_state_->GetButtonState(PlatformToGvrButton(type));
 }
 
+bool VrController::IsTouchingTrackpad() const {
+  return controller_state_->IsTouching();
+}
+
+gfx::PointF VrController::GetPositionInTrackpad() const {
+  gfx::PointF position{controller_state_->GetTouchPos().x,
+                       controller_state_->GetTouchPos().y};
+  ClampTouchpadPosition(&position);
+  return position;
+}
+
 base::TimeTicks VrController::GetLastOrientationTimestamp() const {
-  // controller_state_->GetLast*Timestamp() returns timestamps in a
-  // different timebase from base::TimeTicks::Now(), so we can't use the
-  // timestamps in any meaningful way in the rest of Chrome.
-  // TODO(mthiesse): Use controller_state_->GetLastOrientationTimestamp() when
-  // b/62818778 is resolved.
-  return base::TimeTicks::Now();
+  // TODO(crbug/866040): Use controller_state_->GetLastTouchTimestamp() when
+  // GVR is upgraded.
+  return last_orientation_timestamp_;
 }
 
 base::TimeTicks VrController::GetLastTouchTimestamp() const {
-  // TODO(mthiesse): Use controller_state_->GetLastTouchTimestamp() when
-  // b/62818778 is resolved.
-  return base::TimeTicks::Now();
+  // TODO(crbug/866040): Use controller_state_->GetLastTouchTimestamp() when
+  // GVR is upgraded.
+  return last_touch_timestamp_;
 }
 
 base::TimeTicks VrController::GetLastButtonTimestamp() const {
-  // TODO(mthiesse): Use controller_state_->GetLastButtonTimestamp() when
-  // b/62818778 is resolved.
-  return base::TimeTicks::Now();
+  // TODO(crbug/866040): Use controller_state_->GetLastButtonTimestamp() when
+  // GVR is upgraded.
+  return last_button_timestamp_;
 }
 
 PlatformController::Handedness VrController::GetHandedness() const {
@@ -220,6 +215,10 @@ PlatformController::Handedness VrController::GetHandedness() const {
 
 bool VrController::GetRecentered() const {
   return controller_state_->GetRecentered();
+}
+
+int VrController::GetBatteryLevel() const {
+  return static_cast<int>(controller_state_->GetBatteryLevel());
 }
 
 gfx::Quaternion VrController::Orientation() const {
@@ -276,18 +275,20 @@ bool VrController::TouchUpHappened() {
   return controller_state_->GetTouchUp();
 }
 
-bool VrController::ButtonDownHappened(gvr::ControllerButton button) {
+bool VrController::ButtonDownHappened(ButtonType button) const {
   // Workaround for GVR sometimes not reporting GetButtonDown when it should.
-  bool detected_down =
-      !previous_button_states_[static_cast<int>(button)] && ButtonState(button);
-  return controller_state_->GetButtonDown(button) || detected_down;
+  auto gvr_button = PlatformToGvrButton(button);
+  bool detected_down = !previous_button_states_[static_cast<int>(button)] &&
+                       ButtonState(gvr_button);
+  return controller_state_->GetButtonDown(gvr_button) || detected_down;
 }
 
-bool VrController::ButtonUpHappened(gvr::ControllerButton button) {
+bool VrController::ButtonUpHappened(ButtonType button) const {
   // Workaround for GVR sometimes not reporting GetButtonUp when it should.
-  bool detected_up =
-      previous_button_states_[static_cast<int>(button)] && !ButtonState(button);
-  return controller_state_->GetButtonUp(button) || detected_up;
+  auto gvr_button = PlatformToGvrButton(button);
+  bool detected_up = previous_button_states_[static_cast<int>(button)] &&
+                     !ButtonState(gvr_button);
+  return controller_state_->GetButtonUp(gvr_button) || detected_up;
 }
 
 bool VrController::ButtonState(gvr::ControllerButton button) const {
@@ -298,16 +299,23 @@ bool VrController::IsConnected() {
   return controller_state_->GetConnectionState() == gvr::kControllerConnected;
 }
 
+void VrController::EnableDeadzoneForTesting() {
+  enable_deadzone_ = true;
+}
+
 void VrController::UpdateState(const gfx::Transform& head_pose) {
   gfx::Transform inv_pose;
   if (head_pose.GetInverse(&inv_pose)) {
     auto current_head_offset = gfx::Point3F();
     inv_pose.TransformPoint(&current_head_offset);
-    // The head offset drifts by a very tiny amount even in 3DOF devices, so
-    // apply a small deadzone to only update the head offset when the head
-    // actually moves.
-    if (head_offset_.SquaredDistanceTo(current_head_offset) >
-        kHeadOffsetDeadzone) {
+    // TODO(https://crbug.com/861807): Remove this once the controller can be
+    // dirty without necessarily affecting quiescence.
+    if (enable_deadzone_) {
+      if (head_offset_.SquaredDistanceTo(current_head_offset) >
+          kHeadOffsetDeadzone) {
+        head_offset_ = current_head_offset;
+      }
+    } else {
       head_offset_ = current_head_offset;
     }
   }
@@ -332,35 +340,36 @@ void VrController::UpdateState(const gfx::Transform& head_pose) {
                    controller_state_->GetConnectionState());
   }
   UpdateAlpha();
+  UpdateTimestamps();
   last_timestamp_nanos_ =
       gvr::GvrApi::GetTimePointNow().monotonic_system_time_nanos;
 }
 
-std::unique_ptr<GestureList> VrController::DetectGestures() {
+InputEventList VrController::DetectGestures() {
   if (controller_state_->GetConnectionState() != gvr::kControllerConnected) {
-    return std::make_unique<GestureList>();
+    return {};
   }
 
-  UpdateCurrentTouchInfo();
-  return gesture_detector_->DetectGestures(
-      touch_info_, base::TimeTicks::Now(),
-      ButtonState(gvr::kControllerButtonClick));
+  return gesture_detector_->DetectGestures(*this, base::TimeTicks::Now());
 }
 
-void VrController::UpdateCurrentTouchInfo() {
-  touch_info_.touch_up = TouchUpHappened();
-  touch_info_.touch_down = TouchDownHappened();
-  touch_info_.is_touching = IsTouching();
-  touch_info_.touch_point.position.set_x(TouchPosX());
-  touch_info_.touch_point.position.set_y(TouchPosY());
-  ClampTouchpadPosition(&touch_info_.touch_point.position);
-  if (touch_info_.is_touching) {
-    touch_info_.touch_point.timestamp =
-        base::TimeTicks() +
-        base::TimeDelta::FromNanoseconds(
-            gvr::GvrApi::GetTimePointNow().monotonic_system_time_nanos);
+void VrController::UpdateTimestamps() {
+  // controller_state_->GetLast*Timestamp() returns timestamps in a
+  // different timebase from base::TimeTicks::Now(), so we can't use the
+  // timestamps in any meaningful way in the rest of Chrome.
+  // TODO(crbug/866040): Use controller_state_->GetLast*Timestamp() after
+  // we upgrade GVR.
+  base::TimeTicks now = base::TimeTicks::Now();
+  last_orientation_timestamp_ = now;
+  if (IsTouchingTrackpad())
+    last_touch_timestamp_ = now;
+  for (int button = PlatformController::kButtonTypeFirst;
+       button < PlatformController::kButtonTypeNumber; ++button) {
+    if (IsButtonDown(static_cast<PlatformController::ButtonType>(button))) {
+      last_button_timestamp_ = now;
+      break;
+    }
   }
-
 }
 
 void VrController::UpdateAlpha() {

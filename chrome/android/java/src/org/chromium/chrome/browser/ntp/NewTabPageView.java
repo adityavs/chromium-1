@@ -4,17 +4,14 @@
 
 package org.chromium.chrome.browser.ntp;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Point;
-import android.graphics.Rect;
 import android.support.v7.widget.DefaultItemAnimator;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.RecyclerView.AdapterDataObserver;
 import android.support.v7.widget.RecyclerView.ViewHolder;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
+import android.view.LayoutInflater;
 import android.widget.FrameLayout;
 
 import org.chromium.base.TraceEvent;
@@ -31,6 +28,7 @@ import org.chromium.chrome.browser.suggestions.SuggestionsConfig;
 import org.chromium.chrome.browser.suggestions.SuggestionsDependencyFactory;
 import org.chromium.chrome.browser.suggestions.SuggestionsUiDelegate;
 import org.chromium.chrome.browser.suggestions.TileGroup;
+import org.chromium.chrome.browser.tab.EmptyTabObserver;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.util.ViewUtils;
 import org.chromium.chrome.browser.widget.displaystyle.UiConfig;
@@ -42,20 +40,15 @@ import org.chromium.chrome.browser.widget.displaystyle.UiConfig;
 public class NewTabPageView extends FrameLayout {
     private static final String TAG = "NewTabPageView";
 
-    private static final long SNAP_SCROLL_DELAY_MS = 30;
-
     private NewTabPageRecyclerView mRecyclerView;
 
     private NewTabPageLayout mNewTabPageLayout;
 
     private NewTabPageManager mManager;
     private Tab mTab;
+    private SnapScrollHelper mSnapScrollHelper;
     private UiConfig mUiConfig;
-    private Runnable mSnapScrollRunnable;
     private Runnable mUpdateSearchBoxOnScrollRunnable;
-
-    private boolean mPendingSnapScroll;
-    private int mLastScrollY = -1;
 
     private boolean mNewTabPageRecyclerViewChanged;
     private int mSnapshotWidth;
@@ -102,7 +95,8 @@ public class NewTabPageView extends FrameLayout {
         mRecyclerView = new NewTabPageRecyclerView(getContext());
 
         // Don't attach now, the recyclerView itself will determine when to do it.
-        mNewTabPageLayout = mRecyclerView.getAboveTheFoldView();
+        mNewTabPageLayout = (NewTabPageLayout) LayoutInflater.from(getContext())
+                                    .inflate(R.layout.new_tab_page_layout, mRecyclerView, false);
     }
 
     /**
@@ -135,7 +129,8 @@ public class NewTabPageView extends FrameLayout {
         mNewTabPageLayout.initialize(manager, tab, tileGroupDelegate, searchProviderHasLogo,
                 searchProviderIsGoogle, mRecyclerView, mContextMenuManager, mUiConfig);
 
-        mRecyclerView.setContainsLocationBar(manager.isLocationBarShownInNTP());
+        mSnapScrollHelper = new SnapScrollHelper(mManager, mNewTabPageLayout, mRecyclerView);
+        mRecyclerView.setSnapScrollHelper(mSnapScrollHelper);
         addView(mRecyclerView);
 
         mRecyclerView.setItemAnimator(new DefaultItemAnimator() {
@@ -177,11 +172,10 @@ public class NewTabPageView extends FrameLayout {
         OfflinePageBridge offlinePageBridge =
                 SuggestionsDependencyFactory.getInstance().getOfflinePageBridge(profile);
 
-        mSnapScrollRunnable = new SnapScrollRunnable();
         mUpdateSearchBoxOnScrollRunnable = mNewTabPageLayout::updateSearchBoxOnScroll;
 
         initializeLayoutChangeListener();
-        setSearchProviderInfo(searchProviderHasLogo, searchProviderIsGoogle);
+        mNewTabPageLayout.setSearchProviderInfo(searchProviderHasLogo, searchProviderIsGoogle);
 
         mRecyclerView.init(mUiConfig, mContextMenuManager);
 
@@ -241,7 +235,7 @@ public class NewTabPageView extends FrameLayout {
      *                        has focus.
      */
     public void setFakeboxDelegate(FakeboxDelegate fakeboxDelegate) {
-        mRecyclerView.setFakeboxDelegate(fakeboxDelegate, mNewTabPageLayout.getSearchBoxView());
+        mRecyclerView.setFakeboxDelegate(fakeboxDelegate);
     }
 
     private void initializeLayoutChangeListener() {
@@ -250,14 +244,8 @@ public class NewTabPageView extends FrameLayout {
         // Listen for layout changes on the NewTabPageView itself to catch changes in scroll
         // position that are due to layout changes after e.g. device rotation. This contrasts with
         // regular scrolling, which is observed through an OnScrollListener.
-        addOnLayoutChangeListener(
-                (v, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-                    int scrollY = mRecyclerView.computeVerticalScrollOffset();
-                    if (mLastScrollY != scrollY) {
-                        mLastScrollY = scrollY;
-                        handleScroll();
-                    }
-                });
+        addOnLayoutChangeListener((v, left, top, right, bottom, oldLeft, oldTop, oldRight,
+                                          oldBottom) -> { mSnapScrollHelper.handleScroll(); });
         TraceEvent.end(TAG + ".initializeLayoutChangeListener()");
     }
 
@@ -275,58 +263,11 @@ public class NewTabPageView extends FrameLayout {
         mRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(RecyclerView recyclerView, int dx, int dy) {
-                mLastScrollY = mRecyclerView.computeVerticalScrollOffset();
-                handleScroll();
+                mSnapScrollHelper.handleScroll();
             }
         });
 
-        @SuppressLint("ClickableViewAccessibility")
-        OnTouchListener onTouchListener = (v, event) -> {
-            mRecyclerView.removeCallbacks(mSnapScrollRunnable);
-
-            if (event.getActionMasked() == MotionEvent.ACTION_CANCEL
-                    || event.getActionMasked() == MotionEvent.ACTION_UP) {
-                mPendingSnapScroll = true;
-                mRecyclerView.postDelayed(mSnapScrollRunnable, SNAP_SCROLL_DELAY_MS);
-            } else {
-                mPendingSnapScroll = false;
-            }
-            return false;
-        };
-        mRecyclerView.setOnTouchListener(onTouchListener);
         TraceEvent.end(TAG + ".setupScrollHandling()");
-    }
-
-    private void handleScroll() {
-        if (mPendingSnapScroll) {
-            mRecyclerView.removeCallbacks(mSnapScrollRunnable);
-            mRecyclerView.postDelayed(mSnapScrollRunnable, SNAP_SCROLL_DELAY_MS);
-        }
-        mNewTabPageLayout.updateSearchBoxOnScroll();
-    }
-
-    /**
-     * Changes the layout depending on whether the selected search provider (e.g. Google, Bing)
-     * has a logo.
-     * @param hasLogo Whether the search provider has a logo.
-     * @param isGoogle Whether the search provider is Google.
-     */
-    public void setSearchProviderInfo(boolean hasLogo, boolean isGoogle) {
-        // Update snap scrolling for the fakebox.
-        mRecyclerView.setContainsLocationBar(mManager.isLocationBarShownInNTP());
-
-        mNewTabPageLayout.setSearchProviderInfo(hasLogo, isGoogle);
-    }
-
-    /**
-     * Get the bounds of the search box in relation to the top level NewTabPage view.
-     *
-     * @param bounds The current drawing location of the search box.
-     * @param translation The translation applied to the search box by the parent view hierarchy up
-     *                    to the NewTabPage view.
-     */
-    void getSearchBoxBounds(Rect bounds, Point translation) {
-        mNewTabPageLayout.getSearchBoxBounds(bounds, translation, this);
     }
 
     @Override
@@ -373,6 +314,19 @@ public class NewTabPageView extends FrameLayout {
         int scrollPosition = getSuggestionsScrollPosition();
         // Nothing to scroll to; return early.
         if (scrollPosition == RecyclerView.NO_POSITION) return;
+
+        // Scrolling doesn't occur if it's called too soon i.e. the ntp hasn't finished loading.
+        if (mTab.isLoading()) {
+            mTab.addObserver(new EmptyTabObserver() {
+                @Override
+                public void onPageLoadFinished(Tab tab) {
+                    mRecyclerView.getLinearLayoutManager().scrollToPositionWithOffset(
+                            scrollPosition, getScrollToSuggestionsOffset());
+                    mTab.removeObserver(this);
+                }
+            });
+            return;
+        }
 
         mRecyclerView.getLinearLayoutManager().scrollToPositionWithOffset(
                 scrollPosition, getScrollToSuggestionsOffset());
@@ -434,17 +388,12 @@ public class NewTabPageView extends FrameLayout {
         return mRecyclerView.getScrollPosition();
     }
 
-    private class SnapScrollRunnable implements Runnable {
-        @Override
-        public void run() {
-            assert mPendingSnapScroll;
-            mPendingSnapScroll = false;
-
-            mRecyclerView.snapScroll();
-        }
-    }
-
     private void onDestroy() {
         mTab.getWindowAndroid().removeContextMenuCloseListener(mContextMenuManager);
+    }
+
+    @VisibleForTesting
+    public SnapScrollHelper getSnapScrollHelper() {
+        return mSnapScrollHelper;
     }
 }

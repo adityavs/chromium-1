@@ -77,6 +77,7 @@ void AutofillExternalDelegate::OnQuery(int query_id,
 void AutofillExternalDelegate::OnSuggestionsReturned(
     int query_id,
     const std::vector<Suggestion>& input_suggestions,
+    bool autoselect_first_suggestion,
     bool is_all_server_suggestions) {
   if (query_id != query_id_)
     return;
@@ -161,10 +162,9 @@ void AutofillExternalDelegate::OnSuggestionsReturned(
 
   // Send to display.
   if (query_field_.is_focusable) {
-    manager_->client()->ShowAutofillPopup(element_bounds_,
-                                          query_field_.text_direction,
-                                          suggestions,
-                                          GetWeakPtr());
+    manager_->client()->ShowAutofillPopup(
+        element_bounds_, query_field_.text_direction, suggestions,
+        autoselect_first_suggestion, GetWeakPtr());
   }
 }
 
@@ -434,20 +434,14 @@ void AutofillExternalDelegate::InsertDataListValues(
 
 base::string16 AutofillExternalDelegate::GetSettingsSuggestionValue()
     const {
-  if (base::FeatureList::IsEnabled(autofill::kAutofillExpandedPopupViews)) {
-    if (GetPopupType() == PopupType::kAddresses)
-      return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_ADDRESSES);
+  if (GetPopupType() == PopupType::kAddresses)
+    return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_ADDRESSES);
 
-    if (GetPopupType() == PopupType::kCreditCards)
-      return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_PAYMENT_METHODS);
+  if (GetPopupType() == PopupType::kCreditCards)
+    return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE_PAYMENT_METHODS);
 
-    DCHECK_EQ(GetPopupType(), PopupType::kPersonalInformation);
-    return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE);
-  }
-
-  return l10n_util::GetStringUTF16(
-      IsKeyboardAccessoryEnabled() ? IDS_AUTOFILL_OPTIONS_CONTENT_DESCRIPTION
-                                   : IDS_AUTOFILL_SETTINGS_POPUP);
+  DCHECK_EQ(GetPopupType(), PopupType::kPersonalInformation);
+  return l10n_util::GetStringUTF16(IDS_AUTOFILL_MANAGE);
 }
 
 }  // namespace autofill

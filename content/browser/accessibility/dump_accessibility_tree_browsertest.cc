@@ -194,7 +194,11 @@ void DumpAccessibilityTreeTest::AddDefaultFilters(
   AddFilter(filters, "FOCUSED", Filter::DENY);
   AddFilter(filters, "HOTTRACKED", Filter::DENY);
   AddFilter(filters, "OFFSCREEN", Filter::DENY);
-  // Object attributes.
+  AddFilter(filters, "value='*'");
+  // The value attribute on the document object contains the URL of the current
+  // page which will not be the same every time the test is run.
+  AddFilter(filters, "value='http*'", Filter::DENY);
+  // Object attributes.value
   AddFilter(filters, "layout-guess:*", Filter::ALLOW);
 
   //
@@ -551,6 +555,11 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityAriaGrabbed) {
 
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityAriaGrid) {
   RunAriaTest(FILE_PATH_LITERAL("aria-grid.html"));
+}
+
+IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
+                       AccessibilityAriaGridDynamicAddRow) {
+  RunAriaTest(FILE_PATH_LITERAL("aria-grid-dynamic-add-row.html"));
 }
 
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
@@ -1254,14 +1263,8 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
   RunHtmlTest(FILE_PATH_LITERAL("iframe-presentational.html"));
 }
 
-#if defined(OS_WIN)
-// Flaky; https://crbug.com/856566.
-#define MAYBE_AccessibilityIframeTransform DISABLED_AccessibilityIframeTransform
-#else
-#define MAYBE_AccessibilityIframeTransform AccessibilityIframeTransform
-#endif
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
-                       MAYBE_AccessibilityIframeTransform) {
+                       AccessibilityIframeTransform) {
   RunHtmlTest(FILE_PATH_LITERAL("iframe-transform.html"));
 }
 
@@ -1270,29 +1273,13 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
   RunHtmlTest(FILE_PATH_LITERAL("iframe-transform-cross-process.html"));
 }
 
-#if defined(OS_WIN)
-// Flaky; https://crbug.com/856566.
-#define MAYBE_AccessibilityIframeTransformNested \
-  DISABLED_AccessibilityIframeTransformNested
-#else
-#define MAYBE_AccessibilityIframeTransformNested \
-  AccessibilityIframeTransformNested
-#endif
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
-                       MAYBE_AccessibilityIframeTransformNested) {
+                       AccessibilityIframeTransformNested) {
   RunHtmlTest(FILE_PATH_LITERAL("iframe-transform-nested.html"));
 }
 
-#if defined(OS_WIN)
-// Flaky; https://crbug.com/856566.
-#define MAYBE_AccessibilityIframeTransformNestedCrossProcess \
-  DISABLED_AccessibilityIframeTransformNestedCrossProcess
-#else
-#define MAYBE_AccessibilityIframeTransformNestedCrossProcess \
-  AccessibilityIframeTransformNestedCrossProcess
-#endif
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
-                       MAYBE_AccessibilityIframeTransformNestedCrossProcess) {
+                       AccessibilityIframeTransformNestedCrossProcess) {
   RunHtmlTest(FILE_PATH_LITERAL("iframe-transform-nested-cross-process.html"));
 }
 
@@ -1772,6 +1759,10 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityTitle) {
   RunHtmlTest(FILE_PATH_LITERAL("title.html"));
 }
 
+IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityTitleChanged) {
+  RunHtmlTest(FILE_PATH_LITERAL("title-changed.html"));
+}
+
 #if defined(OS_WIN) || defined(OS_MACOSX)
 // Flaky on Win/Mac: crbug.com/508532
 #define MAYBE_AccessibilityTransition DISABLED_AccessibilityTransition
@@ -1781,6 +1772,10 @@ IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityTitle) {
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest,
                        MAYBE_AccessibilityTransition) {
   RunHtmlTest(FILE_PATH_LITERAL("transition.html"));
+}
+
+IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityTruncateLabel) {
+  RunHtmlTest(FILE_PATH_LITERAL("truncate-label.html"));
 }
 
 IN_PROC_BROWSER_TEST_F(DumpAccessibilityTreeTest, AccessibilityUl) {

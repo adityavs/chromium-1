@@ -14,8 +14,8 @@
 #include "content/browser/service_worker/service_worker_metrics.h"
 #include "content/browser/service_worker/service_worker_register_job.h"
 #include "content/common/service_worker/service_worker_messages.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_thread.h"
+#include "third_party/blink/public/common/service_worker/service_worker_utils.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 
 namespace content {
@@ -212,12 +212,12 @@ void ServiceWorkerRegistration::ActivateWaitingVersionWhenReady() {
   }
 
   if (IsLameDuckActiveVersion()) {
-    if (ServiceWorkerUtils::IsServicificationEnabled() &&
+    if (blink::ServiceWorkerUtils::IsServicificationEnabled() &&
         active_version()->running_status() == EmbeddedWorkerStatus::RUNNING) {
       // If the waiting worker is ready and the active worker needs to be
       // swapped out, ask the active worker to trigger idle timer as soon as
       // possible.
-      active_version()->event_dispatcher()->SetIdleTimerDelayToZero();
+      active_version()->endpoint()->SetIdleTimerDelayToZero();
     }
     StartLameDuckTimer();
   }
@@ -260,7 +260,7 @@ void ServiceWorkerRegistration::ClearWhenReady() {
 void ServiceWorkerRegistration::AbortPendingClear(StatusCallback callback) {
   DCHECK(context_);
   if (!is_uninstalling()) {
-    std::move(callback).Run(blink::SERVICE_WORKER_OK);
+    std::move(callback).Run(blink::ServiceWorkerStatusCode::kOk);
     return;
   }
   is_uninstalling_ = false;
@@ -281,6 +281,9 @@ void ServiceWorkerRegistration::OnNoControllees(ServiceWorkerVersion* version) {
     return;
   DCHECK_EQ(active_version(), version);
   if (is_uninstalling_) {
+    // TODO(falken): This can destroy the caller during this observer function
+    // call, which is impolite and dangerous. Try to make this async, or make
+    // OnNoControllees not an observer function.
     Clear();
     return;
   }
@@ -291,13 +294,13 @@ void ServiceWorkerRegistration::OnNoControllees(ServiceWorkerVersion* version) {
   }
 
   if (IsLameDuckActiveVersion()) {
-    if (ServiceWorkerUtils::IsServicificationEnabled() &&
+    if (blink::ServiceWorkerUtils::IsServicificationEnabled() &&
         should_activate_when_ready_ &&
         active_version()->running_status() == EmbeddedWorkerStatus::RUNNING) {
       // If the waiting worker is ready and the active worker needs to be
       // swapped out, ask the active worker to trigger idle timer as soon as
       // possible.
-      active_version()->event_dispatcher()->SetIdleTimerDelayToZero();
+      active_version()->endpoint()->SetIdleTimerDelayToZero();
     }
     StartLameDuckTimer();
   }
@@ -495,13 +498,13 @@ void ServiceWorkerRegistration::RegisterRegistrationFinishedCallback(
 void ServiceWorkerRegistration::DispatchActivateEvent(
     scoped_refptr<ServiceWorkerVersion> activating_version,
     blink::ServiceWorkerStatusCode start_worker_status) {
-  if (start_worker_status != blink::SERVICE_WORKER_OK) {
+  if (start_worker_status != blink::ServiceWorkerStatusCode::kOk) {
     OnActivateEventFinished(activating_version, start_worker_status);
     return;
   }
   if (activating_version != active_version()) {
     OnActivateEventFinished(activating_version,
-                            blink::SERVICE_WORKER_ERROR_FAILED);
+                            blink::ServiceWorkerStatusCode::kErrorFailed);
     return;
   }
 
@@ -512,7 +515,7 @@ void ServiceWorkerRegistration::DispatchActivateEvent(
       ServiceWorkerMetrics::EventType::ACTIVATE,
       base::BindOnce(&ServiceWorkerRegistration::OnActivateEventFinished, this,
                      activating_version));
-  activating_version->event_dispatcher()->DispatchActivateEvent(
+  activating_version->endpoint()->DispatchActivateEvent(
       activating_version->CreateSimpleEventCallback(request_id));
 }
 
@@ -535,7 +538,7 @@ void ServiceWorkerRegistration::OnActivateEventFinished(
   // it should still be activated. However, if the failure occurred during
   // shutdown, ignore it to give the worker another chance the next time the
   // browser starts up.
-  if (is_shutdown && status != blink::SERVICE_WORKER_OK)
+  if (is_shutdown && status != blink::ServiceWorkerStatusCode::kOk)
     return;
 
   // "Run the Update State algorithm passing registration's active worker and
@@ -554,6 +557,14 @@ void ServiceWorkerRegistration::Clear() {
   is_uninstalling_ = false;
   is_uninstalled_ = true;
   should_activate_when_ready_ = false;
+
+  // Some callbacks, at least OnRegistrationFinishedUninstalling and
+  // NotifyDoneUninstallingRegistration, may drop their references to
+  // |this|, so protect it first.
+  // TODO(falken): Clean this up, can we call the observers from a task
+  // or make the observers more polite?
+  auto protect = base::WrapRefCounted(this);
+
   if (context_)
     context_->storage()->NotifyDoneUninstallingRegistration(this);
 
@@ -595,7 +606,7 @@ void ServiceWorkerRegistration::OnRestoreFinished(
     scoped_refptr<ServiceWorkerVersion> version,
     blink::ServiceWorkerStatusCode status) {
   if (!context_) {
-    std::move(callback).Run(blink::SERVICE_WORKER_ERROR_ABORT);
+    std::move(callback).Run(blink::ServiceWorkerStatusCode::kErrorAbort);
     return;
   }
   context_->storage()->NotifyDoneInstallingRegistration(

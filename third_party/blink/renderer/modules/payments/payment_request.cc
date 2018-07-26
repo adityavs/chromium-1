@@ -139,7 +139,7 @@ namespace {
 
 // If the website does not call complete() 60 seconds after show() has been
 // resolved, then behave as if the website called complete("fail").
-static const int kCompleteTimeoutSeconds = 60;
+constexpr TimeDelta kCompleteTimeout = TimeDelta::FromSeconds(60);
 
 // Validates ShippingOption or PaymentItem, which happen to have identical
 // fields, except for "id", which is present only in ShippingOption.
@@ -526,12 +526,7 @@ void ValidateAndConvertPaymentDetailsModifiers(
 
     output.back()->method_data =
         payments::mojom::blink::PaymentMethodData::New();
-
-    // TODO(zino): We should replace supported_methods with supported_method in
-    // mojom and browser side (including a bunch of tests).
-    // Please see https://crbug.com/754779
-    output.back()->method_data->supported_methods = {
-        modifier.supportedMethod()};
+    output.back()->method_data->supported_method = modifier.supportedMethod();
 
     if (modifier.hasData() && !modifier.data().IsEmpty()) {
       StringifyAndParseMethodSpecificData(
@@ -655,10 +650,7 @@ void ValidateAndConvertPaymentMethodData(
 
     output.push_back(payments::mojom::blink::PaymentMethodData::New());
 
-    // TODO(zino): We should replace supported_methods with supported_method in
-    // mojom and browser side (including a bunch of tests).
-    // Please see https://crbug.com/754779
-    output.back()->supported_methods = {payment_method_data.supportedMethod()};
+    output.back()->supported_method = payment_method_data.supportedMethod();
 
     if (payment_method_data.hasData() &&
         !payment_method_data.data().IsEmpty()) {
@@ -802,6 +794,14 @@ const AtomicString& PaymentRequest::InterfaceName() const {
 
 ExecutionContext* PaymentRequest::GetExecutionContext() const {
   return ContextLifecycleObserver::GetExecutionContext();
+}
+
+ScriptPromise PaymentRequest::Retry(ScriptState*,
+                                    const PaymentValidationErrors&) {
+  // TODO(zino): Should implement this method. Please see
+  // https://crbug.com/861704
+  NOTIMPLEMENTED();
+  return ScriptPromise();
 }
 
 ScriptPromise PaymentRequest::Complete(ScriptState* script_state,
@@ -1076,7 +1076,7 @@ void PaymentRequest::OnPaymentResponse(PaymentResponsePtr response) {
     return;
   }
 
-  complete_timer_.StartOneShot(kCompleteTimeoutSeconds, FROM_HERE);
+  complete_timer_.StartOneShot(kCompleteTimeout, FROM_HERE);
 
   show_resolver_->Resolve(new PaymentResponse(
       std::move(response), shipping_address_.Get(), this, id_));

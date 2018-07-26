@@ -29,15 +29,11 @@ class NewTabButton : public views::ImageButton,
   NewTabButton(TabStrip* tab_strip, views::ButtonListener* listener);
   ~NewTabButton() override;
 
-  // Set the background offset used to match the background image to the frame
+  // Set the background X offset used to match the background image to the frame
   // image.
-  void set_background_offset(const gfx::Point& offset) {
+  void set_background_offset(int offset) {
     background_offset_ = offset;
   }
-
-  // Returns the offset from the top of the tabstrip at which the new tab
-  // button's visible region begins.
-  static int GetTopOffset();
 
   // Retrieves the last active BrowserView instance to display the NewTabPromo.
   static void ShowPromoForLastActiveBrowser();
@@ -79,6 +75,7 @@ class NewTabButton : public views::ImageButton,
   void PaintButtonContents(gfx::Canvas* canvas) override;
   void Layout() override;
   void OnThemeChanged() override;
+  gfx::Size CalculatePreferredSize() const override;
   void OnBoundsChanged(const gfx::Rect& previous_bounds) override;
 
   // views::MaskedTargeterDelegate:
@@ -89,12 +86,6 @@ class NewTabButton : public views::ImageButton,
 
   // Returns whether this button should draw an incognito icon.
   bool ShouldDrawIncognitoIcon() const;
-
-  // Returns the gfx::Rect around the visible portion of the New Tab Button.
-  // Note: This is different than the rect around the entire New Tab Button as
-  // it extends to the top of the tabstrip for Fitts' Law interaction in a
-  // maximized window. Used for anchoring the NewTabPromo.
-  gfx::Rect GetVisibleBounds() const;
 
   // Returns the radius to use for the button corners (in newer material UI).
   int GetCornerRadius() const;
@@ -116,27 +107,31 @@ class NewTabButton : public views::ImageButton,
                  const SkPath& fill,
                  gfx::Canvas* canvas) const;
 
+  // Paints a properly sized plus (+) icon into the center of the button.
+  void PaintPlusIcon(gfx::Canvas* canvas, int offset, int size);
+
   SkColor GetButtonFillColor() const;
+  SkColor GetIconColor() const;
 
-  // In the touch-optimized UI, initializes the needed button icons.
-  void InitButtonIcons();
+  // In the touch-optimized UI, initializes the incognito button icon.
+  void InitIncognitoIcon();
 
-  // Returns the path for the touch-optimized new tab button for the given
+  // Returns the path for the newer material ui new tab button for the given
   // |scale|. |button_y| is the button's top y-cordinate. If |for_fill| is true,
   // the path will be shrunk by 1px from all sides to allow room for the stroke
   // to show up. If |extend_to_top| is true, the path is extended vertically to
   // y = 0.
-  SkPath GetTouchOptimizedButtonPath(float button_y,
-                                     float scale,
-                                     bool extend_to_top,
-                                     bool for_fill) const;
+  SkPath GetNewerMaterialUiButtonPath(float button_y,
+                                      float scale,
+                                      bool extend_to_top,
+                                      bool for_fill) const;
 
-  // Similar, but for the non-touch-optimized button.
-  SkPath GetNonTouchOptimizedButtonPath(int button_y,
-                                        int button_height,
-                                        float scale,
-                                        bool extend_to_top,
-                                        bool for_fill) const;
+  // Similar, but for the non-new material ui button.
+  SkPath GetMaterialUiButtonPath(int button_y,
+                                 int button_height,
+                                 float scale,
+                                 bool extend_to_top,
+                                 bool for_fill) const;
 
   void UpdateInkDropBaseColor();
 
@@ -148,7 +143,7 @@ class NewTabButton : public views::ImageButton,
   NewTabPromoBubbleView* new_tab_promo_ = nullptr;
 
   // The offset used to paint the background image.
-  gfx::Point background_offset_;
+  int background_offset_;
 
   // Whether this new tab button belongs to a tabstrip that is part of an
   // incognito mode browser or not. Note that you can't drag a tab from one
@@ -157,7 +152,6 @@ class NewTabButton : public views::ImageButton,
 
   // In the touch-optimized UI, the new tab button has a plus icon, and an
   // incognito icon if is in incognito mode.
-  gfx::ImageSkia plus_icon_;
   gfx::ImageSkia incognito_icon_;
 
   // In touch-optimized UI, this view holds the ink drop layer so that it's

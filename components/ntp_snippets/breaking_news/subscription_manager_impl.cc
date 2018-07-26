@@ -101,27 +101,26 @@ void SubscriptionManagerImpl::StartAccessTokenRequest(
   }
 
   OAuth2TokenService::ScopeSet scopes = {kContentSuggestionsApiScope};
-  access_token_fetcher_ =
-      identity_manager_->CreateAccessTokenFetcherForPrimaryAccount(
-          "ntp_snippets", scopes,
-          base::BindOnce(&SubscriptionManagerImpl::AccessTokenFetchFinished,
-                         base::Unretained(this), subscription_token),
-          identity::PrimaryAccountAccessTokenFetcher::Mode::
-              kWaitUntilAvailable);
+  access_token_fetcher_ = std::make_unique<
+      identity::PrimaryAccountAccessTokenFetcher>(
+      "ntp_snippets", identity_manager_, scopes,
+      base::BindOnce(&SubscriptionManagerImpl::AccessTokenFetchFinished,
+                     base::Unretained(this), subscription_token),
+      identity::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable);
 }
 
 void SubscriptionManagerImpl::AccessTokenFetchFinished(
     const std::string& subscription_token,
     GoogleServiceAuthError error,
-    std::string access_token) {
+    identity::AccessTokenInfo access_token_info) {
   access_token_fetcher_.reset();
 
   if (error.state() != GoogleServiceAuthError::NONE) {
     // In case of error, we will retry on next Chrome restart.
     return;
   }
-  DCHECK(!access_token.empty());
-  SubscribeInternal(subscription_token, access_token);
+  DCHECK(!access_token_info.token.empty());
+  SubscribeInternal(subscription_token, access_token_info.token);
 }
 
 void SubscriptionManagerImpl::DidSubscribe(

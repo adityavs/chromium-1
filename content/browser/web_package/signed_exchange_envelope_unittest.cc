@@ -23,7 +23,7 @@ const char kSignatureString[] =
     "sig1;"
     " sig=*MEUCIQDXlI2gN3RNBlgFiuRNFpZXcDIaUpX6HIEwcZEc0cZYLAIga9DsVOMM+"
     "g5YpwEBdGW3sS+bvnmAJJiSMwhuBdqp5UY=*;"
-    " integrity=\"mi\";"
+    " integrity=\"mi-draft2\";"
     " validity-url=\"https://test.example.org/resource.validity.1511128380\";"
     " cert-url=\"https://example.com/oldcerts\";"
     " cert-sha256=*W7uB969dFW3Mb5ZefPS9Tq5ZbH5iSmOILpjv2qEArmI=*;"
@@ -57,13 +57,13 @@ base::Optional<SignedExchangeEnvelope> GenerateHeaderAndParse(
 }  // namespace
 
 TEST(SignedExchangeEnvelopeTest, ParseGoldenFile) {
-  base::FilePath test_htxg_path;
-  base::PathService::Get(content::DIR_TEST_DATA, &test_htxg_path);
-  test_htxg_path = test_htxg_path.AppendASCII("htxg").AppendASCII(
-      "test.example.org_test.htxg");
+  base::FilePath test_sxg_path;
+  base::PathService::Get(content::DIR_TEST_DATA, &test_sxg_path);
+  test_sxg_path =
+      test_sxg_path.AppendASCII("sxg").AppendASCII("test.example.org_test.sxg");
 
   std::string contents;
-  ASSERT_TRUE(base::ReadFileToString(test_htxg_path, &contents));
+  ASSERT_TRUE(base::ReadFileToString(test_sxg_path, &contents));
   auto* contents_bytes = reinterpret_cast<const uint8_t*>(contents.data());
 
   ASSERT_GT(contents.size(), SignedExchangePrologue::kEncodedPrologueInBytes);
@@ -92,7 +92,7 @@ TEST(SignedExchangeEnvelopeTest, ParseGoldenFile) {
   EXPECT_EQ(envelope->response_code(), static_cast<net::HttpStatusCode>(200u));
   EXPECT_EQ(envelope->response_headers().size(), 3u);
   EXPECT_EQ(envelope->response_headers().find("content-encoding")->second,
-            "mi-sha256");
+            "mi-sha256-draft2");
 }
 
 TEST(SignedExchangeEnvelopeTest, ValidHeader) {

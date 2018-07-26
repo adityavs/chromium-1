@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.customtabs;
 
 import android.app.PendingIntent;
 import android.app.PendingIntent.CanceledException;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -47,21 +48,20 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
     private static final String TAG = "CustomTabIntentData";
 
     // The type of UI for Custom Tab to use.
+    @IntDef({CustomTabsUiType.DEFAULT, CustomTabsUiType.MEDIA_VIEWER,
+            CustomTabsUiType.PAYMENT_REQUEST, CustomTabsUiType.INFO_PAGE,
+            CustomTabsUiType.READER_MODE, CustomTabsUiType.MINIMAL_UI_WEBAPP,
+            CustomTabsUiType.OFFLINE_PAGE})
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-            CUSTOM_TABS_UI_TYPE_DEFAULT, CUSTOM_TABS_UI_TYPE_MEDIA_VIEWER,
-            CUSTOM_TABS_UI_TYPE_PAYMENT_REQUEST, CUSTOM_TABS_UI_TYPE_INFO_PAGE,
-            CUSTOM_TABS_UI_TYPE_READER_MODE, CUSTOM_TABS_UI_TYPE_MINIMAL_UI_WEBAPP,
-            CUSTOM_TABS_UI_TYPE_OFFLINE_PAGE,
-    })
-    public @interface CustomTabsUiType {}
-    public static final int CUSTOM_TABS_UI_TYPE_DEFAULT = 0;
-    public static final int CUSTOM_TABS_UI_TYPE_MEDIA_VIEWER = 1;
-    public static final int CUSTOM_TABS_UI_TYPE_PAYMENT_REQUEST = 2;
-    public static final int CUSTOM_TABS_UI_TYPE_INFO_PAGE = 3;
-    public static final int CUSTOM_TABS_UI_TYPE_READER_MODE = 4;
-    public static final int CUSTOM_TABS_UI_TYPE_MINIMAL_UI_WEBAPP = 5;
-    public static final int CUSTOM_TABS_UI_TYPE_OFFLINE_PAGE = 6;
+    public @interface CustomTabsUiType {
+        int DEFAULT = 0;
+        int MEDIA_VIEWER = 1;
+        int PAYMENT_REQUEST = 2;
+        int INFO_PAGE = 3;
+        int READER_MODE = 4;
+        int MINIMAL_UI_WEBAPP = 5;
+        int OFFLINE_PAGE = 6;
+    }
 
     /**
      * Extra that indicates whether or not the Custom Tab is being launched by an Intent fired by
@@ -131,8 +131,8 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
     private final int mInitialBackgroundColor;
     private final boolean mDisableStar;
     private final boolean mDisableDownload;
-    @Nullable private final String mModulePackageName;
-    @Nullable private final String mModuleClassName;
+    @Nullable
+    private final ComponentName mModuleComponentName;
 
     private int mToolbarColor;
     private int mBottomBarColor;
@@ -158,7 +158,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
      * Add extras to customize menu items for opening payment request UI custom tab from Chrome.
      */
     public static void addPaymentRequestUIExtras(Intent intent) {
-        intent.putExtra(EXTRA_UI_TYPE, CUSTOM_TABS_UI_TYPE_PAYMENT_REQUEST);
+        intent.putExtra(EXTRA_UI_TYPE, CustomTabsUiType.PAYMENT_REQUEST);
         intent.putExtra(EXTRA_IS_OPENED_BY_CHROME, true);
         IntentHandler.addTrustedIntentExtras(intent);
     }
@@ -167,7 +167,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
      * Add extras to customize menu items for opening Reader Mode UI custom tab from Chrome.
      */
     public static void addReaderModeUIExtras(Intent intent) {
-        intent.putExtra(EXTRA_UI_TYPE, CUSTOM_TABS_UI_TYPE_READER_MODE);
+        intent.putExtra(EXTRA_UI_TYPE, CustomTabsUiType.READER_MODE);
         intent.putExtra(EXTRA_IS_OPENED_BY_CHROME, true);
         IntentHandler.addTrustedIntentExtras(intent);
     }
@@ -221,7 +221,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
                 intent, IntentHandler.EXTRA_OPEN_NEW_INCOGNITO_TAB, false);
 
         final int requestedUiType =
-                IntentUtils.safeGetIntExtra(intent, EXTRA_UI_TYPE, CUSTOM_TABS_UI_TYPE_DEFAULT);
+                IntentUtils.safeGetIntExtra(intent, EXTRA_UI_TYPE, CustomTabsUiType.DEFAULT);
         mUiType = verifiedUiType(requestedUiType);
 
         mTitleVisibilityState = IntentUtils.safeGetIntExtra(
@@ -243,8 +243,15 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
         mDisableStar = IntentUtils.safeGetBooleanExtra(intent, EXTRA_DISABLE_STAR_BUTTON, false);
         mDisableDownload =
                 IntentUtils.safeGetBooleanExtra(intent, EXTRA_DISABLE_DOWNLOAD_BUTTON, false);
-        mModulePackageName = IntentUtils.safeGetStringExtra(intent, EXTRA_MODULE_PACKAGE_NAME);
-        mModuleClassName = IntentUtils.safeGetStringExtra(intent, EXTRA_MODULE_CLASS_NAME);
+
+        String modulePackageName =
+                IntentUtils.safeGetStringExtra(intent, EXTRA_MODULE_PACKAGE_NAME);
+        String moduleClassName = IntentUtils.safeGetStringExtra(intent, EXTRA_MODULE_CLASS_NAME);
+        if (modulePackageName != null && moduleClassName != null) {
+            mModuleComponentName = new ComponentName(modulePackageName, moduleClassName);
+        } else {
+            mModuleComponentName = null;
+        }
     }
 
     /**
@@ -255,12 +262,12 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
     private int verifiedUiType(int requestedUiType) {
         if (!isTrustedIntent()) {
             if (ChromeVersionInfo.isLocalBuild()) Log.w(TAG, FIRST_PARTY_PITFALL_MSG);
-            return CUSTOM_TABS_UI_TYPE_DEFAULT;
+            return CustomTabsUiType.DEFAULT;
         }
 
-        if (requestedUiType == CUSTOM_TABS_UI_TYPE_PAYMENT_REQUEST) {
+        if (requestedUiType == CustomTabsUiType.PAYMENT_REQUEST) {
             if (!mIsOpenedByChrome) {
-                return CUSTOM_TABS_UI_TYPE_DEFAULT;
+                return CustomTabsUiType.DEFAULT;
             }
         }
 
@@ -541,7 +548,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
      * @return See {@link #EXTRA_UI_TYPE}.
      */
     boolean isMediaViewer() {
-        return mUiType == CUSTOM_TABS_UI_TYPE_MEDIA_VIEWER;
+        return mUiType == CustomTabsUiType.MEDIA_VIEWER;
     }
 
     @CustomTabsUiType
@@ -568,7 +575,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
      * See {@link #EXTRA_UI_TYPE}.
      */
     boolean isInfoPage() {
-        return mUiType == CUSTOM_TABS_UI_TYPE_INFO_PAGE;
+        return mUiType == CustomTabsUiType.INFO_PAGE;
     }
 
     /**
@@ -597,7 +604,7 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
      * @return Whether the Custom Tab is opened for payment request.
      */
     boolean isForPaymentRequest() {
-        return mUiType == CUSTOM_TABS_UI_TYPE_PAYMENT_REQUEST;
+        return mUiType == CustomTabsUiType.PAYMENT_REQUEST;
     }
 
     /**
@@ -609,18 +616,10 @@ public class CustomTabIntentDataProvider extends BrowserSessionDataProvider {
     }
 
     /**
-     * @return The APK package to load the module from, or null if not specified.
+     * @return The component name of the module entry point, or null if not specified.
      */
     @Nullable
-    String getModulePackageName() {
-        return mModulePackageName;
-    }
-
-    /**
-     * @return The class name of the module entry point, or null if not specified.
-     */
-    @Nullable
-    String getModuleClassName() {
-        return mModuleClassName;
+    ComponentName getModuleComponentName() {
+        return mModuleComponentName;
     }
 }

@@ -30,12 +30,16 @@
 
 #if defined(USE_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/ozone_switches.h"
 #endif
 
 #if defined(OS_WIN)
 #include "gpu/ipc/service/direct_composition_surface_win.h"
 #include "ui/gl/gl_surface_egl.h"
+#endif
+
+#if BUILDFLAG(ENABLE_VULKAN)
+#include "gpu/vulkan/init/vulkan_factory.h"
+#include "gpu/vulkan/vulkan_implementation.h"
 #endif
 
 namespace gpu {
@@ -54,11 +58,10 @@ bool CollectGraphicsInfo(GPUInfo* gpu_info,
   if (gl::GetGLImplementation() == gl::kGLImplementationEGLGLES2 &&
       gl::GLSurfaceEGL::IsDirectCompositionSupported()) {
     gpu_info->direct_composition = true;
-  }
-
-  if (gl::GetGLImplementation() == gl::kGLImplementationEGLGLES2 &&
-      DirectCompositionSurfaceWin::AreOverlaysSupported()) {
-    gpu_info->supports_overlays = true;
+    gpu_info->supports_overlays =
+        DirectCompositionSurfaceWin::AreOverlaysSupported();
+    gpu_info->overlay_capabilities =
+        DirectCompositionSurfaceWin::GetOverlayCapabilities();
   }
 #endif  // defined(OS_WIN)
 
@@ -173,6 +176,20 @@ bool GpuInit::InitializeAndStartSandbox(base::CommandLine* command_line,
 #endif  // OS_WIN
   }
 
+#if BUILDFLAG(ENABLE_VULKAN)
+  if (gpu_preferences_.enable_vulkan) {
+    vulkan_implementation_ = gpu::CreateVulkanImplementation();
+    if (!vulkan_implementation_ ||
+        !vulkan_implementation_->InitializeVulkanInstance()) {
+      DLOG(WARNING) << "Failed to create and initialize Vulkan implementation.";
+      vulkan_implementation_ = nullptr;
+    }
+    gpu_preferences_.enable_vulkan = !!vulkan_implementation_;
+  }
+#else
+  gpu_preferences_.enable_vulkan = false;
+#endif
+
   sandbox_helper_->PreSandboxStartup();
 
   bool attempted_startsandbox = false;
@@ -194,7 +211,7 @@ bool GpuInit::InitializeAndStartSandbox(base::CommandLine* command_line,
   // may also have started at this point.
   ui::OzonePlatform::InitParams params;
   params.single_process = false;
-  params.using_mojo = command_line->HasSwitch(switches::kEnableDrmMojo);
+  params.using_mojo = features::IsOzoneDrmMojo();
   ui::OzonePlatform::InitializeForGPU(params);
 #endif
 
@@ -321,10 +338,10 @@ void GpuInit::InitializeInProcess(base::CommandLine* command_line,
   ui::OzonePlatform::InitParams params;
   params.single_process = true;
 #if defined(OS_CHROMEOS)
-  params.using_mojo = !features::IsAshInBrowserProcess() ||
-                      command_line->HasSwitch(switches::kEnableDrmMojo);
+  params.using_mojo =
+      !features::IsAshInBrowserProcess() || features::IsOzoneDrmMojo();
 #else
-  params.using_mojo = command_line->HasSwitch(switches::kEnableDrmMojo);
+  params.using_mojo = features::IsOzoneDrmMojo();
 #endif
   ui::OzonePlatform::InitializeForGPU(params);
   ui::OzonePlatform::GetInstance()->AfterSandboxEntry();

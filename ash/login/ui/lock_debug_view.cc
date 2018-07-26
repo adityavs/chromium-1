@@ -12,13 +12,14 @@
 #include "ash/detachable_base/detachable_base_pairing_status.h"
 #include "ash/ime/ime_controller.h"
 #include "ash/login/login_screen_controller.h"
-#include "ash/login/ui/layout_util.h"
 #include "ash/login/ui/lock_contents_view.h"
 #include "ash/login/ui/lock_screen.h"
 #include "ash/login/ui/login_data_dispatcher.h"
 #include "ash/login/ui/login_detachable_base_model.h"
 #include "ash/login/ui/non_accessible_view.h"
+#include "ash/login/ui/views_utils.h"
 #include "ash/public/interfaces/kiosk_app_info.mojom.h"
+#include "ash/shelf/login_shelf_view.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
@@ -48,18 +49,24 @@ enum {
   kGlobalToggleDebugDetachableBase,
   kGlobalCycleDetachableBaseStatus,
   kGlobalCycleDetachableBaseId,
-
+  kGlobalCycleAuthErrorMessage,
   kPerUserTogglePin,
   kPerUserCycleEasyUnlockState,
   kPerUserForceOnlineSignIn,
   kPerUserToggleAuthEnabled,
   kPerUserUseDetachableBase,
+  kPerUserTogglePublicAccount,
 };
 }  // namespace ButtonId
 
 constexpr const char* kDebugUserNames[] = {
     "Angelina Johnson", "Marcus Cohen", "Chris Wallace",
     "Debbie Craig",     "Stella Wong",  "Stephanie Wade",
+};
+
+constexpr const char* kDebugPublicAccountNames[] = {
+    "Seattle Public Library", "San Jose Public Library",
+    "Sunnyvale Public Library", "Mountain View Public Library",
 };
 
 constexpr const char* kDebugDetachableBases[] = {"Base A", "Base B", "Base C"};
@@ -72,17 +79,23 @@ constexpr const char kDebugBluetoothName[] = "Bluetooth adapter";
 constexpr const char kDebugKioskAppId[] = "asdf1234";
 constexpr const char kDebugKioskAppName[] = "Test App Name";
 
+constexpr const char kDebugDefaultLocaleCode[] = "en-GB";
+constexpr const char kDebugDefaultLocaleTitle[] = "English";
+constexpr const char kDebugEnterpriseDomain[] = "library.com";
+
 // Additional state for a user that the debug UI needs to reference.
 struct UserMetadata {
   explicit UserMetadata(const mojom::UserInfoPtr& user_info)
       : account_id(user_info->account_id),
-        display_name(user_info->display_name) {}
+        display_name(user_info->display_name),
+        type(user_info->type) {}
 
   AccountId account_id;
   std::string display_name;
   bool enable_pin = false;
   bool enable_click_to_unlock = false;
   bool enable_auth = true;
+  user_manager::UserType type = user_manager::USER_TYPE_REGULAR;
   mojom::EasyUnlockIconId easy_unlock_id = mojom::EasyUnlockIconId::NONE;
 };
 
@@ -99,6 +112,48 @@ std::string DetachableBasePairingStatusToString(
       return "Invalid device";
   }
   return "Unknown";
+}
+
+// Update the user data based on |type| and |user_index|.
+mojom::LoginUserInfoPtr PopulateUserData(const mojom::LoginUserInfoPtr& user,
+                                         user_manager::UserType type,
+                                         int user_index) {
+  mojom::LoginUserInfoPtr result = user->Clone();
+  result->basic_user_info->type = type;
+
+  bool is_public_account = type == user_manager::USER_TYPE_PUBLIC_ACCOUNT;
+  // Set debug user names and email. Useful for the stub user, which does not
+  // have a name  and email set.
+  result->basic_user_info->display_name =
+      is_public_account
+          ? kDebugPublicAccountNames[user_index %
+                                     base::size(kDebugPublicAccountNames)]
+          : kDebugUserNames[user_index % base::size(kDebugUserNames)];
+  result->basic_user_info->display_email =
+      result->basic_user_info->account_id.GetUserEmail();
+
+  if (is_public_account) {
+    result->public_account_info = ash::mojom::PublicAccountInfo::New();
+    result->public_account_info->enterprise_domain = kDebugEnterpriseDomain;
+    result->public_account_info->default_locale = kDebugDefaultLocaleCode;
+
+    std::vector<ash::mojom::LocaleItemPtr> locales;
+    mojom::LocaleItemPtr locale_item = ash::mojom::LocaleItem::New();
+    locale_item->language_code = kDebugDefaultLocaleCode;
+    locale_item->title = kDebugDefaultLocaleTitle;
+    locales.push_back(std::move(locale_item));
+    result->public_account_info->available_locales = std::move(locales);
+
+    // Request keyboard layouts for the default locale.
+    Shell::Get()
+        ->login_screen_controller()
+        ->RequestPublicSessionKeyboardLayouts(
+            result->basic_user_info->account_id, kDebugDefaultLocaleCode);
+  } else {
+    result->public_account_info.reset();
+  }
+
+  return result;
 }
 
 }  // namespace
@@ -125,7 +180,10 @@ class LockDebugView::DebugDataDispatcherTransformer
   LoginDataDispatcher* debug_dispatcher() { return &debug_dispatcher_; }
 
   // Changes the number of displayed users to |count|.
-  void SetUserCount(int count) {
+  void SetUserCount(int count) { NotifyUsers(BuildUserList(count)); }
+
+  // Create user list.
+  std::vector<mojom::LoginUserInfoPtr> BuildUserList(int count) {
     DCHECK(!root_users_.empty());
 
     count = std::max(count, 0);
@@ -146,15 +204,20 @@ class LockDebugView::DebugDataDispatcherTransformer
                 std::to_string(i));
       }
 
-      // Set debug user names. Useful for the stub user, which does not have a
-      // name set.
-      users[i]->basic_user_info->display_name =
-          kDebugUserNames[i % base::size(kDebugUserNames)];
+      // Setup user data based on the user type in debug_users_.
+      user_manager::UserType type = (i < debug_users_.size())
+                                        ? debug_users_[i].type
+                                        : users[i]->basic_user_info->type;
+      users[i] = PopulateUserData(users[i], type, i);
 
       if (i >= debug_users_.size())
         debug_users_.push_back(UserMetadata(users[i]->basic_user_info));
     }
 
+    return users;
+  }
+
+  void NotifyUsers(std::vector<mojom::LoginUserInfoPtr> users) {
     // User notification resets PIN state.
     for (UserMetadata& user : debug_users_)
       user.enable_pin = false;
@@ -256,6 +319,23 @@ class LockDebugView::DebugDataDispatcherTransformer
             base::TimeDelta::FromHours(8));
   }
 
+  // Convert user type to regular user or public account for the user at
+  // |user_index|.
+  void TogglePublicAccountForUserIndex(size_t user_index) {
+    DCHECK(user_index >= 0 && user_index < debug_users_.size());
+    UserMetadata& user = debug_users_[user_index];
+    // Swap the type between regular and public account.
+    user.type = user.type == user_manager::USER_TYPE_REGULAR
+                    ? user_manager::USER_TYPE_PUBLIC_ACCOUNT
+                    : user_manager::USER_TYPE_REGULAR;
+
+    std::vector<mojom::LoginUserInfoPtr> users =
+        BuildUserList(debug_users_.size());
+    // Update display name and email in debug users.
+    debug_users_[user_index] = UserMetadata(users[user_index]->basic_user_info);
+    NotifyUsers(std::move(users));
+  }
+
   void ToggleLockScreenNoteButton() {
     if (lock_screen_note_state_ == mojom::TrayActionState::kAvailable) {
       lock_screen_note_state_ = mojom::TrayActionState::kNotAvailable;
@@ -268,17 +348,18 @@ class LockDebugView::DebugDataDispatcherTransformer
 
   void AddKioskApp(ShelfWidget* shelf_widget) {
     mojom::KioskAppInfoPtr app_info = mojom::KioskAppInfo::New();
-    app_info->app_id = kDebugKioskAppId;
+    app_info->identifier = mojom::KioskAppIdentifier::New();
+    app_info->identifier->set_app_id(kDebugKioskAppId);
     app_info->name = base::UTF8ToUTF16(kDebugKioskAppName);
     kiosk_apps_.push_back(std::move(app_info));
-    shelf_widget->SetLoginKioskApps(mojo::Clone(kiosk_apps_));
+    shelf_widget->login_shelf_view()->SetKioskApps(mojo::Clone(kiosk_apps_));
   }
 
   void RemoveKioskApp(ShelfWidget* shelf_widget) {
     if (kiosk_apps_.empty())
       return;
     kiosk_apps_.pop_back();
-    shelf_widget->SetLoginKioskApps(mojo::Clone(kiosk_apps_));
+    shelf_widget->login_shelf_view()->SetKioskApps(mojo::Clone(kiosk_apps_));
   }
 
   void AddLockScreenDevChannelInfo(const std::string& os_version,
@@ -501,7 +582,8 @@ LockDebugView::LockDebugView(mojom::TrayActionState initial_note_action_state,
           data_dispatcher,
           base::BindRepeating(
               &LockDebugView::UpdatePerUserActionContainerAndLayout,
-              base::Unretained(this)))) {
+              base::Unretained(this)))),
+      next_auth_error_type_(AuthErrorType::kFirstUnlockFailed) {
   SetLayoutManager(
       std::make_unique<views::BoxLayout>(views::BoxLayout::kHorizontal));
 
@@ -549,6 +631,8 @@ LockDebugView::LockDebugView(mojom::TrayActionState initial_note_action_state,
             toggle_container);
   global_action_toggle_auth_ = AddButton(
       "Auth (allowed)", ButtonId::kGlobalToggleAuth, toggle_container);
+  AddButton("Cycle auth error", ButtonId::kGlobalCycleAuthErrorMessage,
+            toggle_container);
 
   auto* kiosk_container = add_horizontal_container();
   AddButton("Add kiosk app", ButtonId::kGlobalAddKioskApp, kiosk_container);
@@ -593,6 +677,46 @@ void LockDebugView::Layout() {
   lock_->SetBoundsRect(GetLocalBounds());
   container_->SetPosition(gfx::Point());
   container_->SizeToPreferredSize();
+}
+
+void LockDebugView::CycleAuthErrorMessage() {
+  switch (next_auth_error_type_) {
+    case AuthErrorType::kFirstUnlockFailed:
+      next_auth_error_type_ = AuthErrorType::kFirstUnlockFailedCapsLockOn;
+      Shell::Get()->ime_controller()->UpdateCapsLockState(
+          false /*caps_enabled*/);
+      debug_detachable_base_model_->SetPairingState(
+          DetachableBasePairingStatus::kNone,
+          DebugLoginDetachableBaseModel::kNullBaseId);
+      lock_->ShowAuthErrorMessageForDebug(1 /*unlock_attempt*/);
+      return;
+    case AuthErrorType::kFirstUnlockFailedCapsLockOn:
+      next_auth_error_type_ = AuthErrorType::kSecondUnlockFailed;
+      Shell::Get()->ime_controller()->UpdateCapsLockState(
+          true /*caps_enabled*/);
+      lock_->ShowAuthErrorMessageForDebug(1 /*unlock_attempt*/);
+      return;
+    case AuthErrorType::kSecondUnlockFailed:
+      next_auth_error_type_ = AuthErrorType::kSecondUnlockFailedCapsLockOn;
+      Shell::Get()->ime_controller()->UpdateCapsLockState(
+          false /*caps_enabled*/);
+      lock_->ShowAuthErrorMessageForDebug(2 /*unlock_attempt*/);
+      return;
+    case AuthErrorType::kSecondUnlockFailedCapsLockOn:
+      next_auth_error_type_ = AuthErrorType::kDetachableBaseFailed;
+      Shell::Get()->ime_controller()->UpdateCapsLockState(
+          true /*caps_enabled*/);
+      lock_->ShowAuthErrorMessageForDebug(2 /*unlock_attempt*/);
+      return;
+    case AuthErrorType::kDetachableBaseFailed:
+      next_auth_error_type_ = AuthErrorType::kFirstUnlockFailed;
+      debug_detachable_base_model_->SetPairingState(
+          DetachableBasePairingStatus::kNotAuthenticated,
+          DebugLoginDetachableBaseModel::kNullBaseId);
+      return;
+    default:
+      NOTREACHED();
+  }
 }
 
 void LockDebugView::ButtonPressed(views::Button* sender,
@@ -736,6 +860,11 @@ void LockDebugView::ButtonPressed(views::Button* sender,
     return;
   }
 
+  if (sender->id() == ButtonId::kGlobalCycleAuthErrorMessage) {
+    CycleAuthErrorMessage();
+    return;
+  }
+
   // Enable or disable PIN.
   if (sender->id() == ButtonId::kPerUserTogglePin)
     debug_data_dispatcher_->TogglePinStateForUserIndex(sender->tag());
@@ -756,6 +885,13 @@ void LockDebugView::ButtonPressed(views::Button* sender,
   if (sender->id() == ButtonId::kPerUserUseDetachableBase) {
     debug_detachable_base_model_->SetBaseLastUsedForUser(
         debug_data_dispatcher_->GetAccountIdForUserIndex(sender->tag()));
+  }
+
+  // Convert this user to regular user or public account.
+  if (sender->id() == ButtonId::kPerUserTogglePublicAccount) {
+    debug_data_dispatcher_->TogglePublicAccountForUserIndex(sender->tag());
+    UpdatePerUserActionContainer();
+    Layout();
   }
 }
 
@@ -791,6 +927,10 @@ void LockDebugView::UpdatePerUserActionContainer() {
       AddButton("Set base used", ButtonId::kPerUserUseDetachableBase, row)
           ->set_tag(i);
     }
+
+    AddButton("Toggle Public Account", ButtonId::kPerUserTogglePublicAccount,
+              row)
+        ->set_tag(i);
 
     per_user_action_view_container_->AddChildView(row);
   }
@@ -834,7 +974,7 @@ views::LabelButton* LockDebugView::AddButton(const std::string& text,
       this, base::ASCIIToUTF16(text));
   button->set_id(id);
   button->SetFocusBehavior(views::View::FocusBehavior::NEVER);
-  container->AddChildView(login_layout_util::WrapViewForPreferredSize(button));
+  container->AddChildView(login_views_utils::WrapViewForPreferredSize(button));
   return button;
 }
 

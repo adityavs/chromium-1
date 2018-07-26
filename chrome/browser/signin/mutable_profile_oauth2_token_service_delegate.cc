@@ -13,6 +13,8 @@
 #include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/metrics/histogram_macros.h"
+#include "build/build_config.h"
+#include "chrome/browser/browser_process.h"
 #include "components/pref_registry/pref_registry_syncable.h"
 #include "components/prefs/pref_service.h"
 #include "components/signin/core/browser/signin_client.h"
@@ -25,7 +27,6 @@
 #include "google_apis/gaia/gaia_constants.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher_immediate_error.h"
 #include "google_apis/gaia/oauth2_access_token_fetcher_impl.h"
-#include "net/url_request/url_request_context_getter.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
 namespace {
@@ -249,7 +250,7 @@ MutableProfileOAuth2TokenServiceDelegate::RevokeServerRefreshToken::
     : token_service_delegate_(token_service_delegate),
       fetcher_(this,
                GaiaConstants::kChromeSource,
-               token_service_delegate_->GetRequestContext()),
+               token_service_delegate_->GetURLLoaderFactory()),
       weak_ptr_factory_(this) {
   RecordRefreshTokenRevocationRequestEvent(
       TokenRevocationRequestProgress::kRequestCreated);
@@ -358,14 +359,22 @@ MutableProfileOAuth2TokenServiceDelegate::
   backoff_policy_.maximum_backoff_ms = 15 * 60 * 1000;
   backoff_policy_.entry_lifetime_ms = -1;
   backoff_policy_.always_use_initial_delay = false;
-  net::NetworkChangeNotifier::AddNetworkChangeObserver(this);
+  g_browser_process->network_connection_tracker()->AddNetworkConnectionObserver(
+      this);
+
+#if !defined(OS_CHROMEOS)
+  // Ensure the device ID is not empty.
+  std::string device_id = client_->GetSigninScopedDeviceId();
+  DCHECK(!device_id.empty());
+#endif
 }
 
 MutableProfileOAuth2TokenServiceDelegate::
     ~MutableProfileOAuth2TokenServiceDelegate() {
   VLOG(1) << "MutablePO2TS::~MutablePO2TS";
   DCHECK(server_revokes_.empty());
-  net::NetworkChangeNotifier::RemoveNetworkChangeObserver(this);
+  g_browser_process->network_connection_tracker()
+      ->RemoveNetworkConnectionObserver(this);
 }
 
 // static
@@ -377,7 +386,6 @@ void MutableProfileOAuth2TokenServiceDelegate::RegisterProfilePrefs(
 OAuth2AccessTokenFetcher*
 MutableProfileOAuth2TokenServiceDelegate::CreateAccessTokenFetcher(
     const std::string& account_id,
-    net::URLRequestContextGetter* getter,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     OAuth2AccessTokenConsumer* consumer) {
   ValidateAccountId(account_id);
@@ -469,11 +477,6 @@ MutableProfileOAuth2TokenServiceDelegate::GetAccounts() {
   return account_ids;
 }
 
-net::URLRequestContextGetter*
-MutableProfileOAuth2TokenServiceDelegate::GetRequestContext() const {
-  return client_->GetURLRequestContext();
-}
-
 scoped_refptr<network::SharedURLLoaderFactory>
 MutableProfileOAuth2TokenServiceDelegate::GetURLLoaderFactory() const {
   return client_->GetURLLoaderFactory();
@@ -497,7 +500,7 @@ void MutableProfileOAuth2TokenServiceDelegate::LoadCredentials(
            signin::AccountConsistencyMethod::kDiceFixAuthErrors ||
        account_consistency_ == signin::AccountConsistencyMethod::kDisabled)) {
     load_credentials_state_ = LOAD_CREDENTIALS_FINISHED_WITH_SUCCESS;
-    FireRefreshTokensLoaded();
+    FinishLoadingCredentials();
     return;
   }
 
@@ -513,7 +516,7 @@ void MutableProfileOAuth2TokenServiceDelegate::LoadCredentials(
     // This case only exists in unit tests that do not care about loading
     // credentials.
     load_credentials_state_ = LOAD_CREDENTIALS_FINISHED_WITH_UNKNOWN_ERRORS;
-    FireRefreshTokensLoaded();
+    FinishLoadingCredentials();
     return;
   }
 
@@ -570,6 +573,7 @@ void MutableProfileOAuth2TokenServiceDelegate::OnWebDataServiceRequestDone(
                      GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
                          GoogleServiceAuthError::InvalidGaiaCredentialsReason::
                              CREDENTIALS_MISSING));
+    FireRefreshTokenAvailable(loading_primary_account_id_);
   }
 
 #ifndef NDEBUG
@@ -580,7 +584,7 @@ void MutableProfileOAuth2TokenServiceDelegate::OnWebDataServiceRequestDone(
 #endif
 
   loading_primary_account_id_.clear();
-  FireRefreshTokensLoaded();
+  FinishLoadingCredentials();
 }
 
 void MutableProfileOAuth2TokenServiceDelegate::LoadAllCredentialsIntoMemory(
@@ -757,8 +761,9 @@ void MutableProfileOAuth2TokenServiceDelegate::UpdateCredentialsInMemory(
   DCHECK(!account_id.empty());
   DCHECK(!refresh_token.empty());
 
+  bool is_refresh_token_invalidated = refresh_token == kInvalidRefreshToken;
   GoogleServiceAuthError error =
-      (refresh_token == kInvalidRefreshToken)
+      is_refresh_token_invalidated
           ? GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
                 GoogleServiceAuthError::InvalidGaiaCredentialsReason::
                     CREDENTIALS_REJECTED_BY_CLIENT)
@@ -771,7 +776,21 @@ void MutableProfileOAuth2TokenServiceDelegate::UpdateCredentialsInMemory(
     DCHECK_NE(refresh_token, refresh_tokens_[account_id]->refresh_token());
     VLOG(1) << "MutablePO2TS::UpdateCredentials; Refresh Token was present. "
             << "account_id=" << account_id;
-    RevokeCredentialsOnServer(refresh_tokens_[account_id]->refresh_token());
+
+    // The old refresh token must be revoked on the server only when it is
+    // invalidated.
+    //
+    // The refresh token is updated to a new valid one in case of reauth.
+    // In the reauth case the old and the new refresh tokens have the same
+    // device ID. When revoking a refresh token on the server, Gaia revokes
+    // all the refresh tokens that have the same device ID.
+    // Therefore, the old refresh token must not be revoked on the server
+    // when it is updated to a new valid one (otherwise the new refresh token
+    // would also be invalidated server-side).
+    // See http://crbug.com/865189 for more information about this regression.
+    if (is_refresh_token_invalidated)
+      RevokeCredentialsOnServer(refresh_tokens_[account_id]->refresh_token());
+
     refresh_tokens_[account_id]->set_refresh_token(refresh_token);
     UpdateAuthError(account_id, error);
   } else {
@@ -834,6 +853,9 @@ void MutableProfileOAuth2TokenServiceDelegate::RevokeCredentials(
     ClearPersistedCredentials(account_id);
     FireRefreshTokenRevoked(account_id);
   }
+
+  // If this was the last token, recreate the device ID.
+  RecreateDeviceIdIfNeeded();
 }
 
 void MutableProfileOAuth2TokenServiceDelegate::ClearPersistedCredentials(
@@ -876,8 +898,8 @@ void MutableProfileOAuth2TokenServiceDelegate::Shutdown() {
   refresh_tokens_.clear();
 }
 
-void MutableProfileOAuth2TokenServiceDelegate::OnNetworkChanged(
-    net::NetworkChangeNotifier::ConnectionType type) {
+void MutableProfileOAuth2TokenServiceDelegate::OnConnectionChanged(
+    network::mojom::ConnectionType type) {
   // If our network has changed, reset the backoff timer so that errors caused
   // by a previous lack of network connectivity don't prevent new requests.
   backoff_entry_.Reset();
@@ -899,4 +921,42 @@ void MutableProfileOAuth2TokenServiceDelegate::AddAccountStatus(
   status->Initialize();
   status->SetLastAuthError(error);
   FireAuthErrorChanged(account_id, status->GetAuthStatus());
+}
+
+void MutableProfileOAuth2TokenServiceDelegate::RecreateDeviceIdIfNeeded() {
+#if !defined(OS_CHROMEOS)
+  // Re-create a new device ID if needed.
+  switch (load_credentials_state_) {
+    case LOAD_CREDENTIALS_UNKNOWN:
+    case LOAD_CREDENTIALS_NOT_STARTED:
+    case LOAD_CREDENTIALS_IN_PROGRESS:
+      // TODO(droger): Add a DCHECK here, because this would mean that the token
+      // service is being used before tokens are loaded. This currently would
+      // fire in tests though.
+      return;
+    case LOAD_CREDENTIALS_FINISHED_WITH_DB_ERRORS:
+    case LOAD_CREDENTIALS_FINISHED_WITH_DECRYPT_ERRORS:
+      // Do not recreate a new device ID if Chrome fails to decrypt tokens as it
+      // may successfully load them on the next restart.
+      return;
+    case LOAD_CREDENTIALS_FINISHED_WITH_SUCCESS:
+    case LOAD_CREDENTIALS_FINISHED_WITH_NO_TOKEN_FOR_PRIMARY_ACCOUNT:
+    case LOAD_CREDENTIALS_FINISHED_WITH_UNKNOWN_ERRORS:
+      // this is the only case when we recreate the device ID.
+      if (GetAccounts().empty())
+        client_->RecreateSigninScopedDeviceId();
+  }
+#endif
+}
+
+void MutableProfileOAuth2TokenServiceDelegate::FinishLoadingCredentials() {
+  DCHECK(load_credentials_state_ != LOAD_CREDENTIALS_UNKNOWN);
+  DCHECK(load_credentials_state_ != LOAD_CREDENTIALS_NOT_STARTED);
+  DCHECK(load_credentials_state_ != LOAD_CREDENTIALS_IN_PROGRESS);
+
+  // Ensure the device ID is not empty, and recreate it if all tokens were
+  // cleared during the loading process.
+  RecreateDeviceIdIfNeeded();
+
+  FireRefreshTokensLoaded();
 }

@@ -8,8 +8,6 @@ import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Point;
-import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -30,10 +28,13 @@ import org.chromium.chrome.browser.feed.action.FeedActionHandler;
 import org.chromium.chrome.browser.ntp.ContextMenuManager;
 import org.chromium.chrome.browser.ntp.ContextMenuManager.TouchEnabledDelegate;
 import org.chromium.chrome.browser.ntp.NewTabPage;
-import org.chromium.chrome.browser.ntp.NewTabPage.FakeboxDelegate;
 import org.chromium.chrome.browser.ntp.NewTabPageLayout;
+import org.chromium.chrome.browser.ntp.SnapScrollHelper;
+import org.chromium.chrome.browser.ntp.snippets.SectionHeaderView;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrlService;
+import org.chromium.chrome.browser.snackbar.Snackbar;
+import org.chromium.chrome.browser.snackbar.SnackbarManager;
 import org.chromium.chrome.browser.suggestions.SuggestionsNavigationDelegateImpl;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -45,17 +46,22 @@ import java.util.Arrays;
 /**
  * Provides a new tab page that displays an interest feed rendered list of content suggestions.
  */
-public class FeedNewTabPage
-        extends NewTabPage implements TouchEnabledDelegate, NewTabPageLayout.ScrollDelegate {
+public class FeedNewTabPage extends NewTabPage implements TouchEnabledDelegate {
+    private final FeedNewTabPageMediator mMediator;
     private final StreamLifecycleManager mStreamLifecycleManager;
+    private final Stream mStream;
 
     private FrameLayout mRootView;
+    private SectionHeaderView mSectionHeaderView;
     private FeedImageLoader mImageLoader;
 
-    private static class DummySnackbarApi implements SnackbarApi {
-        // TODO: implement snackbar functionality.
+    private class BasicSnackbarApi implements SnackbarApi {
         @Override
-        public void show(String message) {}
+        public void show(String message) {
+            mNewTabPageManager.getSnackbarManager().showSnackbar(
+                    Snackbar.make(message, new SnackbarManager.SnackbarController() {},
+                            Snackbar.TYPE_ACTION, Snackbar.UMA_FEED_NTP_STREAM));
+        }
     }
 
     private static class BasicStreamConfiguration implements StreamConfiguration {
@@ -78,7 +84,7 @@ public class FeedNewTabPage
         }
         @Override
         public int getPaddingTop() {
-            return mPadding;
+            return 0;
         }
         @Override
         public int getPaddingBottom() {
@@ -142,26 +148,19 @@ public class FeedNewTabPage
                                 new FeedActionHandler(navigationDelegate),
                                 new BasicStreamConfiguration(activity.getResources()),
                                 new BasicCardConfiguration(activity.getResources()),
-                                new DummySnackbarApi())
+                                new BasicSnackbarApi())
                         .build();
 
-        Stream stream = streamScope.getStream();
-        mStreamLifecycleManager = new StreamLifecycleManager(stream, activity, tab);
+        mStream = streamScope.getStream();
+        mStreamLifecycleManager = new StreamLifecycleManager(mStream, activity, tab);
 
-        stream.getView().setBackgroundColor(Color.WHITE);
-        mRootView.addView(stream.getView());
+        LayoutInflater inflater = LayoutInflater.from(activity);
+        mNewTabPageLayout = (NewTabPageLayout) inflater.inflate(R.layout.new_tab_page_layout, null);
+        mSectionHeaderView = (SectionHeaderView) inflater.inflate(
+                R.layout.new_tab_page_snippets_expandable_header, null);
 
-        stream.setHeaderViews(Arrays.asList(mNewTabPageLayout));
-
-        // TODO(skym): This is a work around for outstanding Feed bug.
-        stream.triggerRefresh();
-    }
-
-    @Override
-    protected void initializeMainView(Context context) {
-        mRootView = new FrameLayout(context);
-        mRootView.setLayoutParams(new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        mMediator = new FeedNewTabPageMediator(this,
+                new SnapScrollHelper(mNewTabPageManager, mNewTabPageLayout, mStream.getView()));
 
         // Don't store a direct reference to the activity, because it might change later if the tab
         // is reparented.
@@ -172,17 +171,30 @@ public class FeedNewTabPage
                         this::setTouchEnabled, closeContextMenuCallback);
         mTab.getWindowAndroid().addContextMenuCloseListener(contextMenuManager);
 
-        LayoutInflater inflater = LayoutInflater.from(context);
-        mNewTabPageLayout = (NewTabPageLayout) inflater.inflate(R.layout.new_tab_page_layout, null);
         mNewTabPageLayout.initialize(mNewTabPageManager, mTab, mTileGroupDelegate,
                 mSearchProviderHasLogo,
-                TemplateUrlService.getInstance().isDefaultSearchEngineGoogle(), this,
+                TemplateUrlService.getInstance().isDefaultSearchEngineGoogle(), mMediator,
                 contextMenuManager, new UiConfig(mRootView));
+
+        mStream.getView().setBackgroundColor(Color.WHITE);
+        mRootView.addView(mStream.getView());
+
+        mStream.setHeaderViews(Arrays.asList(mNewTabPageLayout, mSectionHeaderView));
+    }
+
+    @Override
+    protected void initializeMainView(Context context) {
+        int topPadding = context.getResources().getDimensionPixelOffset(R.dimen.tab_strip_height);
+        mRootView = new FrameLayout(context);
+        mRootView.setLayoutParams(new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        mRootView.setPadding(0, topPadding, 0, 0);
     }
 
     @Override
     public void destroy() {
         super.destroy();
+        mMediator.destroy();
         mImageLoader.destroy();
         mStreamLifecycleManager.destroy();
     }
@@ -198,22 +210,7 @@ public class FeedNewTabPage
     }
 
     @Override
-    protected void setSearchProviderInfoOnView(boolean hasLogo, boolean isGoogle) {
-        mNewTabPageLayout.setSearchProviderInfo(hasLogo, isGoogle);
-    }
-
-    @Override
     protected void scrollToSuggestions() {
-        // TODO(twellington): implement this method.
-    }
-
-    @Override
-    public void getSearchBoxBounds(Rect bounds, Point translation) {
-        // TODO(twellington): implement this method.
-    }
-
-    @Override
-    public void setFakeboxDelegate(FakeboxDelegate fakeboxDelegate) {
         // TODO(twellington): implement this method.
     }
 
@@ -230,35 +227,20 @@ public class FeedNewTabPage
         ViewUtils.captureBitmap(mRootView, canvas);
     }
 
+    /** @return The {@link Stream} that this class holds. */
+    Stream getStream() {
+        return mStream;
+    }
+
+    /** @return The {@link SectionHeaderView} for the Feed section header. */
+    SectionHeaderView getSectionHeaderView() {
+        return mSectionHeaderView;
+    }
+
     // TouchEnabledDelegate interface.
 
     @Override
     public void setTouchEnabled(boolean enabled) {
-        // TODO(twellington): implement this method.
-    }
-
-    // ScrollDelegate interface.
-
-    @Override
-    public boolean isScrollViewInitialized() {
-        // TODO(twellington): implement this method.
-        return false;
-    }
-
-    @Override
-    public int getVerticalScrollOffset() {
-        // TODO(twellington): implement this method.
-        return 0;
-    }
-
-    @Override
-    public boolean isChildVisibleAtPosition(int position) {
-        // TODO(twellington): implement this method.
-        return false;
-    }
-
-    @Override
-    public void snapScroll() {
         // TODO(twellington): implement this method.
     }
 }

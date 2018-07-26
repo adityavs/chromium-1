@@ -4,6 +4,7 @@
 
 #include "cc/animation/worklet_animation.h"
 
+#include "cc/animation/animation_id_provider.h"
 #include "cc/animation/keyframe_effect.h"
 #include "cc/animation/scroll_timeline.h"
 #include "cc/trees/animation_options.h"
@@ -11,15 +12,34 @@
 namespace cc {
 
 WorkletAnimation::WorkletAnimation(
-    int id,
+    int cc_animation_id,
+    WorkletAnimationId worklet_animation_id,
     const std::string& name,
     std::unique_ptr<ScrollTimeline> scroll_timeline,
     std::unique_ptr<AnimationOptions> options,
     bool is_controlling_instance)
-    : SingleKeyframeEffectAnimation(id),
+    : WorkletAnimation(cc_animation_id,
+                       worklet_animation_id,
+                       name,
+                       std::move(scroll_timeline),
+                       std::move(options),
+                       is_controlling_instance,
+                       nullptr) {}
+
+WorkletAnimation::WorkletAnimation(
+    int cc_animation_id,
+    WorkletAnimationId worklet_animation_id,
+    const std::string& name,
+    std::unique_ptr<ScrollTimeline> scroll_timeline,
+    std::unique_ptr<AnimationOptions> options,
+    bool is_controlling_instance,
+    std::unique_ptr<KeyframeEffect> effect)
+    : SingleKeyframeEffectAnimation(cc_animation_id, std::move(effect)),
+      worklet_animation_id_(worklet_animation_id),
       name_(name),
       scroll_timeline_(std::move(scroll_timeline)),
       options_(std::move(options)),
+      local_time_(base::nullopt),
       start_time_(base::nullopt),
       last_current_time_(base::nullopt),
       state_(State::PENDING),
@@ -28,12 +48,13 @@ WorkletAnimation::WorkletAnimation(
 WorkletAnimation::~WorkletAnimation() = default;
 
 scoped_refptr<WorkletAnimation> WorkletAnimation::Create(
-    int id,
+    WorkletAnimationId worklet_animation_id,
     const std::string& name,
     std::unique_ptr<ScrollTimeline> scroll_timeline,
     std::unique_ptr<AnimationOptions> options) {
   return WrapRefCounted(new WorkletAnimation(
-      id, name, std::move(scroll_timeline), std::move(options), false));
+      AnimationIdProvider::NextAnimationId(), worklet_animation_id, name,
+      std::move(scroll_timeline), std::move(options), false));
 }
 
 scoped_refptr<Animation> WorkletAnimation::CreateImplInstance() const {
@@ -41,8 +62,9 @@ scoped_refptr<Animation> WorkletAnimation::CreateImplInstance() const {
   if (scroll_timeline_)
     impl_timeline = scroll_timeline_->CreateImplInstance();
 
-  return WrapRefCounted(new WorkletAnimation(
-      id(), name(), std::move(impl_timeline), CloneOptions(), true));
+  return WrapRefCounted(new WorkletAnimation(id(), worklet_animation_id_,
+                                             name(), std::move(impl_timeline),
+                                             CloneOptions(), true));
 }
 
 void WorkletAnimation::PushPropertiesTo(Animation* animation_impl) {
@@ -59,13 +81,14 @@ void WorkletAnimation::Tick(base::TimeTicks monotonic_time) {
   // skip ticking all animations on main thread in http://crbug.com/762717.
   if (!is_impl_instance_)
     return;
-
+  if (!local_time_.has_value())
+    return;
   // As the output of a WorkletAnimation is driven by a script-provided local
   // time, we don't want the underlying effect to participate in the normal
   // animations lifecycle. To avoid this we pause the underlying keyframe effect
   // at the local time obtained from the user script - essentially turning each
   // call to |WorkletAnimation::Tick| into a seek in the effect.
-  keyframe_effect()->Pause(local_time_);
+  keyframe_effect()->Pause(local_time_.value());
   keyframe_effect()->Tick(monotonic_time);
 }
 
@@ -89,15 +112,15 @@ void WorkletAnimation::UpdateInputState(MutatorInputState* input_state,
 
   switch (state_) {
     case State::PENDING:
-      input_state->added_and_updated_animations.push_back(
-          {id(), name(), current_time, CloneOptions()});
+      input_state->Add(
+          {worklet_animation_id(), name(), current_time, CloneOptions()});
       state_ = State::RUNNING;
       break;
     case State::RUNNING:
-      input_state->updated_animations.push_back({id(), current_time});
+      input_state->Update({worklet_animation_id(), current_time});
       break;
     case State::REMOVED:
-      input_state->removed_animations.push_back(id());
+      input_state->Remove(worklet_animation_id());
       break;
   }
 }
@@ -105,7 +128,6 @@ void WorkletAnimation::UpdateInputState(MutatorInputState* input_state,
 void WorkletAnimation::SetOutputState(
     const MutatorOutputState::AnimationState& state) {
   local_time_ = state.local_time;
-  SetNeedsPushProperties();
 }
 
 // TODO(crbug.com/780151): Multiply the result by the play back rate.
@@ -150,9 +172,9 @@ void WorkletAnimation::PromoteScrollTimelinePendingToActive() {
     scroll_timeline_->PromoteScrollTimelinePendingToActive();
 }
 
-void WorkletAnimation::RemoveKeyframeModels() {
+void WorkletAnimation::RemoveKeyframeModel(int keyframe_model_id) {
   state_ = State::REMOVED;
-  SingleKeyframeEffectAnimation::RemoveKeyframeModels();
+  SingleKeyframeEffectAnimation::RemoveKeyframeModel(keyframe_model_id);
 }
 
 bool WorkletAnimation::IsWorkletAnimation() const {

@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Uporabljena je bila lokalizacija, vendar v manifestu ni bil naveden parameter default_locale.</translation>
 <translation id="2576842806987913196">Datoteka CRX s tem imenom že obstaja.</translation>
 <translation id="2753617847762399167">Neveljavna pot (absolutna ali v povezavi z »..«): »<ph name="IMAGE_PATH" />«</translation>
-<translation id="27822970480436970">Tej razširitvi ni uspelo spremeniti omrežne zahteve, ker je bila sprememba v sporu z drugo razširitvijo.</translation>
 <translation id="2785530881066938471">Datoteke »<ph name="RELATIVE_PATH" />« ni mogoče naložiti. Ni kodirana z UTF-8.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (ID razširitve »<ph name="EXTENSION_ID" />«) je blokiral skrbnik. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Paketa »<ph name="ERROR_CODE" />« ni bilo mogoče namestiti</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Neznan izdelek <ph name="PRODUCT_ID" /> dobavitelja <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">Datoteka manifesta ni veljavna</translation>
 <translation id="7217838517480956708">Skrbnik tega računalnika zahteva namestitev razširitve <ph name="EXTENSION_NAME" />. Ni je mogoče odstraniti ali spremeniti.</translation>
+<translation id="7939686037314084444">Ta razširitev se ni pravilno naložila. Morda ne more prestrezati omrežnih zahtev.</translation>
 <translation id="7972881773422714442">Možnosti: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Sprednji</translation>
 <translation id="8047248493720652249">Ta razširitev ni mogla prenosa poimenovati »<ph name="ATTEMPTED_FILENAME" />«, ker je druga razširitev (<ph name="EXTENSION_NAME" />) določila drugo ime datoteke: »<ph name="ACTUAL_FILENAME" />«.</translation>

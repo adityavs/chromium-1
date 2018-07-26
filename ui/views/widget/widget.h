@@ -34,9 +34,6 @@
 #if defined(IsMinimized)
 #undef IsMinimized
 #endif
-#if defined(CreateWindow)
-#undef CreateWindow
-#endif
 #endif
 
 namespace base {
@@ -327,14 +324,6 @@ class VIEWS_EXPORT Widget : public internal::NativeWidgetDelegate,
   // during application shutdown when the last non-secondary widget is closed.
   static void CloseAllSecondaryWidgets();
 
-  // Converts a rectangle from one Widget's coordinate system to another's.
-  // Returns false if the conversion couldn't be made, because either these two
-  // Widgets do not have a common ancestor or they are not on the screen yet.
-  // The value of |*rect| won't be changed when false is returned.
-  static bool ConvertRect(const Widget* source,
-                          const Widget* target,
-                          gfx::Rect* rect);
-
   // Retrieves the Widget implementation associated with the given
   // NativeView or Window, or NULL if the supplied handle has no associated
   // Widget.
@@ -428,6 +417,9 @@ class VIEWS_EXPORT Widget : public internal::NativeWidgetDelegate,
   // fit the entire size of the RootView. The RootView takes ownership of this
   // View, unless it is set as not being parent-owned.
   void SetContentsView(View* view);
+
+  // NOTE: This may not be the same view as WidgetDelegate::GetContentsView().
+  // See RootView::GetContentsView().
   View* GetContentsView();
 
   // Returns the bounds of the Widget in screen coordinates.
@@ -552,9 +544,11 @@ class VIEWS_EXPORT Widget : public internal::NativeWidgetDelegate,
   // underlying windowing system.
   void SetOpacity(float opacity);
 
-  // Sets the aspect ratio of the widget, which will be maintained during
-  // resizing.
-  void SetAspectRatio(const gfx::Size& aspect_ratio);
+  // Sets the aspect ratio of the widget's content, which will be maintained
+  // during interactive resizing. This size disregards title bar and borders.
+  // Once set, some platforms ensure the content will only size to integer
+  // multiples of |aspect_ratio|.
+  void SetAspectRatio(const gfx::SizeF& aspect_ratio);
 
   // Flashes the frame of the window to draw attention to it. Currently only
   // implemented on Windows for non-Aura.

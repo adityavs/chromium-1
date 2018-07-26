@@ -45,9 +45,7 @@
 #include "third_party/blink/renderer/platform/graphics/paint/paint_controller_test.h"
 #include "third_party/blink/renderer/platform/graphics/paint/property_tree_state.h"
 #include "third_party/blink/renderer/platform/graphics/paint/scoped_paint_chunk_properties.h"
-#include "third_party/blink/renderer/platform/graphics/test/fake_scrollable_area.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
-#include "third_party/blink/renderer/platform/scroll/scrollable_area.h"
 #include "third_party/blink/renderer/platform/testing/fake_graphics_layer.h"
 #include "third_party/blink/renderer/platform/testing/fake_graphics_layer_client.h"
 #include "third_party/blink/renderer/platform/testing/layer_tree_host_embedder.h"
@@ -167,6 +165,7 @@ TEST_P(GraphicsLayerTest, updateLayerShouldFlattenTransformWithAnimations) {
   std::unique_ptr<CompositorKeyframeModel> float_keyframe_model(
       CompositorKeyframeModel::Create(*curve, CompositorTargetProperty::OPACITY,
                                       0, 0));
+  int keyframe_model_id = float_keyframe_model->Id();
 
   std::unique_ptr<CompositorAnimationTimeline> compositor_timeline =
       CompositorAnimationTimeline::Create();
@@ -195,7 +194,7 @@ TEST_P(GraphicsLayerTest, updateLayerShouldFlattenTransformWithAnimations) {
 
   EXPECT_TRUE(
       mutator->HasTickingKeyframeModelForTesting(cc_layer_->element_id()));
-  animation.GetCompositorAnimation()->RemoveKeyframeModels();
+  animation.GetCompositorAnimation()->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_FALSE(
       mutator->HasTickingKeyframeModelForTesting(cc_layer_->element_id()));
 

@@ -6,12 +6,13 @@
 
 #include <memory>
 #include "base/macros.h"
+#include "base/task/sequence_manager/test/fake_task.h"
+#include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/page/launching_process_state.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/task_queue_manager_for_test.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/test/fake_frame_scheduler.h"
@@ -19,6 +20,8 @@
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 using base::sequence_manager::TaskQueue;
+using base::sequence_manager::FakeTask;
+using base::sequence_manager::FakeTaskTiming;
 
 namespace blink {
 namespace scheduler {
@@ -27,10 +30,9 @@ namespace {
 class MainThreadSchedulerImplForTest : public MainThreadSchedulerImpl {
  public:
   MainThreadSchedulerImplForTest(
-      std::unique_ptr<base::sequence_manager::SequenceManager>
-          task_queue_manager,
+      std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager,
       base::Optional<base::Time> initial_virtual_time)
-      : MainThreadSchedulerImpl(std::move(task_queue_manager),
+      : MainThreadSchedulerImpl(std::move(sequence_manager),
                                 initial_virtual_time){};
 
   using MainThreadSchedulerImpl::SetCurrentUseCaseForTest;
@@ -57,7 +59,7 @@ class MainThreadMetricsHelperTest : public testing::Test {
   void SetUp() override {
     histogram_tester_.reset(new base::HistogramTester());
     scheduler_ = std::make_unique<MainThreadSchedulerImplForTest>(
-        base::sequence_manager::TaskQueueManagerForTest::Create(
+        base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, task_environment_.GetMainThreadTaskRunner(),
             task_environment_.GetMockTickClock()),
         base::nullopt);
@@ -89,11 +91,8 @@ class MainThreadMetricsHelperTest : public testing::Test {
           new MainThreadTaskQueueForTest(queue_type));
     }
 
-    // Pass an empty task for recording.
-    TaskQueue::PostedTask posted_task(base::OnceClosure(), FROM_HERE);
-    TaskQueue::Task task(std::move(posted_task), base::TimeTicks());
-    metrics_helper_->RecordTaskMetrics(queue.get(), task, start,
-                                       start + duration, base::nullopt);
+    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
+                                       FakeTaskTiming(start, start + duration));
   }
 
   void RunTask(FrameSchedulerImpl* scheduler,
@@ -104,11 +103,8 @@ class MainThreadMetricsHelperTest : public testing::Test {
     scoped_refptr<MainThreadTaskQueueForTest> queue(
         new MainThreadTaskQueueForTest(QueueType::kDefault));
     queue->SetFrameSchedulerForTest(scheduler);
-    // Pass an empty task for recording.
-    TaskQueue::PostedTask posted_task(base::OnceClosure(), FROM_HERE);
-    TaskQueue::Task task(std::move(posted_task), base::TimeTicks());
-    metrics_helper_->RecordTaskMetrics(queue.get(), task, start,
-                                       start + duration, base::nullopt);
+    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
+                                       FakeTaskTiming(start, start + duration));
   }
 
   void RunTask(UseCase use_case,
@@ -119,11 +115,8 @@ class MainThreadMetricsHelperTest : public testing::Test {
     scoped_refptr<MainThreadTaskQueueForTest> queue(
         new MainThreadTaskQueueForTest(QueueType::kDefault));
     scheduler_->SetCurrentUseCaseForTest(use_case);
-    // Pass an empty task for recording.
-    TaskQueue::PostedTask posted_task(base::OnceClosure(), FROM_HERE);
-    TaskQueue::Task task(std::move(posted_task), base::TimeTicks());
-    metrics_helper_->RecordTaskMetrics(queue.get(), task, start,
-                                       start + duration, base::nullopt);
+    metrics_helper_->RecordTaskMetrics(queue.get(), FakeTask(),
+                                       FakeTaskTiming(start, start + duration));
   }
 
   base::TimeTicks Milliseconds(int milliseconds) {
@@ -281,29 +274,36 @@ TEST_F(MainThreadMetricsHelperTest, Metrics_PerQueueType) {
   RunTask(QueueType::kTest, Seconds(22), base::TimeDelta::FromSeconds(4));
 
   scheduler_->SetRendererBackgrounded(true);
+  // Wait for internally triggered tasks to run.
+  constexpr int kCoolingOfTimeSeconds = 10;
 
-  RunTask(QueueType::kControl, Seconds(26), base::TimeDelta::FromSeconds(2));
-  RunTask(QueueType::kFrameThrottleable, Seconds(28),
+  RunTask(QueueType::kControl, Seconds(26 + kCoolingOfTimeSeconds),
+          base::TimeDelta::FromSeconds(2));
+  RunTask(QueueType::kFrameThrottleable, Seconds(28 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(8));
-  RunTask(QueueType::kUnthrottled, Seconds(38),
+  RunTask(QueueType::kUnthrottled, Seconds(38 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(5));
-  RunTask(QueueType::kFrameLoading, Seconds(45),
+  RunTask(QueueType::kFrameLoading, Seconds(45 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(10));
-  RunTask(QueueType::kFrameThrottleable, Seconds(60),
+  RunTask(QueueType::kFrameThrottleable, Seconds(60 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(5));
-  RunTask(QueueType::kCompositor, Seconds(70),
+  RunTask(QueueType::kCompositor, Seconds(70 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(20));
-  RunTask(QueueType::kIdle, Seconds(90), base::TimeDelta::FromSeconds(5));
-  RunTask(QueueType::kFrameLoadingControl, Seconds(100),
+  RunTask(QueueType::kIdle, Seconds(90 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(5));
-  RunTask(QueueType::kControl, Seconds(106), base::TimeDelta::FromSeconds(6));
-  RunTask(QueueType::kFrameThrottleable, Seconds(114),
+  RunTask(QueueType::kFrameLoadingControl, Seconds(100 + kCoolingOfTimeSeconds),
+          base::TimeDelta::FromSeconds(5));
+  RunTask(QueueType::kControl, Seconds(106 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(6));
-  RunTask(QueueType::kFramePausable, Seconds(120),
+  RunTask(QueueType::kFrameThrottleable, Seconds(114 + kCoolingOfTimeSeconds),
+          base::TimeDelta::FromSeconds(6));
+  RunTask(QueueType::kFramePausable, Seconds(120 + kCoolingOfTimeSeconds),
           base::TimeDelta::FromSeconds(17));
-  RunTask(QueueType::kIdle, Seconds(140), base::TimeDelta::FromSeconds(15));
+  RunTask(QueueType::kIdle, Seconds(140 + kCoolingOfTimeSeconds),
+          base::TimeDelta::FromSeconds(15));
 
-  RunTask(QueueType::kDetached, Seconds(156), base::TimeDelta::FromSeconds(2));
+  RunTask(QueueType::kDetached, Seconds(156 + kCoolingOfTimeSeconds),
+          base::TimeDelta::FromSeconds(2));
 
   std::vector<base::Bucket> expected_samples = {
       {static_cast<int>(QueueType::kControl), 11},

@@ -7,6 +7,7 @@ import("//build/config/features.gni")
 import("//build/config/ui.gni")
 import("//components/nacl/features.gni")
 import("//media/media_options.gni")
+import("//ppapi/buildflags/buildflags.gni")
 import("//printing/buildflags/buildflags.gni")
 import("//rlz/buildflags/buildflags.gni")
 import("//testing/test.gni")
@@ -83,7 +84,6 @@ test("components_unittests") {
     "//components/content_settings/core/browser:unit_tests",
     "//components/content_settings/core/common:unit_tests",
     "//components/crx_file:unit_tests",
-    "//components/data_usage/core:unit_tests",
     "//components/device_event_log:unit_tests",
     "//components/dom_distiller/core:unit_tests",
     "//components/download:unit_tests",
@@ -180,7 +180,7 @@ test("components_unittests") {
   if (is_ios) {
     deps += [
       "//components/autofill/ios/browser:unit_tests",
-      "//components/autofill/ios/fill:unit_tests",
+      "//components/autofill/ios/form_util:unit_tests",
       "//components/image_fetcher/ios:unit_tests",
       "//components/signin/ios/browser:unit_tests",
       "//components/translate/ios/browser:unit_tests",
@@ -500,7 +500,7 @@ if (!is_ios) {
       data += [ "$root_out_dir/Content Shell.app/" ]
     }
 
-    if (!is_android) {
+    if (enable_plugins) {
       sources += [ "pdf/renderer/pdf_accessibility_tree_browsertest.cc" ]
       deps += [ "//components/pdf/renderer" ]
     }

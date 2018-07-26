@@ -13,8 +13,11 @@
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
+#include "base/optional.h"
+#include "content/browser/background_fetch/background_fetch_data_manager_observer.h"
 #include "content/browser/background_fetch/background_fetch_delegate_proxy.h"
 #include "content/browser/background_fetch/background_fetch_event_dispatcher.h"
+#include "content/browser/background_fetch/storage/get_initialization_data_task.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 #include "content/common/content_export.h"
 #include "content/public/browser/browser_thread.h"
@@ -42,7 +45,8 @@ struct ServiceWorkerFetchRequest;
 // Background Fetch requests function similarly to normal fetches except that
 // they are persistent across Chromium or service worker shutdown.
 class CONTENT_EXPORT BackgroundFetchContext
-    : public ServiceWorkerContextCoreObserver,
+    : public BackgroundFetchDataManagerObserver,
+      public ServiceWorkerContextCoreObserver,
       public base::RefCountedThreadSafe<BackgroundFetchContext,
                                         BrowserThread::DeleteOnIOThread> {
  public:
@@ -54,7 +58,6 @@ class CONTENT_EXPORT BackgroundFetchContext
       const scoped_refptr<content::CacheStorageContextImpl>&
           cache_storage_context);
 
-  // Adds service worker context observer and initializes |data_manager_|.
   void InitializeOnIOThread();
 
   // Called by the StoragePartitionImpl destructor.
@@ -103,13 +106,28 @@ class CONTENT_EXPORT BackgroundFetchContext
       const std::string& unique_id,
       blink::mojom::BackgroundFetchRegistrationObserverPtr observer);
 
-  // Updates the title of the Background Fetch identified by |registration_id|.
-  // The |callback| will be invoked when the title has been updated, or an error
-  // occurred that prevents it from doing so.
+  // Updates the title or icon of the Background Fetch identified by
+  // |registration_id|. The |callback| will be invoked when the title has been
+  // updated, or an error occurred that prevents it from doing so.
+  // The icon is wrapped in an optional. If the optional has a value then the
+  // internal |icon| is guarnteed to be not null.
   void UpdateUI(
       const BackgroundFetchRegistrationId& registration_id,
-      const std::string& title,
+      const base::Optional<std::string>& title,
+      const base::Optional<SkBitmap>& icon,
       blink::mojom::BackgroundFetchService::UpdateUICallback callback);
+
+  // BackgroundFetchDataManagerObserver implementation.
+  void OnRegistrationCreated(
+      const BackgroundFetchRegistrationId& registration_id,
+      const BackgroundFetchRegistration& registration,
+      const BackgroundFetchOptions& options,
+      const SkBitmap& icon,
+      int num_requests) override;
+  void OnUpdatedUI(const BackgroundFetchRegistrationId& registration_id,
+                   const std::string& title) override;
+  void OnServiceWorkerDatabaseCorrupted(
+      int64_t service_worker_registration_id) override;
 
   // ServiceWorkerContextCoreObserver implementation.
   void OnRegistrationDeleted(int64_t registration_id,
@@ -117,6 +135,8 @@ class CONTENT_EXPORT BackgroundFetchContext
   void OnStorageWiped() override;
 
  private:
+  FRIEND_TEST_ALL_PREFIXES(BackgroundFetchServiceTest,
+                           JobsInitializedOnBrowserRestart);
   friend class BackgroundFetchServiceTest;
   friend class BackgroundFetchJobControllerTest;
   friend class base::DeleteHelper<BackgroundFetchContext>;
@@ -130,43 +150,27 @@ class CONTENT_EXPORT BackgroundFetchContext
 
   // Creates a new Job Controller for the given |registration_id| and |options|,
   // which will start fetching the files that are part of the registration.
-  void CreateController(
-      const BackgroundFetchRegistrationId& registration_id,
-      const BackgroundFetchOptions& options,
-      const SkBitmap& icon,
-      size_t num_requests,
-      std::unique_ptr<BackgroundFetchRegistration> registration);
-
-  // Initializes the new Job Controller.
-  void InitializeController(
-      const std::string& unique_id,
-      std::unique_ptr<BackgroundFetchJobController> controller,
-      std::unique_ptr<BackgroundFetchRegistration> registration,
-      size_t total_downloads,
-      size_t completed_downloads);
+  void CreateController(const BackgroundFetchRegistrationId& registration_id,
+                        const BackgroundFetchRegistration& registration,
+                        const BackgroundFetchOptions& options,
+                        const SkBitmap& icon,
+                        const std::string& ui_title,
+                        size_t num_completed_requests,
+                        size_t num_requests,
+                        const std::vector<std::string>& outstanding_guids);
 
   // Called when an existing registration has been retrieved from the data
   // manager. If the registration does not exist then |registration| is nullptr.
   void DidGetRegistration(
       blink::mojom::BackgroundFetchService::GetRegistrationCallback callback,
       blink::mojom::BackgroundFetchError error,
-      std::unique_ptr<BackgroundFetchRegistration> registration);
+      const BackgroundFetchRegistration& registration);
 
   // Called when a new registration has been created by the data manager.
   void DidCreateRegistration(
       const BackgroundFetchRegistrationId& registration_id,
-      const BackgroundFetchOptions& options,
-      const SkBitmap& icon,
-      size_t num_requests,
       blink::mojom::BackgroundFetchError error,
-      std::unique_ptr<BackgroundFetchRegistration> registration);
-
-  // Called when the new title has been updated in the data manager.
-  void DidUpdateStoredUI(
-      const std::string& unique_id,
-      const std::string& title,
-      blink::mojom::BackgroundFetchService::UpdateUICallback callback,
-      blink::mojom::BackgroundFetchError error);
+      const BackgroundFetchRegistration& registration);
 
   // Called by a JobController when it finishes processing. Also used to
   // implement |Abort|.
@@ -194,6 +198,12 @@ class CONTENT_EXPORT BackgroundFetchContext
   // Called when the notification UI for the background fetch job associated
   // with |unique_id| is activated.
   void DispatchClickEvent(const std::string& unique_id);
+
+  // Called when the data manager finishes getting the initialization data.
+  void DidGetInitializationData(
+      blink::mojom::BackgroundFetchError error,
+      std::vector<background_fetch::BackgroundFetchInitializationData>
+          initialization_data);
 
   // Called when all processing for the |registration_id| has been finished and
   // the job is ready to be deleted. |blob_handles| are unused, but some callers

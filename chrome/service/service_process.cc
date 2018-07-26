@@ -42,11 +42,12 @@
 #include "chrome/service/cloud_print/cloud_print_proxy.h"
 #include "chrome/service/net/service_url_request_context_getter.h"
 #include "chrome/service/service_process_prefs.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/language/core/common/locale_util.h"
 #include "components/network_session_configurator/common/network_switches.h"
 #include "components/prefs/json_pref_store.h"
-#include "mojo/edk/embedder/embedder.h"
-#include "mojo/edk/embedder/scoped_ipc_support.h"
+#include "mojo/core/embedder/embedder.h"
+#include "mojo/core/embedder/scoped_ipc_support.h"
 #include "net/base/network_change_notifier.h"
 #include "net/url_request/url_fetcher.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -131,16 +132,15 @@ void PrepareRestartOnCrashEnviroment(
 ServiceProcess::ServiceProcess()
     : shutdown_event_(base::WaitableEvent::ResetPolicy::MANUAL,
                       base::WaitableEvent::InitialState::NOT_SIGNALED),
-      main_message_loop_(NULL),
       enabled_services_(0),
       update_available_(false) {
   DCHECK(!g_service_process);
   g_service_process = this;
 }
 
-bool ServiceProcess::Initialize(base::MessageLoopForUI* message_loop,
+bool ServiceProcess::Initialize(base::OnceClosure quit_closure,
                                 const base::CommandLine& command_line,
-                                ServiceProcessState* state) {
+                                std::unique_ptr<ServiceProcessState> state) {
 #if defined(USE_GLIB)
   // g_type_init has been deprecated since version 2.35.
 #if !GLIB_CHECK_VERSION(2, 35, 0)
@@ -148,8 +148,8 @@ bool ServiceProcess::Initialize(base::MessageLoopForUI* message_loop,
   g_type_init();
 #endif
 #endif  // defined(USE_GLIB)
-  main_message_loop_ = message_loop;
-  service_process_state_.reset(state);
+  quit_closure_ = std::move(quit_closure);
+  service_process_state_ = std::move(state);
 
   // Initialize TaskScheduler.
   constexpr int kMaxBackgroundThreads = 1;
@@ -182,10 +182,10 @@ bool ServiceProcess::Initialize(base::MessageLoopForUI* message_loop,
   }
 
   // Initialize Mojo early so things can use it.
-  mojo::edk::Init();
-  mojo_ipc_support_.reset(new mojo::edk::ScopedIPCSupport(
+  mojo::core::Init();
+  mojo_ipc_support_.reset(new mojo::core::ScopedIPCSupport(
       io_thread_->task_runner(),
-      mojo::edk::ScopedIPCSupport::ShutdownPolicy::FAST));
+      mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST));
 
   request_context_getter_ = new ServiceURLRequestContextGetter();
 
@@ -207,13 +207,13 @@ bool ServiceProcess::Initialize(base::MessageLoopForUI* message_loop,
   // Check if a locale override has been specified on the command-line.
   std::string locale = command_line.GetSwitchValueASCII(switches::kLang);
   if (!locale.empty()) {
-    service_prefs_->SetString(prefs::kApplicationLocale, locale);
+    service_prefs_->SetString(language::prefs::kApplicationLocale, locale);
     service_prefs_->WritePrefs();
   } else {
     // If no command-line value was specified, read the last used locale from
     // the prefs.
-    locale =
-        service_prefs_->GetString(prefs::kApplicationLocale, std::string());
+    locale = service_prefs_->GetString(language::prefs::kApplicationLocale,
+                                       std::string());
     language::ConvertToActualUILocale(&locale);
     // If no locale was specified anywhere, use the default one.
     if (locale.empty())
@@ -300,8 +300,7 @@ void ServiceProcess::Shutdown() {
 }
 
 void ServiceProcess::Terminate() {
-  main_message_loop_->task_runner()->PostTask(
-      FROM_HERE, base::RunLoop::QuitCurrentWhenIdleClosureDeprecated());
+  std::move(quit_closure_).Run();
 }
 
 void ServiceProcess::OnShutdown() {

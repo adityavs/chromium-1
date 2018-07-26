@@ -8,6 +8,7 @@
 
 #include "base/logging.h"
 #include "base/memory/singleton.h"
+#include "base/strings/string_split.h"
 #include "chrome/browser/chromeos/arc/input_method_manager/arc_input_method_manager_bridge_impl.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
@@ -32,6 +33,30 @@ constexpr char kChromeOSIMEIdInArcContainer[] =
 constexpr char kArcIMEProxyExtensionName[] =
     "org.chromium.arc.inputmethod.proxy";
 
+void SwitchImeToCallback(const std::string& ime_id,
+                         const std::string& component_id,
+                         bool success) {
+  if (success)
+    return;
+
+  // TODO(yhanana): We should prevent InputMethodManager from changing current
+  // input method until this callback is called with true and once it's done the
+  // IME switching code below can be removed.
+  LOG(ERROR) << "Switch the active IME to \"" << ime_id << "\"(component_id=\""
+             << component_id << "\") failed";
+  auto* imm = chromeos::input_method::InputMethodManager::Get();
+  if (imm && imm->GetActiveIMEState()) {
+    for (const auto& id : imm->GetActiveIMEState()->GetActiveInputMethodIds()) {
+      if (!chromeos::extension_ime_util::IsArcIME(id)) {
+        imm->GetActiveIMEState()->ChangeInputMethod(id,
+                                                    false /* show_message */);
+        return;
+      }
+    }
+  }
+  NOTREACHED() << "There is no enabled non-ARC IME.";
+}
+
 // Singleton factory for ArcInputMethodManagerService
 class ArcInputMethodManagerServiceFactory
     : public internal::ArcBrowserContextKeyedServiceFactoryBase<
@@ -52,6 +77,42 @@ class ArcInputMethodManagerServiceFactory
 };
 
 }  // namespace
+
+class ArcInputMethodManagerService::ArcProxyInputMethodObserver
+    : public input_method::InputMethodEngineBase::Observer {
+ public:
+  ArcProxyInputMethodObserver() = default;
+  ~ArcProxyInputMethodObserver() override = default;
+
+  // input_method::InputMethodEngineBase::Observer overrides:
+  // TODO(yhanada): Implement below methods to forward those events to ARC.
+  void OnActivate(const std::string& engine_id) override {}
+  void OnFocus(
+      const ui::IMEEngineHandlerInterface::InputContext& context) override {}
+  void OnBlur(int context_id) override {}
+  void OnKeyEvent(
+      const std::string& engine_id,
+      const input_method::InputMethodEngineBase::KeyboardEvent& event,
+      ui::IMEEngineHandlerInterface::KeyEventDoneCallback key_data) override {}
+  void OnReset(const std::string& engine_id) override {}
+  void OnDeactivated(const std::string& engine_id) override {}
+  void OnCompositionBoundsChanged(
+      const std::vector<gfx::Rect>& bounds) override {}
+  bool IsInterestedInKeyEvent() const override { return false; }
+  void OnSurroundingTextChanged(const std::string& engine_id,
+                                const std::string& text,
+                                int cursor_pos,
+                                int anchor_pos,
+                                int offset_pos) override {}
+  void OnInputContextUpdate(
+      const ui::IMEEngineHandlerInterface::InputContext& context) override {}
+  void OnCandidateClicked(
+      const std::string& component_id,
+      int candidate_id,
+      input_method::InputMethodEngineBase::MouseButtonEvent button) override {}
+  void OnMenuItemActivated(const std::string& component_id,
+                           const std::string& menu_id) override {}
+};
 
 // static
 ArcInputMethodManagerService*
@@ -81,6 +142,9 @@ ArcInputMethodManagerService::ArcInputMethodManagerService(
   auto* imm = chromeos::input_method::InputMethodManager::Get();
   imm->AddObserver(this);
   imm->AddImeMenuObserver(this);
+
+  proxy_ime_engine_->Initialize(std::make_unique<ArcProxyInputMethodObserver>(),
+                                proxy_ime_extension_id_.c_str(), profile_);
 }
 
 ArcInputMethodManagerService::~ArcInputMethodManagerService() {
@@ -108,6 +172,7 @@ void ArcInputMethodManagerService::OnActiveImeChanged(
 
 void ArcInputMethodManagerService::OnImeInfoChanged(
     std::vector<mojom::ImeInfoPtr> ime_info_array) {
+  using chromeos::input_method::InputMethodDescriptor;
   using chromeos::input_method::InputMethodDescriptors;
   using chromeos::input_method::InputMethodManager;
 
@@ -121,8 +186,14 @@ void ArcInputMethodManagerService::OnImeInfoChanged(
 
   // Convert ime_info_array to InputMethodDescriptors.
   InputMethodDescriptors descriptors;
-  for (const auto& ime_info : ime_info_array)
-    descriptors.push_back(BuildInputMethodDescriptor(ime_info.get()));
+  std::vector<std::string> enabled_input_method_ids;
+  for (const auto& ime_info : ime_info_array) {
+    const InputMethodDescriptor& descriptor =
+        BuildInputMethodDescriptor(ime_info.get());
+    descriptors.push_back(descriptor);
+    if (ime_info->enabled)
+      enabled_input_method_ids.push_back(descriptor.id());
+  }
   if (descriptors.empty()) {
     // If no ARC IME is installed, remove ARC IME entry from preferences.
     RemoveArcIMEFromPrefs();
@@ -131,6 +202,22 @@ void ArcInputMethodManagerService::OnImeInfoChanged(
   // Add the proxy IME entry to InputMethodManager if any ARC IME is installed.
   state->AddInputMethodExtension(proxy_ime_extension_id_, descriptors,
                                  proxy_ime_engine_.get());
+
+  // Enabled IMEs that are already enabled in the container.
+  const std::string active_ime_ids =
+      profile_->GetPrefs()->GetString(prefs::kLanguageEnabledImes);
+  std::vector<std::string> active_ime_list = base::SplitString(
+      active_ime_ids, ",", base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
+  // TODO(crbug.com/845079): We should keep the order of the IMEs as same as in
+  // chrome://settings
+  for (const auto& input_method_id : enabled_input_method_ids) {
+    if (std::find(active_ime_list.begin(), active_ime_list.end(),
+                  input_method_id) == active_ime_list.end()) {
+      active_ime_list.push_back(input_method_id);
+    }
+  }
+  profile_->GetPrefs()->SetString(prefs::kLanguageEnabledImes,
+                                  base::JoinString(active_ime_list, ","));
 }
 
 void ArcInputMethodManagerService::ImeMenuListChanged() {
@@ -197,16 +284,7 @@ void ArcInputMethodManagerService::SwitchImeTo(const std::string& ime_id) {
   if (!ceiu::IsArcIME(ime_id))
     component_id = kChromeOSIMEIdInArcContainer;
   imm_bridge_->SendSwitchImeTo(
-      component_id, base::BindOnce(
-                        [](const std::string& ime_id,
-                           const std::string& component_id, bool success) {
-                          if (!success) {
-                            LOG(ERROR) << "Switch the active IME to \""
-                                       << ime_id << "\"(component_id=\""
-                                       << component_id << "\") failed";
-                          }
-                        },
-                        ime_id, component_id));
+      component_id, base::BindOnce(&SwitchImeToCallback, ime_id, component_id));
 }
 
 chromeos::input_method::InputMethodDescriptor
@@ -234,7 +312,7 @@ ArcInputMethodManagerService::BuildInputMethodDescriptor(
 }
 
 void ArcInputMethodManagerService::RemoveArcIMEFromPrefs() {
-  RemoveArcIMEFromPref(prefs::kLanguageEnabledExtensionImes);
+  RemoveArcIMEFromPref(prefs::kLanguageEnabledImes);
   RemoveArcIMEFromPref(prefs::kLanguagePreloadEngines);
 
   PrefService* prefs = profile_->GetPrefs();

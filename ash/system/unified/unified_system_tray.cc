@@ -47,6 +47,10 @@ class UnifiedSystemTray::UiDelegate : public message_center::UiDelegate {
 
   message_center::UiController* ui_controller() { return ui_controller_.get(); }
 
+  void SetTrayBubbleHeight(int height) {
+    popup_alignment_delegate_->SetTrayBubbleHeight(height);
+  }
+
  private:
   std::unique_ptr<message_center::UiController> ui_controller_;
   std::unique_ptr<AshPopupAlignmentDelegate> popup_alignment_delegate_;
@@ -61,11 +65,12 @@ class UnifiedSystemTray::UiDelegate : public message_center::UiDelegate {
 UnifiedSystemTray::UiDelegate::UiDelegate(UnifiedSystemTray* owner)
     : owner_(owner) {
   ui_controller_ = std::make_unique<message_center::UiController>(this);
+  ui_controller_->set_hide_on_last_notification(false);
   popup_alignment_delegate_ =
       std::make_unique<AshPopupAlignmentDelegate>(owner->shelf());
   message_popup_collection_ =
       std::make_unique<message_center::MessagePopupCollection>(
-          message_center::MessageCenter::Get(), ui_controller_.get(),
+          message_center::MessageCenter::Get(),
           popup_alignment_delegate_.get());
   display::Screen* screen = display::Screen::GetScreen();
   popup_alignment_delegate_->StartObserving(
@@ -88,6 +93,7 @@ bool UnifiedSystemTray::UiDelegate::ShowPopups() {
 
 void UnifiedSystemTray::UiDelegate::HidePopups() {
   message_popup_collection_->MarkAllPopupsShown();
+  popup_alignment_delegate_->SetTrayBubbleHeight(0);
 }
 
 bool UnifiedSystemTray::UiDelegate::ShowMessageCenter(bool show_by_click) {
@@ -204,6 +210,10 @@ void UnifiedSystemTray::ShowVolumeSliderBubble() {
       UnifiedSliderBubbleController::SLIDER_TYPE_VOLUME);
 }
 
+void UnifiedSystemTray::SetTrayBubbleHeight(int height) {
+  ui_delegate_->SetTrayBubbleHeight(height);
+}
+
 gfx::Rect UnifiedSystemTray::GetBubbleBoundsInScreen() const {
   return bubble_ ? bubble_->GetBoundsInScreen() : gfx::Rect();
 }
@@ -223,10 +233,13 @@ void UnifiedSystemTray::SetTrayEnabled(bool enabled) {
 }
 
 bool UnifiedSystemTray::PerformAction(const ui::Event& event) {
-  if (bubble_)
+  if (bubble_) {
     CloseBubble();
-  else
-    ShowBubble(true /* show_by_click */);
+  } else {
+    ShowBubble(event.IsMouseEvent() || event.IsGestureEvent());
+    if (event.IsKeyEvent() || (event.flags() & ui::EF_TOUCH_ACCESSIBILITY))
+      ActivateBubble();
+  }
   return true;
 }
 

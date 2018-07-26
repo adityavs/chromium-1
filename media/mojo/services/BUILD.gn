@@ -110,6 +110,8 @@ component("services") {
     sources += [
       "android_mojo_media_client.cc",
       "android_mojo_media_client.h",
+      "android_mojo_util.cc",
+      "android_mojo_util.h",
       "mojo_media_drm_storage.cc",
       "mojo_media_drm_storage.h",
     ]
@@ -141,6 +143,13 @@ component("services") {
     if (is_mac) {
       deps += [ "//sandbox" ]
     }
+  }
+
+  if (enable_assistant_audio_decoder) {
+    sources += [
+      "assistant_mojo_media_client.cc",
+      "assistant_mojo_media_client.h",
+    ]
   }
 }
 
@@ -177,7 +186,7 @@ source_set("unit_tests") {
     "//components/ukm:test_support",
     "//media:test_support",
     "//media/mojo:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//mojo/public/interfaces/bindings/tests:test_interfaces",
     "//services/metrics/public/cpp:ukm_builders",
     "//testing/gmock",

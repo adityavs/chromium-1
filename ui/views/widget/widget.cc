@@ -718,7 +718,7 @@ void Widget::SetOpacity(float opacity) {
   native_widget_->SetOpacity(opacity);
 }
 
-void Widget::SetAspectRatio(const gfx::Size& aspect_ratio) {
+void Widget::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
   native_widget_->SetAspectRatio(aspect_ratio);
 }
 
@@ -836,10 +836,6 @@ void Widget::UpdateWindowTitle() {
     return;
 
   non_client_view_->UpdateWindowTitle();
-
-  // If the non-client view is rendering its own title, it'll need to relayout
-  // now and to get a paint update later on.
-  non_client_view_->Layout();
 }
 
 void Widget::UpdateWindowIcon() {

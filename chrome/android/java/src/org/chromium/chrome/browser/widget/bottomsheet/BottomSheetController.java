@@ -10,6 +10,7 @@ import android.view.View;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManager;
 import org.chromium.chrome.browser.compositor.layouts.SceneChangeObserver;
@@ -78,19 +79,30 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
     /** Whether the bottom sheet is temporarily suppressed. */
     private boolean mIsSuppressed;
 
+    /** The manager for Contextual Search to attach listeners to. */
+    private ContextualSearchManager mContextualSearchManager;
+
+    /** Whether the bottom sheet should be suppressed when Contextual Search is showing. */
+    private boolean mSuppressSheetForContextualSearch;
+
     /**
      * Build a new controller of the bottom sheet.
      * @param tabModelSelector A tab model selector to track events on tabs open in the browser.
      * @param layoutManager A layout manager for detecting changes in the active layout.
      * @param scrim The scrim that shows when the bottom sheet is opened.
-     * @param contextualSearchManager The manager for Contextual Search to attach listeners to.
      * @param bottomSheet The bottom sheet that this class will be controlling.
+     * @param contextualSearchManager The manager for Contextual Search to attach listeners to.
+     * @param suppressSheetForContextualSearch Whether the bottom sheet should be suppressed when
+     *                                         Contextual Search is showing.
      */
     public BottomSheetController(final Activity activity, final TabModelSelector tabModelSelector,
-            final LayoutManager layoutManager, final ScrimView scrim,
-            ContextualSearchManager contextualSearchManager, BottomSheet bottomSheet) {
+            final LayoutManager layoutManager, final ScrimView scrim, BottomSheet bottomSheet,
+            ContextualSearchManager contextualSearchManager,
+            boolean suppressSheetForContextualSearch) {
         mBottomSheet = bottomSheet;
         mLayoutManager = layoutManager;
+        mContextualSearchManager = contextualSearchManager;
+        mSuppressSheetForContextualSearch = suppressSheetForContextualSearch;
         mSnackbarManager = new SnackbarManager(
                 activity, mBottomSheet.findViewById(R.id.bottom_sheet_snackbar_container));
         mSnackbarManager.onStart();
@@ -165,7 +177,10 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
             public void onScrimClick() {
                 if (!mBottomSheet.isSheetOpen()) return;
                 mBottomSheet.setSheetState(
-                        BottomSheet.SHEET_STATE_PEEK, true, StateChangeReason.TAP_SCRIM);
+                        mBottomSheet.getCurrentSheetContent().isPeekStateEnabled()
+                                ? BottomSheet.SheetState.PEEK
+                                : BottomSheet.SheetState.HIDDEN,
+                        true, StateChangeReason.TAP_SCRIM);
             }
 
             @Override
@@ -200,8 +215,8 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
         });
 
         // TODO(mdjones): This should be changed to a generic OverlayPanel observer.
-        if (contextualSearchManager != null) {
-            contextualSearchManager.addObserver(new ContextualSearchObserver() {
+        if (mContextualSearchManager != null && mSuppressSheetForContextualSearch) {
+            mContextualSearchManager.addObserver(new ContextualSearchObserver() {
                 @Override
                 public void onShowContextualSearch(
                         @Nullable GSAContextDisplaySelection selectionContext) {
@@ -231,7 +246,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
      */
     private void suppressSheet(@StateChangeReason int reason) {
         mIsSuppressed = true;
-        mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_HIDDEN, false, reason);
+        mBottomSheet.setSheetState(BottomSheet.SheetState.HIDDEN, false, reason);
     }
 
     /**
@@ -246,7 +261,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
         mIsSuppressed = false;
 
         if (mBottomSheet.getCurrentSheetContent() != null) {
-            mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_PEEK, true);
+            mBottomSheet.setSheetState(BottomSheet.SheetState.PEEK, true);
         } else {
             // In the event the previous content was hidden, try to show the next one.
             showNextContent();
@@ -280,7 +295,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
         mFullShowRequestedSet.add(content);
         if (!loadInternal(content)) return false;
         if (!mBottomSheet.isSheetOpen() && !isOtherUIObscuring()) {
-            mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_PEEK, animate);
+            mBottomSheet.setSheetState(BottomSheet.SheetState.PEEK, animate);
         }
         mWasShownForCurrentTab = true;
         return true;
@@ -333,7 +348,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
         if (mIsProcessingHideRequest) return;
 
         // Handle showing the next content if it exists.
-        if (mBottomSheet.getSheetState() == BottomSheet.SHEET_STATE_HIDDEN) {
+        if (mBottomSheet.getSheetState() == BottomSheet.SheetState.HIDDEN) {
             // If the sheet is already hidden, simply show the next content.
             showNextContent();
         } else {
@@ -342,7 +357,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
                 @Override
                 public void onSheetStateChanged(int currentState) {
                     // Don't do anything until the sheet is completely hidden.
-                    if (currentState != BottomSheet.SHEET_STATE_HIDDEN) return;
+                    if (currentState != BottomSheet.SheetState.HIDDEN) return;
 
                     showNextContent();
                     mBottomSheet.removeObserver(this);
@@ -352,7 +367,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
 
             mIsProcessingHideRequest = true;
             mBottomSheet.addObserver(hiddenSheetObserver);
-            mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_HIDDEN, animate);
+            mBottomSheet.setSheetState(BottomSheet.SheetState.HIDDEN, animate);
         }
     }
 
@@ -361,7 +376,10 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
      */
     public void expandSheet() {
         if (mBottomSheet.getCurrentSheetContent() == null) return;
-        mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_HALF, true);
+        mBottomSheet.setSheetState(BottomSheet.SheetState.HALF, true);
+        if (mContextualSearchManager != null) {
+            mContextualSearchManager.hideContextualSearch(OverlayPanel.StateChangeReason.UNKNOWN);
+        }
     }
 
     @Override
@@ -388,7 +406,7 @@ public class BottomSheetController implements ApplicationStatus.ActivityStateLis
         BottomSheetContent nextContent = mContentQueue.poll();
         mBottomSheet.showContent(nextContent);
         if (mFullShowRequestedSet.contains(nextContent)) {
-            mBottomSheet.setSheetState(BottomSheet.SHEET_STATE_PEEK, true);
+            mBottomSheet.setSheetState(BottomSheet.SheetState.PEEK, true);
         }
     }
 

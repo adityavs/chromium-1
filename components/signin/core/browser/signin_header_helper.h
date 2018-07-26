@@ -175,13 +175,13 @@ class SigninHeaderHelper {
 
   // Returns wether an account consistency header should be built for this
   // request.
-  bool ShouldBuildRequestHeader(
+  virtual bool ShouldBuildRequestHeader(
       const GURL& url,
-      const content_settings::CookieSettings* cookie_settings);
+      const content_settings::CookieSettings* cookie_settings) = 0;
 
  protected:
-  SigninHeaderHelper() {}
-  virtual ~SigninHeaderHelper() {}
+  explicit SigninHeaderHelper(const std::string& histogram_suffix);
+  virtual ~SigninHeaderHelper();
 
   // Dictionary of fields in a account consistency response header.
   using ResponseHeaderDictionary = std::multimap<std::string, std::string>;
@@ -194,6 +194,15 @@ class SigninHeaderHelper {
  private:
   // Returns whether the url is eligible for the request header.
   virtual bool IsUrlEligibleForRequestHeader(const GURL& url) = 0;
+
+  // Returns a string that can be used as a histogram name. Its value ios
+  // "|histogram_name|.|histogram_suffix_|".
+  std::string GetSuffixedHistogramName(const std::string& histogram_name);
+
+  // Suffix to be used by the histograms recodered by this SigninHeaderHelper.
+  std::string histogram_suffix_;
+
+  DISALLOW_COPY_AND_ASSIGN(SigninHeaderHelper);
 };
 
 
@@ -228,7 +237,8 @@ bool AppendOrRemoveDiceRequestHeader(
     bool sync_enabled,
     bool sync_has_auth_error,
     AccountConsistencyMethod account_consistency,
-    const content_settings::CookieSettings* cookie_settings);
+    const content_settings::CookieSettings* cookie_settings,
+    const std::string& device_id);
 
 // Returns the parameters contained in the X-Chrome-Manage-Accounts response
 // header.

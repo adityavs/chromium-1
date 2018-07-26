@@ -24,7 +24,7 @@ class PLATFORM_EXPORT CompositorThreadScheduler
  public:
   explicit CompositorThreadScheduler(
       std::unique_ptr<base::sequence_manager::SequenceManager>
-          task_queue_manager);
+          sequence_manager);
 
   ~CompositorThreadScheduler() override;
 
@@ -32,20 +32,21 @@ class PLATFORM_EXPORT CompositorThreadScheduler
   scoped_refptr<NonMainThreadTaskQueue> DefaultTaskQueue() override;
   void OnTaskCompleted(NonMainThreadTaskQueue* worker_task_queue,
                        const base::sequence_manager::TaskQueue::Task& task,
-                       base::TimeTicks start,
-                       base::TimeTicks end,
-                       base::Optional<base::TimeDelta> thread_time) override;
+                       const base::sequence_manager::TaskQueue::TaskTiming&
+                           task_timing) override;
 
   // WebThreadScheduler:
   scoped_refptr<scheduler::SingleThreadIdleTaskRunner> IdleTaskRunner()
       override;
   scoped_refptr<base::SingleThreadTaskRunner> V8TaskRunner() override;
   scoped_refptr<base::SingleThreadTaskRunner> CompositorTaskRunner() override;
+  scoped_refptr<base::SingleThreadTaskRunner> InputTaskRunner() override;
   bool ShouldYieldForHighPriorityWork() override;
   bool CanExceedIdleDeadlineIfRequired() const override;
   void AddTaskObserver(base::MessageLoop::TaskObserver* task_observer) override;
   void RemoveTaskObserver(
       base::MessageLoop::TaskObserver* task_observer) override;
+  void AddRAILModeObserver(WebRAILModeObserver*) override {}
   void Shutdown() override;
 
   // SingleThreadIdleTaskRunner::Delegate:
@@ -59,6 +60,9 @@ class PLATFORM_EXPORT CompositorThreadScheduler
   void InitImpl() override;
 
  private:
+  scoped_refptr<NonMainThreadTaskQueue> input_task_queue_;
+  scoped_refptr<base::SingleThreadTaskRunner> input_task_runner_;
+
   CompositorMetricsHelper compositor_metrics_helper_;
 
   DISALLOW_COPY_AND_ASSIGN(CompositorThreadScheduler);

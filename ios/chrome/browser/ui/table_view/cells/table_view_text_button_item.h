@@ -7,18 +7,10 @@
 
 #import "ios/chrome/browser/ui/table_view/cells/table_view_item.h"
 
-@protocol TextButtonItemDelegate<NSObject>
-// Delegates an action to be performed by the presenter.
-- (void)performButtonAction;
-
-@end
-
 // TableViewTextButtonItem contains the model for
 // TableViewTextButtonCell.
 @interface TableViewTextButtonItem : TableViewItem
 
-// EnableSyncActionDelegate to perform TableViewTextButtonCell actions.
-@property(nonatomic, weak) id<TextButtonItemDelegate> delegate;
 // Text being displayed above the button.
 @property(nonatomic, readwrite, strong) NSString* text;
 // Text for cell button.
@@ -27,17 +19,18 @@
 // Button background color. Default is custom blue color.
 @property(nonatomic, strong) UIColor* buttonBackgroundColor;
 
+// Accessibility identifier that will assigned to the button.
+@property(nonatomic, strong) NSString* buttonAccessibilityIdentifier;
+
 @end
 
 // TableViewTextButtonCell contains a textLabel and a UIbutton
 // laid out vertically and centered.
 @interface TableViewTextButtonCell : UITableViewCell
 
-// Delegate used to show sync settings options.
-@property(nonatomic, weak) id<TextButtonItemDelegate> delegate;
 // Cell text information.
 @property(nonatomic, strong) UILabel* textLabel;
-// Action button.
+// Action button. Note: Set action method in the TableView datasource method.
 @property(nonatomic, strong) UIButton* button;
 
 @end

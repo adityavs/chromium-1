@@ -96,6 +96,7 @@ struct StructTraits<gpu::mojom::GpuPreferencesDataView, gpu::GpuPreferences> {
         prefs.enable_threaded_texture_mailboxes();
     out->gl_shader_interm_output = prefs.gl_shader_interm_output();
     out->emulate_shader_precision = prefs.emulate_shader_precision();
+    out->max_active_webgl_contexts = prefs.max_active_webgl_contexts();
     out->enable_gpu_service_logging = prefs.enable_gpu_service_logging();
     out->enable_gpu_service_tracing = prefs.enable_gpu_service_tracing();
     out->use_passthrough_cmd_decoder = prefs.use_passthrough_cmd_decoder();
@@ -120,6 +121,7 @@ struct StructTraits<gpu::mojom::GpuPreferencesDataView, gpu::GpuPreferences> {
     out->use_gpu_fences_for_overlay_planes =
         prefs.use_gpu_fences_for_overlay_planes();
     out->watchdog_starts_backgrounded = prefs.watchdog_starts_backgrounded();
+    out->enable_vulkan = prefs.enable_vulkan();
     return true;
   }
 
@@ -220,6 +222,9 @@ struct StructTraits<gpu::mojom::GpuPreferencesDataView, gpu::GpuPreferences> {
   static bool emulate_shader_precision(const gpu::GpuPreferences& prefs) {
     return prefs.emulate_shader_precision;
   }
+  static uint32_t max_active_webgl_contexts(const gpu::GpuPreferences& prefs) {
+    return prefs.max_active_webgl_contexts;
+  }
   static bool enable_gpu_service_logging(const gpu::GpuPreferences& prefs) {
     return prefs.enable_gpu_service_logging;
   }
@@ -256,6 +261,9 @@ struct StructTraits<gpu::mojom::GpuPreferencesDataView, gpu::GpuPreferences> {
   }
   static bool watchdog_starts_backgrounded(const gpu::GpuPreferences& prefs) {
     return prefs.watchdog_starts_backgrounded;
+  }
+  static bool enable_vulkan(const gpu::GpuPreferences& prefs) {
+    return prefs.enable_vulkan;
   }
 };
 

@@ -52,8 +52,7 @@ void TestAutofillClient::InitializeUKMSources() {
 }
 
 AddressNormalizer* TestAutofillClient::GetAddressNormalizer() {
-  // TODO(crbug.com/788432): Should use a TestAddressNormalizer.
-  return nullptr;
+  return &test_address_normalizer_;
 }
 
 security_state::SecurityLevel
@@ -71,6 +70,19 @@ void TestAutofillClient::ShowUnmaskPrompt(
 }
 
 void TestAutofillClient::OnUnmaskVerificationResult(PaymentsRpcResult result) {
+}
+
+void TestAutofillClient::ShowLocalCardMigrationPrompt(
+    base::OnceClosure closure) {
+  std::move(closure).Run();
+}
+
+void TestAutofillClient::ConfirmSaveAutofillProfile(
+    const AutofillProfile& profile,
+    base::OnceClosure callback) {
+  // Since there is no confirmation needed to save an Autofill Profile,
+  // running |callback| will proceed with saving |profile|.
+  std::move(callback).Run();
 }
 
 void TestAutofillClient::ConfirmSaveCreditCardLocally(
@@ -109,8 +121,8 @@ void TestAutofillClient::ShowAutofillPopup(
     const gfx::RectF& element_bounds,
     base::i18n::TextDirection text_direction,
     const std::vector<Suggestion>& suggestions,
-    base::WeakPtr<AutofillPopupDelegate> delegate) {
-}
+    bool autoselect_first_suggestion,
+    base::WeakPtr<AutofillPopupDelegate> delegate) {}
 
 void TestAutofillClient::UpdateAutofillPopupDataListValues(
     const std::vector<base::string16>& values,

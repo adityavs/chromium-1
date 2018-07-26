@@ -112,7 +112,11 @@ std::unique_ptr<base::Value> ParseReportUpload(const std::string& payload) {
   // Clear out any non-reproducible fields.
   for (auto& report : parsed_payload->GetList()) {
     report.RemoveKey("age");
-    report.RemovePath({"report", "elapsed_time"});
+    report.RemovePath({"body", "elapsed_time"});
+    auto* user_agent =
+        report.FindKeyOfType("user_agent", base::Value::Type::STRING);
+    if (user_agent != nullptr)
+      *user_agent = base::Value("Mozilla/1.0");
   }
   return parsed_payload;
 }
@@ -143,20 +147,22 @@ IN_PROC_BROWSER_TEST_F(ReportingBrowserTest, TestReportingHeadersProcessed) {
       R"json(
         [
           {
-            "report": {
+            "body": {
               "protocol": "http/1.1",
               "referrer": "",
               "sampling_fraction": 1.0,
               "server_ip": "127.0.0.1",
+              "method": "GET",
               "status_code": 204,
+              "phase": "application",
               "type": "ok",
-              "uri": "https://example.com:%d/original",
             },
             "type": "network-error",
             "url": "https://example.com:%d/original",
+            "user_agent": "Mozilla/1.0",
           },
         ]
       )json",
-      port(), port()));
+      port()));
   EXPECT_EQ(*expected, *actual);
 }

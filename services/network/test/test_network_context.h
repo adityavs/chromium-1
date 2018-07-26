@@ -48,6 +48,9 @@ class TestNetworkContext : public mojom::NetworkContext {
                       base::Time end_time,
                       mojom::ClearDataFilterPtr filter,
                       ClearHttpCacheCallback callback) override {}
+  void ComputeHttpCacheSize(base::Time start_time,
+                            base::Time end_time,
+                            ComputeHttpCacheSizeCallback callback) override {}
   void ClearChannelIds(base::Time start_time,
                        base::Time end_time,
                        mojom::ClearDataFilterPtr filter,
@@ -65,6 +68,7 @@ class TestNetworkContext : public mojom::NetworkContext {
   void ClearNetworkErrorLogging(
       mojom::ClearDataFilterPtr filter,
       ClearNetworkErrorLoggingCallback callback) override {}
+  void CloseAllConnections(CloseAllConnectionsCallback callback) override {}
   void SetNetworkConditions(const base::UnguessableToken& throttling_profile_id,
                             mojom::NetworkConditionsPtr conditions) override {}
   void SetAcceptLanguage(const std::string& new_accept_language) override {}
@@ -104,6 +108,11 @@ class TestNetworkContext : public mojom::NetworkContext {
   void SetFailingHttpTransactionForTesting(
       int32_t rv,
       SetFailingHttpTransactionForTestingCallback callback) override {}
+  void PreconnectSockets(uint32_t num_streams,
+                         const GURL& url,
+                         int32_t load_flags,
+                         bool privacy_mode_enabled) override {}
+  void ResetURLLoaderFactories() override {}
 };
 
 }  // namespace network

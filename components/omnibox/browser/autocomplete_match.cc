@@ -223,6 +223,7 @@ const gfx::VectorIcon& AutocompleteMatch::TypeToVectorIcon(Type type,
     case Type::PHYSICAL_WEB_DEPRECATED:
     case Type::PHYSICAL_WEB_OVERFLOW_DEPRECATED:
     case Type::TAB_SEARCH_DEPRECATED:
+    case Type::DOCUMENT_SUGGESTION:
       if (is_refresh_ui)
         return omnibox::kMdPageIcon;
       else if (is_touch_ui)
@@ -773,6 +774,14 @@ size_t AutocompleteMatch::EstimateMemoryUsage() const {
   res += base::trace_event::EstimateMemoryUsage(duplicate_matches);
 
   return res;
+}
+
+bool AutocompleteMatch::IsExceptedFromLineReversal() const {
+  return !!answer && answer->type() == SuggestionAnswer::ANSWER_TYPE_DICTIONARY;
+}
+
+bool AutocompleteMatch::ShouldShowTabMatch() const {
+  return has_tab_match && !associated_keyword;
 }
 
 #if DCHECK_IS_ON()

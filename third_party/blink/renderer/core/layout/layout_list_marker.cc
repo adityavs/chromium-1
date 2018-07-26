@@ -114,9 +114,8 @@ bool LayoutListMarker::IsImage() const {
   return image_ && !image_->ErrorOccurred();
 }
 
-void LayoutListMarker::Paint(const PaintInfo& paint_info,
-                             const LayoutPoint& paint_offset) const {
-  ListMarkerPainter(*this).Paint(paint_info, paint_offset);
+void LayoutListMarker::Paint(const PaintInfo& paint_info) const {
+  ListMarkerPainter(*this).Paint(paint_info);
 }
 
 void LayoutListMarker::UpdateLayout() {
@@ -297,8 +296,6 @@ void LayoutListMarker::UpdateMargins() {
 std::pair<LayoutUnit, LayoutUnit> LayoutListMarker::InlineMarginsForInside(
     const ComputedStyle& style,
     bool is_image) {
-  LayoutUnit margin_start;
-  LayoutUnit margin_end;
   if (is_image)
     return {LayoutUnit(), LayoutUnit(kCMarkerPaddingPx)};
   switch (GetListStyleCategory(style.ListStyleType())) {

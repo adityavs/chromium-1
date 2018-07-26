@@ -41,6 +41,22 @@
     header.titleLabel.textColor = styler.headerFooterTitleColor;
 }
 
+- (CGFloat)headerHeightForWidth:(CGFloat)width {
+  static TableViewActivityIndicatorHeaderFooterView* header;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    header = [[TableViewActivityIndicatorHeaderFooterView alloc] init];
+  });
+
+  [self configureHeaderFooterView:header
+                       withStyler:[[ChromeTableViewStyler alloc] init]];
+  header.frame = CGRectMake(0, 0, width, 0);
+  [header setNeedsLayout];
+  [header layoutIfNeeded];
+  return
+      [header systemLayoutSizeFittingSize:UILayoutFittingCompressedSize].height;
+}
+
 @end
 
 #pragma mark - TableViewActivityIndicatorHeaderFooterView
@@ -86,22 +102,31 @@
     // Add subviews to View Hierarchy.
     [self.contentView addSubview:horizontalStack];
 
+    // Lower the padding constraints priority. UITableView might try to set
+    // the header view height/width to 0 breaking the constraints. See
+    // https://crbug.com/854117 for more information.
+    NSLayoutConstraint* topAnchorConstraint = [horizontalStack.topAnchor
+        constraintGreaterThanOrEqualToAnchor:self.contentView.topAnchor
+                                    constant:kTableViewVerticalSpacing];
+    topAnchorConstraint.priority = UILayoutPriorityDefaultHigh;
+    NSLayoutConstraint* bottomAnchorConstraint = [horizontalStack.bottomAnchor
+        constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor
+                                 constant:-kTableViewVerticalSpacing];
+    bottomAnchorConstraint.priority = UILayoutPriorityDefaultHigh;
+    NSLayoutConstraint* leadingAnchorConstraint = [horizontalStack.leadingAnchor
+        constraintEqualToAnchor:self.contentView.leadingAnchor
+                       constant:kTableViewHorizontalSpacing];
+    leadingAnchorConstraint.priority = UILayoutPriorityDefaultHigh;
+    NSLayoutConstraint* trailingAnchorConstraint =
+        [horizontalStack.trailingAnchor
+            constraintEqualToAnchor:self.contentView.trailingAnchor
+                           constant:-kTableViewHorizontalSpacing];
+    trailingAnchorConstraint.priority = UILayoutPriorityDefaultHigh;
+
     // Set and activate constraints.
     [NSLayoutConstraint activateConstraints:@[
-      [self.contentView.heightAnchor constraintGreaterThanOrEqualToConstant:
-                                         kTableViewHeaderFooterViewHeight],
-      [horizontalStack.leadingAnchor
-          constraintEqualToAnchor:self.contentView.leadingAnchor
-                         constant:kTableViewHorizontalSpacing],
-      [horizontalStack.trailingAnchor
-          constraintEqualToAnchor:self.contentView.trailingAnchor
-                         constant:-kTableViewHorizontalSpacing],
-      [horizontalStack.topAnchor
-          constraintGreaterThanOrEqualToAnchor:self.contentView.topAnchor
-                                      constant:kTableViewVerticalSpacing],
-      [horizontalStack.bottomAnchor
-          constraintLessThanOrEqualToAnchor:self.contentView.bottomAnchor
-                                   constant:-kTableViewVerticalSpacing],
+      topAnchorConstraint, bottomAnchorConstraint, leadingAnchorConstraint,
+      trailingAnchorConstraint,
       [horizontalStack.centerYAnchor
           constraintEqualToAnchor:self.contentView.centerYAnchor]
     ]];

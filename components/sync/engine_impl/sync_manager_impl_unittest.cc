@@ -994,7 +994,7 @@ class SyncManagerTest : public testing::Test,
 
   void TearDown() override {
     sync_manager_.RemoveObserver(&manager_observer_);
-    sync_manager_.ShutdownOnSyncThread(STOP_SYNC);
+    sync_manager_.ShutdownOnSyncThread();
     PumpLoop();
   }
 
@@ -1009,7 +1009,6 @@ class SyncManagerTest : public testing::Test,
     enabled_types.Put(PASSWORDS);
     enabled_types.Put(PREFERENCES);
     enabled_types.Put(PRIORITY_PREFERENCES);
-    enabled_types.Put(ARTICLES);
 
     return enabled_types;
   }
@@ -1121,7 +1120,7 @@ class SyncManagerTest : public testing::Test,
   }
 
   void SimulateInvalidatorEnabledForTest(bool is_enabled) {
-    DCHECK(sync_manager_.thread_checker_.CalledOnValidThread());
+    DCHECK_CALLED_ON_VALID_SEQUENCE(sync_manager_.sequence_checker_);
     sync_manager_.SetInvalidatorEnabled(is_enabled);
   }
 

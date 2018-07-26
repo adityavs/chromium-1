@@ -51,23 +51,23 @@ void LoginKeyboardTestBase::ShowKeyboard() {
   keyboard_controller_->ShowKeyboard(false);
   // Set keyboard height to half of the root window - this should overlap with
   // lock/login layout.
-  if (keyboard_controller_->ui()->GetContentsWindow()->bounds().height() == 0) {
+  if (keyboard_controller_->ui()->GetKeyboardWindow()->bounds().height() == 0) {
     int height = Shell::GetPrimaryRootWindow()->bounds().height() / 2;
-    keyboard_controller_->ui()->GetContentsWindow()->SetBounds(
+    keyboard_controller_->ui()->GetKeyboardWindow()->SetBounds(
         keyboard::KeyboardBoundsFromRootBounds(
             Shell::GetPrimaryRootWindow()->bounds(), height));
-    keyboard_controller_->NotifyContentsLoaded();
+    keyboard_controller_->NotifyKeyboardWindowLoaded();
   }
-  ASSERT_TRUE(keyboard_controller_->keyboard_visible());
+  ASSERT_TRUE(keyboard_controller_->IsKeyboardVisible());
 }
 
 void LoginKeyboardTestBase::HideKeyboard() {
   keyboard_controller_->HideKeyboardByUser();
-  ASSERT_FALSE(keyboard_controller_->keyboard_visible());
+  ASSERT_FALSE(keyboard_controller_->IsKeyboardVisible());
 }
 
 gfx::Rect LoginKeyboardTestBase::GetKeyboardBoundsInScreen() const {
-  return keyboard_controller_->ui()->GetContentsWindow()->GetBoundsInScreen();
+  return keyboard_controller_->ui()->GetKeyboardWindow()->GetBoundsInScreen();
 }
 
 void LoginKeyboardTestBase::ShowLockScreen() {
@@ -99,19 +99,26 @@ void LoginKeyboardTestBase::ShowLoginScreen() {
 }
 
 void LoginKeyboardTestBase::LoadUsers(int count) {
-  std::vector<mojom::LoginUserInfoPtr> users;
   for (int i = 0; i < count; ++i) {
     std::string email =
         base::StrCat({"user", std::to_string(i), "@domain.com "});
-    users.push_back(CreateUser(email));
+    users_.push_back(CreateUser(email));
   }
-  login_controller_->LoadUsers(std::move(users), false);
+  ash::LockScreen::Get()->data_dispatcher()->NotifyUsers(users_);
+}
+
+void LoginKeyboardTestBase::LoadPublicAccountUsers(int count) {
+  for (int i = 0; i < count; ++i) {
+    std::string email =
+        base::StrCat({"publicuser", std::to_string(i), "@domain.com"});
+    users_.push_back(CreatePublicAccountUser(email));
+  }
+  ash::LockScreen::Get()->data_dispatcher()->NotifyUsers(users_);
 }
 
 void LoginKeyboardTestBase::LoadUser(const std::string& email) {
-  std::vector<mojom::LoginUserInfoPtr> users;
-  users.push_back(CreateUser(email));
-  login_controller_->LoadUsers(std::move(users), false);
+  users_.push_back(CreateUser(email));
+  ash::LockScreen::Get()->data_dispatcher()->NotifyUsers(users_);
 }
 
 }  // namespace ash

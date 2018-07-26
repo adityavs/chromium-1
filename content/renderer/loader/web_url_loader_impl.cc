@@ -89,6 +89,7 @@ using blink::WebURLLoader;
 using blink::WebURLLoaderClient;
 using blink::WebURLRequest;
 using blink::WebURLResponse;
+using blink::scheduler::WebResourceLoadingTaskRunnerHandle;
 
 namespace content {
 
@@ -211,7 +212,6 @@ int GetInfoFromDataURL(const GURL& url,
   info->content_length = data->length();
   info->encoded_data_length = 0;
   info->encoded_body_length = 0;
-  info->previews_state = PREVIEWS_OFF;
 
   return net::OK;
 }
@@ -367,21 +367,28 @@ WebURLLoaderFactoryImpl::CreateTestOnlyFactory() {
 
 std::unique_ptr<blink::WebURLLoader> WebURLLoaderFactoryImpl::CreateURLLoader(
     const blink::WebURLRequest& request,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner) {
+    std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle) {
   if (!loader_factory_) {
     // In some tests like RenderViewTests loader_factory_ is not available.
     // These tests can still use data URLs to bypass the ResourceDispatcher.
-    if (!task_runner)
-      task_runner = base::ThreadTaskRunnerHandle::Get();
+    if (!task_runner_handle) {
+      // TODO(altimin): base::ThreadTaskRunnerHandle::Get is deprecated in
+      // the renderer. Fix this for frame and non-frame clients.
+      task_runner_handle =
+          WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
+              base::ThreadTaskRunnerHandle::Get());
+    }
+
     return std::make_unique<WebURLLoaderImpl>(resource_dispatcher_.get(),
-                                              std::move(task_runner),
+                                              std::move(task_runner_handle),
                                               nullptr /* factory */);
   }
 
-  DCHECK(task_runner);
+  DCHECK(task_runner_handle);
   DCHECK(resource_dispatcher_);
-  return std::make_unique<WebURLLoaderImpl>(
-      resource_dispatcher_.get(), std::move(task_runner), loader_factory_);
+  return std::make_unique<WebURLLoaderImpl>(resource_dispatcher_.get(),
+                                            std::move(task_runner_handle),
+                                            loader_factory_);
 }
 
 // This inner class exists since the WebURLLoader may be deleted while inside a
@@ -391,11 +398,12 @@ class WebURLLoaderImpl::Context : public base::RefCounted<Context> {
  public:
   using ReceivedData = RequestPeer::ReceivedData;
 
-  Context(WebURLLoaderImpl* loader,
-          ResourceDispatcher* resource_dispatcher,
-          scoped_refptr<base::SingleThreadTaskRunner> task_runner,
-          scoped_refptr<network::SharedURLLoaderFactory> factory,
-          mojom::KeepAliveHandlePtr keep_alive_handle);
+  Context(
+      WebURLLoaderImpl* loader,
+      ResourceDispatcher* resource_dispatcher,
+      std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle,
+      scoped_refptr<network::SharedURLLoaderFactory> factory,
+      mojom::KeepAliveHandlePtr keep_alive_handle);
 
   ResourceDispatcher* resource_dispatcher() { return resource_dispatcher_; }
   int request_id() const { return request_id_; }
@@ -449,6 +457,7 @@ class WebURLLoaderImpl::Context : public base::RefCounted<Context> {
 
   WebURLLoaderClient* client_;
   ResourceDispatcher* resource_dispatcher_;
+  std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   std::unique_ptr<FtpDirectoryListingResponseDelegate> ftp_listing_delegate_;
   std::unique_ptr<SharedMemoryDataConsumerHandle::Writer> body_stream_writer_;
@@ -521,7 +530,7 @@ class WebURLLoaderImpl::SinkPeer : public RequestPeer {
 WebURLLoaderImpl::Context::Context(
     WebURLLoaderImpl* loader,
     ResourceDispatcher* resource_dispatcher,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     mojom::KeepAliveHandlePtr keep_alive_handle_ptr)
     : loader_(loader),
@@ -529,7 +538,8 @@ WebURLLoaderImpl::Context::Context(
       report_raw_headers_(false),
       client_(nullptr),
       resource_dispatcher_(resource_dispatcher),
-      task_runner_(std::move(task_runner)),
+      task_runner_handle_(std::move(task_runner_handle)),
+      task_runner_(task_runner_handle_->GetTaskRunner()),
       keep_alive_handle_(
           keep_alive_handle_ptr
               ? std::make_unique<KeepAliveHandleWithChildProcessReference>(
@@ -580,10 +590,11 @@ void WebURLLoaderImpl::Context::SetDefersLoading(bool value) {
 void WebURLLoaderImpl::Context::DidChangePriority(
     WebURLRequest::Priority new_priority, int intra_priority_value) {
   if (request_id_ != -1) {
-    resource_dispatcher_->DidChangePriority(
-        request_id_,
-        ConvertWebKitPriorityToNetPriority(new_priority),
-        intra_priority_value);
+    net::RequestPriority net_priority =
+        ConvertWebKitPriorityToNetPriority(new_priority);
+    resource_dispatcher_->DidChangePriority(request_id_, net_priority,
+                                            intra_priority_value);
+    task_runner_handle_->DidChangeRequestPriority(net_priority);
   }
 }
 
@@ -625,6 +636,8 @@ void WebURLLoaderImpl::Context::Start(const WebURLRequest& request,
          request.GetFrameType() ==
              network::mojom::RequestContextFrameType::kNone);
 
+  // TODO(domfarolino): Retrieve the referrer in the form of a referrer member
+  // instead of the header field. See https://crbug.com/850813.
   GURL referrer_url(
       request.HttpHeaderField(WebString::FromASCII("Referer")).Latin1());
   const std::string& method = request.HttpMethod().Latin1();
@@ -707,6 +720,8 @@ void WebURLLoaderImpl::Context::Start(const WebURLRequest& request,
     resource_request->do_not_prompt_for_login = true;
   }
   resource_request->report_raw_headers = request.ReportRawHeaders();
+  // TODO(ryansturm): Remove resource_request->previews_state once it is no
+  // longer used in a network delegate. https://crbug.com/842233
   resource_request->previews_state =
       static_cast<int>(request.GetPreviewsState());
   resource_request->throttling_profile_id = request.GetDevToolsToken();
@@ -1120,21 +1135,21 @@ void WebURLLoaderImpl::RequestPeerImpl::OnCompletedRequest(
 
 WebURLLoaderImpl::WebURLLoaderImpl(
     ResourceDispatcher* resource_dispatcher,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
     : WebURLLoaderImpl(resource_dispatcher,
-                       std::move(task_runner),
+                       std::move(task_runner_handle),
                        std::move(url_loader_factory),
                        nullptr) {}
 
 WebURLLoaderImpl::WebURLLoaderImpl(
     ResourceDispatcher* resource_dispatcher,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
+    std::unique_ptr<WebResourceLoadingTaskRunnerHandle> task_runner_handle,
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     mojom::KeepAliveHandlePtr keep_alive_handle)
     : context_(new Context(this,
                            resource_dispatcher,
-                           std::move(task_runner),
+                           std::move(task_runner_handle),
                            std::move(url_loader_factory),
                            std::move(keep_alive_handle))) {}
 
@@ -1201,8 +1216,6 @@ void WebURLLoaderImpl::PopulateURLResponse(
   extra_data->set_was_alpn_negotiated(info.was_alpn_negotiated);
   extra_data->set_was_alternate_protocol_available(
       info.was_alternate_protocol_available);
-  extra_data->set_previews_state(
-      static_cast<PreviewsState>(info.previews_state));
   extra_data->set_effective_connection_type(info.effective_connection_type);
 
   // If there's no received headers end time, don't set load timing.  This is
@@ -1297,10 +1310,8 @@ void WebURLLoaderImpl::LoadSynchronously(
   const int error_code = sync_load_response.error_code;
   if (error_code != net::OK) {
     if (sync_load_response.cors_error) {
-      // TODO(toyoshim): Pass CORS error related headers here.
-      error =
-          WebURLError(network::CORSErrorStatus(*sync_load_response.cors_error),
-                      WebURLError::HasCopyInCache::kFalse, final_url);
+      error = WebURLError(*sync_load_response.cors_error,
+                          WebURLError::HasCopyInCache::kFalse, final_url);
     } else {
       // SyncResourceHandler returns ERR_ABORTED for CORS redirect errors,
       // so we treat the error as a web security violation.

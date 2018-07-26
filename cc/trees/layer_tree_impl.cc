@@ -86,11 +86,10 @@ LayerTreeImpl::LayerTreeImpl(
       content_source_id_(0),
       elastic_overscroll_(elastic_overscroll),
       layers_(new OwnedLayerImplList),
-      viewport_size_invalid_(false),
       needs_update_draw_properties_(true),
       scrollbar_geometries_need_update_(false),
       needs_full_tree_sync_(true),
-      needs_surface_ids_sync_(false),
+      needs_surface_ranges_sync_(false),
       next_activation_forces_redraw_(false),
       has_ever_been_drawn_(false),
       handle_visibility_changed_(false),
@@ -104,9 +103,6 @@ LayerTreeImpl::LayerTreeImpl(
 }
 
 LayerTreeImpl::~LayerTreeImpl() {
-  BreakSwapPromises(IsActiveTree() ? SwapPromise::SWAP_FAILS
-                                   : SwapPromise::ACTIVATION_FAILS);
-
   // Need to explicitly clear the tree prior to destroying this so that
   // the LayerTreeImpl pointer is still valid in the LayerImpl dtor.
   DCHECK(LayerListIsEmpty());
@@ -115,6 +111,8 @@ LayerTreeImpl::~LayerTreeImpl() {
 
 void LayerTreeImpl::Shutdown() {
   DetachLayers();
+  BreakSwapPromises(IsActiveTree() ? SwapPromise::SWAP_FAILS
+                                   : SwapPromise::ACTIVATION_FAILS);
   DCHECK(LayerListIsEmpty());
 }
 
@@ -425,12 +423,12 @@ void LayerTreeImpl::PushPropertyTreesTo(LayerTreeImpl* target_tree) {
   target_tree->SetCurrentlyScrollingNode(scrolling_node);
 }
 
-void LayerTreeImpl::PushSurfaceIdsTo(LayerTreeImpl* target_tree) {
-  if (needs_surface_ids_sync()) {
-    target_tree->ClearSurfaceLayerIds();
-    target_tree->SetSurfaceLayerIds(SurfaceLayerIds());
+void LayerTreeImpl::PushSurfaceRangesTo(LayerTreeImpl* target_tree) {
+  if (needs_surface_ranges_sync()) {
+    target_tree->ClearSurfaceRanges();
+    target_tree->SetSurfaceRanges(SurfaceRanges());
     // Reset for next update
-    set_needs_surface_ids_sync(false);
+    set_needs_surface_ranges_sync(false);
   }
 }
 
@@ -439,7 +437,7 @@ void LayerTreeImpl::PushPropertiesTo(LayerTreeImpl* target_tree) {
   // The request queue should have been processed and does not require a push.
   DCHECK_EQ(ui_resource_request_queue_.size(), 0u);
 
-  PushSurfaceIdsTo(target_tree);
+  PushSurfaceRangesTo(target_tree);
   target_tree->property_trees()->scroll_tree.PushScrollUpdatesFromPendingTree(
       &property_trees_, target_tree);
 
@@ -453,8 +451,8 @@ void LayerTreeImpl::PushPropertiesTo(LayerTreeImpl* target_tree) {
 
   target_tree->set_browser_controls_shrink_blink_size(
       browser_controls_shrink_blink_size_);
-  target_tree->set_top_controls_height(top_controls_height_);
-  target_tree->set_bottom_controls_height(bottom_controls_height_);
+  target_tree->SetTopControlsHeight(top_controls_height_);
+  target_tree->SetBottomControlsHeight(bottom_controls_height_);
   target_tree->PushBrowserControls(nullptr);
 
   target_tree->set_overscroll_behavior(overscroll_behavior_);
@@ -477,6 +475,7 @@ void LayerTreeImpl::PushPropertiesTo(LayerTreeImpl* target_tree) {
   if (TakeNewLocalSurfaceIdRequest())
     target_tree->RequestNewLocalSurfaceId();
   target_tree->SetLocalSurfaceIdFromParent(local_surface_id_from_parent());
+  target_tree->SetDeviceViewportSize(device_viewport_size_);
 
   target_tree->pending_page_scale_animation_ =
       std::move(pending_page_scale_animation_);
@@ -497,11 +496,6 @@ void LayerTreeImpl::PushPropertiesTo(LayerTreeImpl* target_tree) {
   target_tree->set_event_listener_properties(
       EventListenerClass::kTouchEndOrCancel,
       event_listener_properties(EventListenerClass::kTouchEndOrCancel));
-
-  if (ViewportSizeInvalid())
-    target_tree->SetViewportSizeInvalid();
-  else
-    target_tree->ResetViewportSizeInvalid();
 
   if (hud_layer())
     target_tree->set_hud_layer(static_cast<HeadsUpDisplayLayerImpl*>(
@@ -898,7 +892,7 @@ void LayerTreeImpl::set_browser_controls_shrink_blink_size(bool shrink) {
     host_impl_->UpdateViewportContainerSizes();
 }
 
-void LayerTreeImpl::set_top_controls_height(float top_controls_height) {
+void LayerTreeImpl::SetTopControlsHeight(float top_controls_height) {
   if (top_controls_height_ == top_controls_height)
     return;
 
@@ -907,7 +901,7 @@ void LayerTreeImpl::set_top_controls_height(float top_controls_height) {
     host_impl_->UpdateViewportContainerSizes();
 }
 
-void LayerTreeImpl::set_bottom_controls_height(float bottom_controls_height) {
+void LayerTreeImpl::SetBottomControlsHeight(float bottom_controls_height) {
   if (bottom_controls_height_ == bottom_controls_height)
     return;
 
@@ -997,7 +991,7 @@ void LayerTreeImpl::SetDeviceScaleFactor(float device_scale_factor) {
 
   set_needs_update_draw_properties();
   if (IsActiveTree())
-    host_impl_->SetFullViewportDamage();
+    host_impl_->SetViewportDamage(GetDeviceViewport());
   host_impl_->SetNeedUpdateGpuRasterizationStatus();
 }
 
@@ -1014,6 +1008,30 @@ bool LayerTreeImpl::TakeNewLocalSurfaceIdRequest() {
   bool new_local_surface_id_request = new_local_surface_id_request_;
   new_local_surface_id_request_ = false;
   return new_local_surface_id_request;
+}
+
+void LayerTreeImpl::SetDeviceViewportSize(
+    const gfx::Size& device_viewport_size) {
+  if (device_viewport_size == device_viewport_size_)
+    return;
+  device_viewport_size_ = device_viewport_size;
+
+  set_needs_update_draw_properties();
+  if (!IsActiveTree())
+    return;
+
+  host_impl_->UpdateViewportContainerSizes();
+  host_impl_->OnCanDrawStateChangedForTree();
+  host_impl_->SetViewportDamage(GetDeviceViewport());
+}
+
+gfx::Rect LayerTreeImpl::GetDeviceViewport() const {
+  // TODO(fsamuel): We should plumb |external_viewport| similar to the
+  // way we plumb |device_viewport_size_|.
+  const gfx::Rect& external_viewport = host_impl_->external_viewport();
+  if (external_viewport.IsEmpty())
+    return gfx::Rect(device_viewport_size_);
+  return external_viewport;
 }
 
 void LayerTreeImpl::SetRasterColorSpace(
@@ -1150,7 +1168,7 @@ bool LayerTreeImpl::UpdateDrawProperties(
     // calculations except when this function is explicitly passed a flag asking
     // us to skip it.
     LayerTreeHostCommon::CalcDrawPropsImplInputs inputs(
-        layer_list_[0], DeviceViewport().size(), host_impl_->DrawTransform(),
+        layer_list_[0], GetDeviceViewport().size(), host_impl_->DrawTransform(),
         device_scale_factor(), current_page_scale_factor(), PageScaleLayer(),
         InnerViewportScrollLayer(), OuterViewportScrollLayer(),
         elastic_overscroll()->Current(IsActiveTree()),
@@ -1286,7 +1304,7 @@ void LayerTreeImpl::BuildPropertyTreesForTesting() {
       OuterViewportScrollLayer(), OverscrollElasticityLayer(),
       elastic_overscroll()->Current(IsActiveTree()),
       current_page_scale_factor(), device_scale_factor(),
-      gfx::Rect(DeviceViewport().size()), host_impl_->DrawTransform(),
+      gfx::Rect(GetDeviceViewport().size()), host_impl_->DrawTransform(),
       &property_trees_);
   property_trees_.transform_tree.set_source_to_parent_updates_allowed(false);
 }
@@ -1328,20 +1346,20 @@ LayerImpl* LayerTreeImpl::LayerById(int id) const {
   return iter != layer_id_map_.end() ? iter->second : nullptr;
 }
 
-void LayerTreeImpl::SetSurfaceLayerIds(
-    const base::flat_set<viz::SurfaceId>& surface_layer_ids) {
-  DCHECK(surface_layer_ids_.empty());
-  surface_layer_ids_ = surface_layer_ids;
-  needs_surface_ids_sync_ = true;
+void LayerTreeImpl::SetSurfaceRanges(
+    const base::flat_set<viz::SurfaceRange> surface_ranges) {
+  DCHECK(surface_layer_ranges_.empty());
+  surface_layer_ranges_ = std::move(surface_ranges);
+  needs_surface_ranges_sync_ = true;
 }
 
-const base::flat_set<viz::SurfaceId>& LayerTreeImpl::SurfaceLayerIds() const {
-  return surface_layer_ids_;
+const base::flat_set<viz::SurfaceRange>& LayerTreeImpl::SurfaceRanges() const {
+  return surface_layer_ranges_;
 }
 
-void LayerTreeImpl::ClearSurfaceLayerIds() {
-  surface_layer_ids_.clear();
-  needs_surface_ids_sync_ = true;
+void LayerTreeImpl::ClearSurfaceRanges() {
+  surface_layer_ranges_.clear();
+  needs_surface_ranges_sync_ = true;
 }
 
 void LayerTreeImpl::AddLayerShouldPushProperties(LayerImpl* layer) {
@@ -1400,7 +1418,7 @@ size_t LayerTreeImpl::NumLayers() {
 
 void LayerTreeImpl::DidBecomeActive() {
   if (next_activation_forces_redraw_) {
-    host_impl_->SetFullViewportDamage();
+    host_impl_->SetViewportDamage(GetDeviceViewport());
     next_activation_forces_redraw_ = false;
   }
 
@@ -1421,20 +1439,6 @@ void LayerTreeImpl::DidBecomeActive() {
 
 bool LayerTreeImpl::RequiresHighResToDraw() const {
   return host_impl_->RequiresHighResToDraw();
-}
-
-bool LayerTreeImpl::ViewportSizeInvalid() const {
-  return viewport_size_invalid_;
-}
-
-void LayerTreeImpl::SetViewportSizeInvalid() {
-  viewport_size_invalid_ = true;
-  host_impl_->OnCanDrawStateChangedForTree();
-}
-
-void LayerTreeImpl::ResetViewportSizeInvalid() {
-  viewport_size_invalid_ = false;
-  host_impl_->OnCanDrawStateChangedForTree();
 }
 
 TaskRunnerProvider* LayerTreeImpl::task_runner_provider() const {
@@ -1483,10 +1487,6 @@ FrameRateCounter* LayerTreeImpl::frame_rate_counter() const {
 
 MemoryHistory* LayerTreeImpl::memory_history() const {
   return host_impl_->memory_history();
-}
-
-gfx::Size LayerTreeImpl::device_viewport_size() const {
-  return host_impl_->device_viewport_size();
 }
 
 gfx::Rect LayerTreeImpl::viewport_visible_rect() const {
@@ -1539,12 +1539,12 @@ base::TimeDelta LayerTreeImpl::CurrentBeginFrameInterval() const {
   return host_impl_->CurrentBeginFrameInterval();
 }
 
-gfx::Rect LayerTreeImpl::DeviceViewport() const {
-  return host_impl_->DeviceViewport();
-}
-
 const gfx::Rect LayerTreeImpl::ViewportRectForTilePriority() const {
-  return host_impl_->ViewportRectForTilePriority();
+  const gfx::Rect& viewport_rect_for_tile_priority =
+      host_impl_->viewport_rect_for_tile_priority();
+  return viewport_rect_for_tile_priority.IsEmpty()
+             ? GetDeviceViewport()
+             : viewport_rect_for_tile_priority;
 }
 
 std::unique_ptr<ScrollbarAnimationController>
@@ -1892,31 +1892,6 @@ static bool PointHitsRect(
   return true;
 }
 
-static bool PointHitsRegion(const gfx::PointF& screen_space_point,
-                            const gfx::Transform& screen_space_transform,
-                            const Region& layer_space_region) {
-  // If the transform is not invertible, then assume that this point doesn't hit
-  // this region.
-  gfx::Transform inverse_screen_space_transform(
-      gfx::Transform::kSkipInitialization);
-  if (!screen_space_transform.GetInverse(&inverse_screen_space_transform))
-    return false;
-
-  // Transform the hit test point from screen space to the local space of the
-  // given region.
-  bool clipped = false;
-  gfx::PointF hit_test_point_in_layer_space = MathUtil::ProjectPoint(
-      inverse_screen_space_transform, screen_space_point, &clipped);
-
-  // If ProjectPoint could not project to a valid value, then we assume that
-  // this point doesn't hit this region.
-  if (clipped)
-    return false;
-
-  return layer_space_region.Contains(
-      gfx::ToRoundedPoint(hit_test_point_in_layer_space));
-}
-
 static bool PointIsClippedByAncestorClipNode(
     const gfx::PointF& screen_space_point,
     const LayerImpl* layer) {
@@ -1960,6 +1935,41 @@ static bool PointIsClippedBySurfaceOrClipRect(
   // Walk up the layer tree and hit-test any render_surfaces and any layer
   // clip rects that are active.
   return PointIsClippedByAncestorClipNode(screen_space_point, layer);
+}
+
+static bool PointHitsRegion(const gfx::PointF& screen_space_point,
+                            const gfx::Transform& screen_space_transform,
+                            const Region& layer_space_region,
+                            const LayerImpl* layer_impl) {
+  if (layer_space_region.IsEmpty())
+    return false;
+
+  // If the transform is not invertible, then assume that this point doesn't hit
+  // this region.
+  gfx::Transform inverse_screen_space_transform(
+      gfx::Transform::kSkipInitialization);
+  if (!screen_space_transform.GetInverse(&inverse_screen_space_transform))
+    return false;
+
+  // Transform the hit test point from screen space to the local space of the
+  // given region.
+  bool clipped = false;
+  gfx::PointF hit_test_point_in_layer_space = MathUtil::ProjectPoint(
+      inverse_screen_space_transform, screen_space_point, &clipped);
+
+  // If ProjectPoint could not project to a valid value, then we assume that
+  // this point doesn't hit this region.
+  if (clipped)
+    return false;
+
+  // We need to walk up the parents to ensure that the layer is not clipped in
+  // such a way that it is impossible for the point to hit the layer.
+  if (layer_impl &&
+      PointIsClippedBySurfaceOrClipRect(screen_space_point, layer_impl))
+    return false;
+
+  return layer_space_region.Contains(
+      gfx::ToRoundedPoint(hit_test_point_in_layer_space));
 }
 
 static bool PointHitsLayer(const LayerImpl* layer,
@@ -2072,42 +2082,47 @@ LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPoint(
   return state.closest_match;
 }
 
-static bool LayerHasTouchEventHandlersAt(const gfx::PointF& screen_space_point,
-                                         LayerImpl* layer_impl) {
-  if (layer_impl->touch_action_region().region().IsEmpty())
-    return false;
-
-  if (!PointHitsRegion(screen_space_point, layer_impl->ScreenSpaceTransform(),
-                       layer_impl->touch_action_region().region()))
-    return false;
-
-  // At this point, we think the point does hit the touch event handler region
-  // on the layer, but we need to walk up the parents to ensure that the layer
-  // was not clipped in such a way that the hit point actually should not hit
-  // the layer.
-  if (PointIsClippedBySurfaceOrClipRect(screen_space_point, layer_impl))
-    return false;
-
-  return true;
-}
-
 struct FindTouchEventLayerFunctor {
   bool operator()(LayerImpl* layer) const {
-    return LayerHasTouchEventHandlersAt(screen_space_point, layer);
+    return PointHitsRegion(screen_space_point, layer->ScreenSpaceTransform(),
+                           layer->touch_action_region().region(), layer);
   }
   const gfx::PointF screen_space_point;
 };
 
-LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInTouchHandlerRegion(
-    const gfx::PointF& screen_space_point) {
+struct FindWheelEventHandlerLayerFunctor {
+  bool operator()(LayerImpl* layer) const {
+    return PointHitsRegion(screen_space_point, layer->ScreenSpaceTransform(),
+                           layer->wheel_event_handler_region(), layer);
+  }
+  const gfx::PointF screen_space_point;
+};
+
+template <typename Functor>
+LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInEventHandlerRegion(
+    const gfx::PointF& screen_space_point,
+    const Functor& func) {
   if (layer_list_.empty())
     return nullptr;
   if (!UpdateDrawProperties())
     return nullptr;
-  FindTouchEventLayerFunctor func = {screen_space_point};
   FindClosestMatchingLayerState state;
   FindClosestMatchingLayer(screen_space_point, layer_list_[0], func, &state);
   return state.closest_match;
+}
+
+LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInTouchHandlerRegion(
+    const gfx::PointF& screen_space_point) {
+  FindTouchEventLayerFunctor func = {screen_space_point};
+  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_point,
+                                                       func);
+}
+
+LayerImpl* LayerTreeImpl::FindLayerThatIsHitByPointInWheelEventHandlerRegion(
+    const gfx::PointF& screen_space_point) {
+  FindWheelEventHandlerLayerFunctor func = {screen_space_point};
+  return FindLayerThatIsHitByPointInEventHandlerRegion(screen_space_point,
+                                                       func);
 }
 
 void LayerTreeImpl::RegisterSelection(const LayerSelection& selection) {

@@ -139,6 +139,11 @@ class ServiceWorkerControlleeRequestHandlerTest : public testing::Test {
 
   ServiceWorkerContextCore* context() const { return helper_->context(); }
 
+  void SetProviderHostIsSecure(ServiceWorkerProviderHost* host,
+                               bool is_secure) {
+    host->info_->is_parent_frame_secure = is_secure;
+  }
+
  protected:
   TestBrowserThreadBundle browser_thread_bundle_;
   std::unique_ptr<EmbeddedWorkerTestHelper> helper_;
@@ -197,6 +202,34 @@ TEST_F(ServiceWorkerControlleeRequestHandlerTest, DisallowServiceWorker) {
   SetBrowserClientForTesting(old_browser_client);
 }
 
+TEST_F(ServiceWorkerControlleeRequestHandlerTest, InsecureContext) {
+  // Store an activated worker.
+  version_->set_fetch_handler_existence(
+      ServiceWorkerVersion::FetchHandlerExistence::EXISTS);
+  version_->SetStatus(ServiceWorkerVersion::ACTIVATED);
+  registration_->SetActiveVersion(version_);
+  context()->storage()->StoreRegistration(registration_.get(), version_.get(),
+                                          base::DoNothing());
+  base::RunLoop().RunUntilIdle();
+
+  SetProviderHostIsSecure(provider_host_.get(), false);
+
+  // Conduct a main resource load.
+  ServiceWorkerRequestTestResources test_resources(
+      this, GURL("https://host/scope/doc"), RESOURCE_TYPE_MAIN_FRAME);
+  ServiceWorkerURLRequestJob* sw_job = test_resources.MaybeCreateJob();
+
+  EXPECT_FALSE(sw_job->ShouldFallbackToNetwork());
+  EXPECT_FALSE(sw_job->ShouldForwardToServiceWorker());
+  EXPECT_FALSE(version_->HasControllee());
+  base::RunLoop().RunUntilIdle();
+
+  // Verify we did not use the worker.
+  EXPECT_TRUE(sw_job->ShouldFallbackToNetwork());
+  EXPECT_FALSE(sw_job->ShouldForwardToServiceWorker());
+  EXPECT_FALSE(version_->HasControllee());
+}
+
 TEST_F(ServiceWorkerControlleeRequestHandlerTest, ActivateWaitingVersion) {
   // Store a registration that is installed but not activated yet.
   version_->set_fetch_handler_existence(
@@ -246,13 +279,13 @@ TEST_F(ServiceWorkerControlleeRequestHandlerTest, InstallingRegistration) {
   base::RunLoop().RunUntilIdle();
 
   // The handler should have fallen back to network and destroyed the job. The
-  // registration should be associated with the provider host, although it is
-  // not controlled since there is no active version.
+  // provider host should not be controlled. However it should add the
+  // registration as a matching registration so it can be used for .ready and
+  // claim().
   EXPECT_FALSE(job);
-  EXPECT_EQ(registration_.get(), provider_host_->associated_registration());
-  EXPECT_EQ(version_.get(), provider_host_->installing_version());
   EXPECT_FALSE(version_->HasControllee());
   EXPECT_FALSE(provider_host_->controller());
+  EXPECT_EQ(registration_.get(), provider_host_->MatchRegistration());
 }
 
 // Test to not regress crbug/414118.

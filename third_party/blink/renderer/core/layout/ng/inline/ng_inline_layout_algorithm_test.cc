@@ -188,9 +188,9 @@ TEST_F(NGInlineLayoutAlgorithmTest, ContainerBorderPadding) {
 
   auto* block_box =
       ToNGPhysicalBoxFragment(layout_result->PhysicalFragment().get());
-  EXPECT_TRUE(layout_result->BfcOffset().has_value());
-  EXPECT_EQ(0, layout_result->BfcOffset().value().line_offset);
-  EXPECT_EQ(0, layout_result->BfcOffset().value().block_offset);
+  EXPECT_TRUE(layout_result->BfcBlockOffset().has_value());
+  EXPECT_EQ(0, layout_result->BfcBlockOffset().value());
+  EXPECT_EQ(0, layout_result->BfcLineOffset());
 
   auto* line = ToNGPhysicalLineBoxFragment(block_box->Children()[0].get());
   EXPECT_EQ(5, line->Offset().left);
@@ -266,10 +266,11 @@ TEST_F(NGInlineLayoutAlgorithmTest, TextFloatsAroundFloatsBefore) {
       ToNGPhysicalBoxFragment(html_fragment->Children()[0].get());
   auto* container_fragment =
       ToNGPhysicalBoxFragment(body_fragment->Children()[0].get());
-  auto* span_box_fragments_wrapper =
-      ToNGPhysicalBoxFragment(container_fragment->Children()[3].get());
   Vector<NGPhysicalLineBoxFragment*> line_boxes;
-  for (const auto& child : span_box_fragments_wrapper->Children()) {
+  for (const auto& child : container_fragment->Children()) {
+    if (!child->IsLineBox())
+      continue;
+
     line_boxes.push_back(ToNGPhysicalLineBoxFragment(child.get()));
   }
 

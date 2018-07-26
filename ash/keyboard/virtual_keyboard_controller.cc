@@ -67,6 +67,14 @@ void MoveKeyboardToDisplayInternal(const display::Display& display) {
   }
 }
 
+bool HasTouchableDisplay() {
+  for (const auto& display : display::Screen::GetScreen()->GetAllDisplays()) {
+    if (display.touch_support() == display::Display::TouchSupport::AVAILABLE)
+      return true;
+  }
+  return false;
+}
+
 void MoveKeyboardToFirstTouchableDisplay() {
   // Move the keyboard to the first display with touch capability.
   for (const auto& display : display::Screen::GetScreen()->GetAllDisplays()) {
@@ -155,7 +163,7 @@ void VirtualKeyboardController::MoveKeyboardToDisplay(
   TRACE_EVENT0("vk", "MoveKeyboardToDisplay");
 
   aura::Window* keyboard_window =
-      keyboard::KeyboardController::Get()->GetContentsWindow();
+      keyboard::KeyboardController::Get()->GetKeyboardWindow();
   DCHECK(keyboard_window);
 
   const display::Screen* screen = display::Screen::GetScreen();
@@ -172,7 +180,7 @@ void VirtualKeyboardController::MoveKeyboardToTouchableDisplay() {
   TRACE_EVENT0("vk", "MoveKeyboardToTouchableDisplay");
 
   aura::Window* keyboard_window =
-      keyboard::KeyboardController::Get()->GetContentsWindow();
+      keyboard::KeyboardController::Get()->GetKeyboardWindow();
   DCHECK(keyboard_window);
 
   const display::Screen* screen = display::Screen::GetScreen();
@@ -181,14 +189,15 @@ void VirtualKeyboardController::MoveKeyboardToTouchableDisplay() {
 
   if (wm::GetFocusedWindow()) {
     // Move the virtual keyboard to the focused display if that display has
-    // touch capability or keyboard is locked
+    // touch capability or no other display has touch capability.
     const display::Display focused_display =
         display::Screen::GetScreen()->GetDisplayNearestWindow(
             wm::GetFocusedWindow());
     if (current_display.id() != focused_display.id() &&
-        focused_display.id() != display::kInvalidDisplayId &&
-        focused_display.touch_support() ==
-            display::Display::TouchSupport::AVAILABLE) {
+        focused_display.is_valid() &&
+        (focused_display.touch_support() ==
+             display::Display::TouchSupport::AVAILABLE ||
+         !HasTouchableDisplay())) {
       MoveKeyboardToDisplayInternal(focused_display);
       return;
     }
@@ -276,7 +285,7 @@ void VirtualKeyboardController::ForceShowKeyboard() {
 
   // TODO(mash): Turning on accessibility keyboard does not create a valid
   // KeyboardController under MASH. See https://crbug.com/646565.
-  if (Shell::GetAshConfig() == Config::MASH)
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
     return;
 
   // Onscreen keyboard has not been enabled yet, forces to bring out the
@@ -294,7 +303,12 @@ void VirtualKeyboardController::OnKeyboardDisabled() {
       chromeos::input_method::mojom::ImeKeyset::kNone);
 }
 
-void VirtualKeyboardController::OnKeyboardHidden() {
+void VirtualKeyboardController::OnKeyboardHidden(bool is_temporary_hide) {
+  // The keyboard may temporarily hide (e.g. to change container behaviors).
+  // The keyset should not be reset in this case.
+  if (is_temporary_hide)
+    return;
+
   Shell::Get()->ime_controller()->OverrideKeyboardKeyset(
       chromeos::input_method::mojom::ImeKeyset::kNone);
 

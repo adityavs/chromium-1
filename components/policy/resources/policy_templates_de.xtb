@@ -42,6 +42,9 @@ Wenn Sie diese Richtlinie festlegen, verwendet <ph name="PRODUCT_NAME" /> das be
 Unter https://www.chromium.org/administrators/policy-list-3/user-data-directory-variables finden Sie eine Liste mit Variablen, die verwendet werden können.
 
 Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cache-Verzeichnis verwendet und der Nutzer kann sie mit der Befehlszeilenmarkierung "--disk-cache-dir" außer Kraft setzen.</translation>
+<translation id="1135264353752122851">Mit dieser Richtlinie wird festgelegt, welche Tastaturlayouts in <ph name="PRODUCT_OS_NAME" />-Nutzersitzungen zulässig sind.
+
+      Wenn die Richtlinie festgelegt ist, kann der Nutzer nur eine der in der Richtlinie vorgegebenen Eingabemethoden auswählen. Falls die Richtlinie nicht konfiguriert oder auf eine leere Liste festgelegt ist, kann der Nutzer aus allen unterstützten Eingabemethoden wählen. Sollte die aktuelle Eingabemethode durch die Richtlinie nicht zulässig sein, wird die Eingabemethode nach Möglichkeit auf das Hardware-Tastaturlayout oder den ersten gültigen Eintrag in dieser Liste eingestellt. Alle ungültigen oder nicht unterstützten Eingabemethoden in der Liste werden ignoriert.</translation>
 <translation id="1138294736309071213">Diese Richtlinie ist nur im Händlermodus aktiv.
 
       Legt fest, wie lange es dauert, bis für Geräte im Händlermodus der Bildschirmschoner auf der Anmeldeseite erscheint.
@@ -69,6 +72,7 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
 <translation id="1221359380862872747">Bei Demo-Anmeldung angegebene URLs laden</translation>
 <translation id="1223789468190631420">Safe Browsing-Aktivierungsstatus für vertrauenswürdige Quellen</translation>
 <translation id="123081309365616809">Streamen von Inhalten an das Gerät aktivieren</translation>
+<translation id="1243570869342663665">Filterung von Inhalten nur für Erwachsene durch "SafeSites" konfigurieren.</translation>
 <translation id="1257550411839719984">Standard-Downloadverzeichnis festlegen</translation>
 <translation id="1265053460044691532">Zeit beschränken, für die sich ein über SAML authentifizierter Nutzer offline anmelden kann</translation>
 <translation id="1291880496936992484">Achtung: RC4 wird nach Version 52, etwa im September 2016, vollständig aus <ph name="PRODUCT_NAME" /> entfernt. Anschließend funktioniert diese Richtlinie nicht mehr.
@@ -127,11 +131,6 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
 
       Falls die Richtlinie nicht konfiguriert ist, gilt der Standardwert "MultiProfileUserBehaviorMustBePrimary" für alle vom Unternehmen verwalteten Nutzer und "MultiProfileUserBehaviorUnrestricted" für nicht verwaltete Nutzer.</translation>
 <translation id="1465619815762735808">Click-to-Play</translation>
-<translation id="1466133662354365542">Aktiviert die AutoFill-Funktion von <ph name="PRODUCT_NAME" /> und ermöglicht es Nutzern, Kreditkarten- und Adressinformationen in Webformularen automatisch mit zuvor gespeicherten Informationen ausfüllen zu lassen.
-
-      Wenn Sie diese Einstellung deaktivieren, schlägt AutoFill weder Kreditkarteninformationen vor oder füllt sie automatisch aus noch werden zusätzliche Kreditkarteninformationen gespeichert, die der Nutzer während des Surfens im Web möglicherweise übermittelt.
-
-      Ist diese Einstellung aktiviert oder nicht konfiguriert, kann der Nutzer die gesamte AutoFill-Funktion in der Benutzeroberfläche steuern (einschließlich Kreditkarten).</translation>
 <translation id="1468307069016535757">Hiermit wird der Standardstatus der Bedienungshilfefunktion für den Modus mit hohem Kontrast auf der Anmeldeseite festgelegt.
 
           Ist diese Richtlinie auf "true" gesetzt, ist der Modus mit hohem Kontrast aktiviert, wenn die Anmeldeseite angezeigt wird.
@@ -210,12 +209,6 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
       In der Richtlinie muss eine URL angegeben werden, von der <ph name="PRODUCT_OS_NAME" /> die Nutzungsbedingungen herunterladen kann. Die Nutzungsbedingungen müssen als unformatierter Text mit dem MIME-Typ "text/plain" vorliegen. Markups sind nicht zulässig.</translation>
 <translation id="1750315445671978749">Alle Downloads blockieren</translation>
 <translation id="1781356041596378058">Diese Richtlinie steuert zudem den Zugriff auf Android-Entwickleroptionen. Wenn Sie diese Richtlinie auf "true" setzen, können Nutzer nicht auf die Entwickleroptionen zugreifen. Wenn Sie diese Richtlinie auf "false" setzen oder nicht konfigurieren, können Nutzer auf die Entwickleroptionen zugreifen, indem sie siebenmal auf die Build-Nummer in der Android-App "Einstellungen" tippen.</translation>
-<translation id="178832255504524723">Mit dieser Richtlinie wird die URL zur Passwortänderung konfiguriert (nur HTTP- und HTTPS-Schemas). Nutzer, die Opfer eines Phishingangriffs geworden sind, werden vom Passwortschutzdienst an diese URL weitergeleitet, damit sie ihr Passwort ändern können.
-      Ihre Anmeldeseiten müssen den Richtlinien unter https://www.chromium.org/developers/design-documents/create-amazing-password-forms entsprechen, damit Fingerabdrücke zur Autorisierung in <ph name="PRODUCT_NAME" /> richtig erfasst werden können.
-
-      Wenn diese Einstellung aktiviert ist, leitet der Passwortschutzdienst Nutzer, die Opfer eines Phishingangriffs geworden sind, an diese URL weiter, damit sie ihr Passwort ändern können.
-      Wenn diese Einstellung deaktiviert oder nicht konfiguriert ist, leitet der Passwortschutzdienst Nutzer an https://myaccounts.google.com weiter, damit sie ihr Passwort ändern können.
-      Diese Richtlinie ist nur in Windows-Instanzen verfügbar, die mit einer <ph name="MS_AD_NAME" />-Domain verbunden sind.</translation>
 <translation id="1797233582739332495">Dem Nutzer eine wiederkehrende Aufforderung anzeigen, dass ein Neustart erforderlich ist</translation>
 <translation id="1803646570632580723">Liste der in der Übersicht angezeigten Apps ansehen</translation>
 <translation id="1808715480127969042">Cookies auf diesen Websites blockieren</translation>
@@ -238,6 +231,13 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
       Wenn die Kompatibilität mit einem fehlerträchtigen Server aufrechterhalten werden muss, kann "tls1.1" eingestellt werden. Hierbei handelt es sich um einen provisorischen Wert und der Server sollte schnell repariert werden.</translation>
 <translation id="1864269674877167562">Wenn diese Richtlinie nicht konfiguriert ist oder ein leerer String dafür festgelegt ist, zeigt <ph name="PRODUCT_OS_NAME" /> keine Option für die automatische Vervollständigung beim Anmeldevorgang an.
       Wenn die Richtlinie für einen String festgelegt ist, der einen Domainnamen darstellt, zeigt <ph name="PRODUCT_OS_NAME" /> eine Option für die automatische Vervollständigung beim Anmeldevorgang des Nutzers an, sodass er seinen Namen ohne die Domain-Namenserweiterung eingeben kann. Der Nutzer kann diese Domain-Namenserweiterung überschreiben.</translation>
+<translation id="1864382791685519617">Durch diese Richtlinie wird die Netzwerkvorhersage in <ph name="PRODUCT_NAME" /> aktiviert und es wird verhindert, dass die Einstellung von Nutzern geändert wird.
+
+      Hiermit werden DNS-Vorabruf, TCP- und SSL-Vorverbindung sowie das Pre-Rendering von Webseiten gesteuert.
+
+      Wenn Sie diese Richtlinie festlegen, können Nutzer diese Einstellung in <ph name="PRODUCT_NAME" /> nicht ändern oder überschreiben.
+
+      Ist die Richtlinie nicht konfiguriert, wird die Netzwerkvorhersage aktiviert, kann jedoch vom Nutzer geändert werden.</translation>
 <translation id="1865417998205858223">Hauptberechtigungen</translation>
 <translation id="186719019195685253">Auszuführende Aktion beim Erreichen der Leerlaufverzögerung während des Wechselstrombetriebs</translation>
 <translation id="187819629719252111">Ermöglicht den Zugriff auf lokale Dateien auf dem Computer, indem <ph name="PRODUCT_NAME" /> gestattet wird, Dialogfelder zur Dateiauswahl anzuzeigen. Wenn Sie diese Einstellung aktivieren, können Nutzer Dateiauswahl-Dialogfelder wie gewohnt öffnen. Ist diese Einstellung deaktiviert, wird bei jeder Nutzeraktion, bei der ein Dialogfeld zur Dateiauswahl angezeigt werden würde, etwa beim Importieren von Lesezeichen, beim Hochladen von Dateien oder beim Speichern von Links, stattdessen eine Meldung angezeigt. Außerdem wird davon ausgegangen, dass der Nutzer im Dialogfeld zur Dateiauswahl auf "Abbrechen" geklickt hat. Wenn diese Einstellung nicht konfiguriert ist, so können Nutzer Dateiauswahl-Dialogfelder wie gewohnt öffnen.</translation>
@@ -250,6 +250,7 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
       Das Format des Werts richtet sich nach den Namen der Zeitzonen in der IANA-Zeitzonen-Datenbank (siehe "https://de.wikipedia.org/wiki/Zeitzonen-Datenbank"). Auf die meisten Zeitzonen kann über "Kontinent/Stadt" oder "Ozean/Stadt" verwiesen werden.
 
       Durch das Festlegen dieser Richtlinie wird die automatische Auflösung der Zeitzone nach Gerätestandort komplett deaktiviert und die Richtlinie "SystemTimezoneAutomaticDetection" überschrieben.</translation>
+<translation id="1885782360784839335">Einblendung von Werbung auf dem gesamten Tab aktivieren</translation>
 <translation id="1888871729456797026">Das Registrierungstoken der Cloud-Richtlinie auf dem Desktop</translation>
 <translation id="1897365952389968758">Ausführung von JavaScript für alle Websites zulassen</translation>
 <translation id="1906888171268104594">Legt fest, ob Nutzungs- und Diagnosedaten, einschließlich Absturzberichten, an Google gesendet werden.
@@ -363,6 +364,7 @@ Wenn diese Richtlinie nicht konfiguriert wird, so wird das standardmäßige Cach
       und der Nutzer kann diesen ändern. In diesem Fall wird der Standardwert
       beim Neustart nicht angewendet.</translation>
 <translation id="2156132677421487971">Konfigurieren von Richtlinien für <ph name="PRODUCT_NAME" />, ein Tool, mit dem Nutzer Inhalte von Tabs, Websites oder dem Desktop von einem Browser auf andere Bildschirme und Soundsysteme übertragen können.</translation>
+<translation id="2166472654199325139">Websites mit Inhalten nur für Erwachsene nicht filtern</translation>
 <translation id="2168397434410358693">Inaktivitätsverzögerung im Netzbetrieb</translation>
 <translation id="2170233653554726857">WPAD-Optimierung aktivieren</translation>
 <translation id="2176565653304920879">Wenn diese Richtlinie aktiviert wird, hängt die automatische Erkennung der Zeitzone folgendermaßen vom Wert der Einstellung ab:
@@ -511,6 +513,12 @@ Falls die Richtlinie auf "false" gesetzt wird, kann eine verzögerungsfreie auto
 <translation id="2466131534462628618">Captive-Portal-Authentifizierung ignoriert Proxy</translation>
 <translation id="2482676533225429905">Natives Messaging</translation>
 <translation id="2483146640187052324">Netzwerkaktionen über alle Netzwerkverbindungen vervollständigen</translation>
+<translation id="2484208301968418871">Mit dieser Richtlinie wird die Anwendung des URL-Filters "SafeSites" konfiguriert.
+      Der Filter greift auf die Google Safe Search API zurück, um URLs als pornografisch oder nicht pornografisch einzuordnen.
+
+      Wenn diese Richtlinie nicht konfiguriert oder auf "Websites mit Inhalten nur für Erwachsene nicht filtern" festgelegt ist, werden Websites nicht gefiltert.
+
+      Falls die Richtlinie auf "Websites auf oberster Ebene mit Inhalten nur für Erwachsene filtern" gesetzt ist, werden als pornografisch eingestufte Websites gefiltert.</translation>
 <translation id="2485721741875148980">Wenn diese Richtlinie auf "true" gesetzt ist, muss sich der Nutzer mit seinem Profil in <ph name="PRODUCT_NAME" /> anmelden, um den Browser zu nutzen. Außerdem wird der Standardwert von BrowserGuestModeEnabled auf "false" gesetzt. Beachten Sie, dass vorhandene, nicht signierte Profile gesperrt werden und nach Aktivieren dieser Richtlinie nicht mehr zugänglich sind. Weitere Informationen erhalten Sie im Hilfeartikel.
 
       Ist die Richtlinie auf "false" gesetzt oder nicht konfiguriert, kann der Nutzer den Browser verwenden, ohne sich in <ph name="PRODUCT_NAME" /> anzumelden.</translation>
@@ -661,17 +669,24 @@ Falls die Richtlinie auf "false" gesetzt wird, kann eine verzögerungsfreie auto
 
       Ist diese Einstellung aktiviert, wird für die Druckvorschau der Standarddrucker des Betriebssystems als Standarddrucker ausgewählt.</translation>
 <translation id="2867699958489427143">Führen Sie ein Rollback durch und bleiben Sie bei der Zielversion, falls die Version des Betriebssystems neuer ist als die der Zielversion. Außerdem sollten Sie während des Vorgangs einen vollständigen Powerwash durchführen.</translation>
-<translation id="286802604195763750">Mit dieser Richtlinie können Sie die Auslösung der Passwortschutzwarnung steuern. Durch diese Meldung werden Nutzer gewarnt, wenn sie ihr geschütztes Passwort auf potenziell verdächtigen Websites wiederverwenden.
-
-      Wenn diese Richtlinie auf "PasswordProtectionWarningOff" festgelegt ist, wird keine Passwortschutzwarnung angezeigt.
-      Wenn diese Richtlinie auf "PasswordProtectionWarningOnPasswordReuse" festgelegt ist, wird die Passwortschutzwarnung angezeigt, wenn der Nutzer sein Google-Passwort auf einer Website wiederverwendet, die nicht auf der weißen Liste steht.
-      Wenn diese Richtlinie auf "PasswordProtectionWarningOnPhishingReuse" festgelegt ist, wird die Passwortschutzwarnung angezeigt, wenn der Nutzer sein Google-Passwort auf einer Phishingwebsite wiederverwendet.
-      Wenn diese Richtlinie nicht konfiguriert ist, wird die Passwortschutzwarnung ausgelöst, wenn der Nutzer sein Google-Passwort auf Phishingwebsites wiederverwendet. Der Nutzer kann diese Einstellung jedoch ändern.</translation>
 <translation id="2872961005593481000">Herunterfahren</translation>
 <translation id="2874209944580848064">Hinweis für <ph name="PRODUCT_OS_NAME" />-Geräte, die Android-Apps unterstützen:</translation>
 <translation id="2877225735001246144">CNAME-Suche bei der Aushandlung der Kerberos-Authentifizierung deaktivieren</translation>
 <translation id="2893546967669465276">Systemprotokolle an den Verwaltungsserver senden</translation>
 <translation id="2899002520262095963">Android-Apps können die über diese Richtlinie festgelegten Netzwerkkonfigurationen und CA-Zertifikate verwenden, haben jedoch keinen Zugriff auf bestimmte Konfigurationsoptionen.</translation>
+<translation id="290002216614278247">Ermöglicht, die Sitzung des Nutzers auf Grundlage der Clientzeit oder des Nutzungskontingents für den jeweiligen Tag zu sperren.
+
+          Das |time_window_limit| gibt ein tägliches Zeitfenster vor, in dem die Sitzung des Nutzers gesperrt werden sollte. Wir unterstützen nur eine Regel für jeden Wochentag, weshalb die Größe der Matrix |entries| von 0 bis 7 reichen kann. |starts_at| und |ends_at| sind Anfang und Ende des Zeitfensters. Wenn |ends_at| kleiner ist als |starts_at|, bedeutet es, dass das |time_limit_window| am darauf folgenden Tag endet. |last_updated_millis| ist der UTC-Zeitstempel für die letzte Aktualisierung des Eintrags. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passt.
+
+          Das |time_usage_limit| stellt ein tägliches Nutzungslimit dar. Wenn der Nutzer das Nutzungslimit erreicht, wird seine Sitzung gesperrt. Für jeden Tag der Woche steht eine Eigenschaft zur Verfügung und diese sollte nur dann konfiguriert werden, wenn für diesen Tag ein aktives Limit vorliegt. |usage_quota_mins| ist der Zeitraum, über den das verwaltete Gerät an einem bestimmten Tag genutzt werden darf, und |reset_at| ist der Zeitpunkt, an dem das Kontingent erneuert wird. Der Standardwert für |reset_at| ist Mitternacht ({'hour': 0, 'minute': 0}). |last_updated_millis| ist der UTC-Zeitstempel für die letzte Aktualisierung des Eintrags. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passen würde.
+
+          Mit |overrides| können die genannten Regeln vorübergehend außer Kraft gesetzt werden.
+          * Wenn weder "time_window_limit" noch "time_usage_limit" aktiv sind, kann |LOCK| zur Sperrung des Geräts verwendet werden.
+          * Mit |LOCK| wird eine Nutzersitzung vorübergehend gesperrt, bis das nächste "time_window_limit" oder "time_usage_limit" beginnt.
+          * Mit |UNLOCK| wird eine durch "time_window_limit" oder "time_usage_limit" gesperrte Sitzung entsperrt.
+          |created_time_millis| ist der UTC-Zeitstempel für die Erstellung der Außerkraftsetzung. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passen würde. Mit ihm wird festgestellt, ob diese Außerkraftsetzung weiterhin angewendet werden soll. Wenn das aktuelle aktive Zeitlimit (Nutzungszeitlimit oder Zeitfensterlimit) gestartet wurde, nachdem die Außerkraftsetzung erfolgt ist, sollte sie keine Auswirkungen haben. Entsprechend gilt: Wenn die Außerkraftsetzung vor der letzten Änderung des aktiven "time_window_limit" oder "time_usage_window" erstellt wurde, sollte sie nicht angewendet werden.
+
+          Falls mehrere Außerkraftsetzungen gesendet werden, wird der neueste gültige Eintrag angewendet.</translation>
 <translation id="2906874737073861391">Liste der AppPack-Erweiterungen</translation>
 <translation id="2907992746861405243">Legt fest, welche Drucker aus <ph name="BULK_PRINTERS_POLICY" /> Nutzern zur Verfügung stehen.
 
@@ -680,6 +695,7 @@ Falls die Richtlinie auf "false" gesetzt wird, kann eine verzögerungsfreie auto
       Wenn diese Richtlinie nicht konfiguriert ist, wird angenommen, dass <ph name="PRINTERS_ALLOW_ALL" /> ausgewählt ist.
       </translation>
 <translation id="2908277604670530363">Maximale Anzahl gleichzeitiger Verbindungen zum Proxyserver</translation>
+<translation id="2951386431828317490">AutoFill für Profile aktivieren</translation>
 <translation id="2956777931324644324">Diese Richtlinie wird seit <ph name="PRODUCT_NAME" /> Version 36 nicht mehr verwendet.
 
       Sie legt fest, ob die Erweiterung für domaingebundene TLS-Zertifikate aktiviert werden soll.
@@ -688,6 +704,7 @@ Falls die Richtlinie auf "false" gesetzt wird, kann eine verzögerungsfreie auto
 <translation id="2957506574938329824">Keine Website darf Zugriff auf Bluetooth-Geräte über die Web Bluetooth API anfordern</translation>
 <translation id="2957513448235202597">Kontotyp für die <ph name="HTTP_NEGOTIATE" />-Authentifizierung</translation>
 <translation id="2959898425599642200">Proxy-Umgehungsregeln</translation>
+<translation id="2960128438010718932">Staging-Zeitplan zum Anwenden eines neuen Updates</translation>
 <translation id="2960691910306063964">Authentifizierung ohne PIN für Hosts für den Remotezugriff aktivieren oder deaktivieren</translation>
 <translation id="2976002782221275500">Hiermit wird angegeben, nach welchem Zeitraum ohne Nutzereingabe der Bildschirm im Akkubetrieb abgedunkelt wird.
 
@@ -726,6 +743,7 @@ Ist die Richtlinie deaktiviert oder nicht konfiguriert, kann WebDriver nicht kom
       Unabhängig davon, ob und wie die Richtlinie festgelegt ist, kann die WPAD-Optimierung nicht von Nutzern verändert werden.</translation>
 <translation id="3072045631333522102">Bildschirmschoner für die Anmeldeseite im Händlermodus</translation>
 <translation id="3072847235228302527">Nutzungsbedingungen für ein lokales Gerätekonto festlegen</translation>
+<translation id="3077183141551274418">Aktiviert oder deaktiviert Tablebenszyklen</translation>
 <translation id="3086995894968271156">Konfigurieren von Cast Receiver in <ph name="PRODUCT_NAME" />.</translation>
 <translation id="3088796212846734853">Ermöglicht die Erstellung einer Liste mit URL-Mustern, die Websites angeben, denen das Anzeigen von Bildern gestattet ist.
 
@@ -1276,6 +1294,11 @@ Wenn die Richtlinie auf "FALSE" gesetzt oder nicht festgelegt wird, führt die T
       Diese Vorschläge werden per Fernzugriff von den Google-Servern abgerufen.
 
       Falls diese Einstellung auf "false" gesetzt ist, werden keine Vorschläge abgerufen oder angezeigt.</translation>
+<translation id="4788252609789586009">Aktiviert die AutoFill-Funktion von <ph name="PRODUCT_NAME" /> und ermöglicht es Nutzern, Kreditkarteninformationen in Webformularen automatisch mit zuvor gespeicherten Informationen ausfüllen zu lassen.
+
+      Wenn diese Einstellung deaktiviert ist, schlägt AutoFill weder Kreditkarteninformationen vor oder füllt sie automatisch aus noch werden zusätzliche Kreditkarteninformationen gespeichert, die der Nutzer während des Surfens im Web möglicherweise sendet.
+
+      Falls diese Einstellung aktiviert ist oder keinen Wert hat, kann der Nutzer die AutoFill-Funktion in der UI für Kreditkarten steuern.</translation>
 <translation id="4791031774429044540">Hiermit wird die Bedienungshilfefunktion für den großen Cursor aktiviert.
 
           Ist diese Richtlinie auf "true" gesetzt, ist der große Cursor immer aktiviert.
@@ -1313,6 +1336,7 @@ alle Proxy-Optionen, die in der Eingabeaufforderung angegeben werden.
 
       Werden diese Richtlinien weder festgelegt noch ausgefüllt, kann sich jeder Nutzer in <ph name="PRODUCT_NAME" /> anmelden.</translation>
 <translation id="4858735034935305895">Vollbildmodus zulassen</translation>
+<translation id="4861767323695239729">In einer Nutzersitzung zulässige Eingabemethoden konfigurieren</translation>
 <translation id="4869787217450099946">Gibt an, ob Bildschirm-Wakelocks zulässig sind. Bildschirm-Wakelocks können von Erweiterungen über die Power Management Extension API angefordert werden.
 
 Falls diese Richtlinie auf "true" gesetzt oder nicht festgelegt wird, werden Bildschirm-Wakelocks bei der Energieverwaltung zugelassen.
@@ -1400,6 +1424,11 @@ Falls die Richtlinie auf "false" gesetzt wird, werden Anfragen für Bildschirm-W
       Wenn für diese Richtlinie "True" festgelegt ist, verhindert <ph name="PRODUCT_OS_NAME" />, dass das Gerät im Entwicklermodus gestartet wird. Das System verweigert den Start und es wird ein Fehlerbildschirm angezeigt, wenn der Schalter für Entwickler aktiviert wird.
 
       Wird für diese Richtlinie "False" oder gar nichts festgelegt, bleibt der Entwicklermodus für das Gerät verfügbar.</translation>
+<translation id="520403427390290017">Die Funktion für Tablebenszyklen gibt CPU- und schließlich Speicherkapazitäten wieder frei, die gerade dafür genutzt werden, Tabs auszuführen, die lange nicht verwendet wurden. Dazu wird die Ausführung zuerst gedrosselt, dann angehalten und schließlich endgültig beendet.
+
+      Wenn die Richtlinie auf "false" gesetzt ist, sind Tablebenszyklen deaktiviert und alle Tabs werden weiter normal ausgeführt.
+
+      Falls die Richtlinie auf "true" gesetzt oder nicht konfiguriert ist, sind Tablebenszyklen aktiviert.</translation>
 <translation id="5208240613060747912">Ermöglicht Ihnen die Zusammenstellung einer Liste mit URL-Mustern, die Websites angeben, denen es nicht gestattet ist, Benachrichtigungen anzuzeigen. Wenn diese Richtlinie nicht konfiguriert ist, kommt für alle Websites entweder der globale Standardwert der Richtlinie "DefaultNotificationsSetting", sofern konfiguriert, oder der persönlichen Konfiguration des Nutzers zum Einsatz.</translation>
 <translation id="5219844027738217407">Bei Android-Apps betrifft diese Richtlinie nur das Mikrofon. Wenn diese Richtlinie auf "true" gesetzt ist, wird das Mikrofon ohne Ausnahme für alle Android-Apps stummgeschaltet.</translation>
 <translation id="523505283826916779">Zugänglichkeitseinstellungen</translation>
@@ -1445,6 +1474,11 @@ Falls die Richtlinie auf "false" gesetzt wird, werden Anfragen für Bildschirm-W
 
           Wird diese Richtlinie auf "false" gesetzt, ist es Nutzern nicht möglich, Inhalte auf ihr Gerät zu streamen. Wird diese Richtlinie auf "true" gesetzt, können Nutzer Inhalte streamen. Ist diese Richtlinie nicht definiert, so können Nutzer zwar keine Inhalte an angemeldete Chrome OS-Geräte streamen, aber an andere Geräte.</translation>
 <translation id="5330684698007383292">Verarbeitung der folgenden Inhaltstypen durch <ph name="PRODUCT_FRAME_NAME" /> zulassen</translation>
+<translation id="5360146044009867539">Aktiviert die AutoFill-Funktion von <ph name="PRODUCT_NAME" /> und ermöglicht es Nutzern, Profil- und Adressinformationen in Webformularen automatisch mit zuvor gespeicherten Informationen ausfüllen zu lassen.
+
+      Wenn diese Einstellung deaktiviert ist, schlägt AutoFill weder Adressinformationen vor oder füllt sie automatisch aus noch werden zusätzliche Adressinformationen gespeichert, die der Nutzer während des Surfens im Web möglicherweise sendet.
+
+      Falls diese Einstellung aktiviert ist oder keinen Wert hat, kann der Nutzer die AutoFill-Funktion in der UI für Adressen steuern.</translation>
 <translation id="5365946944967967336">Startseiten-Schaltfläche auf Symbolleiste anzeigen</translation>
 <translation id="5366745336748853475">Ermöglicht Ihnen die Zusammenstellung einer Liste mit URL-Mustern, die Websites angeben, für die auf dem Anmeldebildschirm im Frame, der den SAML-Flow hostet, automatisch ein Clientzertifikat ausgewählt wird, wenn die Website ein Zertifikat anfordert. Zum Beispiel kann damit ein geräteübergreifendes Zertifikat konfiguriert werden, das dem SAML IdP präsentiert wird.
 
@@ -1726,6 +1760,12 @@ Wenn diese Einstellung deaktiviert oder nicht konfiguriert ist, wird kein Proxy 
 <translation id="6155936611791017817">Standardstatus für den großen Cursor auf der Anmeldeseite festlegen</translation>
 <translation id="6157537876488211233">Kommagetrennte Liste der Proxy-Umgehungsregeln</translation>
 <translation id="6158324314836466367">Unternehmens-Web-Store-Name (veraltet)</translation>
+<translation id="6164955668342404660">Eingestellt in M69. Verwenden Sie stattdessen "OverrideSecurityRestrictionsOnInsecureOrigin".
+
+      Mit dieser Richtlinie wird eine Liste aller Quellen (URLs) festgelegt, die als sicherer Kontext eingestuft werden sollen. Auf diese Weise können Organisationen einen Testserver für interne Webentwicklungen einrichten, damit ihre Entwickler Funktionen testen können, die einen sicheren Kontext voraussetzen, ohne TLS auf dem Testserver bereitstellen zu müssen.
+      Das Festlegen einer Liste von URLs in dieser Richtlinie hat den gleichen Effekt wie das Festlegen des Befehlszeilenparameters "--unsafely-treat-insecure-origin-as-secure" für eine durch Kommas getrennte Liste mit denselben URLs. Ein Festlegen dieser Richtlinie überschreibt den Befehlszeilenparameter.
+      Weitere Informationen zu sicherem Kontext finden Sie unter https://www.w3.org/TR/secure-contexts/.
+      </translation>
 <translation id="6181608880636987460">Ermöglicht die Zusammenstellung einer Liste mit URL-Mustern, die Websites angeben, denen die Ausführung des Plug-ins "<ph name="FLASH_PLUGIN_NAME" />" nicht gestattet ist.
 
           Ist diese Richtlinie nicht festgelegt, kommt für alle Websites entweder der globale Standardwert der Richtlinie "DefaultPluginsSetting", sofern konfiguriert, oder die persönliche Konfiguration des Nutzers zum Einsatz.</translation>
@@ -1843,13 +1883,6 @@ Ein Teil der Proxyeinstellungen ist für Android-Apps verfügbar und kann auf fr
 
       Wenn diese Richtlinie nicht konfiguriert wird oder die Liste leer ist, sind alle Schemata in <ph name="PRODUCT_NAME" /> zugänglich.</translation>
 <translation id="6652197835259177259">Einstellungen für lokal verwaltete Nutzer</translation>
-<translation id="6654559957643809067">Diese Richtlinie aktiviert die Netzwerkvorhersage in <ph name="PRODUCT_NAME" /> und verhindert, dass die Einstellung von Nutzern geändert wird. 
-
-Hiermit werden DNS-Vorabruf, TCP- und SSL-Vorverbindung und das Pre-Rendering von Webseiten gesteuert. 
-
-Wenn Sie diese Einstellung auf "Immer", "Nie" oder "Nur WLAN" festlegen, können sie Nutzer in <ph name="PRODUCT_NAME" /> nicht ändern oder überschreiben. 
-
-Ist die Richtlinie nicht konfiguriert, wird die Netzwerkvorhersage aktiviert, kann jedoch vom Nutzer geändert werden. </translation>
 <translation id="6658245400435704251">Legt die Anzahl von Sekunden fest, die eine Verzögerung ab dem Übertragungszeitpunkt an den Server maximal betragen darf, wenn ein Gerät ein Update herunterlädt. Die Verzögerungszeit setzt sich aus der Istzeit und der auf die Anzahl der Überprüfungen auf Updates verwendeten Zeit zusammen. Die obere Grenze für den Streufaktor bildet ein konstanter Zeitraum, sodass ein Gerät nur eine begrenzte Zeit lang auf den Download eines Updates wartet.</translation>
 <translation id="6665670272107384733">Festlegen, wie oft der Nutzer das Passwort eingeben muss, um das schnelle Entsperren zu verwenden</translation>
 <translation id="6681229465468164801">Ermöglicht Ihnen die Erstellung einer Liste mit URL-Mustern. Den angegebenen Websites ist es nicht gestattet, Zugriff auf ein USB-Gerät anzufordern.
@@ -1864,6 +1897,7 @@ Ist die Richtlinie nicht konfiguriert, wird die Netzwerkvorhersage aktiviert, ka
       Wenn diese Richtlinie deaktiviert oder nicht konfiguriert ist, kommen nur die regulären lokalen Profile zum Einsatz.
 
       Durch die Richtlinie <ph name="SYNC_DISABLED_POLICY_NAME" /> wird die gesamte Datensynchronisierung deaktiviert und somit RoamingProfileSupportEnabled überschrieben.</translation>
+<translation id="6731757988219967594">Websites auf oberster Ebene (aber nicht eingebettete iFrames) mit Inhalten nur für Erwachsene filtern</translation>
 <translation id="6735701345096330595">Aktivierung von Sprachen für die Rechtschreibprüfung erzwingen</translation>
 <translation id="673699536430961464">Mit dieser Einstellung können Nutzer nach der Anmeldung auf ihrem <ph name="PRODUCT_OS_NAME" />-Gerät im Inhaltsbereich des Browserfensters zwischen Google-Konten wechseln.
 
@@ -1886,12 +1920,24 @@ Ist die Richtlinie nicht konfiguriert, wird die Netzwerkvorhersage aktiviert, ka
 <translation id="6757438632136860443">Ermöglicht die Zusammenstellung einer Liste mit URL-Mustern, die Websites angeben, denen die Ausführung des Plug-ins "<ph name="FLASH_PLUGIN_NAME" />" gestattet ist.
 
           Ist diese Richtlinie nicht festgelegt, kommt für alle Websites entweder der globale Standardwert der Richtlinie "DefaultPluginsSetting", sofern konfiguriert, oder die persönliche Konfiguration des Nutzers zum Einsatz.</translation>
+<translation id="6762235610019366960">Mit dieser Richtlinie wird festgelegt, ob in <ph name="PRODUCT_NAME" /> Werbung und/oder Bildungsinhalte auf einem ganzen Tab angezeigt werden dürfen.
+
+      Falls sie nicht konfiguriert oder aktiviert (auf "true" gesetzt) ist, dürfen Nutzern in <ph name="PRODUCT_NAME" /> Inhalte auf einem ganzen Tab angezeigt werden, um ihnen Produktinformationen zu geben.
+
+      Wenn sie deaktiviert (auf "false" festgelegt) ist, werden Nutzern in <ph name="PRODUCT_NAME" /> Inhalte nicht auf einem ganzen Tab angezeigt, um ihnen Produktinformationen zu geben.
+
+      Mit dieser Einstellung wird die Einblendung von Begrüßungsseiten konfiguriert, die Nutzern bei der Anmeldung in <ph name="PRODUCT_NAME" /> helfen, auf denen der Browser als Standardbrowser eingerichtet werden kann oder über die Nutzer über Produktfunktionen informiert werden.</translation>
 <translation id="6766216162565713893">Websites dürfen den Nutzer um Zugriff auf ein Bluetooth-Gerät in der Nähe bitten</translation>
 <translation id="6770454900105963262">Informationen zu aktiven Kiosksitzungen senden</translation>
 <translation id="6786747875388722282">Erweiterungen</translation>
 <translation id="6786967369487349613">Roaming-Profilverzeichnis festlegen</translation>
 <translation id="6810445994095397827">JavaScript auf diesen Websites blockieren</translation>
 <translation id="681446116407619279">Unterstützte Authentifizierungsschemas</translation>
+<translation id="6832455357698286434">
+      Mit dieser Richtlinie wird eine Liste aller Quellen (URLs) oder Hostnamenmuster (wie "*.example.com") festgelegt, die als sicherer Kontext eingestuft werden sollen. Auf diese Weise können Organisationen einen Testserver für interne Webentwicklungen einrichten, damit ihre Entwickler Funktionen testen können, die einen sicheren Kontext voraussetzen, ohne TLS auf dem Testserver bereitstellen zu müssen.
+      Das Festlegen einer Liste von URLs in dieser Richtlinie hat den gleichen Effekt wie das Festlegen des Befehlszeilenparameters "--unsafely-treat-insecure-origin-as-secure" für eine durch Kommas getrennte Liste mit denselben URLs. Ein Festlegen dieser Richtlinie überschreibt den Befehlszeilenparameter.
+      Weitere Informationen zu sicherem Kontext finden Sie unter https://www.w3.org/TR/secure-contexts/.
+      </translation>
 <translation id="6835883744948188639">Dem Nutzer eine wiederkehrende Aufforderung anzeigen, dass ein Neustart empfohlen wird</translation>
 <translation id="6838056959556423778">Überschreibt die Regeln von <ph name="PRODUCT_NAME" /> zur Auswahl des Standarddruckers.
 
@@ -2123,6 +2169,15 @@ Wird diese Richtlinie nicht konfiguriert, wird der standardmäßige Profilpfad v
 
           Bei Deaktivierung dieser Einstellung ist diese Funktion nicht verfügbar.</translation>
 <translation id="7275334191706090484">Verwaltete Lesezeichen</translation>
+<translation id="729492886167634859">Durch diese Richtlinie wird eine Liste mit Prozentwerten festgelegt, die angeben, welcher Anteil der <ph name="PRODUCT_OS_NAME" />-Geräte in der OE pro Woche aktualisiert werden, nachdem das Update entdeckt wurde. Der Abstand zwischen Entdeckungszeitpunkt und Veröffentlichungszeitpunkt hängt davon ab, wann das Gerät nach Updates sucht.
+
+      Der n-te Wert in der Liste gibt den Prozentsatz an Geräten an, die in der n-ten Woche, nachdem das Update entdeckt wurde, auf die nächste Version aktualisiert werden. Wenn zum Beispiel heute ein Update entdeckt wird, steht der erste Wert in der Liste für den Prozentsatz der Geräte in der OE, die bis heute in einer Woche auf diese Version aktualisiert werden sollen. Der zweite Wert gibt den Prozentsatz der Geräte in der OE an, die in der darauffolgenden zweiten Woche aktualisiert werden sollen, und so weiter.
+
+      Wenn für diese Richtlinie ein Wert festgelegt ist, folgen Updates dieser Richtlinie und ignorieren die Richtlinie <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" />.
+
+      Falls diese Liste leer ist, erfolgt kein Staging und Updates werden gemäß anderen Geräterichtlinien angewendet.
+
+      Diese Richtlinie gilt nicht für Kanalwechsel.</translation>
 <translation id="7295019613773647480">Betreute Nutzer aktivieren</translation>
 <translation id="7301543427086558500">Definiert eine Liste alternativer URLs, mit denen Suchbegriffe aus der Suchmaschine extrahiert werden können. Die URLs sollten den String <ph name="SEARCH_TERM_MARKER" /> enthalten, der zum Extrahieren der Suchbegriffe verwendet wird.
 
@@ -2199,17 +2254,6 @@ Wird diese Richtlinie nicht konfiguriert, wird der standardmäßige Profilpfad v
 <translation id="7511361072385293666">Wenn diese Richtlinie auf "true" eingestellt oder nicht konfiguriert ist, ist die Verwendung des QUIC-Protokolls in <ph name="PRODUCT_NAME" /> zulässig.
       Ist die Richtlinie auf "false" eingestellt, ist die Verwendung des QUIC-Protokolls nicht zulässig.</translation>
 <translation id="7519251620064708155">Schlüsselgenerierung auf diesen Websites zulassen</translation>
-<translation id="7529083451528428240">Ermöglicht, die Sitzung des Nutzers auf Grundlage der Clientzeit oder des Nutzungskontingents für den jeweiligen Tag zu sperren.
-
-          Das |time_window_limit| gibt ein tägliches Zeitfenster vor, in dem die Sitzung des Nutzers gesperrt sein soll. Wir unterstützen nur eine Regel für jeden Wochentag, weshalb die Größe der Matrix |entries| von 0 bis 7 reichen kann. |starts_at| und |ends_at| sind Anfang und Ende des Zeitfensters. Wenn |ends_at| kleiner ist als |starts_at|, bedeutet das, dass das |time_limit_window| am darauf folgenden Tag endet. |last_updated_millis| ist der UTC-Zeitstempel für die letzte Aktualisierung des Eintrags. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passen würde.
-
-          Das |time_usage_limit| stellt ein tägliches Nutzungslimit dar. Wenn der Nutzer es erreicht, wird seine Sitzung gesperrt. Für jeden Tag der Woche steht eine Eigenschaft zur Verfügung und diese sollte nur dann konfiguriert werden, wenn für diesen Tag ein aktives Limit vorliegt. |usage_quota_mins| ist der Zeitraum, über den das verwaltete Gerät an einem bestimmten Tag genutzt werden darf, und |reset_at| ist der Zeitpunkt, an dem das Kontingent erneuert wird. Der Standardwert für |reset_at| ist Mitternacht ({'hour': 0, 'minute': 0}). |last_updated_millis| ist der UTC-Zeitstempel für die letzte Aktualisierung des Eintrags. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passen würde.
-
-          Mit |overrides| können die genannten Regeln vorübergehend außer Kraft gesetzt werden.
-          * Wenn weder "time_window_limit" noch "time_usage_limit" aktiv sind, kann |LOCK| zur Sperrung des Geräts verwendet werden.
-          * Mit |LOCK| wird eine Nutzersitzung vorübergehend gesperrt, bis das nächste "time_window_limit" oder "time_usage_limit" beginnt.
-          * Mit |UNLOCK| wird eine durch "time_window_limit" oder "time_usage_limit" gesperrte Sitzung entsperrt.
-          |created_time_millis| ist der UTC-Zeitstempel für die Erstellung der Außerkraftsetzung. Er wird als String gesendet, da ein Zeitstempel nicht in eine ganze Zahl passen würde. Mit ihm wird festgestellt, ob diese Außerkraftsetzung weiterhin angewendet werden soll. Wenn das aktuelle aktive Zeitlimit (Nutzungszeitlimit oder Zeitfensterlimit) gestartet wurde, nachdem die Außerkraftsetzung erfolgt ist, sollte sie keine Auswirkungen haben. Entsprechend gilt: Wenn die Außerkraftsetzung vor der letzten Änderung des aktiven "time_window_limit" oder "time_usage_window" erstellt wurde, sollte sie nicht angewendet werden.</translation>
 <translation id="7529100000224450960">Ermöglicht Ihnen die Zusammenstellung einer Liste mit URL-Mustern, die Websites angeben, denen das Öffnen von Pop-ups gestattet ist. Wenn diese Richtlinie nicht konfiguriert ist, so kommt für alle Websites entweder der globale Standardwert der Richtlinie "DefaultPopupsSetting", sofern konfiguriert, oder der persönlichen Konfiguration des Nutzers zum Einsatz.</translation>
 <translation id="7529144158022474049">Streufaktor automatisch aktualisieren</translation>
 <translation id="7534199150025803530">Diese Richtlinie hat keine Auswirkungen auf die Android Google Drive App. Wenn Sie die Nutzung von Google Drive über Mobilfunkverbindungen verhindern möchten, sollten Sie das Installieren der Android Google Drive App nicht zulassen.</translation>
@@ -2244,6 +2288,7 @@ Wird diese Richtlinie nicht konfiguriert, wird der standardmäßige Profilpfad v
 <translation id="7617319494457709698">Mit dieser Richtlinie wird festgelegt, welche Erweiterungen zum Zweck der Remote-Bestätigung mithilfe der <ph name="CHALLENGE_USER_KEY_FUNCTION" /> die <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> verwenden dürfen. Damit eine Erweiterung die API verwenden darf, muss sie zu dieser Liste hinzugefügt werden.
 
           Wenn eine Erweiterung nicht in der Liste enthalten ist oder keine Liste festgelegt wurde, treten beim API-Aufruf Fehler auf und ein Fehlercode wird angezeigt.</translation>
+<translation id="7620300057302654932">Quellen oder Hostnamenmuster als sicheren Kontext einstufen.</translation>
 <translation id="7625444193696794922">Gibt den Release-Kanal an, an den dieses Gerät gebunden werden soll.</translation>
 <translation id="7632724434767231364">Name der GSSAPI-Bibliothek</translation>
 <translation id="7635471475589566552">Konfiguriert das App-Gebietsschema in <ph name="PRODUCT_NAME" /> und verhindert, dass Nutzer das Gebietsschema ändern. Wenn Sie diese Einstellung aktivieren, verwendet <ph name="PRODUCT_NAME" /> das angegebene Gebietsschema. Wird das konfigurierte Gebietsschema nicht unterstützt, kommt stattdessen "en-US" zum Einsatz. Ist diese Einstellung deaktiviert oder nicht konfiguriert, verwendet <ph name="PRODUCT_NAME" /> das vom Nutzer angegebene bevorzugte Gebietsschema (sofern konfiguriert), das Gebietsschema des Systems oder das Ersatz-Gebietsschema "en-US".</translation>
@@ -2575,6 +2620,12 @@ Diese Außerkraftsetzung soll in Zukunft beseitigt werden.</translation>
 
           Beispielmuster finden Sie unter https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8493645415242333585">Speichern des Browserverlaufs deaktivieren</translation>
+<translation id="8498293625012059298">Mit dieser Richtlinie wird die URL zur Passwortänderung konfiguriert (nur HTTP- und HTTPS-Schemas). Nutzer, in deren Browser eine Warnung angezeigt wurde, werden vom Passwortschutzdienst an diese URL weitergeleitet, damit sie ihr Passwort ändern können.
+      Ihre Anmeldeseiten müssen den Richtlinien unter https://www.chromium.org/developers/design-documents/create-amazing-password-forms entsprechen, damit Fingerabdrücke zur Autorisierung in <ph name="PRODUCT_NAME" /> richtig erfasst werden können.
+
+      Wenn diese Einstellung aktiviert ist, leitet der Passwortschutzdienst Nutzer, in deren Browser eine Warnung angezeigt wurde, an diese URL weiter, damit sie ihr Passwort ändern können.
+      Falls diese Einstellung deaktiviert oder nicht konfiguriert ist, leitet der Passwortschutzdienst Nutzer an https://myaccounts.google.com weiter, damit sie ihr Passwort ändern können.
+      Diese Richtlinie ist nur in Windows-Instanzen verfügbar, die mit einer <ph name="MS_AD_NAME" />-Domain verbunden sind.</translation>
 <translation id="8499172469244085141">Standardeinstellungen (können vom Nutzer überschrieben werden)</translation>
 <translation id="8507835864888987300">Legt eine Zielversion für automatische Aktualisierungen fest.
 
@@ -2628,6 +2679,14 @@ Diese Außerkraftsetzung soll in Zukunft beseitigt werden.</translation>
       Wird diese Richtlinie auf "false" geändert, wirkt sich dies nur auf den Start neuer virtueller Maschinen aus. Virtuelle Maschinen, die bereits laufen, werden davon nicht beendet.
       Ist diese Richtlinie auf einem verwalteten Gerät nicht konfiguriert, darf das Gerät virtuelle Maschinen nicht ausführen.
       Auf nicht verwalteten Geräten dürfen virtuelle Maschinen ausgeführt werden.</translation>
+<translation id="8669669491594628013">Mit dieser Richtlinie können Sie die Auslösung der Passwortschutzwarnung steuern. Durch diese Meldung werden Nutzer gewarnt, wenn sie ihr geschütztes Passwort auf potenziell verdächtigen Websites wiederverwenden.
+
+      Mithilfe der Richtlinien "PasswordProtectionLoginURLs" und "PasswordProtectionChangePasswordURL" können Sie konfigurieren, welches Passwort geschützt werden soll.
+
+      Wenn diese Richtlinie auf "PasswordProtectionWarningOff" gesetzt ist, wird keine Passwortschutzwarnung angezeigt.
+      Ist diese Richtlinie auf "PasswordProtectionWarningOnPasswordReuse" eingestellt, wird die Passwortschutzwarnung angezeigt, falls der Nutzer sein geschütztes Passwort auf einer Website wiederverwendet, die nicht auf der weißen Liste steht.
+      Falls diese Richtlinie auf "PasswordProtectionWarningOnPhishingReuse" gesetzt ist, wird die Passwortschutzwarnung angezeigt, wenn der Nutzer sein geschütztes Passwort auf einer Phishingwebsite wiederverwendet.
+      Ist diese Richtlinie nicht konfiguriert, schützt der Passwortschutzdienst nur Google-Passwörter, aber der Nutzer kann diese Einstellung ändern.</translation>
 <translation id="8672321184841719703">Automatische Aktualisierung auf Zielversion</translation>
 <translation id="867410340948518937">U2F (Universal Second Factor)</translation>
 <translation id="8685024486845674965">Die Passwortschutzwarnung wird durch die Wiederverwendung eines Passworts ausgelöst</translation>
@@ -2690,11 +2749,6 @@ Diese Außerkraftsetzung soll in Zukunft beseitigt werden.</translation>
       Wenn die Einstellung nicht konfiguriert ist, kann der Nutzer entscheiden, ob er die Funktion in Anspruch nehmen möchte oder nicht.</translation>
 <translation id="8870318296973696995">Startseite</translation>
 <translation id="8882006618241293596">Das Plug-in "<ph name="FLASH_PLUGIN_NAME" />" auf diesen Websites blockieren</translation>
-<translation id="8894962626537183708">
-      Mit dieser Richtlinie wird eine Liste aller Quellen (URLs) festgelegt, die als sicherer Kontext eingestuft werden sollen. Auf diese Weise können Organisationen einen Testserver für interne Webentwicklung einrichten, damit ihre Entwickler Funktionen testen können, die einen sicheren Quellenkontext voraussetzen, ohne TLS auf dem Testserver bereitstellen zu müssen.
-      Das Festlegen einer Liste von URLs in dieser Richtlinie hat den gleichen Effekt wie das Festlegen des Befehlszeilenparameters "--unsafely-treat-insecure-origin-as-secure" für eine durch Kommas getrennte Liste mit denselben URLs. Wenn die Richtlinie festgelegt wird, wird der Befehlszeilenparameter überschrieben.
-      Weitere Informationen zu sicherem Kontext finden Sie unter https://www.w3.org/TR/secure-contexts/.
-      </translation>
 <translation id="890403179930035128">Erzwingt die Aktivierung von Sprachen für die Rechtschreibprüfung. Sprachen in dieser Liste, die nicht erkannt werden, werden ignoriert.
 
       Wenn diese Richtlinie aktiviert wird, wird die Rechtschreibprüfung für die angegebenen Sprachen aktiviert, zusätzlich zu den Sprachen, für die der Nutzer die Rechtschreibprüfung aktiviert hat.

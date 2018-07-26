@@ -46,7 +46,7 @@ AppListControllerImpl::AppListControllerImpl()
 
   // Create only for non-mash. Mash uses window tree embed API to get a
   // token to map answer card contents.
-  if (Shell::GetAshConfig() != Config::MASH) {
+  if (Shell::GetAshConfig() != Config::MASH_DEPRECATED) {
     answer_card_contents_registry_ =
         std::make_unique<app_list::AnswerCardContentsRegistry>();
   }
@@ -93,20 +93,19 @@ app_list::SearchModel* AppListControllerImpl::GetSearchModel() {
 
 void AppListControllerImpl::AddItem(AppListItemMetadataPtr item_data) {
   const std::string folder_id = item_data->folder_id;
-  if (folder_id.empty()) {
+  if (folder_id.empty())
     model_.AddItem(CreateAppListItem(std::move(item_data)));
-  } else {
-    // When we're setting a whole model of a profile, each item may have its
-    // folder id set properly. However, |AppListModel::AddItemToFolder| requires
-    // the item to add is not in the target folder yet, and sets its folder id
-    // later. So we should clear the folder id here to avoid breaking checks.
-    item_data->folder_id.clear();
+  else
     AddItemToFolder(std::move(item_data), folder_id);
-  }
 }
 
 void AppListControllerImpl::AddItemToFolder(AppListItemMetadataPtr item_data,
                                             const std::string& folder_id) {
+  // When we're setting a whole model of a profile, each item may have its
+  // folder id set properly. However, |AppListModel::AddItemToFolder| requires
+  // the item to add is not in the target folder yet, and sets its folder id
+  // later. So we should clear the folder id here to avoid breaking checks.
+  item_data->folder_id.clear();
   model_.AddItemToFolder(CreateAppListItem(std::move(item_data)), folder_id);
 }
 
@@ -467,12 +466,14 @@ void AppListControllerImpl::OnTabletModeStarted() {
     return;
   }
 
-  if (!is_home_launcher_enabled_ || !display::Display::HasInternalDisplay() ||
-      (Shell::Get()->session_controller() &&
-       Shell::Get()->session_controller()->login_status() !=
-           LoginStatus::USER)) {
+  if (!is_home_launcher_enabled_ || !display::Display::HasInternalDisplay())
     return;
-  }
+
+  SessionController const* session_controller =
+      Shell::Get()->session_controller();
+  if (session_controller && !session_controller->IsActiveUserSessionStarted())
+    return;
+
   // Show the app list if the tablet mode starts.
   Show(display::Display::InternalDisplayId(), app_list::kTabletMode,
        base::TimeTicks());

@@ -17,10 +17,13 @@
 #include "base/gtest_prod_util.h"
 #include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/observer_list.h"
+#include "base/optional.h"
 #include "content/browser/background_fetch/background_fetch.pb.h"
 #include "content/browser/background_fetch/background_fetch_registration_id.h"
 #include "content/browser/background_fetch/background_fetch_scheduler.h"
 #include "content/browser/background_fetch/storage/database_task.h"
+#include "content/browser/background_fetch/storage/get_initialization_data_task.h"
 #include "content/browser/cache_storage/cache_storage_context_impl.h"
 #include "content/common/content_export.h"
 #include "third_party/blink/public/platform/modules/background_fetch/background_fetch.mojom.h"
@@ -32,7 +35,9 @@ class BlobDataHandle;
 
 namespace content {
 
+class BackgroundFetchDataManagerObserver;
 class BackgroundFetchRequestInfo;
+class BackgroundFetchRequestMatchParams;
 struct BackgroundFetchSettledFetch;
 class BrowserContext;
 class CacheStorageManager;
@@ -54,17 +59,17 @@ class CONTENT_EXPORT BackgroundFetchDataManager
     : public BackgroundFetchScheduler::RequestProvider,
       public background_fetch::DatabaseTaskHost {
  public:
+  using GetInitializationDataCallback = base::OnceCallback<void(
+      blink::mojom::BackgroundFetchError,
+      std::vector<background_fetch::BackgroundFetchInitializationData>)>;
   using SettledFetchesCallback = base::OnceCallback<void(
       blink::mojom::BackgroundFetchError,
       bool /* background_fetch_succeeded */,
       std::vector<BackgroundFetchSettledFetch>,
       std::vector<std::unique_ptr<storage::BlobDataHandle>>)>;
-  using GetMetadataCallback =
-      base::OnceCallback<void(blink::mojom::BackgroundFetchError,
-                              std::unique_ptr<proto::BackgroundFetchMetadata>)>;
   using GetRegistrationCallback =
       base::OnceCallback<void(blink::mojom::BackgroundFetchError,
-                              std::unique_ptr<BackgroundFetchRegistration>)>;
+                              const BackgroundFetchRegistration&)>;
   using NextRequestCallback =
       base::OnceCallback<void(scoped_refptr<BackgroundFetchRequestInfo>)>;
   using NumRequestsCallback = base::OnceCallback<void(size_t)>;
@@ -72,13 +77,21 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   BackgroundFetchDataManager(
       BrowserContext* browser_context,
       scoped_refptr<ServiceWorkerContextWrapper> service_worker_context,
-      scoped_refptr<CacheStorageContextImpl> cache_storage_context,
-      const base::RepeatingClosure& abandon_fetches_callback);
+      scoped_refptr<CacheStorageContextImpl> cache_storage_context);
 
   ~BackgroundFetchDataManager() override;
 
   // Grabs a reference to CacheStorageManager.
   virtual void InitializeOnIOThread();
+
+  // Adds or removes the given |observer| to this data manager instance.
+  void AddObserver(BackgroundFetchDataManagerObserver* observer);
+  void RemoveObserver(BackgroundFetchDataManagerObserver* observer);
+
+  // Gets the required data to initialize BackgroundFetchContext with the
+  // appropriate JobControllers. This will be called when BackgroundFetchContext
+  // is being intialized on the IO thread.
+  void GetInitializationData(GetInitializationDataCallback callback);
 
   // Creates and stores a new registration with the given properties. Will
   // invoke the |callback| when the registration has been created, which may
@@ -90,12 +103,6 @@ class CONTENT_EXPORT BackgroundFetchDataManager
       const SkBitmap& icon,
       GetRegistrationCallback callback);
 
-  // Get the BackgroundFetchMetadata.
-  void GetMetadata(int64_t service_worker_registration_id,
-                   const url::Origin& origin,
-                   const std::string& developer_id,
-                   GetMetadataCallback callback);
-
   // Get the BackgroundFetchRegistration.
   void GetRegistration(int64_t service_worker_registration_id,
                        const url::Origin& origin,
@@ -105,14 +112,17 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   // Updates the UI values for a Background Fetch registration.
   void UpdateRegistrationUI(
       const BackgroundFetchRegistrationId& registration_id,
-      const std::string& title,
+      const base::Optional<std::string>& title,
+      const base::Optional<SkBitmap>& icon,
       blink::mojom::BackgroundFetchService::UpdateUICallback callback);
 
-  // Reads all settled fetches for the given |registration_id|. Both the Request
-  // and Response objects will be initialised based on the stored data. Will
-  // invoke the |callback| when the list of fetches has been compiled.
+  // Reads the settled fetches for the given |registration_id| based on
+  // |match_params|. Both the Request and Response objects will be initialised
+  // based on the stored data. Will invoke the |callback| when the list of
+  // fetches has been compiled.
   void GetSettledFetchesForRegistration(
       const BackgroundFetchRegistrationId& registration_id,
+      std::unique_ptr<BackgroundFetchRequestMatchParams> match_params,
       SettledFetchesCallback callback);
 
   // Marks that the backgroundfetched/backgroundfetchfail/backgroundfetchabort
@@ -143,14 +153,8 @@ class CONTENT_EXPORT BackgroundFetchDataManager
       const url::Origin& origin,
       blink::mojom::BackgroundFetchService::GetDeveloperIdsCallback callback);
 
-  // Gets the number of fetch requests that have been completed for a given
-  // registration.
-  void GetNumCompletedRequests(
-      const BackgroundFetchRegistrationId& registration_id,
-      NumRequestsCallback callback);
-
-  const base::RepeatingClosure& abandon_fetches_callback() {
-    return abandon_fetches_callback_;
+  const base::ObserverList<BackgroundFetchDataManagerObserver>& observers() {
+    return observers_;
   }
 
   // BackgroundFetchScheduler::RequestProvider implementation:
@@ -185,10 +189,10 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   }
 
   void AddStartNextPendingRequestTask(
-      int64_t service_worker_registration_id,
+      const BackgroundFetchRegistrationId& registration_id,
       NextRequestCallback callback,
       blink::mojom::BackgroundFetchError error,
-      std::unique_ptr<proto::BackgroundFetchMetadata> metadata);
+      const BackgroundFetchRegistration& registration);
 
   void AddDatabaseTask(std::unique_ptr<background_fetch::DatabaseTask> task);
 
@@ -216,16 +220,13 @@ class CONTENT_EXPORT BackgroundFetchDataManager
   // Invariant: the frontmost task, if any, has already been started.
   base::queue<std::unique_ptr<background_fetch::DatabaseTask>> database_tasks_;
 
+  base::ObserverList<BackgroundFetchDataManagerObserver> observers_;
+
   // The |unique_id|s of registrations that have been deactivated since the
   // browser was last started. They will be automatically deleted when the
   // refcount of JavaScript objects that refers to them goes to zero, unless
   // the browser is shutdown first.
   std::set<std::string> ref_counted_unique_ids_;
-
-  // This is called to abandon all ongoing fetches. It will also mark these
-  // fetches for deletion, which will be cleaned up by the Cleanup task
-  // subsequently.
-  base::RepeatingClosure abandon_fetches_callback_;
 
   base::WeakPtrFactory<BackgroundFetchDataManager> weak_ptr_factory_;
 

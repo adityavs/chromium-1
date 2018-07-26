@@ -32,6 +32,7 @@
 #include "third_party/blink/renderer/core/geometry/dom_rect_read_only.h"
 #include "third_party/blink/renderer/core/html/canvas/image_data.h"
 #include "third_party/blink/renderer/core/typed_arrays/dom_array_buffer_base.h"
+#include "third_party/blink/renderer/platform/file_metadata.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/blink/renderer/platform/wtf/date_math.h"
 #include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
@@ -55,10 +56,9 @@ namespace blink {
 // made to how Blink writes data. Purely V8-side changes do not require an
 // adjustment to this value.
 
-V8ScriptValueSerializer::V8ScriptValueSerializer(
-    scoped_refptr<ScriptState> script_state,
-    const Options& options)
-    : script_state_(std::move(script_state)),
+V8ScriptValueSerializer::V8ScriptValueSerializer(ScriptState* script_state,
+                                                 const Options& options)
+    : script_state_(script_state),
       serialized_script_value_(SerializedScriptValue::Create()),
       serializer_(script_state_->GetIsolate(), this),
       transferables_(options.transferables),
@@ -120,7 +120,7 @@ void V8ScriptValueSerializer::PrepareTransfer(ExceptionState& exception_state) {
   for (uint32_t i = 0; i < transferables_->array_buffers.size(); i++) {
     DOMArrayBufferBase* array_buffer = transferables_->array_buffers[i].Get();
     if (!array_buffer->IsShared()) {
-      v8::Local<v8::Value> wrapper = ToV8(array_buffer, script_state_.get());
+      v8::Local<v8::Value> wrapper = ToV8(array_buffer, script_state_);
       serializer_.TransferArrayBuffer(
           i, v8::Local<v8::ArrayBuffer>::Cast(wrapper));
     } else {
@@ -582,8 +582,8 @@ void* V8ScriptValueSerializer::ReallocateBufferMemory(void* old_buffer,
                                                       size_t size,
                                                       size_t* actual_size) {
   *actual_size = WTF::Partitions::BufferActualSize(size);
-  return WTF::Partitions::BufferRealloc(old_buffer, *actual_size,
-                                        "SerializedScriptValue buffer");
+  return WTF::Partitions::BufferTryRealloc(old_buffer, *actual_size,
+                                           "SerializedScriptValue buffer");
 }
 
 void V8ScriptValueSerializer::FreeBufferMemory(void* buffer) {

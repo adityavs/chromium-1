@@ -10,36 +10,23 @@
 #include "base/macros.h"
 #include "base/time/time.h"
 #include "chrome/browser/vr/vr_export.h"
+#include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/vector2d_f.h"
-
-namespace blink {
-class WebGestureEvent;
-}
 
 namespace vr {
 
-using GestureList = std::vector<std::unique_ptr<blink::WebGestureEvent>>;
+class InputEvent;
+class PlatformController;
 
-struct TouchPoint {
-  gfx::Vector2dF position;
-  base::TimeTicks timestamp;
-};
-
-struct TouchInfo {
-  TouchPoint touch_point;
-  bool touch_up;
-  bool touch_down;
-  bool is_touching;
-};
+using InputEventList = std::vector<std::unique_ptr<InputEvent>>;
 
 class VR_EXPORT GestureDetector {
  public:
   GestureDetector();
   virtual ~GestureDetector();
 
-  std::unique_ptr<GestureList> DetectGestures(const TouchInfo& touch_info,
-                                              base::TimeTicks current_timestamp,
-                                              bool force_cancel);
+  InputEventList DetectGestures(const PlatformController& controller,
+                                base::TimeTicks current_timestamp);
 
  private:
   enum GestureDetectorStateLabel {
@@ -47,6 +34,11 @@ class VR_EXPORT GestureDetector {
     TOUCHING,    // touching the touch pad but not scrolling
     SCROLLING,   // scrolling on the touch pad
     POST_SCROLL  // scroll has finished and we are hallucinating events
+  };
+
+  struct TouchPoint {
+    gfx::PointF position;
+    base::TimeTicks timestamp;
   };
 
   struct GestureDetectorState {
@@ -60,52 +52,54 @@ class VR_EXPORT GestureDetector {
     gfx::Vector2dF displacement;
   };
 
-  std::unique_ptr<blink::WebGestureEvent> GetGestureFromTouchInfo(
-      const TouchInfo& input_touch_info,
-      bool force_cancel,
-      base::TimeTicks current_timestamp);
+  void DetectMenuButtonGestures(InputEventList* event_list,
+                                const PlatformController& controller,
+                                base::TimeTicks current_timestamp);
 
-  void HandleWaitingState(const TouchInfo& touch_info,
-                          blink::WebGestureEvent* gesture);
-  void HandleDetectingState(const TouchInfo& touch_info,
-                            bool force_cancel,
-                            blink::WebGestureEvent* gesture);
-  void HandleScrollingState(const TouchInfo& touch_info,
-                            bool force_cancel,
-                            base::TimeTicks current_timestamp,
-                            blink::WebGestureEvent* gesture);
-  void HandlePostScrollingState(const TouchInfo& touch_info,
-                                bool force_cancel,
-                                base::TimeTicks current_timestamp,
-                                blink::WebGestureEvent* gesture);
+  std::unique_ptr<InputEvent> GetGestureFromTouchInfo(
+      const TouchPoint& touch_point);
 
-  void UpdateGestureWithScrollDelta(blink::WebGestureEvent* gesture,
-                                    base::TimeTicks current_timestamp);
+  std::unique_ptr<InputEvent> HandleWaitingState(const TouchPoint& touch_point);
+  std::unique_ptr<InputEvent> HandleDetectingState(
+      const TouchPoint& touch_point);
+  std::unique_ptr<InputEvent> HandleScrollingState(
+      const TouchPoint& touch_point);
+  std::unique_ptr<InputEvent> HandlePostScrollingState(
+      const TouchPoint& touch_point);
+
+  void UpdateGestureWithScrollDelta(InputEvent* gesture);
 
   // If the user is touching the touch pad and the touch point is different from
   // before, update the touch point and return true. Otherwise, return false.
-  bool UpdateCurrentTouchPoint(const TouchInfo& touch_info);
+  bool UpdateCurrentTouchPoint(const PlatformController& controller);
 
-  void ExtrapolateTouchInfo(TouchInfo* touch_info,
-                            base::TimeTicks current_timestamp);
+  void ExtrapolateTouchPoint(TouchPoint* touch_point,
+                             base::TimeTicks current_timestamp);
 
-  void UpdateOverallVelocity(const TouchInfo& touch_info);
+  void UpdateOverallVelocity(const TouchPoint& touch_info);
 
-  void UpdateGestureParameters(const TouchInfo& touch_info);
+  void UpdateGestureParameters(const TouchPoint& touch_info);
 
-  bool InSlop(const gfx::Vector2dF touch_position) const;
+  bool InSlop(const gfx::PointF touch_position) const;
 
   void Reset();
 
   std::unique_ptr<GestureDetectorState> state_;
+
+  bool is_select_button_pressed_ = false;
+  bool is_touching_trackpad_ = false;
 
   // Number of consecutively extrapolated touch points
   int extrapolated_touch_ = 0;
 
   base::TimeTicks last_touch_timestamp_;
   base::TimeTicks last_timestamp_;
+  bool last_touching_state_ = false;
 
   bool touch_position_changed_;
+
+  base::TimeTicks menu_button_down_timestamp_;
+  bool menu_button_long_pressed_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(GestureDetector);
 };

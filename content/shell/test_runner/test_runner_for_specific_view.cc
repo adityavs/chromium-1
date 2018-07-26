@@ -34,7 +34,7 @@
 #include "gin/wrappable.h"
 #include "third_party/blink/public/mojom/frame/find_in_page.mojom.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_registration.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_registration.h"
 #include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/platform/web_point.h"
 #include "third_party/blink/public/platform/web_url_response.h"
@@ -313,8 +313,8 @@ void TestRunnerForSpecificView::GetBluetoothManualChooserEvents(
   return delegate()->GetBluetoothManualChooserEvents(base::BindOnce(
       &TestRunnerForSpecificView::GetBluetoothManualChooserEventsCallback,
       weak_factory_.GetWeakPtr(),
-      base::Passed(v8::UniquePersistent<v8::Function>(
-          blink::MainThreadIsolate(), callback))));
+      v8::UniquePersistent<v8::Function>(blink::MainThreadIsolate(),
+                                         callback)));
 }
 
 void TestRunnerForSpecificView::GetBluetoothManualChooserEventsCallback(
@@ -390,8 +390,8 @@ void TestRunnerForSpecificView::DispatchBeforeInstallPromptEvent(
       base::BindOnce(
           &TestRunnerForSpecificView::DispatchBeforeInstallPromptCallback,
           weak_factory_.GetWeakPtr(),
-          base::Passed(v8::UniquePersistent<v8::Function>(
-              blink::MainThreadIsolate(), callback))));
+          v8::UniquePersistent<v8::Function>(blink::MainThreadIsolate(),
+                                             callback)));
 }
 
 void TestRunnerForSpecificView::DispatchBeforeInstallPromptCallback(

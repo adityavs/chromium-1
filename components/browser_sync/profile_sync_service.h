@@ -41,7 +41,6 @@
 #include "components/sync/engine/sync_engine.h"
 #include "components/sync/engine/sync_engine_host.h"
 #include "components/sync/js/sync_js_controller.h"
-#include "components/sync/model/model_type_store.h"
 #include "components/version_info/version_info.h"
 #include "google_apis/gaia/google_service_auth_error.h"
 #include "url/gurl.h"
@@ -213,12 +212,11 @@ class ProfileSyncService : public syncer::SyncService,
     GaiaCookieManagerService* gaia_cookie_manager_service = nullptr;
     StartBehavior start_behavior = MANUAL_START;
     syncer::NetworkTimeUpdateCallback network_time_update_callback;
-    base::FilePath base_directory;
     scoped_refptr<net::URLRequestContextGetter> url_request_context;
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory;
     std::string debug_identifier;
     version_info::Channel channel = version_info::Channel::UNKNOWN;
-    syncer::RepeatingModelTypeStoreFactory model_type_store_factory;
+    bool user_events_separate_pref_group = false;
 
    private:
     DISALLOW_COPY_AND_ASSIGN(InitParams);
@@ -236,12 +234,9 @@ class ProfileSyncService : public syncer::SyncService,
   int GetDisableReasons() const override;
   State GetState() const override;
   bool IsFirstSetupComplete() const override;
-  bool IsSyncAllowed() const override;
-  bool IsSyncActive() const override;
   bool IsLocalSyncEnabled() const override;
   void TriggerRefresh(const syncer::ModelTypeSet& types) override;
   void OnDataTypeRequestsSyncStartup(syncer::ModelType type) override;
-  bool CanSyncStart() const override;
   void RequestStop(SyncStopDataFate data_fate) override;
   void RequestStart() override;
   syncer::ModelTypeSet GetActiveDataTypes() const override;
@@ -253,14 +248,10 @@ class ProfileSyncService : public syncer::SyncService,
   void OnUserChoseDatatypes(bool sync_everything,
                             syncer::ModelTypeSet chosen_types) override;
   void SetFirstSetupComplete() override;
-  bool IsFirstSetupInProgress() const override;
   std::unique_ptr<syncer::SyncSetupInProgressHandle> GetSetupInProgressHandle()
       override;
   bool IsSetupInProgress() const override;
-  bool ConfigurationDone() const override;
   const GoogleServiceAuthError& GetAuthError() const override;
-  bool HasUnrecoverableError() const override;
-  bool IsEngineInitialized() const override;
   sync_sessions::OpenTabsUIDelegate* GetOpenTabsUIDelegate() override;
   bool IsPassphraseRequiredForDecryption() const override;
   base::Time GetExplicitPassphraseTime() const override;
@@ -278,10 +269,8 @@ class ProfileSyncService : public syncer::SyncService,
       const override;
   void ReenableDatatype(syncer::ModelType type) override;
   syncer::SyncTokenStatus GetSyncTokenStatus() const override;
-  std::string QuerySyncStatusSummaryString() override;
-  bool QueryDetailedSyncStatus(syncer::SyncStatus* result) override;
+  bool QueryDetailedSyncStatus(syncer::SyncStatus* result) const override;
   base::Time GetLastSyncedTime() const override;
-  std::string GetEngineInitializationStateString() const override;
   syncer::SyncCycleSnapshot GetLastCycleSnapshot() const override;
   std::unique_ptr<base::Value> GetTypeStatusMap() override;
   const GURL& sync_service_url() const override;
@@ -441,6 +430,9 @@ class ProfileSyncService : public syncer::SyncService,
   syncer::SyncErrorController* sync_error_controller() {
     return sync_error_controller_.get();
   }
+  const syncer::SyncErrorController* sync_error_controller() const {
+    return sync_error_controller_.get();
+  }
 
   // KeyedService implementation.  This must be called exactly
   // once (before this object is destroyed).
@@ -469,14 +461,6 @@ class ProfileSyncService : public syncer::SyncService,
   // Set the provider for whether sync is currently allowed by the platform.
   void SetPlatformSyncAllowedProvider(
       const PlatformSyncAllowedProvider& platform_sync_allowed_provider);
-
-  // Returns a function  that will create a ModelTypeStore that shares
-  // the sync LevelDB backend. |base_path| should be set to profile path.
-  static syncer::RepeatingModelTypeStoreFactory GetModelTypeStoreFactory(
-      const base::FilePath& base_path);
-
-  // Needed to test whether the directory is deleted properly.
-  base::FilePath GetDirectoryPathForTest() const;
 
   // Sometimes we need to wait for tasks on the sync thread in tests.
   base::MessageLoop* GetSyncLoopForTest() const;
@@ -638,15 +622,15 @@ class ProfileSyncService : public syncer::SyncService,
   // The product channel of the embedder.
   const version_info::Channel channel_;
 
-  // The path to the base directory under which sync should store its
-  // information.
-  const base::FilePath base_directory_;
-
   // An identifier representing this instance for debugging purposes.
   const std::string debug_identifier_;
 
   // This specifies where to find the sync server.
   const GURL sync_service_url_;
+
+  // Whether USER_EVENTS model type has a separate pref group instead of
+  // being bundled with the TYPED_URLS model type.
+  const bool user_events_separate_pref_group_;
 
   // A utility object containing logic and state relating to encryption. It is
   // never null.
@@ -771,12 +755,6 @@ class ProfileSyncService : public syncer::SyncService,
   // An object that lets us check whether sync is currently allowed on this
   // platform.
   PlatformSyncAllowedProvider platform_sync_allowed_provider_;
-
-  // The factory used to initialize the ModelTypeStore passed to
-  // sync bridges created by the ProfileSyncService. The default factory
-  // creates an on disk leveldb-backed ModelTypeStore; one might override this
-  // default to, e.g., use an in-memory db for unit tests.
-  syncer::RepeatingModelTypeStoreFactory model_type_store_factory_;
 
   // This weak factory invalidates its issued pointers when Sync is disabled.
   base::WeakPtrFactory<ProfileSyncService> sync_enabled_weak_factory_;

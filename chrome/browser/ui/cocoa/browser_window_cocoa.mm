@@ -318,7 +318,7 @@ void BrowserWindowCocoa::OnActiveTabChanged(content::WebContents* old_contents,
                                             int reason) {
   [controller_ onActiveTabChanged:old_contents to:new_contents];
   // TODO(pkasting): Perhaps the code in
-  // TabStripController::activateTabWithContents should move here?  Or this
+  // TabStripControllerCocoa::activateTabWithContents should move here?  Or this
   // should call that (instead of TabStripModelObserverBridge doing so)?  It's
   // not obvious to me why Mac doesn't handle tab changes in BrowserWindow the
   // way views and GTK do.
@@ -425,15 +425,6 @@ void BrowserWindowCocoa::UpdateToolbar(content::WebContents* contents) {
   [controller_ updateToolbarWithContents:contents];
 }
 
-void BrowserWindowCocoa::RevertToolbarUrl() {
-  // This method was added to BrowserWindow in order to address issue 830491
-  // where navigating a link to the current page would not reset the omnibox
-  // text. Uncertain if the same issue exists on Mac, as the corresponding test
-  // (BrowserTest, ResetUrlOnReNavigation) is passing.
-  // TODO(manuk): Do we need this on Mac? Might resolve itself when macviews
-  // launches.
-}
-
 void BrowserWindowCocoa::ResetToolbarTabState(content::WebContents* contents) {
   [controller_ resetTabState:contents];
 }
@@ -517,6 +508,16 @@ autofill::SaveCardBubbleView* BrowserWindowCocoa::ShowSaveCreditCardBubble(
     bool user_gesture) {
   return autofill::CreateSaveCardBubbleView(web_contents, controller,
                                             controller_, user_gesture);
+}
+
+autofill::LocalCardMigrationBubble*
+BrowserWindowCocoa::ShowLocalCardMigrationBubble(
+    content::WebContents* web_contents,
+    autofill::LocalCardMigrationBubbleController* controller,
+    bool user_gesture) {
+  // TODO(crbug.com/859652): Implement on Mac.
+  NOTIMPLEMENTED();
+  return nullptr;
 }
 
 ShowTranslateBubbleResult BrowserWindowCocoa::ShowTranslateBubble(

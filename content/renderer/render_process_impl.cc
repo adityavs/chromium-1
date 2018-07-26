@@ -115,7 +115,6 @@ RenderProcessImpl::RenderProcessImpl(
     // closer to V8s normal performance and behavior.
     constexpr char kDisabledFlags[] =
         "--noturbo_verify "
-        "--noverify_csa "
         "--noturbo_verify_allocation "
         "--nodebug_code";
 
@@ -145,8 +144,10 @@ RenderProcessImpl::RenderProcessImpl(
   SetV8FlagIfFeature(features::kV8VmFuture, "--future");
   SetV8FlagIfNotFeature(features::kV8VmFuture, "--no-future");
 
-  SetV8FlagIfFeature(features::kWebAssemblyBaseline, "--wasm-tier-up");
-  SetV8FlagIfNotFeature(features::kWebAssemblyBaseline, "--no-wasm-tier-up");
+  SetV8FlagIfFeature(features::kWebAssemblyBaseline,
+                     "--liftoff --wasm-tier-up");
+  SetV8FlagIfNotFeature(features::kWebAssemblyBaseline,
+                        "--no-liftoff --no-wasm-tier-up");
 
   if (base::FeatureList::IsEnabled(features::kWebAssemblyThreads)) {
     constexpr char kFlags[] =
@@ -166,7 +167,7 @@ RenderProcessImpl::RenderProcessImpl(
 
   SetV8FlagIfNotFeature(features::kWebAssemblyTrapHandler,
                         "--no-wasm-trap-handler");
-#if defined(OS_LINUX) && defined(ARCH_CPU_X86_64) && !defined(OS_ANDROID)
+#if defined(OS_LINUX) && defined(ARCH_CPU_X86_64)
   if (base::FeatureList::IsEnabled(features::kWebAssemblyTrapHandler)) {
     bool use_v8_signal_handler = false;
     base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();

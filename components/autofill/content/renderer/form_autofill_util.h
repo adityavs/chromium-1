@@ -60,22 +60,6 @@ enum ExtractMask {
 // Copied to components/autofill/ios/browser/resources/autofill_controller.js.
 extern const size_t kMaxParseableFields;
 
-// Create an instance of ScopedLayoutPreventer to stop form_util code from
-// triggering layout as a side-effect. For example, when creating a
-// FormFieldData, a call to WebNode::isFocusable is normally made, which may
-// trigger a layout computation. When an instance of ScopedLayoutPreventer is
-// alive, that call will not be made. On destruction, this class allows
-// layout-triggering calls again. It is not thread safe and multiple instances
-// should not be created at the same time in the same process.
-class ScopedLayoutPreventer {
- public:
-  ScopedLayoutPreventer();
-  ~ScopedLayoutPreventer();
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(ScopedLayoutPreventer);
-};
-
 // Helper function that strips any authentication data, as well as query and
 // ref portions of URL
 GURL StripAuthAndParams(const GURL& gurl);
@@ -138,6 +122,10 @@ bool IsWebElementVisible(const blink::WebElement& element);
 // Returns the form's |name| attribute if non-empty; otherwise the form's |id|
 // attribute.
 const base::string16 GetFormIdentifier(const blink::WebFormElement& form);
+
+// Returns text alignment for |element|.
+base::i18n::TextDirection GetTextDirectionForElement(
+    const blink::WebFormControlElement& element);
 
 // Returns all the auto-fillable form control elements in |control_elements|.
 std::vector<blink::WebFormControlElement> ExtractAutofillableElementsFromSet(
@@ -292,6 +280,10 @@ bool InferLabelForElementForTesting(const blink::WebFormControlElement& element,
 // with given form renderer id.
 blink::WebFormElement FindFormByUniqueRendererId(blink::WebDocument doc,
                                                  uint32_t form_renderer_id);
+
+// Note: The vector-based API of the following two functions is a tax for limiting
+// the frequency and duration of retrieving a lot of DOM elements. Alternative
+// solutions have been discussed on https://crrev.com/c/1108201.
 
 // Returns form control elements by unique renderer id. The result has the same
 // number elements as |form_control_renderer_ids| and i-th element of the result

@@ -37,11 +37,10 @@
 <translation id="1873233029667955273">Google Chrome ไม่ใช่เบราว์เซอร์เริ่มต้น</translation>
 <translation id="1874309113135274312">Google Chrome เบต้า (mDNS-In)</translation>
 <translation id="1877026089748256423">Chrome ล้าสมัย</translation>
-<translation id="2007150628464581396">{0,plural, =1{Chrome จะเปิดขึ้นมาใหม่ใน 1 นาที}other{Chrome จะเปิดขึ้นมาใหม่ใน # นาที}}</translation>
+<translation id="1915828456209461693">อัปเดตใหม่ของ Chrome พร้อมให้ใช้งานแล้วและระบบจะใช้อัปเดตดังกล่าวเมื่อคุณเปิด Chrome ขึ้นมาใหม่</translation>
 <translation id="2063848847527508675">ต้องรีสตาร์ท Chrome OS เพื่อใช้การอัปเดต</translation>
 <translation id="2084710999043359739">เพิ่มลงใน Chrome</translation>
 <translation id="2094919256425865063">ปิด Chrome ใช่ไหม</translation>
-<translation id="210890598424854131">{0,plural, =0{Chrome จะเปิดขึ้นมาใหม่ตอนนี้}=1{Chrome จะเปิดขึ้นมาใหม่ใน 1 วินาที}other{Chrome จะเปิดขึ้นมาใหม่ใน # วินาที}}</translation>
 <translation id="2120620239521071941">การดำเนินการนี้จะลบ <ph name="ITEMS_COUNT" /> รายการออกจากอุปกรณ์นี้ หากต้องการดึงข้อมูลภายหลัง ให้ลงชื่อเข้าใช้ Chrome ด้วย <ph name="USER_EMAIL" /></translation>
 <translation id="2123055963409958220">ช่วยให้ Chrome ดียิ่งขึ้นด้วยการรายงาน<ph name="BEGIN_LINK" />การตั้งค่าปัจจุบัน<ph name="END_LINK" /></translation>
 <translation id="216054706567564023">ติดตั้ง Chrome ในโทรศัพท์ เราจะส่ง SMS ไปยังหมายเลขโทรศัพท์สำหรับการกู้คืนบัญชีของคุณ</translation>
@@ -58,6 +57,7 @@
 <translation id="2348335408836342058">Chrome ต้องการสิทธิ์เข้าถึงไมโครโฟนและกล้องถ่ายรูปของคุณสำหรับเว็บไซต์นี้</translation>
 <translation id="2397416548179033562">แสดงเมนู Chrome</translation>
 <translation id="2429317896000329049">Google Chrome ไม่สามารถซิงค์ข้อมูลของคุณเนื่องจากไม่สามารถใช้การซิงค์กับโดเมนของคุณ</translation>
+<translation id="2436117022029368436">สื่อสารกับ Google เพื่อปรับปรุงการท่องเว็บและ Chrome</translation>
 <translation id="2467438592969358367">Google Chrome ต้องการส่งออกรหัสผ่านของคุณ พิมพ์รหัสผ่าน Windows เพื่ออนุญาตให้ดำเนินการ</translation>
 <translation id="2485422356828889247">ถอนการติดตั้ง</translation>
 <translation id="2534507159460261402">Google Pay (คัดลอกไปยัง Chrome)</translation>
@@ -98,7 +98,6 @@
 <translation id="3479552764303398839">ไม่ใช่ตอนนี้</translation>
 <translation id="3503306920980160878">Chrome ต้องการสิทธิ์เข้าถึงตำแหน่งของคุณเพื่อแชร์ตำแหน่งกับเว็บไซต์นี้</translation>
 <translation id="3582972582564653026">ซิงค์และปรับเปลี่ยน Chrome ในอุปกรณ์ต่างๆ</translation>
-<translation id="3612333635265770873">เป็นที่ทราบกันว่าโมดูลที่มีชื่อเดียวกันจะมีความขัดแย้งกับ Google Chrome</translation>
 <translation id="3622797965165704966">ตอนนี้การใช้ Chrome กับบัญชี Google ของคุณและบนคอมพิวเตอร์ที่ใช้ร่วมกันทำได้ง่ายกว่าเดิม</translation>
 <translation id="3637702109597584617"><ph name="TERMS_OF_SERVICE_LINK" />ข้อกำหนดในการให้บริการ<ph name="END_TERMS_OF_SERVICE_LINK" />ของ Google Chrome OS</translation>
 <translation id="3716182511346448902">หน้านี้ใช้หน่วยความจำมากเกินไป Chrome จึงหยุดหน้าชั่วคราว</translation>
@@ -132,6 +131,7 @@
 <translation id="4561051373932531560">Google Chrome ทำให้คุณสามารถคลิกที่หมายเลขโทรศัพท์บนเว็บแล้วโทรหาด้วย Skype!</translation>
 <translation id="4567424176335768812">คุณกำลังลงชื่อเข้าใช้เป็น <ph name="USER_EMAIL_ADDRESS" /> ตอนนี้คุณสามารถเข้าถึงบุ๊กมาร์ก ประวัติการเข้าชม และการตั้งค่าอื่นๆ บนอุปกรณ์ทั้งหมดที่ลงชื่อเข้าใช้</translation>
 <translation id="4571503333518166079">ไปที่การตั้งค่าการแจ้งเตือน Chrome</translation>
+<translation id="459622048091363950">เมื่อ Chrome มีสิทธิ์การเข้าถึงแล้ว เว็บไซต์จะขอสิทธิ์การเข้าถึงจากคุณได้</translation>
 <translation id="4600710005438004015">Chrome อัปเดตเป็นเวอร์ชันล่าสุดไม่ได้ คุณจึงไม่ได้รับฟีเจอร์ใหม่และการแก้ไขด้านความปลอดภัย</translation>
 <translation id="4631713731678262610">ซ่อนในเมนู Chrome</translation>
 <translation id="4633000520311261472">เพื่อให้ Chrome ปลอดภัยขึ้น เราปิดส่วนขยายบางรายการที่ไม่ได้ระบุไว้ใน <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> และอาจถูกเพิ่มเข้ามาโดยที่คุณไม่รู้ตัว</translation>
@@ -143,7 +143,6 @@
 <translation id="4771048833395599659">ไฟล์นี้อาจเป็นอันตราย Chrome จึงบล็อกไว้</translation>
 <translation id="4794050651896644714">บันทึกรายละเอียดใน Chrome</translation>
 <translation id="4804732725083176494">ผู้ดูแลระบบอุปกรณ์เครื่องนี้ปิดไม่ให้ลงชื่อเข้าใช้ Chrome</translation>
-<translation id="4833487314064352405">{0,plural, =1{เปิด Chrome ขึ้นมาใหม่ภายใน 1 วัน}other{เปิด Chrome ขึ้นมาใหม่ภายใน # วัน}}</translation>
 <translation id="4891791193823137474">ให้ Google Chrome ทำงานในเบื้องหลัง</translation>
 <translation id="4895437082222824641">เปิดลิงก์ใน Chrome แท็บใหม่</translation>
 <translation id="4921569541910214635">หากต้องการแชร์คอมพิวเตอร์ ตอนนี้คุณสามารถตั้งค่า Chrome ในแบบที่คุณชอบได้แล้ว</translation>
@@ -151,7 +150,6 @@
 <translation id="495931528404527476">ใน Chrome</translation>
 <translation id="4990567037958725628">Google Chrome Canary</translation>
 <translation id="5028489144783860647">Google Chrome ไม่สามารถซิงค์ข้อมูลของคุณ โปรดอัปเดตข้อความรหัสผ่านการซิงค์</translation>
-<translation id="5131923704757666404">{0,plural, =1{Chrome จะเปิดขึ้นมาใหม่ภายใน 1 ชั่วโมง}other{Chrome จะเปิดขึ้นมาใหม่ภายใน # ชั่วโมง}}</translation>
 <translation id="5132929315877954718">พบกับแอป เกม ส่วนขยาย และธีมเด็ดๆ สำหรับ Google Chrome</translation>
 <translation id="5166975452760862670">Google Chrome แสดงในภาษานี้</translation>
 <translation id="5170938038195470297">โปรไฟล์ของคุณไม่สามารถใช้ได้เพราะมาจากรุ่นที่ใหม่กว่าของ Google Chrome ฟีเจอร์บางอย่างอาจจะไม่พร้อมใช้งาน โปรดระบุไดเรกทอรีของโปรไฟล์อื่นหรือใช้ Chrome รุ่นที่ใหม่กว่า</translation>
@@ -159,10 +157,8 @@
 <translation id="5204098752394657250"><ph name="TERMS_OF_SERVICE_LINK" />ข้อกำหนดในการให้บริการ<ph name="END_TERMS_OF_SERVICE_LINK" />ของ Google Chrome</translation>
 <translation id="5251420635869119124">ผู้เยี่ยมชมสามารถใช้ Chrome ได้โดยไม่ทิ้งร่องรอยไว้</translation>
 <translation id="532046782124376502">คำเตือน: Google Chrome ไม่สามารถป้องกันไม่ให้ส่วนขยายบันทึกประวัติการเข้าชม หากต้องการปิดใช้ส่วนขยายนี้ในโหมดไม่ระบุตัวตน ให้ยกเลิกการเลือกตัวเลือกนี้</translation>
-<translation id="5334545119300433702">เป็นที่ทราบว่าโมดูลนี้ขัดแย้งกับ Google Chrome</translation>
 <translation id="5386244825306882791">อีกทั้งยังควบคุมหน้าที่จะแสดงเมื่อคุณเปิด Chrome หรือทำการค้นหาจากแถบอเนกประสงค์ด้วย</translation>
 <translation id="5430073640787465221">ไฟล์ค่ากำหนดของคุณขัดข้องหรือไม่ถูกต้อง Google Chrome ไม่สามารถกู้คืนการตั้งค่าของคุณได้</translation>
-<translation id="5495581687705680288">โมดูลที่โหลดใน Google Chrome</translation>
 <translation id="556024056938947818">Google Chrome กำลังพยายามแสดงรหัสผ่าน</translation>
 <translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
 <translation id="565744775970812598"><ph name="FILE_NAME" /> อาจเป็นอันตราย Chrome จึงบล็อกไว้</translation>
@@ -245,9 +241,9 @@
 <translation id="8286862437124483331">Google Chrome กำลังพยายามแสดงรหัสผ่าน พิมพ์รหัสผ่าน Windows ของคุณเพื่อแสดงรหัสผ่าน</translation>
 <translation id="8290100596633877290">อ๊ะ! Google Chrome ขัดข้อง เปิดใหม่ตอนนี้หรือไม่</translation>
 <translation id="8342675569599923794">ไฟล์นี้อันตราย Chrome จึงบล็อกไว้</translation>
+<translation id="8380166467911888159">Chrome จะส่งข้อความที่คุณพิมพ์ในช่องข้อความไปยัง Google เพื่อแก้ไขข้อผิดพลาดของการสะกดคำ</translation>
 <translation id="840084489713044809">Google Chrome ต้องการส่งออกรหัสผ่านของคุณ</translation>
 <translation id="8406086379114794905">ช่วยปรับปรุง Chrome ให้ดีขึ้น</translation>
-<translation id="8439301513305169426">Chrome จะบันทึกรหัสผ่านนี้ด้วย <ph name="SAVED_PASSWORD_LINK" /> คุณไม่จำเป็นต้องจำรหัสผ่าน</translation>
 <translation id="8455999171311319804">ไม่บังคับ: ช่วยทำให้ Chrome OS ดียิ่งขึ้นโดยการส่งข้อมูลการวินิจฉัยและการใช้งานไปยัง Google โดยอัตโนมัติ</translation>
 <translation id="8478823064122749032">ติดตั้ง Chrome ในโทรศัพท์ เราจะส่ง SMS ไปยังหมายเลขโทรศัพท์สำหรับการกู้คืนบัญชีของคุณ: <ph name="PHONE_NUMBER" /></translation>
 <translation id="8521348052903287641">กฎขาเข้าสำหรับ Google Chrome Dev เพื่ออนุญาตการเข้าชมแบบ mDNS</translation>
@@ -255,7 +251,6 @@
 <translation id="8547799825197623713">Chrome App Launcher Canary</translation>
 <translation id="8556340503434111824">มี Chrome รุ่นใหม่ให้ใช้งานแล้วและเร็วกว่าเดิม</translation>
 <translation id="8568392309447938879">คุณจะต้องลงชื่อเข้าใช้ Chrome เพื่อใช้แอป ซึ่งจะช่วยให้ Chrome สามารถซิงค์แอป บุ๊กมาร์ก ประวัติ รหัสผ่าน และการตั้งค่าอื่นๆ ระหว่างอุปกรณ์ได้</translation>
-<translation id="859960207076826247">{0,plural, =0{มีการอัปเดต Chrome}=1{มีการอัปเดต Chrome}other{อัปเดต Chrome พร้อมให้ใช้งานมาแล้ว # วัน}}</translation>
 <translation id="8606668294522778825">Google Chrome อาจใช้บริการเว็บเพื่อปรับปรุงประสบการณ์การท่องเว็บของคุณ คุณสามารถเลือกปิดบริการเหล่านี้ได้ <ph name="BEGIN_LINK" />ดูข้อมูลเพิ่มเติม<ph name="END_LINK" /></translation>
 <translation id="8614913330719544658">Google Chrome ไม่ตอบสนอง เปิดใช้งานใหม่ตอนนี้หรือไม่</translation>
 <translation id="8667808506758191620"><ph name="DEVICE_TYPE" /> ของคุณเป็นเวอร์ชันล่าสุดแล้ว</translation>

@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <set>
 #include <utility>
 
 #include "base/bind.h"
@@ -532,7 +533,6 @@ bool LoginDatabase::Init() {
   db_.set_page_size(2048);
   db_.set_cache_size(32);
   db_.set_exclusive_locking();
-  db_.set_restrict_to_user();
   db_.set_histogram_tag("Passwords");
 
   if (!db_.Open(db_path_)) {
@@ -816,6 +816,19 @@ void LoginDatabase::ReportMetrics(const std::string& sync_username,
 
   for (const auto& password_to_realms : passwords_to_realms)
     LogPasswordReuseMetrics(password_to_realms.second);
+
+  sql::Statement blacklist_statement(
+      db_.GetUniqueStatement("SELECT signon_realm "
+                             "FROM logins WHERE blacklisted_by_user = 1"));
+  std::set<std::string> signon_realms;
+  size_t blacklisted_items = 0;
+  while (blacklist_statement.Step()) {
+    signon_realms.insert(blacklist_statement.ColumnString(0));
+    ++blacklisted_items;
+  }
+  size_t blacklisted_duplicates = blacklisted_items - signon_realms.size();
+  UMA_HISTOGRAM_COUNTS_1000("PasswordManager.BlacklistedDuplicates",
+                            blacklisted_duplicates);
 }
 
 PasswordStoreChangeList LoginDatabase::AddLogin(const PasswordForm& form) {

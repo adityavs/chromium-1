@@ -39,7 +39,6 @@
 #include "chrome/browser/chromeos/login/login_wizard.h"
 #include "chrome/browser/chromeos/login/screens/core_oobe_view.h"
 #include "chrome/browser/chromeos/login/screens/gaia_view.h"
-#include "chrome/browser/chromeos/login/signin/token_handle_util.h"
 #include "chrome/browser/chromeos/login/startup_utils.h"
 #include "chrome/browser/chromeos/login/ui/input_events_blocker.h"
 #include "chrome/browser/chromeos/login/ui/login_display_host_mojo.h"
@@ -73,6 +72,7 @@
 #include "chromeos/settings/timezone_settings.h"
 #include "chromeos/timezone/timezone_resolver.h"
 #include "components/account_id/account_id.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/language/core/common/locale_util.h"
 #include "components/prefs/pref_service.h"
 #include "components/session_manager/core/session_manager.h"
@@ -535,6 +535,10 @@ LoginDisplay* LoginDisplayHostWebUI::GetLoginDisplay() {
   return login_display_.get();
 }
 
+ExistingUserController* LoginDisplayHostWebUI::GetExistingUserController() {
+  return existing_user_controller_.get();
+}
+
 gfx::NativeWindow LoginDisplayHostWebUI::GetNativeWindow() const {
   return login_window_ ? login_window_->GetNativeWindow() : nullptr;
 }
@@ -602,11 +606,7 @@ void LoginDisplayHostWebUI::StartWizard(OobeScreen first_screen) {
   DVLOG(1) << "Starting wizard, first_screen: "
            << GetOobeScreenName(first_screen);
   // Create and show the wizard.
-  // Note, dtor of the old WizardController should be called before ctor of the
-  // new one, because "default_controller()" is updated there. So pure "reset()"
-  // is done before new controller creation.
-  wizard_controller_.reset();
-  wizard_controller_.reset(CreateWizardController());
+  wizard_controller_ = std::make_unique<WizardController>();
 
   oobe_progress_bar_visible_ = !StartupUtils::IsDeviceRegistered();
   SetOobeProgressBarVisible(oobe_progress_bar_visible_);
@@ -754,12 +754,6 @@ bool LoginDisplayHostWebUI::IsVoiceInteractionOobe() {
 
 ////////////////////////////////////////////////////////////////////////////////
 // LoginDisplayHostWebUI, public
-
-WizardController* LoginDisplayHostWebUI::CreateWizardController() {
-  // TODO(altimofeev): ensure that WebUI is ready.
-  OobeUI* oobe_ui = GetOobeUI();
-  return new WizardController(this, oobe_ui);
-}
 
 void LoginDisplayHostWebUI::OnBrowserCreated() {
   // Close lock window now so that the launched browser can receive focus.
@@ -1137,9 +1131,7 @@ void LoginDisplayHostWebUI::OnLoginPromptVisible() {
 }
 
 void LoginDisplayHostWebUI::CreateExistingUserController() {
-  // There can only be one |ExistingUserController| instance at a time.
-  existing_user_controller_.reset();
-  existing_user_controller_.reset(new ExistingUserController(this));
+  existing_user_controller_ = std::make_unique<ExistingUserController>();
   login_display_->set_delegate(existing_user_controller_.get());
 }
 
@@ -1165,11 +1157,11 @@ void LoginDisplayHostWebUI::ShowGaiaDialog(
   NOTREACHED();
 }
 
-void LoginDisplayHostWebUI::HideGaiaDialog() {
+void LoginDisplayHostWebUI::HideOobeDialog() {
   NOTREACHED();
 }
 
-void LoginDisplayHostWebUI::UpdateGaiaDialogSize(int width, int height) {
+void LoginDisplayHostWebUI::UpdateOobeDialogSize(int width, int height) {
   NOTREACHED();
 }
 
@@ -1178,6 +1170,22 @@ const user_manager::UserList LoginDisplayHostWebUI::GetUsers() {
 }
 
 void LoginDisplayHostWebUI::ShowFeedback() {
+  NOTREACHED();
+}
+
+void LoginDisplayHostWebUI::ShowResetScreen() {
+  NOTREACHED();
+}
+
+// This is handled differently in webui.
+void LoginDisplayHostWebUI::ShowDialogForCaptivePortal() {}
+
+// This is handled differently in webui.
+void LoginDisplayHostWebUI::HideDialogForCaptivePortal() {}
+
+void LoginDisplayHostWebUI::OnCancelPasswordChangedFlow() {}
+
+void LoginDisplayHostWebUI::UpdateAddUserButtonStatus() {
   NOTREACHED();
 }
 
@@ -1262,7 +1270,8 @@ void ShowLoginWizard(OobeScreen first_screen) {
   }
 
   PrefService* prefs = g_browser_process->local_state();
-  std::string current_locale = prefs->GetString(prefs::kApplicationLocale);
+  std::string current_locale =
+      prefs->GetString(language::prefs::kApplicationLocale);
   language::ConvertToActualUILocale(&current_locale);
   VLOG(1) << "Current locale: " << current_locale;
 
@@ -1309,7 +1318,7 @@ void ShowLoginWizard(OobeScreen first_screen) {
   // Chrome locale. Otherwise it will be lost if Chrome restarts.
   // Don't need to schedule pref save because setting initial local
   // will enforce preference saving.
-  prefs->SetString(prefs::kApplicationLocale, locale);
+  prefs->SetString(language::prefs::kApplicationLocale, locale);
   StartupUtils::SetInitialLocale(locale);
 
   TriggerShowLoginWizardFinish(locale, std::move(data));

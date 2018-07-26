@@ -422,7 +422,11 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
 
   // The hitTest() method looks for mouse events by walking layers that
   // intersect the point from front to back.
-  bool HitTest(HitTestResult&);
+  // |hit_test_area| is the rect in the space of this PaintLayer's
+  // LayoutObject to consider for hit testing.
+  bool HitTest(const HitTestLocation& location,
+               HitTestResult&,
+               const LayoutRect& hit_test_area);
 
   bool IntersectsDamageRect(const LayoutRect& layer_bounds,
                             const LayoutRect& damage_rect,
@@ -835,6 +839,14 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
     DCHECK(!needs_descendant_dependent_flags_update_);
     return has_non_contained_absolute_position_descendant_;
   }
+  bool HasSelfPaintingLayerDescendant() const {
+    DCHECK(!needs_descendant_dependent_flags_update_);
+    return has_self_painting_layer_descendant_;
+  }
+  bool IsNonStackedWithInFlowStackedDescendant() const {
+    DCHECK(!needs_descendant_dependent_flags_update_);
+    return is_non_stacked_with_in_flow_stacked_descendant_;
+  }
 
   // Returns true if there is a descendant with blend-mode that is
   // not contained within another enclosing stacking context other
@@ -895,12 +907,6 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
 
   void DidUpdateScrollsOverflow();
 
-  bool HasSelfPaintingLayerDescendant() const {
-    if (has_self_painting_layer_descendant_dirty_)
-      UpdateHasSelfPaintingLayerDescendant();
-    DCHECK(!has_self_painting_layer_descendant_dirty_);
-    return has_self_painting_layer_descendant_;
-  }
   LayoutRect PaintingExtent(const PaintLayer* root_layer,
                             const LayoutSize& sub_pixel_accumulation,
                             GlobalPaintFlags);
@@ -1066,7 +1072,7 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
   // See
   // https://chromium.googlesource.com/chromium/src.git/+/master/third_party/blink/renderer/core/paint/README.md
   // for the definition of a replaced normal-flow stacking element.
-  bool IsReplacedNormalFlowStacking();
+  bool IsReplacedNormalFlowStacking() const;
 
   void SetNeeedsCompositingReasonsUpdate() {
     needs_compositing_reasons_update_ = true;
@@ -1100,8 +1106,6 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
 
   bool HasOverflowControls() const;
 
-  void DirtyAncestorChainHasSelfPaintingLayerDescendantStatus();
-
   enum UpdateLayerPositionBehavior { AllLayers, OnlyStickyLayers };
   void UpdateLayerPositionRecursive(UpdateLayerPositionBehavior = AllLayers);
 
@@ -1116,9 +1120,11 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
     const LayoutRect& rect;
     // Whether location.Intersects(rect) returns true.
     const HitTestLocation& location;
+    const HitTestLocation& original_location;
     const bool intersects_location;
     HitTestRecursionData(const LayoutRect& rect_arg,
-                         const HitTestLocation& location_arg);
+                         const HitTestLocation& location_arg,
+                         const HitTestLocation& original_location_arg);
   };
 
   PaintLayer* HitTestLayer(PaintLayer* root_layer,
@@ -1246,13 +1252,6 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
   // overflow-only concept.
   unsigned is_self_painting_layer_ : 1;
 
-  // If have no self-painting descendants, we don't have to walk our children
-  // during painting. This can lead to significant savings, especially if the
-  // tree has lots of non-self-painting layers grouped together (e.g. table
-  // cells).
-  mutable unsigned has_self_painting_layer_descendant_ : 1;
-  mutable unsigned has_self_painting_layer_descendant_dirty_ : 1;
-
   const unsigned is_root_layer_ : 1;
 
   unsigned has_visible_content_ : 1;
@@ -1325,6 +1324,9 @@ class CORE_EXPORT PaintLayer : public DisplayItemClient {
   unsigned descendant_may_need_compositing_requirements_update_ : 1;
   unsigned needs_compositing_layer_assignment_ : 1;
   unsigned descendant_needs_compositing_layer_assignment_ : 1;
+
+  unsigned has_self_painting_layer_descendant_ : 1;
+  unsigned is_non_stacked_with_in_flow_stacked_descendant_ : 1;
 
   LayoutBoxModelObject& layout_object_;
 

@@ -36,15 +36,21 @@ class FakeAssistantManagerServiceImpl : public AssistantManagerService {
   void SendUpdateSettingsUiRequest(
       const std::string& update,
       UpdateSettingsUiResponseCallback callback) override;
-  void SetAssistantController(
-      ash::mojom::AssistantController* controller) override;
 
   // mojom::Assistant overrides:
   void StartVoiceInteraction() override;
   void StopActiveInteraction() override;
   void SendTextQuery(const std::string& query) override;
-  void AddAssistantEventSubscriber(
-      mojom::AssistantEventSubscriberPtr subscriber) override;
+  void AddAssistantInteractionSubscriber(
+      mojom::AssistantInteractionSubscriberPtr subscriber) override;
+  void AddAssistantNotificationSubscriber(
+      mojom::AssistantNotificationSubscriberPtr subscriber) override;
+  void AddAssistantScreenContextSubscriber(
+      mojom::AssistantScreenContextSubscriberPtr subscriber) override;
+  void RetrieveNotification(mojom::AssistantNotificationPtr notification,
+                            int action_index) override;
+  void DismissNotification(
+      mojom::AssistantNotificationPtr notification) override;
   void RequestScreenContext(const gfx::Rect& region,
                             RequestScreenContextCallback callback) override;
 

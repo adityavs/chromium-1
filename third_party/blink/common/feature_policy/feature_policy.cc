@@ -105,20 +105,6 @@ std::unique_ptr<FeaturePolicy> FeaturePolicy::CreateFromParentPolicy(
                                 GetDefaultFeatureList());
 }
 
-// static
-std::unique_ptr<FeaturePolicy> FeaturePolicy::CreateFromPolicyWithOrigin(
-    const FeaturePolicy& policy,
-    const url::Origin& origin) {
-  std::unique_ptr<FeaturePolicy> new_policy =
-      base::WrapUnique(new FeaturePolicy(origin, policy.feature_list_));
-  new_policy->inherited_policies_ = policy.inherited_policies_;
-  for (const auto& feature : policy.allowlists_) {
-    new_policy->allowlists_[feature.first] =
-        base::WrapUnique(new Allowlist(*feature.second));
-  }
-  return new_policy;
-}
-
 bool FeaturePolicy::IsFeatureEnabled(
     mojom::FeaturePolicyFeature feature) const {
   return IsFeatureEnabledForOrigin(feature, origin_);
@@ -186,9 +172,6 @@ FeaturePolicy::FeaturePolicy(url::Origin origin,
                              const FeatureList& feature_list)
     : origin_(origin), feature_list_(feature_list) {}
 
-FeaturePolicy::FeaturePolicy(url::Origin origin)
-    : origin_(origin), feature_list_(GetDefaultFeatureList()) {}
-
 FeaturePolicy::~FeaturePolicy() = default;
 
 // static
@@ -226,22 +209,26 @@ void FeaturePolicy::AddContainerPolicy(
     // delegate it to the child frame, using the iframe attribute, then the
     // feature should be enabled in the child frame.
     mojom::FeaturePolicyFeature feature = parsed_declaration.feature;
-    if (feature == mojom::FeaturePolicyFeature::kNotFound)
+    // Do not allow setting a container policy for a feature which is not in the
+    // feature list.
+    auto search = inherited_policies_.find(feature);
+    if (search == inherited_policies_.end())
       continue;
+    bool& inherited_policy = search->second;
     // If the parent frame does not enable the feature, then the child frame
     // must not.
-    inherited_policies_[feature] = false;
+    inherited_policy = false;
     if (parent_policy->IsFeatureEnabled(feature)) {
       if (parsed_declaration.matches_opaque_src && origin_.unique()) {
         // If the child frame has an opaque origin, and the declared container
         // policy indicates that the feature should be enabled, enable it for
         // the child frame.
-        inherited_policies_[feature] = true;
+        inherited_policy = true;
       } else if (AllowlistFromDeclaration(parsed_declaration)
                      ->Contains(origin_)) {
         // Otherwise, enbable the feature if the declared container policy
         // includes the origin of the child frame.
-        inherited_policies_[feature] = true;
+        inherited_policy = true;
       }
     }
   }
@@ -292,6 +279,8 @@ const FeaturePolicy::FeatureList& FeaturePolicy::GetDefaultFeatureList() {
                             FeaturePolicy::FeatureDefault::EnableForAll},
                            {mojom::FeaturePolicyFeature::kSpeaker,
                             FeaturePolicy::FeatureDefault::EnableForSelf},
+                           {mojom::FeaturePolicyFeature::kSyncScript,
+                            FeaturePolicy::FeatureDefault::EnableForAll},
                            {mojom::FeaturePolicyFeature::kSyncXHR,
                             FeaturePolicy::FeatureDefault::EnableForAll},
                            {mojom::FeaturePolicyFeature::kUnsizedMedia,

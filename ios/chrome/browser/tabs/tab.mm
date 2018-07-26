@@ -64,7 +64,6 @@
 #include "ios/chrome/browser/translate/chrome_ios_translate_client.h"
 #import "ios/chrome/browser/u2f/u2f_controller.h"
 #import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/open_url_command.h"
 #import "ios/chrome/browser/ui/commands/show_signin_command.h"
 #import "ios/chrome/browser/ui/open_in_controller.h"
 #import "ios/chrome/browser/ui/overscroll_actions/overscroll_actions_controller.h"
@@ -368,6 +367,16 @@ NSString* const kTabUrlKey = @"url";
   [_overscrollActionsController clear];
 }
 
+- (void)notifyTabOfUrlMayStartLoading:(const GURL&)url {
+  NSString* urlString = base::SysUTF8ToNSString(url.spec());
+  if ([urlString length]) {
+    [[NSNotificationCenter defaultCenter]
+        postNotificationName:kTabUrlMayStartLoadingNotificationForCrashReporting
+                      object:self
+                    userInfo:@{kTabUrlKey : urlString}];
+  }
+}
+
 #pragma mark - Public API (relatinge to User agent)
 
 - (BOOL)usesDesktopUserAgent {
@@ -397,6 +406,10 @@ NSString* const kTabUrlKey = @"url";
 
 - (void)webState:(web::WebState*)webState
     didStartNavigation:(web::NavigationContext*)navigation {
+  // Notify tab of Url may start loading, this notification is not sent in cases
+  // of app launching, history api navigations, and hash change navigations.
+  [self notifyTabOfUrlMayStartLoading:navigation->GetUrl()];
+
   [self.dialogDelegate cancelDialogForTab:self];
   [_openInController disable];
 }
@@ -497,31 +510,6 @@ NSString* const kTabUrlKey = @"url";
   return NO;
 }
 
-- (BOOL)webController:(CRWWebController*)webController
-        shouldOpenURL:(const GURL&)url
-      mainDocumentURL:(const GURL&)mainDocumentURL {
-  // Always allow frame loads.
-  if (url != mainDocumentURL)
-    return YES;
-
-  // TODO(crbug.com/546402): If this turns out to be useful, find a less hacky
-  // hook point to send this from.
-  NSString* urlString = base::SysUTF8ToNSString(url.spec());
-  if ([urlString length]) {
-    [[NSNotificationCenter defaultCenter]
-        postNotificationName:kTabUrlMayStartLoadingNotificationForCrashReporting
-                      object:self
-                    userInfo:@{kTabUrlKey : urlString}];
-  }
-
-  return YES;
-}
-
-- (BOOL)webController:(CRWWebController*)webController
-    shouldOpenExternalURL:(const GURL&)URL {
-  return YES;
-}
-
 #pragma mark - Private methods
 
 - (OpenInController*)openInController {
@@ -529,6 +517,7 @@ NSString* const kTabUrlKey = @"url";
     _openInController = [[OpenInController alloc]
         initWithRequestContext:_browserState->GetRequestContext()
                  webController:self.webController];
+    _openInController.baseView = self.view;
   }
   return _openInController;
 }

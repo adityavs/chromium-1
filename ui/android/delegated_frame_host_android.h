@@ -62,6 +62,26 @@ class UI_ANDROID_EXPORT DelegatedFrameHostAndroid
 
   ~DelegatedFrameHostAndroid() override;
 
+  // Wait up to 5 seconds for the first frame to be produced. Having Android
+  // display a placeholder for a longer period of time is preferable to drawing
+  // nothing, and the first frame can take a while on low-end systems.
+  static constexpr base::TimeDelta FirstFrameTimeout() {
+    return base::TimeDelta::FromSeconds(5);
+  }
+  static constexpr int64_t FirstFrameTimeoutFrames() {
+    return FirstFrameTimeout() / viz::BeginFrameArgs::DefaultInterval();
+  }
+
+  // Wait up to 1 second for a frame of the correct size to be produced. Android
+  // OS will only wait 4 seconds, so we limit this to 1 second to make sure we
+  // have always produced a frame before the OS stops waiting.
+  static constexpr base::TimeDelta ResizeTimeout() {
+    return base::TimeDelta::FromSeconds(1);
+  }
+  static constexpr int64_t ResizeTimeoutFrames() {
+    return ResizeTimeout() / viz::BeginFrameArgs::DefaultInterval();
+  }
+
   void SubmitCompositorFrame(
       const viz::LocalSurfaceId& local_surface_id,
       viz::CompositorFrame frame,
@@ -73,7 +93,9 @@ class UI_ANDROID_EXPORT DelegatedFrameHostAndroid
 
   bool HasDelegatedContent() const;
 
-  viz::FrameSinkId GetFrameSinkId() const;
+  cc::SurfaceLayer* content_layer_for_testing() { return content_layer_.get(); }
+
+  const viz::FrameSinkId& GetFrameSinkId() const;
 
   // Should only be called when the host has a content layer. Use this for one-
   // off screen capture, not for video. Always provides RGBA_BITMAP
@@ -106,7 +128,7 @@ class UI_ANDROID_EXPORT DelegatedFrameHostAndroid
 
   // Returns the ID for the current Surface. Returns an invalid ID if no
   // surface exists (!HasDelegatedContent()).
-  const viz::SurfaceId& SurfaceId() const;
+  viz::SurfaceId SurfaceId() const;
 
   void TakeFallbackContentFrom(DelegatedFrameHostAndroid* other);
 

@@ -180,9 +180,7 @@
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/env.h"
 #include "ui/aura/layout_manager.h"
-#include "ui/aura/mus/focus_synchronizer.h"
 #include "ui/aura/mus/user_activity_forwarder.h"
-#include "ui/aura/mus/window_tree_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/base/ui_base_features.h"
@@ -264,10 +262,6 @@ void RegisterProfilePrefs(PrefRegistrySimple* registry, bool for_test) {
 
 // static
 Shell* Shell::instance_ = nullptr;
-// static
-aura::WindowTreeClient* Shell::window_tree_client_ = nullptr;
-// static
-aura::WindowManagerClient* Shell::window_manager_client_ = nullptr;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Shell, public:
@@ -403,8 +397,8 @@ Config Shell::GetAshConfig() {
 
 // static
 bool Shell::ShouldUseIMEService() {
-  return Shell::GetAshConfig() == Config::MASH ||
-         base::FeatureList::IsEnabled(::features::kOopAsh);
+  return Shell::GetAshConfig() == Config::MASH_DEPRECATED ||
+         base::FeatureList::IsEnabled(::features::kMash);
 }
 
 // static
@@ -570,7 +564,7 @@ void Shell::UpdateCursorCompositingEnabled() {
 }
 
 void Shell::SetCursorCompositingEnabled(bool enabled) {
-  if (GetAshConfig() != Config::MASH) {
+  if (GetAshConfig() != Config::MASH_DEPRECATED) {
     // TODO: needs to work in mash. http://crbug.com/705592.
     CursorWindowController* cursor_window_controller =
         window_tree_host_manager_->cursor_window_controller();
@@ -723,8 +717,6 @@ Shell::Shell(std::unique_ptr<ShellDelegate> shell_delegate,
 
 Shell::~Shell() {
   TRACE_EVENT0("shutdown", "ash::Shell::Destructor");
-
-  const Config config = shell_port_->GetAshConfig();
 
   // Wayland depends upon some ash specific objects. Destroy it early on.
   wayland_server_controller_.reset();
@@ -910,11 +902,6 @@ Shell::~Shell() {
   // Depends on |focus_controller_|, so must be destroyed before.
   window_tree_host_manager_.reset();
   focus_controller_->RemoveObserver(this);
-  if (config != Config::CLASSIC &&
-      window_tree_client_->focus_synchronizer()->active_focus_client() ==
-          focus_controller_.get()) {
-    window_tree_client_->focus_synchronizer()->SetSingletonFocusClient(nullptr);
-  }
   focus_controller_.reset();
   screen_position_controller_.reset();
 
@@ -1012,6 +999,8 @@ void Shell::Init(
         prefs::mojom::kLocalStateServiceName);
   }
 
+  tablet_mode_controller_ = std::make_unique<TabletModeController>();
+
   // Some delegates access ShellPort during their construction. Create them here
   // instead of the ShellPort constructor.
   accessibility_focus_ring_controller_ =
@@ -1028,7 +1017,7 @@ void Shell::Init(
   wallpaper_controller_ = std::make_unique<WallpaperController>();
 
   // TODO(sky): move creation to ShellPort.
-  if (config != Config::MASH)
+  if (config != Config::MASH_DEPRECATED)
     immersive_handler_factory_ = std::make_unique<ImmersiveHandlerFactoryAsh>();
 
   window_positioner_ = std::make_unique<WindowPositioner>();
@@ -1038,8 +1027,8 @@ void Shell::Init(
     cursor_manager_ = std::make_unique<CursorManager>(
         base::WrapUnique(native_cursor_manager_));
   } else {
-    // TODO(jamescook|estade): Cursor manager for Config::MASH. We might be able
-    // to use most of the classic version after we switch to ws2.
+    // TODO(jamescook|estade): Cursor manager for Config::MASH_DEPRECATED. We
+    // might be able to use most of the classic version after we switch to ws2.
   }
 
   shell_delegate_->PreInit();
@@ -1083,10 +1072,6 @@ void Shell::Init(
   focus_controller_ =
       std::make_unique<::wm::FocusController>(new wm::AshFocusRules());
   focus_controller_->AddObserver(this);
-  if (config != Config::CLASSIC) {
-    window_tree_client_->focus_synchronizer()->SetSingletonFocusClient(
-        focus_controller_.get());
-  }
 
   screen_position_controller_.reset(new ScreenPositionController);
 
@@ -1108,7 +1093,6 @@ void Shell::Init(
   }
 
   accelerator_controller_ = shell_port_->CreateAcceleratorController();
-  tablet_mode_controller_ = std::make_unique<TabletModeController>();
 
   // |app_list_controller_| is put after |tablet_mode_controller_| as the former
   // uses the latter in constructor.
@@ -1140,10 +1124,8 @@ void Shell::Init(
   toplevel_window_event_handler_ =
       std::make_unique<ToplevelWindowEventHandler>();
 
-  if (config != Config::MASH) {
-    system_gesture_filter_.reset(new SystemGestureEventFilter);
-    AddPreTargetHandler(system_gesture_filter_.get());
-  }
+  system_gesture_filter_ = std::make_unique<SystemGestureEventFilter>();
+  AddPreTargetHandler(system_gesture_filter_.get());
 
   sticky_keys_controller_.reset(new StickyKeysController);
   screen_pinning_controller_ = std::make_unique<ScreenPinningController>();
@@ -1179,9 +1161,7 @@ void Shell::Init(
   if (!::features::IsAshInBrowserProcess())
     client_image_registry_ = std::make_unique<ClientImageRegistry>();
 
-  // In mash drag and drop is handled by mus.
-  if (config != Config::MASH)
-    drag_drop_controller_ = std::make_unique<DragDropController>();
+  drag_drop_controller_ = std::make_unique<DragDropController>();
 
   // |screenshot_controller_| needs to be created (and prepended as a
   // pre-target handler) at this point, because |mouse_cursor_filter_| needs to
@@ -1270,7 +1250,7 @@ void Shell::Init(
 
   // Needs to be created after InitDisplays() since it may cause the virtual
   // keyboard to be deployed.
-  if (config != Config::MASH)
+  if (config != Config::MASH_DEPRECATED)
     virtual_keyboard_controller_.reset(new VirtualKeyboardController);
 
   if (cursor_manager_) {
@@ -1309,7 +1289,7 @@ void Shell::Init(
         tap_visualizer::mojom::kServiceName);
   }
 
-  if (config != Config::MASH) {
+  if (config != Config::MASH_DEPRECATED) {
     window_service_owner_ =
         std::make_unique<WindowServiceOwner>(std::move(gpu_interface_provider));
     if (!ShouldUseIMEService()) {
@@ -1408,12 +1388,7 @@ void Shell::InitRootWindow(aura::Window* root_window) {
   ::wm::SetActivationClient(root_window, focus_controller_.get());
   root_window->AddPreTargetHandler(focus_controller_.get());
   aura::client::SetVisibilityClient(root_window, visibility_controller_.get());
-  if (drag_drop_controller_) {
-    DCHECK_NE(Config::MASH, GetAshConfig());
-    aura::client::SetDragDropClient(root_window, drag_drop_controller_.get());
-  } else {
-    DCHECK_EQ(Config::MASH, GetAshConfig());
-  }
+  aura::client::SetDragDropClient(root_window, drag_drop_controller_.get());
   aura::client::SetScreenPositionClient(root_window,
                                         screen_position_controller_.get());
   aura::client::SetCursorClient(root_window, cursor_manager_.get());

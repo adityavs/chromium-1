@@ -13,6 +13,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#import "base/test/ios/wait_util.h"
 #include "base/test/scoped_task_environment.h"
 #include "base/values.h"
 #include "components/autofill/core/common/password_form_fill_data.h"
@@ -21,18 +22,17 @@
 #include "components/password_manager/core/browser/password_store_consumer.h"
 #include "components/password_manager/core/browser/stub_password_manager_client.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
+#import "components/password_manager/ios/js_password_manager.h"
 #include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "components/security_state/ios/ssl_status_input_event_data.h"
 #import "ios/chrome/browser/autofill/form_input_accessory_view_controller.h"
 #import "ios/chrome/browser/autofill/form_suggestion_controller.h"
 #include "ios/chrome/browser/browser_state/test_chrome_browser_state.h"
-#import "ios/chrome/browser/passwords/js_password_manager.h"
 #import "ios/chrome/browser/passwords/password_form_filler.h"
 #include "ios/chrome/browser/passwords/test_helpers.h"
 #include "ios/chrome/browser/web/chrome_web_client.h"
 #import "ios/chrome/browser/web/chrome_web_test.h"
-#import "ios/testing/wait_util.h"
 #import "ios/web/public/navigation_item.h"
 #import "ios/web/public/navigation_manager.h"
 #include "ios/web/public/ssl_status.h"
@@ -57,9 +57,9 @@ using password_manager::PasswordStoreConsumer;
 using test_helpers::SetPasswordFormFillData;
 using testing::NiceMock;
 using testing::Return;
-using testing::kWaitForActionTimeout;
-using testing::kWaitForJSCompletionTimeout;
-using testing::WaitUntilConditionOrTimeout;
+using base::test::ios::kWaitForActionTimeout;
+using base::test::ios::kWaitForJSCompletionTimeout;
+using base::test::ios::WaitUntilConditionOrTimeout;
 using testing::WithArg;
 using testing::_;
 
@@ -1371,6 +1371,7 @@ TEST_F(PasswordControllerTest, CheckAsyncSuggestions) {
                                                        type:@"focus"
                                                  typedValue:@""
                                                 isMainFrame:YES
+                                             hasUserGesture:YES
                                                    webState:web_state()
                                           completionHandler:^(BOOL success) {
                                             completion_handler_success =
@@ -1407,6 +1408,7 @@ TEST_F(PasswordControllerTest, CheckNoAsyncSuggestionsOnNonUsernameField) {
                                                      type:@"focus"
                                                typedValue:@""
                                               isMainFrame:YES
+                                           hasUserGesture:YES
                                                  webState:web_state()
                                         completionHandler:^(BOOL success) {
                                           completion_handler_success = success;
@@ -1436,6 +1438,7 @@ TEST_F(PasswordControllerTest, CheckNoAsyncSuggestionsOnNoPasswordForms) {
                                                      type:@"focus"
                                                typedValue:@""
                                               isMainFrame:YES
+                                           hasUserGesture:YES
                                                  webState:web_state()
                                         completionHandler:^(BOOL success) {
                                           completion_handler_success = success;

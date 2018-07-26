@@ -155,6 +155,14 @@ void ChromeAutofillClientIOS::OnUnmaskVerificationResult(
   unmask_controller_.OnVerificationResult(result);
 }
 
+void ChromeAutofillClientIOS::ConfirmSaveAutofillProfile(
+    const AutofillProfile& profile,
+    base::OnceClosure callback) {
+  // Since there is no confirmation needed to save an Autofill Profile,
+  // running |callback| will proceed with saving |profile|.
+  std::move(callback).Run();
+}
+
 void ChromeAutofillClientIOS::ConfirmSaveCreditCardLocally(
     const CreditCard& card,
     const base::Closure& callback) {
@@ -164,6 +172,11 @@ void ChromeAutofillClientIOS::ConfirmSaveCreditCardLocally(
           /*upload_save_card_callback=*/
           base::OnceCallback<void(const base::string16&)>(),
           /*local_save_card_callback=*/callback, GetPrefs())));
+}
+
+void ChromeAutofillClientIOS::ShowLocalCardMigrationPrompt(
+    base::OnceClosure closure) {
+  NOTREACHED();
 }
 
 void ChromeAutofillClientIOS::ConfirmSaveCreditCardToCloud(
@@ -215,6 +228,7 @@ void ChromeAutofillClientIOS::ShowAutofillPopup(
     const gfx::RectF& element_bounds,
     base::i18n::TextDirection text_direction,
     const std::vector<Suggestion>& suggestions,
+    bool /*unused_autoselect_first_suggestion*/,
     base::WeakPtr<AutofillPopupDelegate> delegate) {
   [bridge_ showAutofillPopup:suggestions popupDelegate:delegate];
 }

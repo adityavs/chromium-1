@@ -102,6 +102,13 @@ void FakePowerManagerClient::DecreaseKeyboardBrightness() {}
 
 void FakePowerManagerClient::IncreaseKeyboardBrightness() {}
 
+void FakePowerManagerClient::GetKeyboardBrightnessPercent(
+    DBusMethodCallback<double> callback) {
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE,
+      base::BindOnce(std::move(callback), keyboard_brightness_percent_));
+}
+
 const base::Optional<power_manager::PowerSupplyProperties>&
 FakePowerManagerClient::GetLastStatus() {
   return props_;
@@ -304,6 +311,10 @@ void FakePowerManagerClient::DeleteArcTimers(const std::string& tag,
       FROM_HERE, base::BindOnce(std::move(callback), true));
 }
 
+void FakePowerManagerClient::DeferScreenDim() {
+  num_defer_screen_dim_calls_++;
+}
+
 bool FakePowerManagerClient::PopVideoActivityReport() {
   CHECK(!video_activity_reports_.empty());
   bool fullscreen = video_activity_reports_.front();
@@ -355,6 +366,11 @@ void FakePowerManagerClient::SendPowerButtonEvent(
     const base::TimeTicks& timestamp) {
   for (auto& observer : observers_)
     observer.PowerButtonEventReceived(down, timestamp);
+}
+
+void FakePowerManagerClient::SendScreenDimImminent() {
+  for (auto& observer : observers_)
+    observer.ScreenDimImminent();
 }
 
 void FakePowerManagerClient::SetLidState(LidState state,

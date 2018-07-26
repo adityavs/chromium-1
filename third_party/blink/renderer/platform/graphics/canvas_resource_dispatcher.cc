@@ -127,14 +127,9 @@ void CanvasResourceDispatcher::PostImageToPlaceholder(
 }
 
 void CanvasResourceDispatcher::DispatchFrameSync(
-    scoped_refptr<StaticBitmapImage> image,
+    scoped_refptr<CanvasResource> canvas_resource,
     base::TimeTicks commit_start_time,
     const SkIRect& damage_rect) {
-  scoped_refptr<CanvasResource> canvas_resource = CanvasResourceBitmap::Create(
-      std::move(image),
-      nullptr,  // Resource provider not specified -> recycling will not work
-      kLow_SkFilterQuality, CanvasColorParams());
-
   viz::CompositorFrame frame;
   if (!PrepareFrame(std::move(canvas_resource), commit_start_time, damage_rect,
                     &frame))
@@ -149,14 +144,9 @@ void CanvasResourceDispatcher::DispatchFrameSync(
 }
 
 void CanvasResourceDispatcher::DispatchFrame(
-    scoped_refptr<StaticBitmapImage> image,
+    scoped_refptr<CanvasResource> canvas_resource,
     base::TimeTicks commit_start_time,
     const SkIRect& damage_rect) {
-  scoped_refptr<CanvasResource> canvas_resource = CanvasResourceBitmap::Create(
-      std::move(image),
-      nullptr,  // Resource provider not specified -> recycling will not work
-      kLow_SkFilterQuality, CanvasColorParams());
-
   viz::CompositorFrame frame;
   if (!PrepareFrame(std::move(canvas_resource), commit_start_time, damage_rect,
                     &frame))
@@ -173,7 +163,6 @@ bool CanvasResourceDispatcher::PrepareFrame(
     base::TimeTicks commit_start_time,
     const SkIRect& damage_rect,
     viz::CompositorFrame* frame) {
-  DCHECK(canvas_resource->IsBitmap());
   if (!canvas_resource || !VerifyImageSize(canvas_resource->Size()))
     return false;
 
@@ -230,37 +219,23 @@ bool CanvasResourceDispatcher::PrepareFrame(
     if (SharedGpuContext::IsGpuCompositingEnabled()) {
       // Case 1: both canvas and compositor are gpu accelerated.
       commit_type = kCommitGPUCanvasGPUCompositing;
-      offscreen_canvas_resource_provider_
-          ->SetTransferableResourceToStaticBitmapImage(&resource,
-                                                       canvas_resource);
       yflipped = true;
     } else {
       // Case 2: canvas is accelerated but gpu compositing is disabled.
       commit_type = kCommitGPUCanvasSoftwareCompositing;
-      offscreen_canvas_resource_provider_
-          ->SetTransferableResourceToSharedBitmap(resource,
-                                                  canvas_resource->Bitmap());
     }
   } else {
     if (SharedGpuContext::IsGpuCompositingEnabled()) {
       // Case 3: canvas is not gpu-accelerated, but compositor is.
       commit_type = kCommitSoftwareCanvasGPUCompositing;
-      scoped_refptr<CanvasResource> accelerated_resource =
-          canvas_resource->MakeAccelerated(
-              SharedGpuContext::ContextProviderWrapper());
-      if (!accelerated_resource)
-        return false;
-      offscreen_canvas_resource_provider_
-          ->SetTransferableResourceToStaticBitmapImage(&resource,
-                                                       accelerated_resource);
     } else {
       // Case 4: both canvas and compositor are not gpu accelerated.
       commit_type = kCommitSoftwareCanvasSoftwareCompositing;
-      offscreen_canvas_resource_provider_
-          ->SetTransferableResourceToSharedBitmap(resource,
-                                                  canvas_resource->Bitmap());
     }
   }
+
+  offscreen_canvas_resource_provider_->SetTransferableResource(&resource,
+                                                               canvas_resource);
 
   commit_type_histogram.Count(commit_type);
 
@@ -304,16 +279,16 @@ bool CanvasResourceDispatcher::PrepareFrame(
             CustomCountHistogram, commit_gpu_canvas_gpu_compositing_main_timer,
             ("Blink.Canvas.OffscreenCommit.GPUCanvasGPUCompositingMain", 0,
              10000000, 50));
-        commit_gpu_canvas_gpu_compositing_main_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_gpu_canvas_gpu_compositing_main_timer.CountMicroseconds(
+            elapsed_time);
       } else {
         DEFINE_THREAD_SAFE_STATIC_LOCAL(
             CustomCountHistogram,
             commit_gpu_canvas_gpu_compositing_worker_timer,
             ("Blink.Canvas.OffscreenCommit.GPUCanvasGPUCompositingWorker", 0,
              10000000, 50));
-        commit_gpu_canvas_gpu_compositing_worker_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_gpu_canvas_gpu_compositing_worker_timer.CountMicroseconds(
+            elapsed_time);
       }
       break;
     case kCommitGPUCanvasSoftwareCompositing:
@@ -323,8 +298,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             commit_gpu_canvas_software_compositing_main_timer,
             ("Blink.Canvas.OffscreenCommit.GPUCanvasSoftwareCompositingMain", 0,
              10000000, 50));
-        commit_gpu_canvas_software_compositing_main_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_gpu_canvas_software_compositing_main_timer.CountMicroseconds(
+            elapsed_time);
       } else {
         DEFINE_THREAD_SAFE_STATIC_LOCAL(
             CustomCountHistogram,
@@ -332,8 +307,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             ("Blink.Canvas.OffscreenCommit."
              "GPUCanvasSoftwareCompositingWorker",
              0, 10000000, 50));
-        commit_gpu_canvas_software_compositing_worker_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_gpu_canvas_software_compositing_worker_timer.CountMicroseconds(
+            elapsed_time);
       }
       break;
     case kCommitSoftwareCanvasGPUCompositing:
@@ -343,8 +318,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             commit_software_canvas_gpu_compositing_main_timer,
             ("Blink.Canvas.OffscreenCommit.SoftwareCanvasGPUCompositingMain", 0,
              10000000, 50));
-        commit_software_canvas_gpu_compositing_main_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_software_canvas_gpu_compositing_main_timer.CountMicroseconds(
+            elapsed_time);
       } else {
         DEFINE_THREAD_SAFE_STATIC_LOCAL(
             CustomCountHistogram,
@@ -352,8 +327,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             ("Blink.Canvas.OffscreenCommit."
              "SoftwareCanvasGPUCompositingWorker",
              0, 10000000, 50));
-        commit_software_canvas_gpu_compositing_worker_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_software_canvas_gpu_compositing_worker_timer.CountMicroseconds(
+            elapsed_time);
       }
       break;
     case kCommitSoftwareCanvasSoftwareCompositing:
@@ -364,8 +339,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             ("Blink.Canvas.OffscreenCommit."
              "SoftwareCanvasSoftwareCompositingMain",
              0, 10000000, 50));
-        commit_software_canvas_software_compositing_main_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_software_canvas_software_compositing_main_timer
+            .CountMicroseconds(elapsed_time);
       } else {
         DEFINE_THREAD_SAFE_STATIC_LOCAL(
             CustomCountHistogram,
@@ -373,8 +348,8 @@ bool CanvasResourceDispatcher::PrepareFrame(
             ("Blink.Canvas.OffscreenCommit."
              "SoftwareCanvasSoftwareCompositingWorker",
              0, 10000000, 50));
-        commit_software_canvas_software_compositing_worker_timer.Count(
-            elapsed_time.InMicroseconds());
+        commit_software_canvas_software_compositing_worker_timer
+            .CountMicroseconds(elapsed_time);
       }
       break;
     case kOffscreenCanvasCommitTypeCount:
@@ -426,8 +401,6 @@ void CanvasResourceDispatcher::SetNeedsBeginFrameInternal() {
 
 void CanvasResourceDispatcher::OnBeginFrame(
     const viz::BeginFrameArgs& begin_frame_args) {
-  DCHECK(Client());
-
   current_begin_frame_ack_ = viz::BeginFrameAck(begin_frame_args, false);
   if (pending_compositor_frames_ >= kMaxPendingCompositorFrames ||
       (begin_frame_args.type == viz::BeginFrameArgs::MISSED &&
@@ -436,7 +409,8 @@ void CanvasResourceDispatcher::OnBeginFrame(
     return;
   }
 
-  Client()->BeginFrame();
+  if (Client())
+    Client()->BeginFrame();
   // TODO(eseckler): Tell |m_sink| if we did not draw during the BeginFrame.
   current_begin_frame_ack_.sequence_number =
       viz::BeginFrameArgs::kInvalidFrameNumber;
@@ -479,12 +453,14 @@ void CanvasResourceDispatcher::Reshape(const IntSize& size) {
 void CanvasResourceDispatcher::DidAllocateSharedBitmap(
     mojo::ScopedSharedBufferHandle buffer,
     ::gpu::mojom::blink::MailboxPtr id) {
-  sink_->DidAllocateSharedBitmap(std::move(buffer), std::move(id));
+  if (sink_)
+    sink_->DidAllocateSharedBitmap(std::move(buffer), std::move(id));
 }
 
 void CanvasResourceDispatcher::DidDeleteSharedBitmap(
     ::gpu::mojom::blink::MailboxPtr id) {
-  sink_->DidDeleteSharedBitmap(std::move(id));
+  if (sink_)
+    sink_->DidDeleteSharedBitmap(std::move(id));
 }
 
 }  // namespace blink

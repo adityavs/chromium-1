@@ -10,8 +10,12 @@
 namespace blink {
 namespace scheduler {
 
-const base::Feature kHighPriorityInput{"BlinkSchedulerHighPriorityInput",
-                                       base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kHighPriorityInputOnMainThread{
+    "BlinkSchedulerHighPriorityInput", base::FEATURE_ENABLED_BY_DEFAULT};
+
+const base::Feature kHighPriorityInputOnCompositorThread{
+    "BlinkSchedulerHighPriorityInputOnCompositorThread",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kDedicatedWorkerThrottling{
     "BlinkSchedulerWorkerThrottling", base::FEATURE_DISABLED_BY_DEFAULT};
@@ -89,6 +93,17 @@ const base::Feature kLowPriorityForAdFrame{
 // Enables setting the priority of an ad frame to best effort priority.
 const base::Feature kBestEffortPriorityForAdFrame{
     "BlinkSchedulerBestEffortPriorityForAdFrame",
+    base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enables using a resource's fetch priority to determine the priority of the
+// resource's loading tasks posted to blink's scheduler.
+const base::Feature kUseResourceFetchPriority{
+    "BlinkSchedulerResourceFetchPriority", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enables setting the priority of cross-origin task queues to
+// low priority.
+const base::Feature kLowPriorityForCrossOrigin{
+    "BlinkSchedulerLowPriorityForCrossOrigin",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enables a chosen experiments only during the load use case.

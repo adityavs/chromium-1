@@ -8,10 +8,6 @@
 // This file lists all the command IDs understood by e.g. the browser.
 // It is used by Windows RC files, Mac NIB files, and other platforms too.
 
-// Mac NIB files (e.g. chrome/app/nibs/MainMenu.xib) include ID numbers rather
-// than the corresponding #define labels.  If you change a given command's
-// number, any NIB files that refer to it will also need to be updated.
-
 // clang-format off
 
 // Values below IDC_MinimumLabelValue are reserved for dynamic menu items.
@@ -94,6 +90,7 @@
 #define IDC_ROUTE_MEDIA                 35011
 #define IDC_WINDOW_MUTE_SITE            35012
 #define IDC_WINDOW_PIN_TAB              35013
+#define IDC_MIGRATE_LOCAL_CREDIT_CARD_FOR_PAGE 35014
 
 // Clipboard commands
 #define IDC_CUT                         36000
@@ -357,6 +354,9 @@
 // Open link in profile entries
 #define IDC_OPEN_LINK_IN_PROFILE_FIRST 52300
 #define IDC_OPEN_LINK_IN_PROFILE_LAST  52399
+
+// Start smart text selection action
+#define IDC_CONTENT_CONTEXT_START_SMART_SELECTION_ACTION 52400
 
 // NOTE: The last valid command value is 57343 (0xDFFF)
 // See http://msdn.microsoft.com/en-us/library/t2zechd4(VS.71).aspx

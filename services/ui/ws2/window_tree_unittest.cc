@@ -23,6 +23,8 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/aura/layout_manager.h"
+#include "ui/aura/test/aura_test_helper.h"
+#include "ui/aura/test/test_screen.h"
 #include "ui/aura/test/test_window_delegate.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_tracker.h"
@@ -971,6 +973,29 @@ TEST(WindowTreeTest2, DeleteWindow) {
             SingleChangeToDescription(*setup.changes()));
 }
 
+TEST(WindowTreeTest2, DeleteTopLevel) {
+  WindowServiceTestSetup setup;
+  aura::Window* top_level =
+      setup.window_tree_test_helper()->NewTopLevelWindow();
+  const ClientWindowId top_level_id =
+      setup.window_tree_test_helper()->ClientWindowIdForWindow(top_level);
+  ASSERT_TRUE(top_level);
+  aura::WindowTracker tracker;
+  tracker.Add(top_level);
+  setup.changes()->clear();
+
+  // Ask the tree to delete the window, which should result in deleting the
+  // Window as well responding with success.
+  setup.window_tree_test_helper()->DeleteWindow(top_level);
+  EXPECT_TRUE(tracker.windows().empty());
+  EXPECT_EQ("ChangeCompleted id=1 success=true",
+            SingleChangeToDescription(*setup.changes()));
+
+  // Make sure the WindowTree doesn't have a mapping for the id anymore.
+  EXPECT_FALSE(
+      setup.window_tree_test_helper()->GetWindowByClientId(top_level_id));
+}
+
 TEST(WindowTreeTest2, ExternalDeleteWindow) {
   WindowServiceTestSetup setup;
   aura::Window* window = setup.window_tree_test_helper()->NewWindow();
@@ -1654,6 +1679,23 @@ TEST(WindowTreeTest2, CancelDragDropBeforeDragLoopRun) {
   // The request should fail.
   EXPECT_EQ("OnPerformDragDropCompleted id=12 success=false action=0",
             SingleChangeToDescription(*setup.changes()));
+}
+
+TEST(WindowTreeTest2, DsfChanges) {
+  WindowServiceTestSetup setup;
+  aura::Window* top_level =
+      setup.window_tree_test_helper()->NewTopLevelWindow();
+  ASSERT_TRUE(top_level);
+  top_level->Show();
+  ServerWindow* top_level_server_window = ServerWindow::GetMayBeNull(top_level);
+  const base::Optional<viz::LocalSurfaceId> initial_surface_id =
+      top_level_server_window->local_surface_id();
+  EXPECT_TRUE(initial_surface_id);
+
+  // Changing the scale factor should change the LocalSurfaceId.
+  setup.aura_test_helper()->test_screen()->SetDeviceScaleFactor(2.0f);
+  EXPECT_TRUE(top_level_server_window->local_surface_id());
+  EXPECT_NE(*top_level_server_window->local_surface_id(), *initial_surface_id);
 }
 
 }  // namespace

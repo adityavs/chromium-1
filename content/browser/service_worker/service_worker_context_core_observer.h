@@ -6,6 +6,7 @@
 #define CONTENT_BROWSER_SERVICE_WORKER_SERVICE_WORKER_CONTEXT_CORE_OBSERVER_H_
 
 #include <stdint.h>
+#include <string>
 
 #include "base/callback.h"
 #include "base/strings/string16.h"
@@ -71,22 +72,12 @@ class ServiceWorkerContextCoreObserver {
       int64_t version_id,
       base::Time script_response_time,
       base::Time script_last_modified) {}
-  virtual void OnErrorReported(int64_t version_id,
-                               int process_id,
-                               int thread_id,
-                               const ErrorInfo& info) {}
+  virtual void OnErrorReported(int64_t version_id, const ErrorInfo& info) {}
   virtual void OnReportConsoleMessage(int64_t version_id,
-                                      int process_id,
-                                      int thread_id,
                                       const ConsoleMessage& message) {}
-  // |web_contents_getter| is only set in PlzNavigate.
-  virtual void OnControlleeAdded(
-      int64_t version_id,
-      const std::string& uuid,
-      int process_id,
-      int route_id,
-      const base::Callback<WebContents*(void)>& web_contents_getter,
-      blink::mojom::ServiceWorkerProviderType type) {}
+  virtual void OnControlleeAdded(int64_t version_id,
+                                 const std::string& uuid,
+                                 const ServiceWorkerClientInfo& info) {}
   virtual void OnControlleeRemoved(int64_t version_id,
                                    const std::string& uuid) {}
   // Called when the ServiceWorkerContainer.register() promise is resolved.

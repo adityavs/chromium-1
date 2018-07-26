@@ -65,6 +65,8 @@ extern const char kGSuiteSyncPasswordEntryRequestOutcomeHistogram[];
 extern const char kGSuiteSyncPasswordWarningDialogHistogram[];
 extern const char kGSuiteSyncPasswordPageInfoHistogram[];
 extern const char kGSuiteSyncPasswordInterstitialHistogram[];
+extern const char kInterstitialActionByUserNavigationHistogram[];
+;
 
 using ReusedPasswordType =
     LoginReputationClientRequest::PasswordReuseEvent::ReusedPasswordType;
@@ -101,6 +103,8 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
     PASSWORD_ALERT_MODE = 18,
     // No request is event sent if the admin turns off password protection.
     TURNED_OFF_BY_ADMIN = 19,
+    // Safe Browsing is disabled.
+    SAFE_BROWSING_DISABLED = 20,
     MAX_OUTCOME
   };
 
@@ -153,15 +157,21 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
   LoginReputationClientResponse::VerdictType GetCachedVerdict(
       const GURL& url,
       LoginReputationClientRequest::TriggerType trigger_type,
+      ReusedPasswordType password_type,
       LoginReputationClientResponse* out_response);
 
   // Stores |verdict| in |settings| based on its |trigger_type|, |url|,
-  // |verdict| and |receive_time|.
+  // reused |password_type|, |verdict| and |receive_time|.
   virtual void CacheVerdict(
       const GURL& url,
       LoginReputationClientRequest::TriggerType trigger_type,
+      ReusedPasswordType password_type,
       LoginReputationClientResponse* verdict,
       const base::Time& receive_time);
+
+  // Migrates cached password reuse verdicts such that verdicts of different
+  // reused password type are cached separately.
+  void MigrateCachedVerdicts();
 
   // Removes all the expired verdicts from cache.
   void CleanUpExpiredVerdicts();
@@ -228,6 +238,7 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
                                 ReusedPasswordType password_type) = 0;
 
   virtual void UpdateSecurityState(safe_browsing::SBThreatType threat_type,
+                                   ReusedPasswordType password_type,
                                    content::WebContents* web_contents) = 0;
 
   // Log the |reason| to several UMA metrics, depending on the value
@@ -288,11 +299,11 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
  protected:
   friend class PasswordProtectionRequest;
 
-  // Chrome can send password protection ping if it is allowed by Finch config
-  // and if Safe Browsing can compute reputation of |main_frame_url| (e.g.
-  // Safe Browsing is not able to compute reputation of a private IP or
-  // a local host). Update |reason| if sending ping is not allowed.
-  // |password_type| is used for UMA metric recording.
+  // Chrome can send password protection ping if it is allowed by for the
+  // |trigger_type| and if Safe Browsing can compute reputation of
+  // |main_frame_url| (e.g. Safe Browsing is not able to compute reputation of a
+  // private IP or a local host). Update |reason| if sending ping is not
+  // allowed. |password_type| is used for UMA metric recording.
   bool CanSendPing(LoginReputationClientRequest::TriggerType trigger_type,
                    const GURL& main_frame_url,
                    ReusedPasswordType password_type,
@@ -370,6 +381,13 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
 
   bool IsModalWarningShowingInWebContents(content::WebContents* web_contents);
 
+  virtual bool CanShowInterstitial(RequestOutcome reason,
+                                   ReusedPasswordType password_type,
+                                   const GURL& main_frame_url) = 0;
+
+  void LogPasswordAlertModeOutcome(RequestOutcome reason,
+                                   ReusedPasswordType password_type);
+
  private:
   friend class PasswordProtectionServiceTest;
   friend class TestPasswordProtectionService;
@@ -414,7 +432,11 @@ class PasswordProtectionService : public history::HistoryServiceObserver {
   bool RemoveExpiredVerdicts(LoginReputationClientRequest::TriggerType type,
                              base::DictionaryValue* cache_dictionary);
 
-  static bool ParseVerdictEntry(base::DictionaryValue* verdict_entry,
+  // Helper function called by RemoveExpiredVerdicts(..). Returns the number of
+  // expired entries removed.
+  size_t RemoveExpiredEntries(base::Value* verdict_dictionary);
+
+  static bool ParseVerdictEntry(base::Value* verdict_entry,
                                 int* out_verdict_received_time,
                                 LoginReputationClientResponse* out_verdict);
 

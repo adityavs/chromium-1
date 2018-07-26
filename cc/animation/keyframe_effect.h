@@ -41,7 +41,7 @@ typedef size_t KeyframeEffectId;
 class CC_ANIMATION_EXPORT KeyframeEffect {
  public:
   explicit KeyframeEffect(KeyframeEffectId id);
-  ~KeyframeEffect();
+  virtual ~KeyframeEffect();
 
   static std::unique_ptr<KeyframeEffect> Create(KeyframeEffectId id);
   std::unique_ptr<KeyframeEffect> CreateImplInstance() const;
@@ -80,7 +80,7 @@ class CC_ANIMATION_EXPORT KeyframeEffect {
   void AttachElement(ElementId element_id);
   void DetachElement();
 
-  void Tick(base::TimeTicks monotonic_time);
+  virtual void Tick(base::TimeTicks monotonic_time);
   static void TickKeyframeModel(base::TimeTicks monotonic_time,
                                 KeyframeModel* keyframe_model,
                                 AnimationTarget* target);
@@ -91,12 +91,13 @@ class CC_ANIMATION_EXPORT KeyframeEffect {
   void UpdateTickingState(UpdateTickingType type);
 
   void Pause(base::TimeDelta pause_offset);
-  void Abort();
-  void AbortKeyframeModelsWithProperty(TargetProperty::Type target_property,
-                                       bool needs_completion);
 
   void AddKeyframeModel(std::unique_ptr<KeyframeModel> keyframe_model);
-  void RemoveKeyframeModels();
+  void PauseKeyframeModel(int keyframe_model_id, double time_offset);
+  void RemoveKeyframeModel(int keyframe_model_id);
+  void AbortKeyframeModel(int keyframe_model_id);
+  void AbortKeyframeModelsWithProperty(TargetProperty::Type target_property,
+                                       bool needs_completion);
 
   void ActivateKeyframeEffects();
 

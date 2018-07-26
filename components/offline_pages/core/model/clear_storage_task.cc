@@ -77,9 +77,9 @@ std::unique_ptr<std::vector<PageInfo>> GetAllTemporaryPageInfos(
     sql::Connection* db) {
   auto result = std::make_unique<std::vector<PageInfo>>();
 
-  const char kSql[] = "SELECT " PAGE_INFO_PROJECTION
-                      " FROM offlinepages_v1"
-                      " WHERE client_namespace = ?";
+  static const char kSql[] = "SELECT " PAGE_INFO_PROJECTION
+                             " FROM offlinepages_v1"
+                             " WHERE client_namespace = ?";
 
   for (const auto& temp_namespace_policy : temp_namespace_policy_map) {
     std::string name_space = temp_namespace_policy.first;
@@ -185,9 +185,6 @@ std::pair<size_t, DeletePageResult> ClearPagesSync(
     const base::Time& start_time,
     const ArchiveManager::StorageStats& stats,
     sql::Connection* db) {
-  if (!db)
-    return std::make_pair(0, DeletePageResult::STORE_FAILURE);
-
   std::unique_ptr<std::vector<PageInfo>> page_infos =
       GetPageInfosToClear(temp_namespace_policy_map, start_time, stats, db);
 
@@ -259,7 +256,8 @@ void ClearStorageTask::OnGetStorageStatsDone(
   store_->Execute(base::BindOnce(&ClearPagesSync, temp_namespace_policy_map,
                                  clearup_time_, stats),
                   base::BindOnce(&ClearStorageTask::OnClearPagesDone,
-                                 weak_ptr_factory_.GetWeakPtr()));
+                                 weak_ptr_factory_.GetWeakPtr()),
+                  {0, DeletePageResult::STORE_FAILURE});
 }
 
 void ClearStorageTask::OnClearPagesDone(

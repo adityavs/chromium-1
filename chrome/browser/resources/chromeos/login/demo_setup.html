@@ -1,4 +1,3 @@
-
 <iron-iconset-svg name="demo-setup-32" size="32">
   <svg>
     <defs>
@@ -37,10 +36,12 @@
               class="options-list-item flex layout horizontal center">
             <div>Online setup</div>
           </cr-radio-button>
-          <cr-radio-button name="offlineSetup"
-              class="options-list-item flex layout horizontal center">
-            <div>Offline setup</div>
-          </cr-radio-button>
+          <template is="dom-if" if="[[offlineDemoModeEnabled_]]">
+            <cr-radio-button name="offlineSetup"
+                class="options-list-item flex layout horizontal center">
+              <div>Offline setup</div>
+            </cr-radio-button>
+          </template>
         </paper-radio-group>
       </div>
       <div slot="bottom-buttons" class="layout horizontal justified">

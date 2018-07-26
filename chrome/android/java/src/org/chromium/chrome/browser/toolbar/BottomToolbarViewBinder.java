@@ -54,19 +54,25 @@ public class BottomToolbarViewBinder
             view.toolbarRoot.setVisibility(model.getValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE)
                             ? View.VISIBLE
                             : View.INVISIBLE);
+        } else if (BottomToolbarModel.COMPOSITED_VIEW_VISIBLE == propertyKey) {
+            view.sceneLayer.setIsVisible(
+                    model.getValue(BottomToolbarModel.COMPOSITED_VIEW_VISIBLE));
+            model.getValue(BottomToolbarModel.LAYOUT_MANAGER).requestUpdate();
         } else if (BottomToolbarModel.SEARCH_ACCELERATOR_LISTENER == propertyKey) {
             view.toolbarRoot.findViewById(R.id.search_button)
                     .setOnClickListener(
                             model.getValue(BottomToolbarModel.SEARCH_ACCELERATOR_LISTENER));
-        } else if (BottomToolbarModel.MENU_BUTTON_LISTENER == propertyKey) {
-            view.toolbarRoot.findViewById(R.id.menu_button)
-                    .setOnTouchListener(model.getValue(BottomToolbarModel.MENU_BUTTON_LISTENER));
         } else if (BottomToolbarModel.LAYOUT_MANAGER == propertyKey) {
             assert view.sceneLayer == null;
             view.sceneLayer = new ScrollingBottomViewSceneLayer(
                     view.toolbarRoot, view.toolbarRoot.getTopShadowHeight());
             model.getValue(BottomToolbarModel.LAYOUT_MANAGER)
                     .addSceneOverlayToBack(view.sceneLayer);
+        } else if (BottomToolbarModel.TOOLBAR_SWIPE_LAYOUT == propertyKey) {
+            assert view.sceneLayer != null;
+            model.getValue(BottomToolbarModel.TOOLBAR_SWIPE_LAYOUT)
+                    .setBottomToolbarSceneLayers(new ScrollingBottomViewSceneLayer(view.sceneLayer),
+                            new ScrollingBottomViewSceneLayer(view.sceneLayer));
         } else if (BottomToolbarModel.RESOURCE_MANAGER == propertyKey) {
             model.getValue(BottomToolbarModel.RESOURCE_MANAGER)
                     .getDynamicResourceLoader()
@@ -77,11 +83,6 @@ public class BottomToolbarViewBinder
                     .setVisibility(model.getValue(BottomToolbarModel.SEARCH_ACCELERATOR_VISIBLE)
                                     ? View.VISIBLE
                                     : View.INVISIBLE);
-        } else if (BottomToolbarModel.UPDATE_BADGE_VISIBLE == propertyKey) {
-            view.toolbarRoot.findViewById(R.id.menu_badge)
-                    .setVisibility(model.getValue(BottomToolbarModel.UPDATE_BADGE_VISIBLE)
-                                    ? View.VISIBLE
-                                    : View.GONE);
         } else if (BottomToolbarModel.TOOLBAR_SWIPE_HANDLER == propertyKey) {
             view.toolbarRoot.setSwipeDetector(
                     model.getValue(BottomToolbarModel.TOOLBAR_SWIPE_HANDLER));

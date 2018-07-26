@@ -39,6 +39,10 @@ void WebRuntimeFeatures::EnableBlinkHeapIncrementalMarking(bool enable) {
   RuntimeEnabledFeatures::SetHeapIncrementalMarkingEnabled(enable);
 }
 
+void WebRuntimeFeatures::EnableBloatedRendererDetection(bool enable) {
+  RuntimeEnabledFeatures::SetBloatedRendererDetectionEnabled(enable);
+}
+
 void WebRuntimeFeatures::EnableExperimentalFeatures(bool enable) {
   RuntimeEnabledFeatures::SetExperimentalFeaturesEnabled(enable);
 }
@@ -86,6 +90,10 @@ void WebRuntimeFeatures::EnableAccelerated2dCanvas(bool enable) {
 
 void WebRuntimeFeatures::EnableAccessibilityObjectModel(bool enable) {
   RuntimeEnabledFeatures::SetAccessibilityObjectModelEnabled(enable);
+}
+
+void WebRuntimeFeatures::EnableAdTagging(bool enable) {
+  RuntimeEnabledFeatures::SetAdTaggingEnabled(enable);
 }
 
 void WebRuntimeFeatures::EnableAllowActivationDelegationAttr(bool enable) {
@@ -176,6 +184,10 @@ void WebRuntimeFeatures::EnableLayeredAPI(bool enable) {
   RuntimeEnabledFeatures::SetLayeredAPIEnabled(enable);
 }
 
+void WebRuntimeFeatures::EnableLayoutNG(bool enable) {
+  RuntimeEnabledFeatures::SetLayoutNGEnabled(enable);
+}
+
 void WebRuntimeFeatures::EnableLazyFrameLoading(bool enable) {
   RuntimeEnabledFeatures::SetLazyFrameLoadingEnabled(enable);
 }
@@ -222,6 +234,10 @@ void WebRuntimeFeatures::EnableNotifications(bool enable) {
 
 void WebRuntimeFeatures::EnableNavigatorContentUtils(bool enable) {
   RuntimeEnabledFeatures::SetNavigatorContentUtilsEnabled(enable);
+}
+
+void WebRuntimeFeatures::EnableNestedWorkers(bool enable) {
+  RuntimeEnabledFeatures::SetNestedWorkersEnabled(enable);
 }
 
 void WebRuntimeFeatures::EnableNetInfoDownlinkMax(bool enable) {
@@ -316,8 +332,8 @@ void WebRuntimeFeatures::EnableTouchEventFeatureDetection(bool enable) {
   RuntimeEnabledFeatures::SetTouchEventFeatureDetectionEnabled(enable);
 }
 
-void WebRuntimeFeatures::EnableTouchpadAndWheelScrollLatching(bool enable) {
-  RuntimeEnabledFeatures::SetTouchpadAndWheelScrollLatchingEnabled(enable);
+void WebRuntimeFeatures::EnableWebGL2ComputeContext(bool enable) {
+  RuntimeEnabledFeatures::SetWebGL2ComputeContextEnabled(enable);
 }
 
 void WebRuntimeFeatures::EnableWebGLDraftExtensions(bool enable) {
@@ -508,12 +524,12 @@ void WebRuntimeFeatures::EnableWorkStealingInScriptRunner(bool enable) {
   RuntimeEnabledFeatures::SetWorkStealingInScriptRunnerEnabled(enable);
 }
 
-void WebRuntimeFeatures::EnableStopInBackground(bool enable) {
-  RuntimeEnabledFeatures::SetStopInBackgroundEnabled(enable);
+void WebRuntimeFeatures::EnableScheduledScriptStreaming(bool enable) {
+  RuntimeEnabledFeatures::SetScheduledScriptStreamingEnabled(enable);
 }
 
-void WebRuntimeFeatures::EnableStopLoadingInBackground(bool enable) {
-  RuntimeEnabledFeatures::SetStopLoadingInBackgroundEnabled(enable);
+void WebRuntimeFeatures::EnableStopInBackground(bool enable) {
+  RuntimeEnabledFeatures::SetStopInBackgroundEnabled(enable);
 }
 
 void WebRuntimeFeatures::EnableStopNonTimersInBackground(bool enable) {

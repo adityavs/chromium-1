@@ -9,6 +9,8 @@
 #include "base/files/file_path.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/strings/string_util.h"
+#include "base/task_scheduler/post_task.h"
+#include "base/timer/timer.h"
 #include "chrome/browser/chromeos/crostini/crostini_app_launch_observer.h"
 #include "chrome/browser/chromeos/crostini/crostini_manager.h"
 #include "chrome/browser/chromeos/crostini/crostini_pref_names.h"
@@ -17,6 +19,7 @@
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
 #include "chrome/browser/chromeos/virtual_machines/virtual_machines_util.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/app_list/crostini/crostini_app_icon.h"
 #include "chrome/browser/ui/ash/launcher/chrome_launcher_controller.h"
 #include "chrome/browser/ui/ash/launcher/shelf_spinner_controller.h"
 #include "chrome/browser/ui/ash/launcher/shelf_spinner_item_controller.h"
@@ -30,6 +33,7 @@ namespace {
 
 constexpr char kCrostiniAppLaunchHistogram[] = "Crostini.AppLaunch";
 constexpr char kCrostiniAppNamePrefix[] = "_crostini_";
+constexpr int64_t kDelayBeforeSpinnerMs = 400;
 
 // If true then override IsCrostiniUIAllowedForProfile and related methods to
 // turn on Crostini.
@@ -108,12 +112,90 @@ void LaunchContainerApplication(
   CrostiniAppLaunchObserver* observer =
       chrome_launcher_controller->crostini_app_window_shelf_controller();
   DCHECK_NE(observer, nullptr);
-  observer->OnAppLaunchRequested(registration.DesktopFileId(), display_id);
+  observer->OnAppLaunchRequested(app_id, display_id);
   crostini::CrostiniManager::GetInstance()->LaunchContainerApplication(
       profile, registration.VmName(), registration.ContainerName(),
       registration.DesktopFileId(), files,
       base::BindOnce(OnContainerApplicationLaunched, app_id));
 }
+
+// Helper class for loading icons. The callback is called when all icons have
+// been loaded, or after a provided timeout, after which the object deletes
+// itself.
+// TODO(timloh): We should consider having a service, so multiple requests for
+// the same icon won't load the same image multiple times and only the first
+// request would incur the loading delay.
+class IconLoadWaiter : public CrostiniAppIcon::Observer {
+ public:
+  static void LoadIcons(
+      Profile* profile,
+      const std::vector<std::string>& app_ids,
+      int resource_size_in_dip,
+      ui::ScaleFactor scale_factor,
+      base::TimeDelta timeout,
+      base::OnceCallback<void(const std::vector<gfx::ImageSkia>&)> callback) {
+    new IconLoadWaiter(profile, app_ids, resource_size_in_dip, scale_factor,
+                       timeout, std::move(callback));
+  }
+
+ private:
+  IconLoadWaiter(
+      Profile* profile,
+      const std::vector<std::string>& app_ids,
+      int resource_size_in_dip,
+      ui::ScaleFactor scale_factor,
+      base::TimeDelta timeout,
+      base::OnceCallback<void(const std::vector<gfx::ImageSkia>&)> callback)
+      : callback_(std::move(callback)) {
+    for (const std::string& app_id : app_ids) {
+      icons_.push_back(std::make_unique<CrostiniAppIcon>(
+          profile, app_id, resource_size_in_dip, this));
+      icons_.back()->LoadForScaleFactor(scale_factor);
+    }
+
+    timeout_timer_.Start(FROM_HERE, timeout, this,
+                         &IconLoadWaiter::RunCallback);
+  }
+
+  // TODO(timloh): This is only called when an icon is found, so if any of the
+  // requested apps are missing an icon, we'll have to wait for the timeout. We
+  // should add an interface so we can avoid this.
+  void OnIconUpdated(CrostiniAppIcon* icon) override {
+    loaded_icons_++;
+    if (loaded_icons_ != icons_.size())
+      return;
+
+    timeout_timer_.AbandonAndStop();
+    RunCallback();
+  }
+
+  void Delete() {
+    DCHECK(!timeout_timer_.IsRunning());
+    delete this;
+  }
+
+  void RunCallback() {
+    DCHECK(callback_);
+    std::vector<gfx::ImageSkia> result;
+    for (const auto& icon : icons_)
+      result.emplace_back(icon->image_skia());
+    std::move(callback_).Run(result);
+
+    // If we're running the callback as loading has finished, we can't delete
+    // ourselves yet as it would destroy the CrostiniAppIcon which is calling
+    // into us right now.
+    base::SequencedTaskRunnerHandle::Get()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&IconLoadWaiter::Delete, base::Unretained(this)));
+  }
+
+  std::vector<std::unique_ptr<CrostiniAppIcon>> icons_;
+  size_t loaded_icons_ = 0;
+
+  base::OneShotTimer timeout_timer_;
+
+  base::OnceCallback<void(const std::vector<gfx::ImageSkia>&)> callback_;
+};
 
 }  // namespace
 
@@ -149,10 +231,29 @@ bool IsCrostiniEnabled(Profile* profile) {
   return profile->GetPrefs()->GetBoolean(crostini::prefs::kCrostiniEnabled);
 }
 
+bool IsCrostiniRunning(Profile* profile) {
+  return crostini::CrostiniManager::GetInstance()->IsVmRunning(
+      profile, kCrostiniDefaultVmName);
+}
+
 void LaunchCrostiniApp(Profile* profile,
                        const std::string& app_id,
                        int64_t display_id) {
   LaunchCrostiniApp(profile, app_id, display_id, std::vector<std::string>());
+}
+
+void AddSpinner(const std::string& app_id,
+                Profile* profile,
+                std::string vm_name,
+                std::string container_name) {
+  ChromeLauncherController* chrome_controller =
+      ChromeLauncherController::instance();
+  if (chrome_controller &&
+      !crostini::CrostiniManager::GetInstance()->IsContainerRunning(
+          profile, vm_name, container_name)) {
+    chrome_controller->GetShelfSpinnerController()->AddSpinnerToShelf(
+        app_id, std::make_unique<ShelfSpinnerItemController>(app_id));
+  }
 }
 
 void LaunchCrostiniApp(Profile* profile,
@@ -206,17 +307,26 @@ void LaunchCrostiniApp(Profile* profile,
   // Update the last launched time.
   registry_service->AppLaunched(app_id);
 
-  // Show a spinner as it may take a while for the app window to appear.
-  ChromeLauncherController* chrome_controller =
-      ChromeLauncherController::instance();
-  DCHECK(chrome_controller);
-  chrome_controller->GetShelfSpinnerController()->AddSpinnerToShelf(
-      app_id, std::make_unique<ShelfSpinnerItemController>(app_id));
-
+  base::ThreadTaskRunnerHandle::Get()->PostDelayedTask(
+      FROM_HERE,
+      base::BindOnce(&AddSpinner, app_id, profile, vm_name, container_name),
+      base::TimeDelta::FromMilliseconds(kDelayBeforeSpinnerMs));
   crostini_manager->RestartCrostini(
       profile, vm_name, container_name,
       base::BindOnce(OnCrostiniRestarted, app_id, browser,
                      std::move(launch_closure)));
+}
+
+void LoadIcons(Profile* profile,
+               const std::vector<std::string>& app_ids,
+               int resource_size_in_dip,
+               ui::ScaleFactor scale_factor,
+               base::TimeDelta timeout,
+               base::OnceCallback<void(const std::vector<gfx::ImageSkia>&)>
+                   icons_loaded_callback) {
+  IconLoadWaiter::LoadIcons(profile, app_ids, resource_size_in_dip,
+                            scale_factor, timeout,
+                            std::move(icons_loaded_callback));
 }
 
 std::string CryptohomeIdForProfile(Profile* profile) {

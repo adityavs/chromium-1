@@ -29,7 +29,6 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
-#include "cc/layers/layer.h"
 #include "cc/layers/picture_layer.h"
 #include "cc/paint/display_item_list.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -39,10 +38,10 @@
 #include "third_party/blink/public/web/blink.h"
 #include "third_party/blink/renderer/core/dom/layout_tree_builder_traversal.h"
 #include "third_party/blink/renderer/core/dom/node.h"
-#include "third_party/blink/renderer/core/exported/web_settings_impl.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/web_frame_widget_base.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/layout/layout_box_model_object.h"
@@ -69,15 +68,12 @@
 
 namespace blink {
 
-std::unique_ptr<LinkHighlightImpl> LinkHighlightImpl::Create(
-    Node* node,
-    WebViewImpl* owning_web_view) {
-  return base::WrapUnique(new LinkHighlightImpl(node, owning_web_view));
+std::unique_ptr<LinkHighlightImpl> LinkHighlightImpl::Create(Node* node) {
+  return base::WrapUnique(new LinkHighlightImpl(node));
 }
 
-LinkHighlightImpl::LinkHighlightImpl(Node* node, WebViewImpl* owning_web_view)
+LinkHighlightImpl::LinkHighlightImpl(Node* node)
     : node_(node),
-      owning_web_view_(owning_web_view),
       current_graphics_layer_(nullptr),
       is_scrolling_graphics_layer_(false),
       geometry_needs_update_(false),
@@ -85,32 +81,23 @@ LinkHighlightImpl::LinkHighlightImpl(Node* node, WebViewImpl* owning_web_view)
       start_time_(CurrentTimeTicks()),
       unique_id_(NewUniqueObjectId()) {
   DCHECK(node_);
-  DCHECK(owning_web_view);
   content_layer_ = cc::PictureLayer::Create(this);
-  clip_layer_ = cc::Layer::Create();
-  clip_layer_->SetTransformOrigin(FloatPoint3D());
-  clip_layer_->AddChild(content_layer_);
+  content_layer_->SetTransformOrigin(FloatPoint3D());
 
   compositor_animation_ = CompositorAnimation::Create();
   DCHECK(compositor_animation_);
   compositor_animation_->SetAnimationDelegate(this);
-  if (owning_web_view_->LinkHighlightsTimeline())
-    owning_web_view_->LinkHighlightsTimeline()->AnimationAttached(*this);
 
-  CompositorElementId element_id =
-      CompositorElementIdFromUniqueObjectId(unique_id_);
-  compositor_animation_->AttachElement(element_id);
+  compositor_animation_->AttachElement(element_id());
   content_layer_->SetIsDrawable(true);
   content_layer_->SetOpacity(1);
-  content_layer_->SetElementId(element_id);
+  content_layer_->SetElementId(element_id());
   geometry_needs_update_ = true;
 }
 
 LinkHighlightImpl::~LinkHighlightImpl() {
   if (compositor_animation_->IsElementAttached())
     compositor_animation_->DetachElement();
-  if (owning_web_view_->LinkHighlightsTimeline())
-    owning_web_view_->LinkHighlightsTimeline()->AnimationDestroyed(*this);
   compositor_animation_->SetAnimationDelegate(nullptr);
   compositor_animation_.reset();
 
@@ -118,15 +105,12 @@ LinkHighlightImpl::~LinkHighlightImpl() {
   ReleaseResources();
 }
 
-cc::PictureLayer* LinkHighlightImpl::ContentLayer() {
-  return content_layer_.get();
-}
-
-cc::Layer* LinkHighlightImpl::ClipLayer() {
-  return clip_layer_.get();
-}
-
 void LinkHighlightImpl::ReleaseResources() {
+  if (!node_)
+    return;
+
+  if (auto* layout_object = node_->GetLayoutObject())
+    layout_object->SetNeedsPaintPropertyUpdate();
   node_.Clear();
 }
 
@@ -143,8 +127,6 @@ void LinkHighlightImpl::AttachLinkHighlightToCompositingLayer(
   }
   if (!new_graphics_layer)
     return;
-
-  clip_layer_->SetTransform(gfx::Transform());
 
   if (current_graphics_layer_ != new_graphics_layer) {
     if (current_graphics_layer_)
@@ -218,10 +200,10 @@ bool LinkHighlightImpl::ComputeHighlightLayerPathAndPosition(
       absolute_quad.Move(ToScrollOffset(scroll_position));
     }
 
-    absolute_quad.SetP1(RoundedIntPoint(absolute_quad.P1()));
-    absolute_quad.SetP2(RoundedIntPoint(absolute_quad.P2()));
-    absolute_quad.SetP3(RoundedIntPoint(absolute_quad.P3()));
-    absolute_quad.SetP4(RoundedIntPoint(absolute_quad.P4()));
+    absolute_quad.SetP1(FloatPoint(RoundedIntPoint(absolute_quad.P1())));
+    absolute_quad.SetP2(FloatPoint(RoundedIntPoint(absolute_quad.P2())));
+    absolute_quad.SetP3(FloatPoint(RoundedIntPoint(absolute_quad.P3())));
+    absolute_quad.SetP4(FloatPoint(RoundedIntPoint(absolute_quad.P4())));
     FloatQuad transformed_quad =
         paint_invalidation_container.AbsoluteToLocalQuad(
             absolute_quad, kUseTransforms | kTraverseDocumentBoundaries);
@@ -241,7 +223,9 @@ bool LinkHighlightImpl::ComputeHighlightLayerPathAndPosition(
     // links: these should ideally be merged into a single rect before creating
     // the path, but that's another CL.
     if (quads.size() == 1 && transformed_quad.IsRectilinear() &&
-        !owning_web_view_->SettingsImpl()->MockGestureTapHighlightsEnabled()) {
+        !node_->GetDocument()
+             .GetSettings()
+             ->GetMockGestureTapHighlightsEnabled()) {
       FloatSize rect_rounding_radii(3, 3);
       new_path.AddRoundedRect(transformed_quad.BoundingBox(),
                               rect_rounding_radii);
@@ -339,7 +323,6 @@ void LinkHighlightImpl::StartHighlightAnimationIfNeeded() {
   compositor_animation_->AddKeyframeModel(std::move(keyframe_model));
 
   Invalidate();
-  owning_web_view_->MainFrameImpl()->FrameWidgetImpl()->ScheduleAnimation();
 }
 
 void LinkHighlightImpl::ClearGraphicsLayerLinkHighlightPointer() {
@@ -408,11 +391,27 @@ void LinkHighlightImpl::Invalidate() {
 }
 
 cc::Layer* LinkHighlightImpl::Layer() {
-  return ClipLayer();
+  return content_layer_.get();
 }
 
 CompositorAnimation* LinkHighlightImpl::GetCompositorAnimation() const {
   return compositor_animation_.get();
+}
+
+CompositorElementId LinkHighlightImpl::element_id() {
+  return CompositorElementIdFromUniqueObjectId(unique_id_);
+}
+
+const EffectPaintPropertyNode* LinkHighlightImpl::effect() {
+  if (!node_)
+    return nullptr;
+
+  if (auto* layout_object = node_->GetLayoutObject()) {
+    if (auto* properties = layout_object->FirstFragment().PaintProperties())
+      return properties->LinkHighlightEffect();
+  }
+
+  return nullptr;
 }
 
 }  // namespace blink

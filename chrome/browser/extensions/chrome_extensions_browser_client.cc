@@ -40,6 +40,7 @@
 #include "chrome/browser/sessions/session_tab_helper.h"
 #include "chrome/browser/task_manager/web_contents_tags.h"
 #include "chrome/browser/ui/bluetooth/chrome_extension_bluetooth_chooser.h"
+#include "chrome/browser/ui/webui/chrome_web_ui_controller_factory.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_paths.h"
 #include "chrome/common/chrome_switches.h"
@@ -61,6 +62,7 @@
 #include "extensions/common/features/feature_channel.h"
 
 #if defined(OS_CHROMEOS)
+#include "chrome/browser/chromeos/login/demo_mode/demo_session.h"
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
 #include "chrome/browser/extensions/updater/chromeos_extension_cache_delegate.h"
 #include "chrome/browser/extensions/updater/extension_cache_impl.h"
@@ -288,6 +290,16 @@ bool ChromeExtensionsBrowserClient::DidVersionUpdate(
 
 void ChromeExtensionsBrowserClient::PermitExternalProtocolHandler() {
   ExternalProtocolHandler::PermitLaunchUrl();
+}
+
+bool ChromeExtensionsBrowserClient::IsInDemoMode() {
+#if defined(OS_CHROMEOS)
+  const chromeos::DemoSession* const demo_session =
+      chromeos::DemoSession::Get();
+  return demo_session && demo_session->started();
+#else
+  return false;
+#endif
 }
 
 bool ChromeExtensionsBrowserClient::IsRunningInForcedAppMode() {
@@ -521,6 +533,12 @@ bool ChromeExtensionsBrowserClient::IsExtensionEnabled(
     content::BrowserContext* context) const {
   return ExtensionSystem::Get(context)->extension_service()->IsExtensionEnabled(
       extension_id);
+}
+
+bool ChromeExtensionsBrowserClient::IsWebUIAllowedToMakeNetworkRequests(
+    const url::Origin& origin) {
+  return ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
+      origin);
 }
 
 // static

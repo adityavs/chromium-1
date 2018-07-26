@@ -16,6 +16,7 @@
 #include "net/third_party/quic/core/quic_pending_retransmission.h"
 #include "net/third_party/quic/core/quic_simple_buffer_allocator.h"
 #include "net/third_party/quic/core/quic_utils.h"
+#include "net/third_party/quic/platform/api/quic_expect_bug.h"
 #include "net/third_party/quic/platform/api/quic_socket_address.h"
 #include "net/third_party/quic/platform/api/quic_string.h"
 #include "net/third_party/quic/platform/api/quic_string_piece.h"
@@ -28,6 +29,7 @@
 using testing::_;
 using testing::DoAll;
 using testing::InSequence;
+using testing::Invoke;
 using testing::Return;
 using testing::SaveArg;
 using testing::StrictMock;
@@ -145,6 +147,7 @@ class QuicPacketCreatorTest : public QuicTestWithParam<TestParams> {
         data_("foo"),
         creator_(connection_id_, &client_framer_, &delegate_, &producer_),
         serialized_packet_(creator_.NoPacket()) {
+    EXPECT_CALL(delegate_, GetPacketBuffer()).WillRepeatedly(Return(nullptr));
     creator_.SetEncrypter(ENCRYPTION_INITIAL, QuicMakeUnique<NullEncrypter>(
                                                   Perspective::IS_CLIENT));
     creator_.SetEncrypter(
@@ -281,26 +284,22 @@ TEST_P(QuicPacketCreatorTest, SerializeFrames) {
       EXPECT_CALL(framer_visitor_, OnUnauthenticatedHeader(_));
       EXPECT_CALL(framer_visitor_, OnDecryptedPacket(_));
       EXPECT_CALL(framer_visitor_, OnPacketHeader(_));
-      if (client_framer_.use_incremental_ack_processing()) {
-        EXPECT_CALL(framer_visitor_, OnAckFrameStart(_, _))
+      EXPECT_CALL(framer_visitor_, OnAckFrameStart(_, _))
+          .WillOnce(Return(true));
+      // This test includes an ack frame with largest_acked == 0 and
+      // the size of the first ack-block == 1 (serialized as
+      // 0). This is an invalid format for pre-version99, valid
+      // for version 99.
+      if (client_framer_.transport_version() != QUIC_VERSION_99) {
+        // pre-version 99; ensure that the error is gracefully
+        // handled.
+        EXPECT_CALL(framer_visitor_, OnAckRange(1, 1, true))
             .WillOnce(Return(true));
-        // This test includes an ack frame with largest_acked == 0 and
-        // the size of the first ack-block == 1 (serialized as
-        // 0). This is an invalid format for pre-version99, valid
-        // for version 99.
-        if (client_framer_.transport_version() != QUIC_VERSION_99) {
-          // pre-version 99; ensure that the error is gracefully
-          // handled.
-          EXPECT_CALL(framer_visitor_, OnAckRange(1, 1, true))
-              .WillOnce(Return(true));
-        } else {
-          // version 99; ensure that the correct packet is signalled
-          // properly.
-          EXPECT_CALL(framer_visitor_, OnAckRange(0, 1, true))
-              .WillOnce(Return(true));
-        }
       } else {
-        EXPECT_CALL(framer_visitor_, OnAckFrame(_));
+        // version 99; ensure that the correct packet is signalled
+        // properly.
+        EXPECT_CALL(framer_visitor_, OnAckRange(0, 1, true))
+            .WillOnce(Return(true));
       }
       EXPECT_CALL(framer_visitor_, OnStreamFrame(_));
       EXPECT_CALL(framer_visitor_, OnStreamFrame(_));
@@ -1164,6 +1163,36 @@ TEST_P(QuicPacketCreatorTest, ConsumeDataAndRandomPadding) {
     creator_.Flush();
   }
   EXPECT_EQ(0u, creator_.pending_padding_bytes());
+}
+
+TEST_P(QuicPacketCreatorTest, FlushWithExternalBuffer) {
+  char external_buffer[kMaxPacketSize];
+  char* expected_buffer = external_buffer;
+  EXPECT_CALL(delegate_, GetPacketBuffer()).WillOnce(Return(expected_buffer));
+
+  QuicFrame frame;
+  MakeIOVector("test", &iov_);
+  ASSERT_TRUE(creator_.ConsumeData(kCryptoStreamId, &iov_, 1u, iov_.iov_len, 0u,
+                                   0u, false,
+                                   /*needs_full_padding=*/true, &frame));
+
+  EXPECT_CALL(delegate_, OnSerializedPacket(_))
+      .WillOnce(Invoke([expected_buffer](SerializedPacket* serialized_packet) {
+        EXPECT_EQ(expected_buffer, serialized_packet->encrypted_buffer);
+        ClearSerializedPacket(serialized_packet);
+      }));
+  creator_.Flush();
+}
+
+// Test for error found in
+// https://bugs.chromium.org/p/chromium/issues/detail?id=859949 where a gap
+// length that crosses an IETF VarInt length boundary would cause a
+// failure. While this test is not applicable to versions other than version 99,
+// it should still work. Hence, it is not made version-specific.
+TEST_P(QuicPacketCreatorTest, IetfAckGapErrorRegression) {
+  QuicAckFrame ack_frame = InitAckFrame({{60, 61}, {125, 126}});
+  frames_.push_back(QuicFrame(&ack_frame));
+  SerializeAllFrames(frames_);
 }
 
 }  // namespace

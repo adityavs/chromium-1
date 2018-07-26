@@ -81,7 +81,6 @@ class TestBrowserWindow : public BrowserWindow {
   void SetFocusToLocationBar(bool select_all) override {}
   void UpdateReloadStopState(bool is_loading, bool force) override {}
   void UpdateToolbar(content::WebContents* contents) override {}
-  void RevertToolbarUrl() override {}
   void ResetToolbarTabState(content::WebContents* contents) override {}
   void FocusToolbar() override {}
   ToolbarActionsBar* GetToolbarActionsBar() override;
@@ -112,6 +111,10 @@ class TestBrowserWindow : public BrowserWindow {
   autofill::SaveCardBubbleView* ShowSaveCreditCardBubble(
       content::WebContents* contents,
       autofill::SaveCardBubbleController* controller,
+      bool user_gesture) override;
+  autofill::LocalCardMigrationBubble* ShowLocalCardMigrationBubble(
+      content::WebContents* contents,
+      autofill::LocalCardMigrationBubbleController* controller,
       bool user_gesture) override;
   ShowTranslateBubbleResult ShowTranslateBubble(
       content::WebContents* contents,
@@ -172,9 +175,8 @@ class TestBrowserWindow : public BrowserWindow {
     void UpdateContentSettingsIcons() override {}
     void UpdateManagePasswordsIconAndBubble() override {}
     void UpdateSaveCreditCardIcon() override {}
-    void UpdateFindBarIconVisibility() override {}
+    void UpdateLocalCardMigrationIcon() override {}
     void UpdateBookmarkStarVisibility() override {}
-    void UpdateZoomViewVisibility() override {}
     void UpdateLocationBarVisibility(bool visible, bool animate) override {}
     void SaveStateToContents(content::WebContents* contents) override {}
     void Revert() override {}

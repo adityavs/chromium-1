@@ -53,6 +53,8 @@ import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.IntentHandler.IntentHandlerDelegate;
 import org.chromium.chrome.browser.IntentHandler.TabOpenType;
+import org.chromium.chrome.browser.appmenu.AppMenu;
+import org.chromium.chrome.browser.appmenu.AppMenuIconRowFooter;
 import org.chromium.chrome.browser.appmenu.AppMenuPropertiesDelegate;
 import org.chromium.chrome.browser.bookmarks.BookmarkUtils;
 import org.chromium.chrome.browser.browseractions.BrowserActionsService;
@@ -101,6 +103,7 @@ import org.chromium.chrome.browser.partnercustomizations.HomepageManager;
 import org.chromium.chrome.browser.partnercustomizations.PartnerBrowserCustomizations;
 import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
 import org.chromium.chrome.browser.preferences.PrefServiceBridge;
+import org.chromium.chrome.browser.preferences.datareduction.DataReductionMainMenuItem;
 import org.chromium.chrome.browser.preferences.datareduction.DataReductionPromoScreen;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.SigninPromoUtil;
@@ -129,14 +132,12 @@ import org.chromium.chrome.browser.toolbar.ToolbarButtonInProductHelpController;
 import org.chromium.chrome.browser.toolbar.ToolbarControlContainer;
 import org.chromium.chrome.browser.util.FeatureUtilities;
 import org.chromium.chrome.browser.util.IntentUtils;
-import org.chromium.chrome.browser.vr_shell.VrIntentUtils;
-import org.chromium.chrome.browser.vr_shell.VrShellDelegate;
+import org.chromium.chrome.browser.vr.VrModuleProvider;
 import org.chromium.chrome.browser.widget.OverviewListLayout;
 import org.chromium.chrome.browser.widget.emptybackground.EmptyBackgroundViewWrapper;
 import org.chromium.components.feature_engagement.EventConstants;
 import org.chromium.components.feature_engagement.FeatureConstants;
 import org.chromium.components.feature_engagement.Tracker;
-import org.chromium.content_public.browser.ContentVideoView;
 import org.chromium.content_public.browser.LoadUrlParams;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.content_public.browser.WebContentsAccessibility;
@@ -162,29 +163,25 @@ import java.util.concurrent.TimeUnit;
  */
 public class ChromeTabbedActivity
         extends ChromeActivity implements OverviewModeObserver, ScreenshotMonitorDelegate {
+    @IntDef({BackPressedResult.NOTHING_HAPPENED, BackPressedResult.HELP_URL_CLOSED,
+            BackPressedResult.MINIMIZED_NO_TAB_CLOSED, BackPressedResult.MINIMIZED_TAB_CLOSED,
+            BackPressedResult.TAB_CLOSED, BackPressedResult.TAB_IS_NULL,
+            BackPressedResult.EXITED_TAB_SWITCHER, BackPressedResult.EXITED_FULLSCREEN,
+            BackPressedResult.NAVIGATED_BACK})
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-        BACK_PRESSED_NOTHING_HAPPENED,
-        BACK_PRESSED_HELP_URL_CLOSED,
-        BACK_PRESSED_MINIMIZED_NO_TAB_CLOSED,
-        BACK_PRESSED_MINIMIZED_TAB_CLOSED,
-        BACK_PRESSED_TAB_CLOSED,
-        BACK_PRESSED_TAB_IS_NULL,
-        BACK_PRESSED_EXITED_TAB_SWITCHER,
-        BACK_PRESSED_EXITED_FULLSCREEN,
-        BACK_PRESSED_NAVIGATED_BACK
-    })
-    private @interface BackPressedResult {}
-    private static final int BACK_PRESSED_NOTHING_HAPPENED = 0;
-    private static final int BACK_PRESSED_HELP_URL_CLOSED = 1;
-    private static final int BACK_PRESSED_MINIMIZED_NO_TAB_CLOSED = 2;
-    private static final int BACK_PRESSED_MINIMIZED_TAB_CLOSED = 3;
-    private static final int BACK_PRESSED_TAB_CLOSED = 4;
-    private static final int BACK_PRESSED_TAB_IS_NULL = 5;
-    private static final int BACK_PRESSED_EXITED_TAB_SWITCHER = 6;
-    private static final int BACK_PRESSED_EXITED_FULLSCREEN = 7;
-    private static final int BACK_PRESSED_NAVIGATED_BACK = 8;
-    private static final int BACK_PRESSED_COUNT = 9;
+    private @interface BackPressedResult {
+        int NOTHING_HAPPENED = 0;
+        int HELP_URL_CLOSED = 1;
+        int MINIMIZED_NO_TAB_CLOSED = 2;
+        int MINIMIZED_TAB_CLOSED = 3;
+        int TAB_CLOSED = 4;
+        int TAB_IS_NULL = 5;
+        int EXITED_TAB_SWITCHER = 6;
+        int EXITED_FULLSCREEN = 7;
+        int NAVIGATED_BACK = 8;
+
+        int NUM_ENTRIES = 9;
+    }
 
     private static final String TAG = "ChromeTabbedActivity";
 
@@ -310,13 +307,13 @@ public class ChromeTabbedActivity
 
         @Override
         public boolean canShowBrowserControls() {
-            if (VrShellDelegate.isInVr()) return false;
+            if (VrModuleProvider.getDelegate().isInVr()) return false;
             return super.canShowBrowserControls();
         }
 
         @Override
         public boolean canAutoHideBrowserControls() {
-            if (VrShellDelegate.isInVr()) return true;
+            if (VrModuleProvider.getDelegate().isInVr()) return true;
             return super.canAutoHideBrowserControls();
         }
     }
@@ -583,11 +580,11 @@ public class ChromeTabbedActivity
             boolean isLegacyMultiWindow = MultiWindowUtils.getInstance().isLegacyMultiWindow(this);
             if (!isShowingPromo && !mIntentWithEffect && FirstRunStatus.getFirstRunFlowComplete()
                     && preferenceManager.getPromosSkippedOnFirstStart()
-                    && !VrShellDelegate.isInVr()
-                    // VrShellDelegate.isInVr may not return true at this point even though Chrome
-                    // is about to enter VR, so we need to also check whether we're launching into
-                    // VR.
-                    && !VrIntentUtils.isLaunchingIntoVr(this, getIntent())
+                    && !VrModuleProvider.getDelegate().isInVr()
+                    // VrModuleProvider.getDelegate().isInVr may not return true at this point even
+                    // though Chrome is about to enter VR, so we need to also check whether we're
+                    // launching into VR.
+                    && !VrModuleProvider.getIntentDelegate().isLaunchingIntoVr(this, getIntent())
                     && !isLegacyMultiWindow) {
                 // Data reduction promo should be temporarily suppressed if the sign in promo is
                 // shown to avoid nagging users too much.
@@ -739,6 +736,7 @@ public class ChromeTabbedActivity
 
     @Override
     public void onStartWithNative() {
+        mMainIntentMetrics.logLaunchBehavior();
         super.onStartWithNative();
 
         setInitialOverviewState();
@@ -875,6 +873,8 @@ public class ChromeTabbedActivity
                     getFullscreenManager().getBrowserVisibilityDelegate(), getFindToolbarManager(),
                     mLayoutManager, mLayoutManager, tabSwitcherClickHandler, newTabClickHandler,
                     bookmarkClickHandler, null, incognitoClickHandler);
+
+            mLayoutManager.setToolbarManager(getToolbarManager());
 
             if (isTablet()) {
                 EmptyBackgroundViewWrapper bgViewWrapper = new EmptyBackgroundViewWrapper(
@@ -1508,24 +1508,47 @@ public class ChromeTabbedActivity
     @Override
     protected AppMenuPropertiesDelegate createAppMenuPropertiesDelegate() {
         return new AppMenuPropertiesDelegate(this) {
-            private boolean showDataSaverFooter() {
+            private boolean shouldShowDataSaverMenuItem() {
                 return DataReductionProxySettings.getInstance()
                         .shouldUseDataReductionMainMenuItem();
             }
 
             @Override
             public int getFooterResourceId() {
-                return showDataSaverFooter() ? R.layout.data_reduction_main_menu_item : 0;
+                if (FeatureUtilities.isBottomToolbarEnabled()) {
+                    return this.shouldShowPageMenu() ? R.layout.icon_row_menu_footer : 0;
+                }
+                return shouldShowDataSaverMenuItem() ? R.layout.data_reduction_main_menu_item : 0;
             }
 
             @Override
-            public View getHeaderView() {
-                return null;
+            public void onFooterViewInflated(AppMenu menu, View view) {
+                if (view instanceof AppMenuIconRowFooter) {
+                    ((AppMenuIconRowFooter) view)
+                            .initialize(ChromeTabbedActivity.this, menu, mBookmarkBridge);
+                }
+            }
+
+            @Override
+            public int getHeaderResourceId() {
+                if (FeatureUtilities.isBottomToolbarEnabled()) {
+                    return shouldShowDataSaverMenuItem() ? R.layout.data_reduction_main_menu_item
+                                                         : 0;
+                }
+                return 0;
+            }
+
+            @Override
+            public void onHeaderViewInflated(AppMenu menu, View view) {
+                if (view instanceof DataReductionMainMenuItem) {
+                    view.findViewById(R.id.data_reduction_menu_divider).setVisibility(View.GONE);
+                }
             }
 
             @Override
             public boolean shouldShowFooter(int maxMenuHeight) {
-                if (showDataSaverFooter()) {
+                if (FeatureUtilities.isBottomToolbarEnabled()) return true;
+                if (shouldShowDataSaverMenuItem()) {
                     return canShowDataReductionItem(maxMenuHeight);
                 }
                 return super.shouldShowFooter(maxMenuHeight);
@@ -1533,7 +1556,9 @@ public class ChromeTabbedActivity
 
             @Override
             public boolean shouldShowHeader(int maxMenuHeight) {
-                if (getBottomSheet() == null) return super.shouldShowHeader(maxMenuHeight);
+                if (!FeatureUtilities.isBottomToolbarEnabled()) {
+                    return super.shouldShowHeader(maxMenuHeight);
+                }
 
                 if (DataReductionProxySettings.getInstance().shouldUseDataReductionMainMenuItem()) {
                     return canShowDataReductionItem(maxMenuHeight);
@@ -1684,7 +1709,7 @@ public class ChromeTabbedActivity
             if (!currentModel.isIncognito()) currentModel.openMostRecentlyClosedTab();
             RecordUserAction.record("MobileTabClosedUndoShortCut");
         } else if (id == R.id.enter_vr_id) {
-            VrShellDelegate.enterVrIfNecessary();
+            VrModuleProvider.getDelegate().enterVrIfNecessary();
         } else {
             return super.onMenuOrKeyboardAction(id, fromMenu);
         }
@@ -1703,8 +1728,8 @@ public class ChromeTabbedActivity
     private void recordBackPressedUma(String logMessage, @BackPressedResult int action) {
         Log.i(TAG, "Back pressed: " + logMessage);
         RecordHistogram.recordEnumeratedHistogram(
-                "Android.Activity.ChromeTabbedActivity.SystemBackAction",
-                action, BACK_PRESSED_COUNT);
+                "Android.Activity.ChromeTabbedActivity.SystemBackAction", action,
+                BackPressedResult.NUM_ENTRIES);
     }
 
     private void recordLauncherShortcutAction(boolean isIncognito) {
@@ -1733,10 +1758,13 @@ public class ChromeTabbedActivity
         // BottomSheet can be opened before native is initialized.
         if (!mUIInitialized) return getBottomSheet() != null && getBottomSheet().handleBackPress();
 
+        if (getManualFillingController() != null && getManualFillingController().handleBackPress())
+            return true;
+
         final Tab currentTab = getActivityTab();
 
         if (exitFullscreenIfShowing()) {
-            recordBackPressedUma("Exited fullscreen", BACK_PRESSED_EXITED_FULLSCREEN);
+            recordBackPressedUma("Exited fullscreen", BackPressedResult.EXITED_FULLSCREEN);
             return true;
         }
 
@@ -1745,20 +1773,20 @@ public class ChromeTabbedActivity
         if (mTabModalHandler.handleBackPress()) return true;
 
         if (currentTab == null) {
-            recordBackPressedUma("currentTab is null", BACK_PRESSED_TAB_IS_NULL);
+            recordBackPressedUma("currentTab is null", BackPressedResult.TAB_IS_NULL);
             moveTaskToBack(true);
             return true;
         }
 
         // If we are in overview mode and not a tablet, then leave overview mode on back.
         if (mLayoutManager.overviewVisible() && !isTablet()) {
-            recordBackPressedUma("Hid overview", BACK_PRESSED_EXITED_TAB_SWITCHER);
+            recordBackPressedUma("Hid overview", BackPressedResult.EXITED_TAB_SWITCHER);
             mLayoutManager.hideOverview(true);
             return true;
         }
 
         if (getToolbarManager().back()) {
-            recordBackPressedUma("Navigating backward", BACK_PRESSED_NAVIGATED_BACK);
+            recordBackPressedUma("Navigating backward", BackPressedResult.NAVIGATED_BACK);
             return true;
         }
 
@@ -1769,7 +1797,7 @@ public class ChromeTabbedActivity
         final boolean helpUrl = currentTab.getUrl().startsWith(HELP_URL_PREFIX);
         if (type == TabLaunchType.FROM_CHROME_UI && helpUrl) {
             getCurrentTabModel().closeTab(currentTab);
-            recordBackPressedUma("Closed tab for help URL", BACK_PRESSED_HELP_URL_CLOSED);
+            recordBackPressedUma("Closed tab for help URL", BackPressedResult.HELP_URL_CLOSED);
             return true;
         }
 
@@ -1782,24 +1810,26 @@ public class ChromeTabbedActivity
         final boolean minimizeApp = !shouldCloseTab || currentTab.isCreatedForExternalApp();
         if (minimizeApp) {
             if (shouldCloseTab) {
-                recordBackPressedUma("Minimized and closed tab", BACK_PRESSED_MINIMIZED_TAB_CLOSED);
-                mActivityStopMetrics.setStopReason(ActivityStopMetrics.STOP_REASON_BACK_BUTTON);
+                recordBackPressedUma(
+                        "Minimized and closed tab", BackPressedResult.MINIMIZED_TAB_CLOSED);
+                mActivityStopMetrics.setStopReason(ActivityStopMetrics.StopReason.BACK_BUTTON);
                 sendToBackground(currentTab);
                 return true;
             } else {
-                recordBackPressedUma("Minimized, kept tab", BACK_PRESSED_MINIMIZED_NO_TAB_CLOSED);
-                mActivityStopMetrics.setStopReason(ActivityStopMetrics.STOP_REASON_BACK_BUTTON);
+                recordBackPressedUma(
+                        "Minimized, kept tab", BackPressedResult.MINIMIZED_NO_TAB_CLOSED);
+                mActivityStopMetrics.setStopReason(ActivityStopMetrics.StopReason.BACK_BUTTON);
                 sendToBackground(null);
                 return true;
             }
         } else if (shouldCloseTab) {
-            recordBackPressedUma("Tab closed", BACK_PRESSED_TAB_CLOSED);
+            recordBackPressedUma("Tab closed", BackPressedResult.TAB_CLOSED);
             getCurrentTabModel().closeTab(currentTab, true, false, false);
             return true;
         }
 
         assert false : "The back button should have already been handled by this point";
-        recordBackPressedUma("Unhandled", BACK_PRESSED_NOTHING_HAPPENED);
+        recordBackPressedUma("Unhandled", BackPressedResult.NOTHING_HAPPENED);
         return false;
     }
 
@@ -2071,13 +2101,8 @@ public class ChromeTabbedActivity
 
     @Override
     protected void showAppMenuForKeyboardEvent() {
-        if (!mUIInitialized || isFullscreenVideoPlaying()) return;
+        if (!mUIInitialized) return;
         super.showAppMenuForKeyboardEvent();
-    }
-
-    private boolean isFullscreenVideoPlaying() {
-        ContentVideoView view = ContentVideoView.getInstance();
-        return view != null && view.createdWithContext(this);
     }
 
     @Override
@@ -2294,7 +2319,7 @@ public class ChromeTabbedActivity
 
     @Override
     protected ChromeFullscreenManager createFullscreenManager() {
-        return new ChromeFullscreenManager(this, ChromeFullscreenManager.CONTROLS_POSITION_TOP);
+        return new ChromeFullscreenManager(this, ChromeFullscreenManager.ControlsPosition.TOP);
     }
 
     /**
@@ -2326,7 +2351,7 @@ public class ChromeTabbedActivity
 
     @Override
     public boolean supportsFullscreenActivity() {
-        return !VrShellDelegate.isInVr();
+        return !VrModuleProvider.getDelegate().isInVr();
     }
 
     @Override

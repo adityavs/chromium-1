@@ -2007,6 +2007,7 @@ interface HTMLCanvasElement : HTMLElement
     method getContext
     method toBlob
     method toDataURL
+    method transferControlToOffscreen
     setter height
     setter width
 interface HTMLCollection
@@ -3587,6 +3588,7 @@ interface IntersectionObserverEntry
 interface Keyboard
     attribute @@toStringTag
     method constructor
+    method getLayoutMap
     method lock
     method unlock
 interface KeyboardEvent : UIEvent
@@ -3609,12 +3611,33 @@ interface KeyboardEvent : UIEvent
     method constructor
     method getModifierState
     method initKeyboardEvent
+interface KeyboardLayoutMap
+    attribute @@toStringTag
+    getter size
+    method @@iterator
+    method constructor
+    method entries
+    method forEach
+    method get
+    method has
+    method keys
+    method values
 interface LinearAccelerationSensor : Accelerometer
     attribute @@toStringTag
     method constructor
 interface Location
     attribute @@toStringTag
     method constructor
+interface Lock
+    attribute @@toStringTag
+    getter mode
+    getter name
+    method constructor
+interface LockManager
+    attribute @@toStringTag
+    method constructor
+    method query
+    method request
 interface MIDIAccess : EventTarget
     attribute @@toStringTag
     getter inputs
@@ -4030,6 +4053,7 @@ interface Navigator
     getter keyboard
     getter language
     getter languages
+    getter locks
     getter maxTouchPoints
     getter mediaCapabilities
     getter mediaDevices
@@ -4184,6 +4208,98 @@ interface OfflineAudioContext : BaseAudioContext
     method startRendering
     method suspend
     setter oncomplete
+interface OffscreenCanvas : EventTarget
+    attribute @@toStringTag
+    getter height
+    getter width
+    method constructor
+    method convertToBlob
+    method getContext
+    method transferToImageBitmap
+    setter height
+    setter width
+interface OffscreenCanvasRenderingContext2D
+    attribute @@toStringTag
+    getter canvas
+    getter direction
+    getter fillStyle
+    getter filter
+    getter font
+    getter globalAlpha
+    getter globalCompositeOperation
+    getter imageSmoothingEnabled
+    getter imageSmoothingQuality
+    getter lineCap
+    getter lineDashOffset
+    getter lineJoin
+    getter lineWidth
+    getter miterLimit
+    getter shadowBlur
+    getter shadowColor
+    getter shadowOffsetX
+    getter shadowOffsetY
+    getter strokeStyle
+    getter textAlign
+    getter textBaseline
+    method arc
+    method arcTo
+    method beginPath
+    method bezierCurveTo
+    method clearRect
+    method clip
+    method closePath
+    method constructor
+    method createImageData
+    method createLinearGradient
+    method createPattern
+    method createRadialGradient
+    method drawImage
+    method ellipse
+    method fill
+    method fillRect
+    method fillText
+    method getImageData
+    method getLineDash
+    method isPointInPath
+    method isPointInStroke
+    method lineTo
+    method measureText
+    method moveTo
+    method putImageData
+    method quadraticCurveTo
+    method rect
+    method resetTransform
+    method restore
+    method rotate
+    method save
+    method scale
+    method setLineDash
+    method setTransform
+    method stroke
+    method strokeRect
+    method strokeText
+    method transform
+    method translate
+    setter direction
+    setter fillStyle
+    setter filter
+    setter font
+    setter globalAlpha
+    setter globalCompositeOperation
+    setter imageSmoothingEnabled
+    setter imageSmoothingQuality
+    setter lineCap
+    setter lineDashOffset
+    setter lineJoin
+    setter lineWidth
+    setter miterLimit
+    setter shadowBlur
+    setter shadowColor
+    setter shadowOffsetX
+    setter shadowOffsetY
+    setter strokeStyle
+    setter textAlign
+    setter textBaseline
 interface Option
     attribute @@toStringTag
     getter defaultSelected
@@ -4693,6 +4809,7 @@ interface RTCPeerConnection : EventTarget
     method addIceCandidate
     method addStream
     method addTrack
+    method addTransceiver
     method close
     method constructor
     method createAnswer
@@ -4704,6 +4821,7 @@ interface RTCPeerConnection : EventTarget
     method getRemoteStreams
     method getSenders
     method getStats
+    method getTransceivers
     method removeStream
     method removeTrack
     method setConfiguration
@@ -4728,12 +4846,14 @@ interface RTCRtpContributingSource
     getter timestamp
     method constructor
 interface RTCRtpReceiver
+    static method getCapabilities
     attribute @@toStringTag
     getter track
     method constructor
     method getContributingSources
     method getStats
 interface RTCRtpSender
+    static method getCapabilities
     attribute @@toStringTag
     getter dtmf
     getter track
@@ -4742,6 +4862,16 @@ interface RTCRtpSender
     method getStats
     method replaceTrack
     method setParameters
+interface RTCRtpTransceiver
+    attribute @@toStringTag
+    getter currentDirection
+    getter direction
+    getter mid
+    getter receiver
+    getter sender
+    getter stopped
+    method constructor
+    setter direction
 interface RTCSessionDescription
     attribute @@toStringTag
     getter sdp
@@ -4766,6 +4896,7 @@ interface RTCTrackEvent : Event
     getter receiver
     getter streams
     getter track
+    getter transceiver
     method constructor
 interface RadioNodeList : NodeList
     attribute @@toStringTag
@@ -8209,6 +8340,7 @@ interface webkitRTCPeerConnection : EventTarget
     method addIceCandidate
     method addStream
     method addTrack
+    method addTransceiver
     method close
     method constructor
     method createAnswer
@@ -8220,6 +8352,7 @@ interface webkitRTCPeerConnection : EventTarget
     method getRemoteStreams
     method getSenders
     method getStats
+    method getTransceivers
     method removeStream
     method removeTrack
     method setConfiguration

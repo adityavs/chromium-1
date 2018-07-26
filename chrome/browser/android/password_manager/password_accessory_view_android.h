@@ -10,6 +10,10 @@
 #include "base/android/scoped_java_ref.h"
 #include "chrome/browser/password_manager/password_accessory_view_interface.h"
 
+namespace gfx {
+class Image;
+}
+
 class PasswordAccessoryController;
 
 // This Android-specific implementation of the |PasswordAccessoryViewInterface|
@@ -23,11 +27,14 @@ class PasswordAccessoryViewAndroid : public PasswordAccessoryViewInterface {
   ~PasswordAccessoryViewAndroid() override;
 
   // PasswordAccessoryViewInterface:
-  void OnItemsAvailable(const GURL& origin,
-                        const std::vector<AccessoryItem>& items) override;
+  void OnItemsAvailable(const std::vector<AccessoryItem>& items) override;
   void OnAutomaticGenerationStatusChanged(bool available) override;
 
   // Called from Java via JNI:
+  void OnFaviconRequested(
+      JNIEnv* env,
+      const base::android::JavaParamRef<jobject>& obj,
+      const base::android::JavaParamRef<jobject>& j_callback);
   void OnFillingTriggered(
       JNIEnv* env,
       const base::android::JavaParamRef<jobject>& obj,
@@ -41,6 +48,10 @@ class PasswordAccessoryViewAndroid : public PasswordAccessoryViewInterface {
                              const base::android::JavaParamRef<jobject>& obj);
 
  private:
+  void OnImageFetched(
+      const base::android::ScopedJavaGlobalRef<jobject>& j_callback,
+      const gfx::Image& image);
+
   // The controller provides data for this view and owns it.
   PasswordAccessoryController* controller_;
 

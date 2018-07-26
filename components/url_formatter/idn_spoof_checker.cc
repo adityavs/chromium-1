@@ -22,6 +22,51 @@ namespace url_formatter {
 
 namespace {
 
+class TopDomainPreloadDecoder : public net::extras::PreloadDecoder {
+ public:
+  using net::extras::PreloadDecoder::PreloadDecoder;
+  ~TopDomainPreloadDecoder() override {}
+
+  bool ReadEntry(net::extras::PreloadDecoder::BitReader* reader,
+                 const std::string& search,
+                 size_t current_search_offset,
+                 bool* out_found) override {
+    bool is_same_skeleton;
+    if (!reader->Next(&is_same_skeleton))
+      return false;
+
+    if (is_same_skeleton) {
+      *out_found = true;
+      return true;
+    }
+
+    bool has_com_suffix = false;
+    if (!reader->Next(&has_com_suffix))
+      return false;
+
+    std::string top_domain;
+    for (char c;; top_domain += c) {
+      huffman_decoder().Decode(reader, &c);
+      if (c == net::extras::PreloadDecoder::kEndOfTable)
+        break;
+    }
+    if (has_com_suffix)
+      top_domain += ".com";
+
+    if (current_search_offset == 0) {
+      *out_found = true;
+      DCHECK(!top_domain.empty());
+      result_ = top_domain;
+    }
+    return true;
+  }
+
+  std::string matching_top_domain() const { return result_; }
+
+ private:
+  std::string result_;
+};
+
 void OnThreadTermination(void* regex_matcher) {
   delete reinterpret_cast<icu::RegexMatcher*>(regex_matcher);
 }
@@ -32,13 +77,20 @@ base::ThreadLocalStorage::Slot& DangerousPatternTLS() {
   return *dangerous_pattern_tls;
 }
 
-#include "components/url_formatter/top_domains/alexa_skeletons-inc.cc"
+#include "components/url_formatter/top_domains/alexa_domains-trie-inc.cc"
+
 // All the domains in the above file have 3 or fewer labels.
 const size_t kNumberOfLabelsToCheck = 3;
-const unsigned char* g_graph = kDafsa;
-size_t g_graph_length = sizeof(kDafsa);
 
-bool LookupMatchInTopDomains(const icu::UnicodeString& ustr_skeleton) {
+IDNSpoofChecker::HuffmanTrieParams g_trie_params{
+    kTopDomainsHuffmanTree, sizeof(kTopDomainsHuffmanTree), kTopDomainsTrie,
+    kTopDomainsTrieBits, kTopDomainsRootPosition};
+
+std::string LookupMatchInTopDomains(const icu::UnicodeString& ustr_skeleton) {
+  TopDomainPreloadDecoder preload_decoder(
+      g_trie_params.huffman_tree, g_trie_params.huffman_tree_size,
+      g_trie_params.trie, g_trie_params.trie_bits,
+      g_trie_params.trie_root_position);
   std::string skeleton;
   ustr_skeleton.toUTF8String(skeleton);
   DCHECK_NE(skeleton.back(), '.');
@@ -52,13 +104,18 @@ bool LookupMatchInTopDomains(const icu::UnicodeString& ustr_skeleton) {
 
   while (labels.size() > 1) {
     std::string partial_skeleton = base::JoinString(labels, ".");
-    if (net::LookupStringInFixedSet(
-            g_graph, g_graph_length, partial_skeleton.data(),
-            partial_skeleton.length()) != net::kDafsaNotFound)
-      return true;
+    bool match = false;
+    bool decoded = preload_decoder.Decode(partial_skeleton, &match);
+    DCHECK(decoded);
+    if (!decoded)
+      return std::string();
+
+    if (match)
+      return preload_decoder.matching_top_domain();
+
     labels.erase(labels.begin());
   }
-  return false;
+  return std::string();
 }
 
 }  // namespace
@@ -308,7 +365,7 @@ bool IDNSpoofChecker::SafeToDisplayAsUnicode(base::StringPiece16 label,
   return !dangerous_pattern->find();
 }
 
-bool IDNSpoofChecker::SimilarToTopDomains(base::StringPiece16 hostname) {
+std::string IDNSpoofChecker::GetSimilarTopDomain(base::StringPiece16 hostname) {
   size_t hostname_length = hostname.length() - (hostname.back() == '.' ? 1 : 0);
   icu::UnicodeString host(FALSE, hostname.data(), hostname_length);
   // If input has any characters outside Latin-Greek-Cyrillic and [0-9._-],
@@ -334,12 +391,15 @@ bool IDNSpoofChecker::SimilarToTopDomains(base::StringPiece16 hostname) {
     }
     host_alt.releaseBuffer(length);
     uspoof_getSkeletonUnicodeString(checker_, 0, host_alt, skeleton, &status);
-    if (U_SUCCESS(status) && LookupMatchInTopDomains(skeleton))
-      return true;
+    if (U_SUCCESS(status)) {
+      std::string match = LookupMatchInTopDomains(skeleton);
+      if (!match.empty())
+        return match;
+    }
   }
 
   uspoof_getSkeletonUnicodeString(checker_, 0, host, skeleton, &status);
-  return U_SUCCESS(status) && LookupMatchInTopDomains(skeleton);
+  return U_SUCCESS(status) ? LookupMatchInTopDomains(skeleton) : std::string();
 }
 
 bool IDNSpoofChecker::IsMadeOfLatinAlikeCyrillic(
@@ -439,15 +499,17 @@ void IDNSpoofChecker::SetAllowedUnicodeSet(UErrorCode* status) {
   uspoof_setAllowedUnicodeSet(checker_, &allowed_set, status);
 }
 
-void IDNSpoofChecker::RestoreTopDomainGraphToDefault() {
-  g_graph = kDafsa;
-  g_graph_length = sizeof(kDafsa);
+// static
+void IDNSpoofChecker::SetTrieParamsForTesting(
+    const HuffmanTrieParams& trie_params) {
+  g_trie_params = trie_params;
 }
 
-void IDNSpoofChecker::SetTopDomainGraph(base::StringPiece domain_graph) {
-  DCHECK_NE(0u, domain_graph.length());
-  g_graph = reinterpret_cast<const unsigned char*>(domain_graph.data());
-  g_graph_length = domain_graph.length();
+// static
+void IDNSpoofChecker::RestoreTrieParamsForTesting() {
+  g_trie_params = HuffmanTrieParams{
+      kTopDomainsHuffmanTree, sizeof(kTopDomainsHuffmanTree), kTopDomainsTrie,
+      kTopDomainsTrieBits, kTopDomainsRootPosition};
 }
 
 }  // namespace url_formatter

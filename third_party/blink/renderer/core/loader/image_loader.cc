@@ -88,7 +88,6 @@ class ImageLoader::Task {
         should_bypass_main_world_csp_(ShouldBypassMainWorldCSP(loader)),
         update_behavior_(update_behavior),
         referrer_policy_(referrer_policy),
-
         weak_factory_(this) {
     ExecutionContext& context = loader_->GetElement()->GetDocument();
     probe::AsyncTaskScheduled(&context, "Image", this);
@@ -112,12 +111,13 @@ class ImageLoader::Task {
       return;
     ExecutionContext& context = loader_->GetElement()->GetDocument();
     probe::AsyncTask async_task(&context, this);
-    if (script_state_->ContextIsValid()) {
-      ScriptState::Scope scope(script_state_.get());
+    if (script_state_ && script_state_->ContextIsValid()) {
+      ScriptState::Scope scope(script_state_);
       loader_->DoUpdateFromElement(should_bypass_main_world_csp_,
                                    update_behavior_, request_url_,
                                    referrer_policy_);
     } else {
+      // This call does not access v8::Context internally.
       loader_->DoUpdateFromElement(should_bypass_main_world_csp_,
                                    update_behavior_, request_url_,
                                    referrer_policy_);
@@ -135,7 +135,7 @@ class ImageLoader::Task {
   WeakPersistent<ImageLoader> loader_;
   BypassMainWorldBehavior should_bypass_main_world_csp_;
   UpdateFromElementBehavior update_behavior_;
-  scoped_refptr<ScriptState> script_state_;
+  WeakPersistent<ScriptState> script_state_;
   ReferrerPolicy referrer_policy_;
   KURL request_url_;
   base::WeakPtrFactory<Task> weak_factory_;
@@ -396,10 +396,7 @@ void ImageLoader::DoUpdateFromElement(BypassMainWorldBehavior bypass_behavior,
       resource_request.SetPreviewsState(WebURLRequest::kPreviewsNoTransform);
     }
 
-    if (referrer_policy != kReferrerPolicyDefault) {
-      resource_request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
-          referrer_policy, url, document.OutgoingReferrer()));
-    }
+    resource_request.SetReferrerPolicy(referrer_policy);
 
     // Correct the RequestContext if necessary.
     if (IsHTMLPictureElement(GetElement()->parentNode()) ||
@@ -430,9 +427,10 @@ void ImageLoader::DoUpdateFromElement(BypassMainWorldBehavior bypass_behavior,
       resource_request.SetSkipServiceWorker(true);
     }
 
+    DCHECK(document.GetFrame());
     FetchParameters params(resource_request, resource_loader_options);
     ConfigureRequest(params, bypass_behavior, *element_,
-                     document.GetClientHintsPreferences());
+                     document.GetFrame()->GetClientHintsPreferences());
 
     if (update_behavior != kUpdateForcedReload && document.GetFrame())
       document.GetFrame()->MaybeAllowImagePlaceholder(params);

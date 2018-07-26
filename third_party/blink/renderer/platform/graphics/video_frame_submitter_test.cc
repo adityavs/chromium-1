@@ -6,10 +6,8 @@
 
 #include <memory>
 #include "base/memory/ptr_util.h"
-#include "base/task_runner_util.h"
 #include "base/test/scoped_task_environment.h"
 #include "base/test/simple_test_tick_clock.h"
-#include "base/threading/thread.h"
 #include "cc/layers/video_frame_provider.h"
 #include "cc/test/layer_test_common.h"
 #include "cc/trees/layer_tree_settings.h"
@@ -25,6 +23,7 @@
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 using testing::_;
+using testing::AnyNumber;
 using testing::Return;
 using testing::StrictMock;
 
@@ -157,7 +156,15 @@ class VideoFrameSubmitterTest : public testing::Test {
     viz::mojom::blink::CompositorFrameSinkRequest request =
         mojo::MakeRequest(&submitter_sink);
     sink_ = std::make_unique<StrictMock<MockCompositorFrameSink>>(&request);
+
+    // By setting the submission state before we set the sink, we can make
+    // testing easier without having to worry about the first sent frame.
+    submitter_->UpdateSubmissionState(true);
     submitter_->SetSink(&submitter_sink);
+    submitter_->SetSurfaceId(viz::SurfaceId(
+        viz::FrameSinkId(1, 1),
+        viz::LocalSurfaceId(11,
+                            base::UnguessableToken::Deserialize(0x111111, 0))));
   }
 
  protected:
@@ -260,6 +267,120 @@ TEST_F(VideoFrameSubmitterTest, DidReceiveFrameSubmitsFrame) {
 
   submitter_->DidReceiveFrame();
   scoped_task_environment_.RunUntilIdle();
+}
+
+TEST_F(VideoFrameSubmitterTest, ShouldSubmitPreventsSubmission) {
+  MakeSubmitter();
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(false));
+  submitter_->UpdateSubmissionState(false);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_FALSE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(false));
+  submitter_->StartRendering();
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(true));
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*sink_, DoSubmitCompositorFrame(_, _)).Times(1);
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+  EXPECT_CALL(*resource_provider_, AppendQuads(_, _, _));
+  EXPECT_CALL(*resource_provider_, PrepareSendToParent(_, _));
+  EXPECT_CALL(*resource_provider_, ReleaseFrameResources());
+  submitter_->UpdateSubmissionState(true);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(false));
+  EXPECT_CALL(*sink_, DoSubmitCompositorFrame(_, _)).Times(1);
+  EXPECT_CALL(*provider_, GetCurrentFrame()).Times(0);
+  submitter_->UpdateSubmissionState(false);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_FALSE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+
+  submitter_->SubmitSingleFrame();
+}
+
+// Tests that when set to true SetForceSubmit forces frame submissions.
+// regardless of the internal submit state.
+TEST_F(VideoFrameSubmitterTest, SetForceSubmitForcesSubmission) {
+  MakeSubmitter();
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(false));
+  submitter_->UpdateSubmissionState(false);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_FALSE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+  submitter_->SetForceSubmit(true);
+  EXPECT_TRUE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(false));
+  EXPECT_CALL(*sink_, DoSubmitCompositorFrame(_, _)).Times(1);
+  EXPECT_CALL(*resource_provider_, AppendQuads(_, _, _));
+  EXPECT_CALL(*resource_provider_, PrepareSendToParent(_, _));
+  EXPECT_CALL(*resource_provider_, ReleaseFrameResources());
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(true));
+  submitter_->StartRendering();
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(true));
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*sink_, DoSubmitCompositorFrame(_, _)).Times(1);
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+  EXPECT_CALL(*resource_provider_, AppendQuads(_, _, _));
+  EXPECT_CALL(*resource_provider_, PrepareSendToParent(_, _));
+  EXPECT_CALL(*resource_provider_, ReleaseFrameResources());
+  submitter_->UpdateSubmissionState(true);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*sink_, SetNeedsBeginFrame(true));
+  EXPECT_CALL(*sink_, DoSubmitCompositorFrame(_, _)).Times(1);
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*resource_provider_, AppendQuads(_, _, _));
+  EXPECT_CALL(*resource_provider_, PrepareSendToParent(_, _));
+  EXPECT_CALL(*resource_provider_, ReleaseFrameResources());
+  submitter_->UpdateSubmissionState(false);
+  scoped_task_environment_.RunUntilIdle();
+
+  EXPECT_TRUE(submitter_->ShouldSubmit());
+
+  EXPECT_CALL(*provider_, GetCurrentFrame())
+      .WillOnce(Return(media::VideoFrame::CreateFrame(
+          media::PIXEL_FORMAT_YV12, gfx::Size(8, 8), gfx::Rect(gfx::Size(8, 8)),
+          gfx::Size(8, 8), base::TimeDelta())));
+  EXPECT_CALL(*provider_, PutCurrentFrame());
+
+  submitter_->SubmitSingleFrame();
 }
 
 TEST_F(VideoFrameSubmitterTest, RotationInformationPassedToResourceProvider) {
@@ -420,7 +541,9 @@ TEST_F(VideoFrameSubmitterTest, NotRenderingDoesNotProduceFrame) {
   MakeSubmitter();
   scoped_task_environment_.RunUntilIdle();
 
-  EXPECT_CALL(*provider_, UpdateCurrentFrame(_, _)).Times(0);
+  // We don't care if UpdateCurrentFrame is called or not; it doesn't matter
+  // if we're not rendering.
+  EXPECT_CALL(*provider_, UpdateCurrentFrame(_, _)).Times(AnyNumber());
   EXPECT_CALL(*sink_, DidNotProduceFrame(_));
 
   viz::BeginFrameArgs args = begin_frame_source_->CreateBeginFrameArgs(
@@ -474,6 +597,10 @@ TEST_F(VideoFrameSubmitterTest, WaitingForAckPreventsNewFrame) {
   // DidNotProduceFrame should be called because no frame will be submitted
   // given that the ACK is still pending.
   EXPECT_CALL(*sink_, DidNotProduceFrame(_)).Times(1);
+
+  // UpdateCurrentFrame should still be called, however, so that the compositor
+  // knows that we missed a frame.
+  EXPECT_CALL(*provider_, UpdateCurrentFrame(_, _)).Times(1);
 
   std::unique_ptr<base::SimpleTestTickClock> new_time =
       std::make_unique<base::SimpleTestTickClock>();

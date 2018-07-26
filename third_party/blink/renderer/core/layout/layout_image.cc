@@ -280,9 +280,8 @@ void LayoutImage::PaintReplaced(const PaintInfo& paint_info,
   ImagePainter(*this).PaintReplaced(paint_info, paint_offset);
 }
 
-void LayoutImage::Paint(const PaintInfo& paint_info,
-                        const LayoutPoint& paint_offset) const {
-  ImagePainter(*this).Paint(paint_info, paint_offset);
+void LayoutImage::Paint(const PaintInfo& paint_info) const {
+  ImagePainter(*this).Paint(paint_info);
 }
 
 void LayoutImage::AreaElementFocusChanged(HTMLAreaElement* area_element) {
@@ -354,8 +353,7 @@ bool LayoutImage::NodeAtPoint(HitTestResult& result,
                               const HitTestLocation& location_in_container,
                               const LayoutPoint& accumulated_offset,
                               HitTestAction hit_test_action) {
-  HitTestResult temp_result(result.GetHitTestRequest(),
-                            result.GetHitTestLocation());
+  HitTestResult temp_result(result);
   bool inside = LayoutReplaced::NodeAtPoint(
       temp_result, location_in_container, accumulated_offset, hit_test_action);
 
@@ -387,7 +385,7 @@ void LayoutImage::ComputeIntrinsicSizingInfo(
   // Our intrinsicSize is empty if we're laying out generated images with
   // relative width/height. Figure out the right intrinsic size to use.
   if (intrinsic_sizing_info.size.IsEmpty() &&
-      image_resource_->ImageHasRelativeSize()) {
+      image_resource_->ImageHasRelativeSize() && !IsLayoutNGListMarkerImage()) {
     LayoutObject* containing_block =
         IsOutOfFlowPositioned() ? Container() : ContainingBlock();
     if (containing_block->IsBox()) {

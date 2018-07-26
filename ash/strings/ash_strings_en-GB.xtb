@@ -36,7 +36,6 @@
 <translation id="1658406695958299976">Sorry, your password still couldn't be verified. Note: If you changed your password recently, your new password will be applied once you sign out. Please use the old password here.</translation>
 <translation id="1677472565718498478"><ph name="TIME" /> left</translation>
 <translation id="1698760176351776263">IPv6 address: <ph name="ADDRESS" /></translation>
-<translation id="170389796989115980">The device admin may be able to monitor your activity.</translation>
 <translation id="1734367976349034509">This device is enterprise managed</translation>
 <translation id="1746730358044914197">Input methods are configured by your administrator.</translation>
 <translation id="1747827819627189109">On-screen keyboard enabled</translation>
@@ -62,7 +61,6 @@
 <translation id="2050339315714019657">Portrait</translation>
 <translation id="2067602449040652523">Keyboard brightness</translation>
 <translation id="2081529251031312395">$1 can still sign in later.</translation>
-<translation id="2122028596993374965">Stop casting <ph name="TAB_NAME" /> to <ph name="RECEIVER_NAME" /></translation>
 <translation id="2127372758936585790">Low-power charger</translation>
 <translation id="2135456203358955318">Docked magnifier</translation>
 <translation id="2144487987174258011">Restart to update Adobe Flash Player</translation>
@@ -75,7 +73,6 @@
 <translation id="2303600792989757991">Toggle window overview</translation>
 <translation id="2338501278241028356">Turn on Bluetooth to discover nearby devices</translation>
 <translation id="2339073806695260576">Tap the stylus button on the shelf to take a note, screenshot, use the laser pointer or magnifying glass.</translation>
-<translation id="2351266942280602854">Language and input</translation>
 <translation id="2352467521400612932">Stylus settings</translation>
 <translation id="2354174487190027830">Activating <ph name="NAME" /></translation>
 <translation id="2359808026110333948">Continue</translation>
@@ -93,7 +90,6 @@
 <translation id="2597972630681408282">Night Light: <ph name="NIGHT_LIGHT_STATUS" /></translation>
 <translation id="2617342710774726426">SIM card is locked</translation>
 <translation id="2653659639078652383">Submit</translation>
-<translation id="2696763960464195425">Your information will be removed when you sign out. <ph name="LEARN_MORE" /></translation>
 <translation id="2700493154570097719">Set your keyboard</translation>
 <translation id="2718395828230677721">Night Light</translation>
 <translation id="2727977024730340865">Plugged in to a low-power charger. Battery charging may not be reliable.</translation>
@@ -195,6 +191,7 @@
 <translation id="4544944664594876241">The shortcut to lock the screen has changed. Please use <ph name="NEW_SHORTCUT" /> instead of <ph name="OLD_SHORTCUT" />.</translation>
 <translation id="4564869809620998694">Font service</translation>
 <translation id="4570957409596482333">Select-to-Speak button</translation>
+<translation id="4585337515783392668">Stop casting on an unknown receiver</translation>
 <translation id="4628757576491864469">Devices</translation>
 <translation id="4659419629803378708">ChromeVox enabled</translation>
 <translation id="4734965478015604180">Horizontal</translation>
@@ -241,13 +238,13 @@
 <translation id="5805697420284793859">Window manager</translation>
 <translation id="5820394555380036790">Chromium OS</translation>
 <translation id="5832805196449965646">Add Person</translation>
+<translation id="5837036133683224804">Stop <ph name="ROUTE_TITLE" /> on <ph name="RECEIVER_NAME" /></translation>
 <translation id="5860033963881614850">Off</translation>
 <translation id="5895138241574237353">Restart</translation>
 <translation id="5901316534475909376">Shift+Esc</translation>
 <translation id="5911533659001334206">Shortcut viewer</translation>
 <translation id="5916664084637901428">On</translation>
 <translation id="592343074608792716">This Chromebook and your phone will connect automatically</translation>
-<translation id="5927132638760172455">Casting to an unknown receiver</translation>
 <translation id="5947494881799873997">Revert</translation>
 <translation id="595202126637698455">Performance tracing enabled</translation>
 <translation id="5957083217255311415">Mobile data is turned off.</translation>
@@ -278,6 +275,7 @@
 <translation id="639644700271529076">CAPS LOCK is off</translation>
 <translation id="6406704438230478924">altgr</translation>
 <translation id="643147933154517414">All finished</translation>
+<translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> on <ph name="RECEIVER_NAME" /></translation>
 <translation id="6452181791372256707">Reject</translation>
 <translation id="6453179446719226835">Language has been changed</translation>
 <translation id="6459472438155181876">Extending screen to <ph name="DISPLAY_NAME" /></translation>
@@ -312,7 +310,6 @@
 <translation id="698231206551913481">All files and local data associated with this user will be permanently deleted once this user is removed.</translation>
 <translation id="7015766095477679451">Come back at <ph name="COME_BACK_TIME" />.</translation>
 <translation id="7029814467594812963">Exit session</translation>
-<translation id="7034339000180558234">Casting <ph name="TAB_NAME" /> to <ph name="RECEIVER_NAME" /></translation>
 <translation id="7037152028959403492">You pressed the shortcut for high contrast. Do you want to turn it on?</translation>
 <translation id="7066646422045619941">This network is disabled by your administrator.</translation>
 <translation id="7067196344162293536">Auto rotate</translation>
@@ -368,7 +365,6 @@
 <translation id="813913629614996137">Initialising...</translation>
 <translation id="8142699993796781067">Private networks</translation>
 <translation id="8152119955266188852">You pressed the shortcut for the full-screen magnifier. Do you want to turn it on?</translation>
-<translation id="8180896103888046100">Stop casting to an unknown receiver</translation>
 <translation id="8190698733819146287">Customise languages and input...</translation>
 <translation id="8261506727792406068">Delete</translation>
 <translation id="8297006494302853456">Weak</translation>
@@ -376,6 +372,7 @@
 <translation id="8351131234907093545">Create note</translation>
 <translation id="8392451568018454956">Options menu for <ph name="USER_EMAIL_ADDRESS" /></translation>
 <translation id="8406981827175133772">Full-screen Magnifier</translation>
+<translation id="8427213022735114808">Dictation sends your voice to Google to allow voice typing in any text field.</translation>
 <translation id="8428213095426709021">Settings</translation>
 <translation id="8431190899827883166">Show taps</translation>
 <translation id="8433186206711564395">Network settings</translation>
@@ -409,7 +406,6 @@
 <translation id="8984179138335769204">Quick launch</translation>
 <translation id="8995603266996330174">Managed by <ph name="DOMAIN" /></translation>
 <translation id="9029474291399787231">Adobe Flash Player update available</translation>
-<translation id="9033907480196064950">You are currently casting <ph name="TAB_NAME" /></translation>
 <translation id="9074739597929991885">Bluetooth</translation>
 <translation id="9079731690316798640">Wi-Fi: <ph name="ADDRESS" /></translation>
 <translation id="9080206825613744995">Microphone is in use.</translation>
@@ -418,6 +414,7 @@
 <translation id="9111102763498581341">Unlock</translation>
 <translation id="9151726767154816831">Restart and powerwash to update</translation>
 <translation id="9179259655489829027">This feature allows you to quickly access any signed-in user without requiring a password. Only use this feature with accounts that you trust.</translation>
+<translation id="9193626018745640770">Casting on an unknown receiver</translation>
 <translation id="9194617393863864469">Sign in another user...</translation>
 <translation id="9201131092683066720">Battery is <ph name="PERCENTAGE" />% full.</translation>
 <translation id="9210037371811586452">Exiting unified desktop mode</translation>

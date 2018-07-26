@@ -113,6 +113,7 @@ class CONTENT_EXPORT InputRouterImpl : public InputRouter,
  private:
   friend class InputRouterImplTest;
   friend class MockRenderWidgetHost;
+  friend class RenderWidgetHostBrowserTest;
 
   // Keeps track of last position of touch points and sets MovementXY for them.
   void SetMovementXYForTouchPoints(blink::WebTouchEvent* event);
@@ -223,7 +224,6 @@ class CONTENT_EXPORT InputRouterImpl : public InputRouter,
   // gesture scroll yet.
   bool touch_scroll_started_sent_;
 
-  bool wheel_scroll_latching_enabled_;
   MouseWheelEventQueue wheel_event_queue_;
   PassthroughTouchEventQueue touch_event_queue_;
   TouchpadPinchEventQueue touchpad_pinch_event_queue_;

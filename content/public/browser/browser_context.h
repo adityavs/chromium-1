@@ -32,6 +32,10 @@ namespace base {
 class FilePath;
 }
 
+namespace download {
+class InProgressDownloadManager;
+}
+
 namespace service_manager {
 class Connector;
 }
@@ -67,7 +71,8 @@ class BrowsingDataRemover;
 class BrowsingDataRemoverDelegate;
 class DownloadManager;
 class DownloadManagerDelegate;
-class PermissionManager;
+class PermissionController;
+class PermissionControllerDelegate;
 struct PushEventPayload;
 class PushMessagingService;
 class ResourceContext;
@@ -101,6 +106,10 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // Returns a BrowsingDataRemover that can schedule data deletion tasks
   // for this |context|.
   static BrowsingDataRemover* GetBrowsingDataRemover(BrowserContext* context);
+
+  // Returns the PermissionController associated with this context. There's
+  // always a PermissionController instance for each BrowserContext.
+  static PermissionController* GetPermissionController(BrowserContext* context);
 
   // Returns a StoragePartition for the given SiteInstance. By default this will
   // create a new StoragePartition if it doesn't exist, unless |can_create| is
@@ -256,9 +265,12 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // return nullptr, implementing the default exception storage strategy.
   virtual SSLHostStateDelegate* GetSSLHostStateDelegate() = 0;
 
-  // Returns the PermissionManager associated with that context if any, nullptr
-  // otherwise.
-  virtual PermissionManager* GetPermissionManager() = 0;
+  // Returns the PermissionControllerDelegate associated with this context if
+  // any, nullptr otherwise.
+  //
+  // Note: if you want to check a permission status, you probably need
+  // BrowserContext::GetPermissionController() instead.
+  virtual PermissionControllerDelegate* GetPermissionControllerDelegate() = 0;
 
   // Returns the BackgroundFetchDelegate associated with that context if any,
   // nullptr otherwise.
@@ -320,6 +332,11 @@ class CONTENT_EXPORT BrowserContext : public base::SupportsUserData {
   // have similar decode performance and stats are not exposed to the web
   // directly, so privacy is not compromised.
   virtual media::VideoDecodePerfHistory* GetVideoDecodePerfHistory();
+
+  // Retrieves the InProgressDownloadManager associated with this object if
+  // available
+  virtual download::InProgressDownloadManager*
+  RetriveInProgressDownloadManager();
 
  private:
   const std::string unique_id_;

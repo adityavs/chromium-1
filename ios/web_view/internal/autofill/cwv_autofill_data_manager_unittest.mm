@@ -8,11 +8,11 @@
 
 #include "base/run_loop.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/test/ios/wait_util.h"
 #include "components/autofill/core/browser/autofill_profile.h"
 #include "components/autofill/core/browser/autofill_test_utils.h"
 #include "components/autofill/core/browser/credit_card.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
-#import "ios/testing/wait_util.h"
 #include "ios/web/public/test/test_web_thread_bundle.h"
 #import "ios/web_view/internal/autofill/cwv_autofill_profile_internal.h"
 #import "ios/web_view/internal/autofill/cwv_credit_card_internal.h"
@@ -28,8 +28,8 @@
 #error "This file requires ARC support."
 #endif
 
-using testing::kWaitForActionTimeout;
-using testing::WaitUntilConditionOrTimeout;
+using base::test::ios::kWaitForActionTimeout;
+using base::test::ios::WaitUntilConditionOrTimeout;
 
 namespace ios_web_view {
 
@@ -50,6 +50,7 @@ class CWVAutofillDataManagerTest : public PlatformTest {
 
     // Set to stub out behavior inside PersonalDataManager.
     personal_data_manager_->SetAutofillEnabled(true);
+    personal_data_manager_->SetAutofillProfileEnabled(true);
     personal_data_manager_->SetAutofillCreditCardEnabled(true);
     personal_data_manager_->SetAutofillWalletImportEnabled(true);
 
@@ -194,6 +195,35 @@ TEST_F(CWVAutofillDataManagerTest, UpdateCreditCard) {
 
   EXPECT_TRUE(FetchCreditCards(^(NSArray<CWVCreditCard*>* credit_cards) {
     EXPECT_NSEQ(kNewName, credit_cards.firstObject.cardHolderFullName);
+  }));
+}
+
+// Tests CWVAutofillDataManager properly deletes all local data.
+TEST_F(CWVAutofillDataManagerTest, ClearAllLocalData) {
+  personal_data_manager_->AddCreditCard(autofill::test::GetCreditCard());
+  personal_data_manager_->AddCreditCard(autofill::test::GetCreditCard2());
+  personal_data_manager_->AddServerCreditCard(
+      autofill::test::GetMaskedServerCard());
+  personal_data_manager_->AddProfile(autofill::test::GetFullProfile());
+  personal_data_manager_->AddProfile(autofill::test::GetFullProfile2());
+
+  EXPECT_TRUE(FetchCreditCards(^(NSArray<CWVCreditCard*>* credit_cards) {
+    EXPECT_EQ(3ul, credit_cards.count);
+  }));
+
+  EXPECT_TRUE(FetchProfiles(^(NSArray<CWVAutofillProfile*>* profiles) {
+    EXPECT_EQ(2ul, profiles.count);
+  }));
+
+  [autofill_data_manager_ clearAllLocalData];
+
+  EXPECT_TRUE(FetchCreditCards(^(NSArray<CWVCreditCard*>* credit_cards) {
+    EXPECT_EQ(1ul, credit_cards.count);
+    EXPECT_TRUE(credit_cards.firstObject.fromGooglePay);
+  }));
+
+  EXPECT_TRUE(FetchProfiles(^(NSArray<CWVAutofillProfile*>* profiles) {
+    EXPECT_EQ(0ul, profiles.count);
   }));
 }
 

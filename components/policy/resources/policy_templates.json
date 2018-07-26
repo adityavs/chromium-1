@@ -885,7 +885,7 @@
 
       This controls DNS prefetching, TCP and SSL preconnection and prerendering of web pages.
 
-      If you set this preference to 'always', 'never', or 'WiFi only', users cannot change or override this setting in <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>.
+      If you set this policy, users cannot change or override this setting in <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>.
 
       If this policy is left not set, network prediction will be enabled but the user will be able to change it.''',
     },
@@ -1768,6 +1768,30 @@
       If you enable this setting or do not set a value, AutoFill will remain under the control of the user. This will allow them to configure AutoFill profiles and to switch AutoFill on or off at their own discretion.''',
     },
     {
+      'name': 'AutofillProfileEnabled',
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'supported_on': [
+        'chrome.*:69-',
+        'chrome_os:69-',
+        'android:69-',
+      ],
+      'features': {
+        'can_be_recommended': True,
+        'dynamic_refresh': True,
+        'per_profile': True,
+      },
+      'example_value': False,
+      'id': 459,
+      'caption': '''Enable AutoFill for profiles''',
+      'tags': [],
+      'desc': '''Enables <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>'s AutoFill feature and allows users to auto complete profile and address information in web forms using previously stored information.
+
+      If this setting is disabled, Autofill will never suggest, or fill address information, nor will it save additional address information that the user might submit while browsing the web.
+
+      If this setting is enabled or has no value, the user will be able to control Autofill for addresses in the UI.''',
+    },
+    {
       'name': 'AutofillCreditCardEnabled',
       'type': 'main',
       'schema': { 'type': 'boolean' },
@@ -1785,11 +1809,11 @@
       'id': 392,
       'caption': '''Enable AutoFill for credit cards''',
       'tags': [],
-      'desc': '''Enables <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>'s AutoFill feature and allows users to auto complete credit card and address information in web forms using previously stored information.
+      'desc': '''Enables <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>'s AutoFill feature and allows users to auto complete credit card information in web forms using previously stored information.
 
-      If you disable this setting, Autofill will never suggest, or fill credit card information, nor will it save additional credit card information that the user might submit while browsing the web.
+      If this setting is disabled, Autofill will never suggest, or fill credit card information, nor will it save additional credit card information that the user might submit while browsing the web.
 
-      If you enable this setting or do not set a value, then user will be able to control the overall autofill feature (incuding credit cards) in the UI.''',
+      If this setting is enabled or has no value, the user will be able to control Autofill for credit cards in the UI.''',
     },
     {
       'name': 'DisabledPlugins',
@@ -10202,6 +10226,10 @@
       'type': 'list',
       'schema': {
         'type': 'array',
+        'items': { 'type': 'string' },
+      },
+      'validation_schema': {
+        'type': 'array',
         'items': {
           'type': 'object',
           'id': 'PrinterType',
@@ -10227,17 +10255,20 @@
         'dynamic_refresh': True,
         'per_profile': True,
       },
-      'example_value': [{
-        "display_name": "Color Laser",
-        "description": "The printer next to the water cooler.",
-        "manufacturer": "Printer Manufacturer",
-        "model": "Color Laser 2004",
-        "uri": "ipps://print-server.intranet.example.com:443/ipp/cl2k4",
-        "uuid": "1c395fdb-5d93-4904-b246-b2c046e79d12",
-        "ppd_resource": {
-          "effective_model": "Printer Manufacturer ColorLaser2k4"
-        }
-      }],
+      # example_value is split onto multiple lines here for readability, but the
+      # 'type': 'list' above means that each element has to fit inside a single-
+      # line textbox in the GPO UI - so the example string is a single line.
+      'example_value': [
+        '{ '
+        '"display_name": "Color Laser", '
+        '"description": "The printer next to the water cooler.", '
+        '"manufacturer": "Printer Manufacturer", '
+        '"model": "Color Laser 2004", '
+        '"uri": "ipps://print-server.intranet.example.com:443/ipp/cl2k4", '
+        '"uuid": "1c395fdb-5d93-4904-b246-b2c046e79d12", '
+        '"ppd_resource": { "effective_model": "Printer Manufacturer ColorLaser2k4" } '
+        '}'
+      ],
       'id': 350,
       'caption': '''Native Printing''',
       'tags': [],
@@ -11366,6 +11397,7 @@
         'type': 'array',
         'items': { 'type': 'string' },
       },
+      'deprecated': True,
       'supported_on': ['chrome.*:65-'],
       'features': {
         'dynamic_refresh': False,
@@ -11375,7 +11407,8 @@
       'id': 400,
       'caption': '''Origins to be treated as secure context.''',
       'tags': ['system-security'],
-      'desc': '''
+      'desc': '''Deprecated in M69. Use OverrideSecurityRestrictionsOnInsecureOrigin instead.
+
       The policy specifies a list of origins (URLs) to be treated as secure context. The intent is to allow organizations to set up a staging server for internal web development, so that their developers can test out features requiring secure contexts without having to deploy TLS on the staging server.
       Setting a list of URLs in this policy has the same effect as setting the command-line flag '--unsafely-treat-insecure-origin-as-secure' to a comma-separated list of the same URLs. If the policy is set, it will override the command-line flag.
       For more information on secure contexts, see https://www.w3.org/TR/secure-contexts/
@@ -11608,7 +11641,7 @@
       If this policy is set to 'PasswordProtectionWarningOff', no password protection warning will be shown.
       If this policy is set to 'PasswordProtectionWarningOnPasswordReuse', password protection warning will be shown when the user reuses their protected password on a non-whitelisted site.
       If this policy is set to 'PasswordProtectionWarningOnPhishingReuse', password protection warning will be shown when the user reuses their protected password on a phishing site.
-      If this policy is left unset, password protection warning will be triggered when the user reuses their protected password on a phishing site but the user will be able to change this setting.''',
+      If this policy is left unset, password protection service will only protect Google passwords but the user will be able to change this setting.''',
     },
     {
       'id': 419,
@@ -11618,7 +11651,7 @@
         'dynamic_refresh': True,
         'per_profile': False,
       },
-      'supported_on': ['chrome.*:66-'],
+      'supported_on': ['chrome.*:66-', 'chrome_os:70-'],
       'type': 'int-enum',
       'schema': {
         'type': 'integer',
@@ -11747,10 +11780,10 @@
       'id': 424,
       'caption': '''Configure the change password URL.''',
       'tags': [],
-      'desc': '''Configure the change password URL (HTTP and HTTPS schemes only). Password protection service will send users to this URL to change their passwords if they've been phished.
+      'desc': '''Configure the change password URL (HTTP and HTTPS schemes only). Password protection service will send users to this URL to change their password after seeing a warning in the browser.
       In order for <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph> to correctly capture the new password fingerprint on this change password page, please make sure your change password page follows the guidelines on https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
 
-      If this setting is enabled, then password protection service will send users to this URL to change their passwords if they've been phished.
+      If this setting is enabled, then password protection service will send users to this URL to change their password after seeing a warning in the browser.
       If this setting is disabled or not set, then password protection service will send users to https://myaccounts.google.com to change their password.
       This policy is not available on Windows instances that are not joined to a <ph name="MS_AD_NAME">Microsoft® Active Directory®</ph> domain.''',
     },
@@ -12193,6 +12226,7 @@
       },
       'example_value': 1,
       'id': 449,
+      'default_for_enterprise_users': 0,
       'caption': '''Control Android backup and restore service''',
       'tags': ['google-sharing'],
       'desc':
@@ -12228,6 +12262,7 @@
       },
       'example_value': 1,
       'id': 450,
+      'default_for_enterprise_users': 0,
       'caption': '''Control Android Google location services''',
       'tags': ['google-sharing'],
       'desc':
@@ -12414,7 +12449,97 @@
       When this policy is not configured or set to "Do not filter sites for adult content", sites will not be filtered.
 
       When this policy is set to "Filter top level sites for adult content", sites classified as pornographic will be filtered.''',
-    }
+    },
+    {
+      'name': 'OverrideSecurityRestrictionsOnInsecureOrigin',
+      'type': 'list',
+      'schema': {
+        'type': 'array',
+        'items': { 'type': 'string' }
+      },
+      'supported_on': ['chrome.*:69-', 'chrome_os:69-', 'android:69-'],
+      'features': {
+        'dynamic_refresh': False,
+        'per_profile': True,
+      },
+      'example_value': ['http://testserver.example.com/'],
+      'id': 457,
+      'caption': '''Origins or hostname patterns to be treated as secure context.''',
+      'tags': ['system-security'],
+      'desc': '''
+      The policy specifies a list of origins (URLs) or hostname patterns (such as "*.example.com") to be treated as secure contexts. The intent is to allow organizations to set up a staging server for internal web development, so that their developers can test out features requiring secure contexts without having to deploy TLS on the staging server.
+      Setting a list of URLs in this policy has the same effect as setting the command-line flag '--unsafely-treat-insecure-origin-as-secure' to a comma-separated list of the same URLs. If the policy is set, it will override the command-line flag.
+      For more information on secure contexts, see https://www.w3.org/TR/secure-contexts/
+      '''
+    },
+    {
+      'name': 'DeviceUpdateStagingPercentOfFleetPerWeek',
+      'type': 'list',
+      'schema': {
+        'type': 'array',
+        'items': { 'type': 'integer' },
+      },
+      'supported_on': ['chrome_os:69-'],
+      'device_only': True,
+      'features': {
+        'dynamic_refresh': True,
+      },
+      'example_value': [ 0, 20, 100 ],
+      'id': 458,
+      'caption': '''The staging schedule for applying a new update''',
+      'tags': ['system-security'],
+      'desc': '''This policy defines a list of percentages that will define the fraction of <ph name="PRODUCT_OS_NAME">$2<ex>Google Chrome OS</ex></ph> devices in the OU to update per week starting from the day the update is first discovered. The discovery time is later than the update published time, since it could be a while after the update publishing until the device checks for updates.
+
+      The n-th value in the list will be used as the percentage of devices that should complete updating to the next version in the n-th week after the update has been discovered. For example, if an update is discovered today, then the first value in the list defines the percentage of devices in the OU that should update to that version by a week from today. The second value defines the percentage of devices in the OU that should update to that version by 2 weeks from today, and so on.
+
+      If there is a value defined for this policy, updates will ignore the <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME">DeviceUpdateScatterFactor</ph> policy and follow this policy instead.
+
+      If this list is empty, there will be no staging and updates will be applied according to other device policies.
+
+      This policy does not apply for channel switches.''',
+    },
+    {
+      'name': 'TabLifecyclesEnabled',
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'supported_on': ['chrome.win:69-'],
+      'features': {
+        'dynamic_refresh': False,
+        'per_profile': False,
+      },
+      'example_value': False,
+      'id': 460,
+      'caption': '''Enables or disables tab lifecycles''',
+      'tags': [],
+      'desc': '''The tab lifecyles feature reclaims CPU and eventually memory associated with running tabs that have not been used in a long period of time, by first throttling them, then freezing them and finally discarding them.
+
+      If the policy is set to false then tab lifecycles are disabled, and all tabs will be left running normally.
+
+      If the policy is set to true or left unspecified then tab lifecycles are enabled.''',
+    },
+    {
+      'name': 'UrlKeyedAnonymizedDataCollectionEnabled',
+      'type': 'main',
+      'schema': { 'type': 'boolean' },
+      'supported_on': ['chrome.*:69-', 'chrome_os:69-', 'android:70-'],
+      'features': {
+        'dynamic_refresh': True,
+        'per_profile': True,
+      },
+      'example_value': True,
+      'id': 461,
+      'caption': '''Enable URL-keyed anonymized data collection''',
+      'tags': ['google-sharing'],
+      'desc': '''Enable URL-keyed anonymized data collection in <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph> and prevents users from changing this setting.
+
+      URL-keyed anonymized data collection sends URLs of pages the user visits to Google to make searches and browsing better.
+
+      If you enable this policy, URL-keyed anonymized data collection is always active.
+
+      If you disable this policy, URL-keyed anonymized data collection is never active.
+
+      If this policy is left not set, URL-keyed anonymized data collection will be enabled but the user will be able to change it.''',
+    },
   ],
 
   'messages': {
@@ -12556,5 +12681,5 @@ The recommended way to configure policy on Windows is via GPO, although provisio
   },
   'placeholders': [],
   'deleted_policy_ids': [412],
-  'highest_id_currently_used': 456
+  'highest_id_currently_used': 461
 }

@@ -12,6 +12,7 @@
 <translation id="1206693055195146388">スライダ</translation>
 <translation id="1211441953136645838">巻末注</translation>
 <translation id="1281252709823657822">ダイアログ</translation>
+<translation id="1289247557029249093">ピクチャー イン ピクチャー モードを終了する</translation>
 <translation id="1335095011850992622">クレジット</translation>
 <translation id="1342835525016946179">記事</translation>
 <translation id="1359897965706325498">バナー</translation>
@@ -51,6 +52,7 @@
 <translation id="2653659639078652383">送信</translation>
 <translation id="2657045182931379222">図形オブジェクト</translation>
 <translation id="2674318244760992338">フッター</translation>
+<translation id="2706474812903655270">この動画はピクチャー イン ピクチャー モードで再生されています</translation>
 <translation id="2709516037105925701">自動入力</translation>
 <translation id="2723001399770238859">音声</translation>
 <translation id="2746543609216772311"><ph name="MINIMUM_DATE_OR_TIME" /> 以降の値を指定する必要があります。</translation>
@@ -114,7 +116,6 @@
 <translation id="5117590920725113268">次の月を表示</translation>
 <translation id="512758898067543763">行見出し</translation>
 <translation id="5143125788380636750">エピローグ</translation>
-<translation id="5153163864850940242">この動画はピクチャー イン ピクチャーで再生されています</translation>
 <translation id="5164977714490026579">値は <ph name="MINIMUM" /> 以上にする必要があります。</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> PB</translation>
 <translation id="5307600278924710095">「<ph name="ATSIGN" />」の前の文字列を入力してください。「<ph name="INVALIDADDRESS" />」は完全なメール アドレスではありません。</translation>
@@ -146,7 +147,6 @@
 <translation id="6164829606128959761">メーター</translation>
 <translation id="6166809985690652833">後書き</translation>
 <translation id="6213469881011901533">用語集</translation>
-<translation id="6310801910862476708">ピクチャー イン ピクチャーを終了</translation>
 <translation id="6398862346408813489">月選択パネルを表示</translation>
 <translation id="6404546809543547843">オーディオ再生バー</translation>
 <translation id="6453774872122745852">謝辞</translation>
@@ -191,6 +191,7 @@
 <translation id="7720026100085573005">残り時間</translation>
 <translation id="7740016676195725605">クローズド キャプションの表示を終了</translation>
 <translation id="7740050170769002709">HTML コンテンツ</translation>
+<translation id="7750228210027921155">ピクチャー イン ピクチャー</translation>
 <translation id="7789962463072032349">一時停止</translation>
 <translation id="7802800022689234070">三角形の展開ボタン</translation>
 <translation id="7888071071722539607">メール アドレスに「<ph name="ATSIGN" />」を挿入してください。「<ph name="INVALIDADDRESS" />」内に「<ph name="ATSIGN" />」がありません。</translation>
@@ -220,7 +221,6 @@
 <translation id="860475260694818407">目次</translation>
 <translation id="8613126697340063924">リモート再生をコントロール</translation>
 <translation id="862370744433916922">副題</translation>
-<translation id="8741316211671074806">ピクチャー イン ピクチャー</translation>
 <translation id="8750798805984357768">これらのオプションから 1 つ選択してください。</translation>
 <translation id="8785498733064193001">再生を開始</translation>
 <translation id="8808573423886751634">章</translation>
@@ -238,6 +238,7 @@
 <translation id="9132465097189459683">その他...</translation>
 <translation id="9138385573473225930">アラート</translation>
 <translation id="9155987714137265666"><ph name="WEEK_START_DATE" /> から始まる <ph name="WEEK" /></translation>
+<translation id="916607977885256133">ピクチャー イン ピクチャー</translation>
 <translation id="9168329111483466115">脚注</translation>
 <translation id="954003015749068518">ピクチャー イン ピクチャーを開始します</translation>
 <translation id="966787709310836684">メニュー</translation>

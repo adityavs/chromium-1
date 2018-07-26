@@ -35,6 +35,7 @@
 #include "gpu/command_buffer/service/image_factory.h"
 #include "gpu/command_buffer/service/image_manager.h"
 #include "gpu/command_buffer/service/mailbox_manager.h"
+#include "gpu/command_buffer/service/memory_tracking.h"
 #include "gpu/command_buffer/service/scheduler.h"
 #include "gpu/ipc/common/gpu_messages.h"
 #include "gpu/ipc/service/gles2_command_buffer_stub.h"
@@ -400,8 +401,12 @@ base::WeakPtr<GpuChannel> GpuChannel::AsWeakPtr() {
 }
 
 base::ProcessId GpuChannel::GetClientPID() const {
-  DCHECK_NE(peer_pid_, base::kNullProcessId);
+  DCHECK(IsConnected());
   return peer_pid_;
+}
+
+bool GpuChannel::IsConnected() const {
+  return peer_pid_ != base::kNullProcessId;
 }
 
 bool GpuChannel::OnMessageReceived(const IPC::Message& msg) {
@@ -562,14 +567,11 @@ const CommandBufferStub* GpuChannel::GetOneStub() const {
 void GpuChannel::OnCreateCommandBuffer(
     const GPUCreateCommandBufferConfig& init_params,
     int32_t route_id,
-    base::SharedMemoryHandle shared_state_handle,
+    base::UnsafeSharedMemoryRegion shared_state_shm,
     ContextResult* result,
     gpu::Capabilities* capabilities) {
   TRACE_EVENT2("gpu", "GpuChannel::OnCreateCommandBuffer", "route_id", route_id,
                "offscreen", (init_params.surface_handle == kNullSurfaceHandle));
-  std::unique_ptr<base::SharedMemory> shared_state_shm(
-      new base::SharedMemory(shared_state_handle, false));
-
   // Default result on failure. Override with a more accurate failure if needed,
   // or with success.
   *result = ContextResult::kFatalFailure;
@@ -695,24 +697,25 @@ void GpuChannel::RemoveFilter(IPC::MessageFilter* filter) {
                             filter_, base::RetainedRef(filter)));
 }
 
-uint64_t GpuChannel::GetMemoryUsage() {
+uint64_t GpuChannel::GetMemoryUsage() const {
   // Collect the unique memory trackers in use by the |stubs_|.
-  std::set<gles2::MemoryTracker*> unique_memory_trackers;
-  for (auto& kv : stubs_)
-    unique_memory_trackers.insert(kv.second->GetMemoryTracker());
-
-  // Sum the memory usage for all unique memory trackers.
+  base::flat_set<gles2::MemoryTracker*> unique_memory_trackers;
+  unique_memory_trackers.reserve(stubs_.size());
   uint64_t size = 0;
-  for (auto* tracker : unique_memory_trackers) {
-    size += gpu_channel_manager()->gpu_memory_manager()->GetTrackerMemoryUsage(
-        tracker);
+  for (const auto& kv : stubs_) {
+    gles2::MemoryTracker* tracker = kv.second->GetMemoryTracker();
+    if (!unique_memory_trackers.insert(tracker).second) {
+      // We already counted that tracker.
+      continue;
+    }
+    size += tracker->GetSize();
   }
 
   return size;
 }
 
 scoped_refptr<gl::GLImage> GpuChannel::CreateImageForGpuMemoryBuffer(
-    const gfx::GpuMemoryBufferHandle& handle,
+    gfx::GpuMemoryBufferHandle handle,
     const gfx::Size& size,
     gfx::BufferFormat format,
     uint32_t internalformat,
@@ -737,8 +740,9 @@ scoped_refptr<gl::GLImage> GpuChannel::CreateImageForGpuMemoryBuffer(
 
       return manager->gpu_memory_buffer_factory()
           ->AsImageFactory()
-          ->CreateImageForGpuMemoryBuffer(handle, size, format, internalformat,
-                                          client_id_, surface_handle);
+          ->CreateImageForGpuMemoryBuffer(std::move(handle), size, format,
+                                          internalformat, client_id_,
+                                          surface_handle);
     }
   }
 }

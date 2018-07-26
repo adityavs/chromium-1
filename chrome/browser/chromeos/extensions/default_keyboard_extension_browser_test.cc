@@ -91,7 +91,7 @@ void DefaultKeyboardExtensionBrowserTest::ShowVirtualKeyboard() {
   aura::Window* window = ash::Shell::GetPrimaryRootWindow();
   ui::InputMethod* input_method = window->GetHost()->GetInputMethod();
   ASSERT_TRUE(input_method);
-  input_method->ShowImeIfNeeded();
+  input_method->ShowVirtualKeyboardIfEnabled();
 }
 
 content::WebContents*
@@ -157,9 +157,7 @@ IN_PROC_BROWSER_TEST_F(DefaultKeyboardExtensionBrowserTest, IsKeyboardLoaded) {
   ASSERT_TRUE(loaded);
 }
 
-// Disabled; http://crbug.com/515596
-IN_PROC_BROWSER_TEST_F(DefaultKeyboardExtensionBrowserTest,
-                       DISABLED_EndToEndTest) {
+IN_PROC_BROWSER_TEST_F(DefaultKeyboardExtensionBrowserTest, EndToEndTest) {
   // Get the virtual keyboard's WebContents.
   content::WebContents* keyboard_wc = GetKeyboardWebContents(kExtensionId);
   ASSERT_TRUE(keyboard_wc);

@@ -33,8 +33,10 @@ class NGBoxFragmentPainter : public BoxPainterBase {
  public:
   NGBoxFragmentPainter(const NGPaintFragment&);
 
-  void Paint(const PaintInfo&, const LayoutPoint& paint_offset);
-  void PaintInlineBox(const PaintInfo&, const LayoutPoint& paint_offset);
+  void Paint(const PaintInfo&);
+  void PaintObject(const PaintInfo&,
+                   const LayoutPoint&,
+                   bool suppress_box_decoration_background = false);
 
   // Hit tests this box fragment.
   // @param physical_offset Physical offset of this box fragment in paint layer.
@@ -62,17 +64,17 @@ class NGBoxFragmentPainter : public BoxPainterBase {
   bool IsPaintingBackgroundOfPaintContainerIntoScrollingContentsLayer(
       const NGPaintFragment&,
       const PaintInfo&);
-  bool IntersectsPaintRect(const PaintInfo&, const LayoutPoint&) const;
+  bool IntersectsPaintRect(const PaintInfo&,
+                           const LayoutPoint& paint_offset) const;
 
-  void PaintWithAdjustedOffset(PaintInfo&, const LayoutPoint&);
-  void PaintBoxDecorationBackground(const PaintInfo&, const LayoutPoint&);
+  void PaintBoxDecorationBackground(const PaintInfo&,
+                                    const LayoutPoint& paint_offset);
   void PaintAllPhasesAtomically(const PaintInfo&,
-                                const LayoutPoint&,
                                 bool is_self_painting);
-  void PaintBlockChildren(const PaintInfo&, const LayoutPoint&);
+  void PaintBlockChildren(const PaintInfo&);
   void PaintLineBoxChildren(const Vector<std::unique_ptr<NGPaintFragment>>&,
                             const PaintInfo&,
-                            const LayoutPoint&);
+                            const LayoutPoint& paint_offset);
   void PaintInlineChildren(const Vector<std::unique_ptr<NGPaintFragment>>&,
                            const PaintInfo&,
                            const LayoutPoint& paint_offset);
@@ -80,32 +82,24 @@ class NGBoxFragmentPainter : public BoxPainterBase {
       const Vector<std::unique_ptr<NGPaintFragment>>&,
       const PaintInfo&,
       const LayoutPoint& paint_offset);
-  void PaintInlineChildBoxUsingLegacyFallback(
-      const NGPhysicalFragment&,
-      const PaintInfo&,
-      const LayoutPoint& paint_offset,
-      const LayoutPoint& legacy_paint_offset);
-  void PaintObject(const PaintInfo&,
-                   const LayoutPoint&,
-                   bool suppress_box_decoration_background = false);
-  void PaintBlockFlowContents(const PaintInfo&, const LayoutPoint&);
+  void PaintInlineChildBoxUsingLegacyFallback(const NGPhysicalFragment&,
+                                              const PaintInfo&);
+  void PaintBlockFlowContents(const PaintInfo&,
+                              const LayoutPoint& paint_offset);
   void PaintInlineChild(const NGPaintFragment&,
                         const PaintInfo&,
                         const LayoutPoint& paint_offset);
-  void PaintAtomicInlineChild(const NGPaintFragment&,
-                              const PaintInfo&,
-                              const LayoutPoint& paint_offset,
-                              const LayoutPoint& legacy_paint_offset);
+  void PaintAtomicInlineChild(const NGPaintFragment&, const PaintInfo&);
   void PaintTextChild(const NGPaintFragment&,
                       const PaintInfo&,
                       const LayoutPoint& paint_offset);
   void PaintFloatingChildren(const Vector<std::unique_ptr<NGPaintFragment>>&,
-                             const PaintInfo&,
-                             const LayoutPoint& paint_offset);
-  void PaintFloats(const PaintInfo&, const LayoutPoint&);
-  void PaintMask(const PaintInfo&, const LayoutPoint&);
-  void PaintOverflowControlsIfNeeded(const PaintInfo&, const LayoutPoint&);
-  void PaintAtomicInline(const PaintInfo&, const LayoutPoint& paint_offset);
+                             const PaintInfo&);
+  void PaintFloats(const PaintInfo&);
+  void PaintMask(const PaintInfo&, const LayoutPoint& paint_offset);
+  void PaintOverflowControlsIfNeeded(const PaintInfo&,
+                                     const LayoutPoint& paint_offset);
+  void PaintAtomicInline(const PaintInfo&);
   void PaintBackground(const PaintInfo&,
                        const LayoutRect&,
                        const Color& background_color,
@@ -119,20 +113,32 @@ class NGBoxFragmentPainter : public BoxPainterBase {
 
   // Hit tests the children of a container fragment, which is either
   // |box_fragment_|, or one of its child line box fragments.
-  // @param physical_offset Physical offset of the container fragment in paint
-  // layer.
+  // @param physical_offset Physical offset of the container fragment's content
+  // box in paint layer. Note that this includes scrolling offset when the
+  // container has 'overflow: scroll'.
   bool HitTestChildren(HitTestResult&,
                        const Vector<std::unique_ptr<NGPaintFragment>>&,
                        const HitTestLocation& location_in_container,
                        const LayoutPoint& physical_offset,
                        HitTestAction);
 
+  // Hit tests a box fragment, which is a child of either |box_fragment_|, or
+  // one of its child line box fragments.
+  // @param physical_offset Physical offset of the given box fragment in the
+  // paint layer.
+  bool HitTestChildBoxFragment(HitTestResult&,
+                               const NGPaintFragment&,
+                               const HitTestLocation& location_in_container,
+                               const LayoutPoint& physical_offset,
+                               HitTestAction);
+
   // Hit tests the given text fragment.
   // @param physical_offset Physical offset of the text fragment in paint layer.
   bool HitTestTextFragment(HitTestResult&,
                            const NGPaintFragment&,
                            const HitTestLocation& location_in_container,
-                           const LayoutPoint& physical_offset);
+                           const LayoutPoint& physical_offset,
+                           HitTestAction);
 
   // Hit tests the given line box fragment.
   // @param physical_offset Physical offset of the line box fragment in paint

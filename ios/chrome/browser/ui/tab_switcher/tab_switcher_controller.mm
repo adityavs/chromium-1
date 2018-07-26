@@ -311,6 +311,12 @@ enum class SnapshotViewOption {
   [self.view addSubview:_tabSwitcherView];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  [self.dispatcher
+      setIncognitoContentVisible:([[_tabSwitcherModel otrTabModel] count] > 0)];
+}
+
 #pragma mark - UIResponder
 
 - (NSArray*)keyCommands {
@@ -444,13 +450,13 @@ enum class SnapshotViewOption {
 
 - (void)openNewTab:(OpenNewTabCommand*)command {
   // Ensure that the right mode is showing.
-  NSInteger panelIndex = command.incognito ? kLocalTabsOffTheRecordPanelIndex
-                                           : kLocalTabsOnTheRecordPanelIndex;
+  NSInteger panelIndex = command.inIncognito ? kLocalTabsOffTheRecordPanelIndex
+                                             : kLocalTabsOnTheRecordPanelIndex;
   [_tabSwitcherView selectPanelAtIndex:panelIndex];
 
   const TabSwitcherSessionType panelSessionType =
-      (command.incognito) ? TabSwitcherSessionType::OFF_THE_RECORD_SESSION
-                          : TabSwitcherSessionType::REGULAR_SESSION;
+      (command.inIncognito) ? TabSwitcherSessionType::OFF_THE_RECORD_SESSION
+                            : TabSwitcherSessionType::REGULAR_SESSION;
 
   TabModel* model = [self tabModelForSessionType:panelSessionType];
 
@@ -866,7 +872,9 @@ enum class SnapshotViewOption {
   DCHECK(model);
   [[self presentedViewController] dismissViewControllerAnimated:NO
                                                      completion:nil];
-  [self.delegate tabSwitcher:self shouldFinishWithActiveModel:model];
+  [self.delegate tabSwitcher:self
+      shouldFinishWithActiveModel:model
+                     focusOmnibox:NO];
   [self performTabSwitcherTransition:TransitionType::TRANSITION_DISMISS
                            withModel:model
                             animated:animated
@@ -1273,6 +1281,8 @@ enum class SnapshotViewOption {
           : [_tabSwitcherModel mainTabModel];
   DCHECK_NE(NSNotFound, static_cast<NSInteger>([tabModel indexOfTab:tab]));
   [tabModel closeTab:tab];
+  [self.dispatcher
+      setIncognitoContentVisible:([[_tabSwitcherModel otrTabModel] count] > 0)];
 
   if (panelSessionType == TabSwitcherSessionType::OFF_THE_RECORD_SESSION) {
     base::RecordAction(

@@ -22,6 +22,7 @@
 #include "mojo/public/cpp/bindings/strong_associated_binding.h"
 #include "third_party/blink/public/mojom/dom_storage/session_storage_namespace.mojom.h"
 #include "third_party/blink/public/mojom/dom_storage/storage_partition_service.mojom.h"
+#include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_storage_event_dispatcher.h"
 
@@ -85,7 +86,6 @@ LocalStorageCachedArea::LocalStorageCachedArea(
       main_thread_scheduler_(main_thread_scheduler),
       weak_factory_(this) {
   DCHECK(!namespace_id_.empty());
-
   blink::mojom::StorageAreaAssociatedPtrInfo wrapper_ptr_info;
   session_namespace->OpenArea(origin_, mojo::MakeRequest(&wrapper_ptr_info));
   leveldb_.Bind(std::move(wrapper_ptr_info),

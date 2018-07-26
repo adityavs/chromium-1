@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Lokalisierung wurde verwendet, in der Manifest-Datei war jedoch kein Wert für "default_locale" angegeben.</translation>
 <translation id="2576842806987913196">Es ist bereits eine CRX-Datei mit diesem Namen vorhanden.</translation>
 <translation id="2753617847762399167">Unzulässiger Pfad (absolut oder relativ mit ".."): "<ph name="IMAGE_PATH" />"</translation>
-<translation id="27822970480436970">Die Erweiterung konnte eine Netzwerkanfrage nicht modifizieren, da die Modifikation einen Konflikt mit einer anderen Erweiterung verursacht.</translation>
 <translation id="2785530881066938471">Datei "<ph name="RELATIVE_PATH" />" konnte nicht für das Content-Skript geladen werden. Sie ist nicht UTF-8-codiert.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (Erweiterungs-ID "<ph name="EXTENSION_ID" />") wurde vom Administrator blockiert. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Paket konnte nicht installiert werden: "<ph name="ERROR_CODE" />".</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Unbekanntes Produkt <ph name="PRODUCT_ID" /> von <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">Manifest-Datei ist ungültig</translation>
 <translation id="7217838517480956708">Der Administrator dieses Computers schreibt die Installation von <ph name="EXTENSION_NAME" /> vor. Die Erweiterung kann nicht entfernt oder geändert werden.</translation>
+<translation id="7939686037314084444">Die Erweiterung wurde nicht richtig geladen. Möglicherweise kann sie keine Netzwerkanfragen abfangen.</translation>
 <translation id="7972881773422714442">Options: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Frontkamera</translation>
 <translation id="8047248493720652249">Diese Erweiterung konnte den Download nicht "<ph name="ATTEMPTED_FILENAME" />" nennen, weil eine andere Erweiterung (<ph name="EXTENSION_NAME" />) einen anderen Dateinamen "<ph name="ACTUAL_FILENAME" />" festgelegt hat.</translation>

@@ -16,11 +16,11 @@
 #include "third_party/blink/renderer/platform/bindings/exception_code.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/network/encoded_form_data.h"
 #include "third_party/blink/renderer/platform/wtf/assertions.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
 
@@ -99,10 +99,7 @@ BodyStreamBuffer::BodyStreamBuffer(ScriptState* script_state,
       consumer_(consumer),
       signal_(signal),
       made_from_readable_stream_(false) {
-  v8::Local<v8::Value> body_value = ToV8(this, script_state);
-  DCHECK(!body_value.IsEmpty());
-  DCHECK(body_value->IsObject());
-  v8::Local<v8::Object> body = body_value.As<v8::Object>();
+  RetainWrapperUntilV8WrapperGetReturnedToV8(script_state);
 
   {
     // Leaving an exception pending will cause Blink to crash in the bindings
@@ -115,8 +112,8 @@ BodyStreamBuffer::BodyStreamBuffer(ScriptState* script_state,
           ReadableStreamOperations::CreateReadableStream(script_state, this,
                                                          strategy);
       if (!readable_stream.IsEmpty()) {
-        V8PrivateProperty::GetInternalBodyStream(script_state->GetIsolate())
-            .Set(body, readable_stream.V8Value());
+        stream_.Set(script_state->GetIsolate(),
+                    readable_stream.V8Value().As<v8::Object>());
       } else {
         stream_broken_ = true;
       }
@@ -144,16 +141,11 @@ BodyStreamBuffer::BodyStreamBuffer(ScriptState* script_state,
       script_state_(script_state),
       signal_(nullptr),
       made_from_readable_stream_(true) {
+  RetainWrapperUntilV8WrapperGetReturnedToV8(script_state);
   DCHECK(ReadableStreamOperations::IsReadableStreamForDCheck(script_state,
                                                              stream));
 
-  v8::Local<v8::Value> body_value = ToV8(this, script_state);
-  DCHECK(!body_value.IsEmpty());
-  DCHECK(body_value->IsObject());
-  v8::Local<v8::Object> body = body_value.As<v8::Object>();
-
-  V8PrivateProperty::GetInternalBodyStream(script_state->GetIsolate())
-      .Set(body, stream.V8Value());
+  stream_.Set(script_state->GetIsolate(), stream.V8Value().As<v8::Object>());
 }
 
 ScriptValue BodyStreamBuffer::Stream() {
@@ -161,15 +153,8 @@ ScriptValue BodyStreamBuffer::Stream() {
   // even if |stream_broken_| is true, so that expected JavaScript attribute
   // behaviour is not changed. User code is still permitted to access the
   // stream even when it has thrown an exception.
-  ScriptState::Scope scope(script_state_.get());
-  v8::Local<v8::Value> body_value = ToV8(this, script_state_.get());
-  DCHECK(!body_value.IsEmpty());
-  DCHECK(body_value->IsObject());
-  v8::Local<v8::Object> body = body_value.As<v8::Object>();
-  return ScriptValue(
-      script_state_.get(),
-      V8PrivateProperty::GetInternalBodyStream(script_state_->GetIsolate())
-          .GetOrUndefined(body));
+  return ScriptValue(script_state_,
+                     stream_.NewLocal(script_state_->GetIsolate()));
 }
 
 scoped_refptr<BlobDataHandle> BodyStreamBuffer::DrainAsBlobDataHandle(
@@ -239,9 +224,8 @@ void BodyStreamBuffer::StartLoading(FetchDataLoader* loader,
   auto* handle = ReleaseHandle(exception_state);
   if (exception_state.HadException())
     return;
-  loader->Start(handle,
-                new LoaderClient(ExecutionContext::From(script_state_.get()),
-                                 this, client));
+  loader->Start(handle, new LoaderClient(ExecutionContext::From(script_state_),
+                                         this, client));
 }
 
 void BodyStreamBuffer::Tee(BodyStreamBuffer** branch1,
@@ -262,8 +246,8 @@ void BodyStreamBuffer::Tee(BodyStreamBuffer** branch1,
       return;
     }
     ScriptValue stream1, stream2;
-    ReadableStreamOperations::Tee(script_state_.get(), Stream(), &stream1,
-                                  &stream2, exception_state);
+    ReadableStreamOperations::Tee(script_state_, Stream(), &stream1, &stream2,
+                                  exception_state);
     if (exception_state.HadException()) {
       stream_broken_ = true;
       return;
@@ -271,12 +255,10 @@ void BodyStreamBuffer::Tee(BodyStreamBuffer** branch1,
 
     // Exceptions here imply that |stream1| and/or |stream2| are broken, not the
     // stream owned by this object, so we shouldn't set |stream_broken_|.
-    auto* tmp1 =
-        new BodyStreamBuffer(script_state_.get(), stream1, exception_state);
+    auto* tmp1 = new BodyStreamBuffer(script_state_, stream1, exception_state);
     if (exception_state.HadException())
       return;
-    auto* tmp2 =
-        new BodyStreamBuffer(script_state_.get(), stream2, exception_state);
+    auto* tmp2 = new BodyStreamBuffer(script_state_, stream2, exception_state);
     if (exception_state.HadException())
       return;
     *branch1 = tmp1;
@@ -290,14 +272,14 @@ void BodyStreamBuffer::Tee(BodyStreamBuffer** branch1,
     stream_broken_ = true;
     return;
   }
-  BytesConsumer::Tee(ExecutionContext::From(script_state_.get()), handle,
-                     &dest1, &dest2);
-  *branch1 = new BodyStreamBuffer(script_state_.get(), dest1, signal_);
-  *branch2 = new BodyStreamBuffer(script_state_.get(), dest2, signal_);
+  BytesConsumer::Tee(ExecutionContext::From(script_state_), handle, &dest1,
+                     &dest2);
+  *branch1 = new BodyStreamBuffer(script_state_, dest1, signal_);
+  *branch2 = new BodyStreamBuffer(script_state_, dest2, signal_);
 }
 
 ScriptPromise BodyStreamBuffer::pull(ScriptState* script_state) {
-  DCHECK_EQ(script_state, script_state_.get());
+  DCHECK_EQ(script_state, script_state_);
   if (!consumer_) {
     // This is a speculative workaround for a crash. See
     // https://crbug.com/773525.
@@ -315,7 +297,7 @@ ScriptPromise BodyStreamBuffer::pull(ScriptState* script_state) {
 
 ScriptPromise BodyStreamBuffer::Cancel(ScriptState* script_state,
                                        ScriptValue reason) {
-  DCHECK_EQ(script_state, script_state_.get());
+  DCHECK_EQ(script_state, script_state_);
   if (Controller())
     Controller()->Close();
   CancelConsumer();
@@ -376,8 +358,7 @@ base::Optional<bool> BodyStreamBuffer::IsStreamLocked(
 }
 
 bool BodyStreamBuffer::IsStreamLockedForDCheck() {
-  return ReadableStreamOperations::IsLockedForDCheck(script_state_.get(),
-                                                     Stream());
+  return ReadableStreamOperations::IsLockedForDCheck(script_state_, Stream());
 }
 
 base::Optional<bool> BodyStreamBuffer::IsStreamDisturbed(
@@ -387,7 +368,7 @@ base::Optional<bool> BodyStreamBuffer::IsStreamDisturbed(
 }
 
 bool BodyStreamBuffer::IsStreamDisturbedForDCheck() {
-  return ReadableStreamOperations::IsDisturbedForDCheck(script_state_.get(),
+  return ReadableStreamOperations::IsDisturbedForDCheck(script_state_,
                                                         Stream());
 }
 
@@ -403,17 +384,17 @@ void BodyStreamBuffer::CloseAndLockAndDisturb(ExceptionState& exception_state) {
   }
   DCHECK(!stream_broken_);
 
-  ScriptState::Scope scope(script_state_.get());
+  ScriptState::Scope scope(script_state_);
   const base::Optional<bool> is_locked = IsStreamLocked(exception_state);
   if (exception_state.HadException() || is_locked.value())
     return;
   ScriptValue reader = ReadableStreamOperations::GetReader(
-      script_state_.get(), Stream(), exception_state);
+      script_state_, Stream(), exception_state);
   if (exception_state.HadException()) {
     stream_broken_ = true;
     return;
   }
-  ReadableStreamOperations::DefaultReaderRead(script_state_.get(), reader);
+  ReadableStreamOperations::DefaultReaderRead(script_state_, reader);
 }
 
 bool BodyStreamBuffer::IsAborted() {
@@ -422,7 +403,21 @@ bool BodyStreamBuffer::IsAborted() {
   return signal_->aborted();
 }
 
+void BodyStreamBuffer::Trace(blink::Visitor* visitor) {
+  visitor->Trace(script_state_);
+  visitor->Trace(stream_);
+  visitor->Trace(consumer_);
+  visitor->Trace(loader_);
+  visitor->Trace(signal_);
+  UnderlyingSourceBase::Trace(visitor);
+}
+
 void BodyStreamBuffer::Abort() {
+  if (!Controller()) {
+    DCHECK(!GetExecutionContext());
+    DCHECK(!consumer_);
+    return;
+  }
   Controller()->GetError(DOMException::Create(DOMExceptionCode::kAbortError));
   CancelConsumer();
 }
@@ -434,7 +429,7 @@ void BodyStreamBuffer::Close() {
 
 void BodyStreamBuffer::GetError() {
   {
-    ScriptState::Scope scope(script_state_.get());
+    ScriptState::Scope scope(script_state_);
     Controller()->GetError(V8ThrowException::CreateTypeError(
         script_state_->GetIsolate(), "network error"));
   }
@@ -516,14 +511,23 @@ base::Optional<bool> BodyStreamBuffer::BooleanStreamOperation(
         "Body stream has suffered a fatal error and cannot be inspected");
     return base::nullopt;
   }
-  ScriptState::Scope scope(script_state_.get());
+  ScriptState::Scope scope(script_state_);
   base::Optional<bool> result =
-      predicate(script_state_.get(), Stream(), exception_state);
+      predicate(script_state_, Stream(), exception_state);
   if (exception_state.HadException()) {
     stream_broken_ = true;
     return base::nullopt;
   }
   return result;
+}
+
+void BodyStreamBuffer::RetainWrapperUntilV8WrapperGetReturnedToV8(
+    ScriptState* script_state) {
+  ExecutionContext::From(script_state)
+      ->GetTaskRunner(TaskType::kInternalDefault)
+      ->PostTask(
+          FROM_HERE,
+          WTF::Bind(Noop, ScriptValue(script_state, ToV8(this, script_state))));
 }
 
 BytesConsumer* BodyStreamBuffer::ReleaseHandle(
@@ -539,7 +543,7 @@ BytesConsumer* BodyStreamBuffer::ReleaseHandle(
   }
 
   if (made_from_readable_stream_) {
-    ScriptState::Scope scope(script_state_.get());
+    ScriptState::Scope scope(script_state_);
     // We need to have |reader| alive by some means (as noted in
     // ReadableStreamDataConsumerHandle). Based on the following facts:
     //  - This function is used only from Tee and StartLoading.
@@ -548,12 +552,12 @@ BytesConsumer* BodyStreamBuffer::ReleaseHandle(
     //  - ReadableStream holds a reference to |reader| inside JS.
     // we don't need to keep the reader explicitly.
     ScriptValue reader = ReadableStreamOperations::GetReader(
-        script_state_.get(), Stream(), exception_state);
+        script_state_, Stream(), exception_state);
     if (exception_state.HadException()) {
       stream_broken_ = true;
       return nullptr;
     }
-    return new ReadableStreamBytesConsumer(script_state_.get(), reader);
+    return new ReadableStreamBytesConsumer(script_state_, reader);
   }
   // We need to call these before calling CloseAndLockAndDisturb.
   const base::Optional<bool> is_closed = IsStreamClosed(exception_state);

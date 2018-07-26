@@ -59,7 +59,7 @@ class COMPONENT_EXPORT(DRIVEFS) DriveFsHost
     virtual net::URLRequestContextGetter* GetRequestContext() = 0;
     virtual service_manager::Connector* GetConnector() = 0;
     virtual const AccountId& GetAccountId() = 0;
-    virtual bool AreRefreshTokensReady() = 0;
+    virtual std::string GetObfuscatedAccountId() = 0;
     virtual std::unique_ptr<OAuth2MintTokenFlow> CreateMintTokenFlow(
         OAuth2MintTokenFlow::Delegate* delegate,
         const std::string& client_id,
@@ -69,6 +69,9 @@ class COMPONENT_EXPORT(DRIVEFS) DriveFsHost
     CreateMojoConnectionDelegate();
 
     virtual void OnMounted(const base::FilePath& mount_path) = 0;
+    virtual void OnUnmounted(base::Optional<base::TimeDelta> remount_delay) = 0;
+    virtual void OnMountFailed(
+        base::Optional<base::TimeDelta> remount_delay) = 0;
 
    private:
     DISALLOW_COPY_AND_ASSIGN(Delegate);

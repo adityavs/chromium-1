@@ -47,6 +47,7 @@
 #include "content/public/common/referrer.h"
 #include "content/public/common/renderer_preferences.h"
 #include "content/public/common/request_context_type.h"
+#include "content/public/common/resource_type.h"
 #include "content/public/common/stop_find_action.h"
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/websocket_handshake_throttle_provider.h"
@@ -247,8 +248,7 @@ class CONTENT_EXPORT RenderFrameImpl
   // Just like RenderFrame::FromWebFrame but returns the implementation.
   static RenderFrameImpl* FromWebFrame(blink::WebFrame* web_frame);
 
-  // Used by content_layouttest_support to hook into the creation of
-  // RenderFrameImpls.
+  // Constructor parameters are bundled into a struct.
   struct CONTENT_EXPORT CreateParams {
     CreateParams(
         RenderViewImpl* render_view,
@@ -283,7 +283,7 @@ class CONTENT_EXPORT RenderFrameImpl
   // See RenderFrameObserver::DidMeaningfulLayout declaration for details.
   void DidMeaningfulLayout(blink::WebMeaningfulLayout layout_type);
 
-  // Draw commands have been issued by RenderWidgetCompositor.
+  // Draw commands have been issued by blink::LayerTreeView.
   void DidCommitAndDrawCompositorFrame();
 
   // Returns the unique name of the RenderFrame.
@@ -480,9 +480,8 @@ class CONTENT_EXPORT RenderFrameImpl
   void SetSelectedText(const base::string16& selection_text,
                        size_t offset,
                        const gfx::Range& range) override;
-  void SetZoomLevel(bool uses_temporary_zoom, double zoom_level) override;
+  void SetZoomLevel(double zoom_level) override;
   double GetZoomLevel() const override;
-  bool UsesTemporaryZoom() const override;
   void AddMessageToConsole(ConsoleMessageLevel level,
                            const std::string& message) override;
   void SetPreviewsState(PreviewsState previews_state) override;
@@ -528,6 +527,7 @@ class CONTENT_EXPORT RenderFrameImpl
       base::Optional<std::vector<mojom::TransferrableURLLoaderPtr>>
           subresource_overrides,
       mojom::ControllerServiceWorkerInfoPtr controller_service_worker_info,
+      network::mojom::URLLoaderFactoryPtr prefetch_loader_factory,
       const base::UnguessableToken& devtools_navigation_token,
       CommitNavigationCallback callback) override;
   void CommitFailedNavigation(
@@ -623,6 +623,7 @@ class CONTENT_EXPORT RenderFrameImpl
                               unsigned source_line,
                               const blink::WebString& stack_trace) override;
   void DownloadURL(const blink::WebURLRequest& request,
+                   CrossOriginRedirects cross_origin_redirect_behavior,
                    mojo::ScopedMessagePipeHandle blob_url_token) override;
   void LoadErrorPage(int reason) override;
   blink::WebNavigationPolicy DecidePolicyForNavigation(
@@ -707,12 +708,6 @@ class CONTENT_EXPORT RenderFrameImpl
   void WillReleaseScriptContext(v8::Local<v8::Context> context,
                                 int world_id) override;
   void DidChangeScrollOffset() override;
-  void ReportFindInPageMatchCount(int request_id,
-                                  int count,
-                                  bool final_update) override;
-  void ReportFindInPageSelection(int request_id,
-                                 int active_match_ordinal,
-                                 const blink::WebRect& sel) override;
   blink::WebPushClient* PushClient() override;
   blink::WebRelatedAppsFetcher* GetRelatedAppsFetcher() override;
   void WillStartUsingPeerConnectionHandler(
@@ -882,7 +877,8 @@ class CONTENT_EXPORT RenderFrameImpl
   void OnDroppedNavigation();
 
   void DidStartResponse(int request_id,
-                        const network::ResourceResponseHead& response_head);
+                        const network::ResourceResponseHead& response_head,
+                        content::ResourceType resource_type);
   void DidCompleteResponse(int request_id,
                            const network::URLLoaderCompletionStatus& status);
   void DidCancelResponse(int request_id);
@@ -1134,20 +1130,23 @@ class CONTENT_EXPORT RenderFrameImpl
       const blink::WebURLError& error,
       bool replace,
       HistoryEntry* entry,
-      const base::Optional<std::string>& error_page_content);
+      const base::Optional<std::string>& error_page_content,
+      std::unique_ptr<blink::WebDocumentLoader::ExtraData> navigation_data);
   void LoadNavigationErrorPageForHttpStatusError(
       const blink::WebURLRequest& failed_request,
       const GURL& unreachable_url,
       int http_status,
       bool replace,
-      HistoryEntry* entry);
+      HistoryEntry* entry,
+      std::unique_ptr<blink::WebDocumentLoader::ExtraData> navigation_data);
   void LoadNavigationErrorPageInternal(
       const std::string& error_html,
       const GURL& error_page_url,
       const GURL& error_url,
       bool replace,
       blink::WebFrameLoadType frame_load_type,
-      const blink::WebHistoryItem& history_item);
+      const blink::WebHistoryItem& history_item,
+      std::unique_ptr<blink::WebDocumentLoader::ExtraData> navigation_data);
 
   void HandleJavascriptExecutionResult(const base::string16& javascript,
                                        int id,
@@ -1168,12 +1167,14 @@ class CONTENT_EXPORT RenderFrameImpl
   void BeginNavigation(const NavigationPolicyInfo& info);
 
   // Loads a data url.
-  void LoadDataURL(const CommonNavigationParams& params,
-                   const RequestNavigationParams& request_params,
-                   blink::WebLocalFrame* frame,
-                   blink::WebFrameLoadType load_type,
-                   blink::WebHistoryItem item_for_history_navigation,
-                   bool is_client_redirect);
+  void LoadDataURL(
+      const CommonNavigationParams& params,
+      const RequestNavigationParams& request_params,
+      blink::WebLocalFrame* frame,
+      blink::WebFrameLoadType load_type,
+      blink::WebHistoryItem item_for_history_navigation,
+      bool is_client_redirect,
+      std::unique_ptr<blink::WebDocumentLoader::ExtraData> navigation_data);
 
   // Sends a proper FrameHostMsg_DidFailProvisionalLoadWithError_Params IPC for
   // the failed request |request|.
@@ -1213,7 +1214,7 @@ class CONTENT_EXPORT RenderFrameImpl
                      int match_count,
                      int ordinal,
                      const blink::WebRect& selection_rect,
-                     bool final_status_update);
+                     bool final_status_update) override;
 
   void InitializeBlameContext(RenderFrameImpl* parent_frame);
 
@@ -1281,7 +1282,8 @@ class CONTENT_EXPORT RenderFrameImpl
   CreateWebSocketHandshakeThrottle() override;
 
   // Updates the state of this frame when asked to commit a navigation.
-  void PrepareFrameForCommit();
+  void PrepareFrameForCommit(const GURL& url,
+                             const RequestNavigationParams& request_params);
 
   // Updates the state when asked to commit a history navigation.  Sets
   // |item_for_history_navigation| and |load_type| to the appropriate values for
@@ -1312,6 +1314,9 @@ class CONTENT_EXPORT RenderFrameImpl
       const RequestNavigationParams& request_params,
       blink::WebHistoryItem* item_for_history_navigation,
       blink::WebFrameLoadType* load_type);
+
+  // Whether url download should be throttled.
+  bool ShouldThrottleDownload();
 
   // Stores the WebLocalFrame we are associated with.  This is null from the
   // constructor until BindToFrame() is called, and it is null after
@@ -1611,6 +1616,10 @@ class CONTENT_EXPORT RenderFrameImpl
   // consumed to initialize a subresource loader).
   mojom::ControllerServiceWorkerInfoPtr controller_service_worker_info_;
 
+  // Set on CommitNavigation when Network Service is enabled, and used
+  // by FrameURLLoaderFactory for prefetch requests.
+  network::mojom::URLLoaderFactoryPtr prefetch_loader_factory_;
+
   // URLLoaderFactory instances used for subresource loading.
   // Depending on how the frame was created, |loader_factories_| could be:
   //   * |HostChildURLLoaderFactoryBundle| for standalone frames, or
@@ -1659,6 +1668,10 @@ class CONTENT_EXPORT RenderFrameImpl
 
   std::unique_ptr<WebSocketHandshakeThrottleProvider>
       websocket_handshake_throttle_provider_;
+
+  // Variable to control burst of download requests.
+  int num_burst_download_requests_ = 0;
+  base::TimeTicks burst_download_start_time_;
 
   base::WeakPtrFactory<RenderFrameImpl> weak_factory_;
 

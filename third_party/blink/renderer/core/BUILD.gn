@@ -28,13 +28,6 @@ rel_blink_core_gen_dir = rebase_path(blink_core_output_dir, root_build_dir)
 # Config for code that builds as part of core.
 config("config") {
   defines = [ "BLINK_CORE_IMPLEMENTATION=1" ]
-
-  cflags = []
-  if (is_win) {
-    # Suppress __declspec(dllexport)/extern conflict (C4910).
-    cflags += [ "/wd4910" ]
-  }
-
   if (is_chromecast) {
     defines += [ "BLINK_MEDIA_LOG=LOG(INFO)" ]
   }
@@ -179,7 +172,9 @@ component("core") {
   ]
   deps = [
     "//third_party/blink/public/common",
+    "//third_party/blink/renderer/core/accessibility",
     "//third_party/blink/renderer/core/animation",
+    "//third_party/blink/renderer/core/aom",
     "//third_party/blink/renderer/core/clipboard",
     "//third_party/blink/renderer/core/context_features",
     "//third_party/blink/renderer/core/css",
@@ -303,6 +298,7 @@ jumbo_source_set("testing") {
     "testing/type_conversions.h",
     "testing/union_types_test.cc",
     "testing/union_types_test.h",
+    "testing/use_mock_scrollbar_settings.h",
     "testing/v8/web_core_test_support.cc",
     "testing/v8/web_core_test_support.h",
     "testing/worker_internals.cc",
@@ -347,6 +343,7 @@ generate_event_interfaces("core_event_interfaces") {
     "events/mouse_event.idl",
     "events/mutation_event.idl",
     "events/page_transition_event.idl",
+    "events/picture_in_picture_control_event.idl",
     "events/pointer_event.idl",
     "events/pop_state_event.idl",
     "events/progress_event.idl",
@@ -1643,6 +1640,7 @@ jumbo_source_set("unit_tests") {
     "animation/animation_test_helper.cc",
     "animation/animation_test_helper.h",
     "animation/compositor_animations_test.cc",
+    "animation/css/css_animations_test.cc",
     "animation/css/css_transition_data_test.cc",
     "animation/document_timeline_test.cc",
     "animation/effect_input_test.cc",
@@ -1701,6 +1699,7 @@ jumbo_source_set("unit_tests") {
     "css/parser/sizes_attribute_parser_test.cc",
     "css/parser/sizes_calc_parser_test.cc",
     "css/properties/css_parsing_utils_test.cc",
+    "css/resolver/css_variable_data_test.cc",
     "css/resolver/css_variable_resolver_test.cc",
     "css/resolver/font_builder_test.cc",
     "css/resolver/font_style_resolver_test.cc",
@@ -1714,7 +1713,6 @@ jumbo_source_set("unit_tests") {
     "css/style_engine_test.cc",
     "css/style_environment_variables_test.cc",
     "css/style_sheet_contents_test.cc",
-    "css/style_sheet_list_test.cc",
     "css/threaded/css_parser_threaded_test.cc",
     "css/threaded/css_to_length_conversion_data_threaded_test.cc",
     "css/threaded/filter_operation_resolver_threaded_test.cc",
@@ -1911,6 +1909,7 @@ jumbo_source_set("unit_tests") {
     "layout/api/selection_state_test.cc",
     "layout/collapsed_border_value_test.cc",
     "layout/custom/layout_worklet_test.cc",
+    "layout/grid_test.cc",
     "layout/jank_tracker_test.cc",
     "layout/layout_block_test.cc",
     "layout/layout_box_model_object_test.cc",
@@ -1918,6 +1917,7 @@ jumbo_source_set("unit_tests") {
     "layout/layout_count_test.cc",
     "layout/layout_embedded_content_test.cc",
     "layout/layout_geometry_map_test.cc",
+    "layout/layout_image_test.cc",
     "layout/layout_inline_test.cc",
     "layout/layout_media_test.cc",
     "layout/layout_multi_column_flow_thread_test.cc",
@@ -1983,16 +1983,17 @@ jumbo_source_set("unit_tests") {
     "loader/base_fetch_context_test.cc",
     "loader/document_load_timing_test.cc",
     "loader/document_loader_test.cc",
-    "loader/document_threadable_loader_test.cc",
     "loader/frame_fetch_context_test.cc",
     "loader/idleness_detector_test.cc",
     "loader/interactive_detector_test.cc",
     "loader/link_loader_test.cc",
+    "loader/long_task_detector_test.cc",
     "loader/mixed_content_checker_test.cc",
     "loader/modulescript/module_script_loader_test.cc",
     "loader/modulescript/module_tree_linker_test.cc",
     "loader/navigation_policy_test.cc",
     "loader/ping_loader_test.cc",
+    "loader/previews_resource_loading_hints_test.cc",
     "loader/programmatic_scroll_test.cc",
     "loader/progress_tracker_test.cc",
     "loader/resource/css_style_sheet_resource_test.cc",

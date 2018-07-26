@@ -38,14 +38,10 @@ namespace content {
 namespace {
 
 // Keys of the fields defined in the database.
-const char kNextNotificationIdKey[] = "NEXT_NOTIFICATION_ID";
 const char kDataKeyPrefix[] = "DATA:";
 
 // Separates the components of compound keys.
 const char kNotificationKeySeparator = '\x00';
-
-// The first notification id which to be handed out by the database.
-const int64_t kFirstPersistentNotificationId = 1;
 
 // Converts the LevelDB |status| to one of the notification database's values.
 NotificationDatabase::Status LevelDBStatusToNotificationDatabaseStatus(
@@ -111,8 +107,9 @@ void UpdateNotificationClickTimestamps(NotificationDatabaseData* data) {
 
 }  // namespace
 
-NotificationDatabase::NotificationDatabase(const base::FilePath& path)
-    : path_(path) {}
+NotificationDatabase::NotificationDatabase(const base::FilePath& path,
+                                           UkmCallback callback)
+    : path_(path), record_notification_to_ukm_callback_(std::move(callback)) {}
 
 NotificationDatabase::~NotificationDatabase() {
   DCHECK(sequence_checker_.CalledOnValidSequence());
@@ -144,16 +141,10 @@ NotificationDatabase::Status NotificationDatabase::Open(
 
   Status status = LevelDBStatusToNotificationDatabaseStatus(
       leveldb_env::OpenDB(options, path_.AsUTF8Unsafe(), &db_));
-  if (status != STATUS_OK)
-    return status;
+  if (status == STATUS_OK)
+    state_ = State::INITIALIZED;
 
-  state_ = State::INITIALIZED;
-
-  return ReadNextPersistentNotificationId();
-}
-
-int64_t NotificationDatabase::GetNextPersistentNotificationId() {
-  return next_persistent_notification_id_++;
+  return status;
 }
 
 NotificationDatabase::Status NotificationDatabase::ReadNotificationData(
@@ -192,11 +183,13 @@ NotificationDatabase::ReadNotificationDataAndRecordInteraction(
   // Update the appropriate fields for UKM logging purposes.
   switch (interaction) {
     case PlatformNotificationContext::Interaction::CLOSED:
+      notification_database_data->closed_reason =
+          NotificationDatabaseData::ClosedReason::USER;
       notification_database_data->time_until_close_millis =
           base::Time::Now() - notification_database_data->creation_time_millis;
       break;
     case PlatformNotificationContext::Interaction::NONE:
-      return status;
+      break;
     case PlatformNotificationContext::Interaction::ACTION_BUTTON_CLICKED:
       notification_database_data->num_action_button_clicks += 1;
       UpdateNotificationClickTimestamps(notification_database_data);
@@ -260,12 +253,6 @@ NotificationDatabase::Status NotificationDatabase::WriteNotificationData(
   leveldb::WriteBatch batch;
   batch.Put(CreateDataKey(origin, notification_id), serialized_data);
 
-  if (written_persistent_notification_id_ != next_persistent_notification_id_) {
-    written_persistent_notification_id_ = next_persistent_notification_id_;
-    batch.Put(kNextNotificationIdKey,
-              base::Int64ToString(next_persistent_notification_id_));
-  }
-
   return LevelDBStatusToNotificationDatabaseStatus(
       db_->Write(leveldb::WriteOptions(), &batch));
 }
@@ -278,6 +265,13 @@ NotificationDatabase::Status NotificationDatabase::DeleteNotificationData(
   DCHECK(!notification_id.empty());
   DCHECK(origin.is_valid());
 
+  NotificationDatabaseData data;
+  Status status = ReadNotificationData(notification_id, origin, &data);
+  if (status == STATUS_OK && record_notification_to_ukm_callback_) {
+    BrowserThread::PostTask(
+        BrowserThread::UI, FROM_HERE,
+        base::BindOnce(record_notification_to_ukm_callback_, data));
+  }
   std::string key = CreateDataKey(origin, notification_id);
   return LevelDBStatusToNotificationDatabaseStatus(
       db_->Delete(leveldb::WriteOptions(), key));
@@ -319,31 +313,6 @@ NotificationDatabase::Status NotificationDatabase::Destroy() {
 
   return LevelDBStatusToNotificationDatabaseStatus(
       leveldb::DestroyDB(path_.AsUTF8Unsafe(), options));
-}
-
-NotificationDatabase::Status
-NotificationDatabase::ReadNextPersistentNotificationId() {
-  std::string value;
-  Status status = LevelDBStatusToNotificationDatabaseStatus(
-      db_->Get(leveldb::ReadOptions(), kNextNotificationIdKey, &value));
-
-  if (status == STATUS_ERROR_NOT_FOUND) {
-    next_persistent_notification_id_ = kFirstPersistentNotificationId;
-    written_persistent_notification_id_ = kFirstPersistentNotificationId;
-    return STATUS_OK;
-  }
-
-  if (status != STATUS_OK)
-    return status;
-
-  if (!base::StringToInt64(value, &next_persistent_notification_id_) ||
-      next_persistent_notification_id_ < kFirstPersistentNotificationId) {
-    return STATUS_ERROR_CORRUPTED;
-  }
-
-  written_persistent_notification_id_ = next_persistent_notification_id_;
-
-  return STATUS_OK;
 }
 
 NotificationDatabase::Status
@@ -420,6 +389,13 @@ NotificationDatabase::DeleteAllNotificationDataInternal(
         notification_database_data.service_worker_registration_id !=
             service_worker_registration_id) {
       continue;
+    }
+
+    if (record_notification_to_ukm_callback_) {
+      BrowserThread::PostTask(
+          BrowserThread::UI, FROM_HERE,
+          base::BindOnce(record_notification_to_ukm_callback_,
+                         notification_database_data));
     }
 
     batch.Delete(iter->key());

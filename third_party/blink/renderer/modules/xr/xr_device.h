@@ -9,8 +9,8 @@
 #include "mojo/public/cpp/bindings/binding.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
-#include "third_party/blink/renderer/core/dom/events/event_target.h"
 #include "third_party/blink/renderer/modules/xr/xr_session_creation_options.h"
+#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/wtf/forward.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
@@ -22,13 +22,12 @@ class XR;
 class XRFrameProvider;
 class XRSession;
 
-class XRDevice final : public EventTargetWithInlineData,
+class XRDevice final : public ScriptWrappable,
                        public device::mojom::blink::VRDisplayClient {
   DEFINE_WRAPPERTYPEINFO();
 
  public:
   XRDevice(XR*,
-           device::mojom::blink::VRMagicWindowProviderPtr,
            device::mojom::blink::VRDisplayHostPtr,
            device::mojom::blink::VRDisplayClientRequest,
            device::mojom::blink::VRDisplayInfoPtr);
@@ -38,11 +37,6 @@ class XRDevice final : public EventTargetWithInlineData,
 
   ScriptPromise supportsSession(ScriptState*, const XRSessionCreationOptions&);
   ScriptPromise requestSession(ScriptState*, const XRSessionCreationOptions&);
-
-  // EventTarget overrides.
-  ExecutionContext* GetExecutionContext() const override;
-  const AtomicString& InterfaceName() const override;
-  void Trace(blink::Visitor*) override;
 
   // XRDisplayClient
   void OnChanged(device::mojom::blink::VRDisplayInfoPtr) override;
@@ -60,9 +54,13 @@ class XRDevice final : public EventTargetWithInlineData,
   const device::mojom::blink::VRDisplayHostPtr& xrDisplayHostPtr() const {
     return display_;
   }
-  const device::mojom::blink::VRMagicWindowProviderPtr&
-  xrMagicWindowProviderPtr() const {
+  const device::mojom::blink::XRFrameDataProviderPtr& xrMagicWindowProviderPtr()
+      const {
     return magic_window_provider_;
+  }
+  const device::mojom::blink::XREnviromentIntegrationProviderPtr&
+  xrEnviromentProviderPtr() const {
+    return enviroment_provider_;
   }
   const device::mojom::blink::VRDisplayInfoPtr& xrDisplayInfoPtr() const {
     return display_info_;
@@ -78,19 +76,20 @@ class XRDevice final : public EventTargetWithInlineData,
   bool HasDeviceFocus() { return has_device_focus_; }
   bool HasDeviceAndFrameFocus() { return IsFrameFocused() && HasDeviceFocus(); }
 
-  bool SupportsExclusive() { return supports_exclusive_; }
+  bool SupportsImmersive() { return supports_immersive_; }
 
   int64_t GetSourceId() const;
+
+  void Trace(blink::Visitor*) override;
 
  private:
   void SetXRDisplayInfo(device::mojom::blink::VRDisplayInfoPtr);
 
   const char* checkSessionSupport(const XRSessionCreationOptions&) const;
 
-  void OnRequestSessionReturned(
-      ScriptPromiseResolver* resolver,
-      const XRSessionCreationOptions& options,
-      device::mojom::blink::XRPresentationConnectionPtr connection);
+  void OnRequestSessionReturned(ScriptPromiseResolver* resolver,
+                                const XRSessionCreationOptions& options,
+                                device::mojom::blink::XRSessionPtr session);
   void OnSupportsSessionReturned(ScriptPromiseResolver* resolver,
                                  bool supports_session);
 
@@ -105,14 +104,15 @@ class XRDevice final : public EventTargetWithInlineData,
   Member<XRFrameProvider> frame_provider_;
   HeapHashSet<WeakMember<XRSession>> sessions_;
   bool is_external_ = false;
-  bool supports_exclusive_ = false;
+  bool supports_immersive_ = false;
   bool supports_ar_ = false;
   bool has_device_focus_ = true;
 
-  // Indicates whether we've already logged a request for an exclusive session.
-  bool did_log_request_exclusive_session_ = false;
+  // Indicates whether we've already logged a request for an immersive session.
+  bool did_log_request_immersive_session_ = false;
 
-  device::mojom::blink::VRMagicWindowProviderPtr magic_window_provider_;
+  device::mojom::blink::XRFrameDataProviderPtr magic_window_provider_;
+  device::mojom::blink::XREnviromentIntegrationProviderPtr enviroment_provider_;
   device::mojom::blink::VRDisplayHostPtr display_;
   device::mojom::blink::VRDisplayInfoPtr display_info_;
   unsigned int display_info_id_ = 0;

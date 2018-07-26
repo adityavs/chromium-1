@@ -74,7 +74,6 @@ class MockFetchContext : public FetchContext {
       const KURL&,
       const ResourceLoaderOptions&,
       SecurityViolationReportingPolicy,
-      FetchParameters::OriginRestriction,
       ResourceRequest::RedirectStatus redirect_status) const override {
     return base::nullopt;
   }
@@ -84,11 +83,6 @@ class MockFetchContext : public FetchContext {
       const ResourceLoaderOptions& options,
       SecurityViolationReportingPolicy reporting_policy,
       ResourceRequest::RedirectStatus redirect_status) const override {
-    return base::nullopt;
-  }
-  base::Optional<ResourceRequestBlockedReason> CheckResponseNosniff(
-      WebURLRequest::RequestContext,
-      const ResourceResponse&) const override {
     return base::nullopt;
   }
   bool ShouldLoadNewResource(Resource::Type) const override {
@@ -102,14 +96,14 @@ class MockFetchContext : public FetchContext {
 
   std::unique_ptr<WebURLLoader> CreateURLLoader(
       const ResourceRequest& request,
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner,
       const ResourceLoaderOptions&) override {
     if (!url_loader_factory_) {
       url_loader_factory_ =
           Platform::Current()->CreateDefaultURLLoaderFactory();
     }
     WrappedResourceRequest wrapped(request);
-    return url_loader_factory_->CreateURLLoader(wrapped, task_runner);
+    return url_loader_factory_->CreateURLLoader(
+        wrapped, CreateResourceLoadingTaskRunnerHandle());
   }
 
   ResourceLoadScheduler::ThrottlingPolicy InitialLoadThrottlingPolicy()
@@ -123,6 +117,12 @@ class MockFetchContext : public FetchContext {
 
   scoped_refptr<base::SingleThreadTaskRunner> GetLoadingTaskRunner() override {
     return frame_scheduler_->GetTaskRunner(TaskType::kInternalTest);
+  }
+
+  std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
+  CreateResourceLoadingTaskRunnerHandle() override {
+    return scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
+        GetLoadingTaskRunner());
   }
 
  private:

@@ -60,6 +60,14 @@ const char kSpdyProxyRealm[] = "/SpdyProxy";
 // already.
 typedef autofill::SavePasswordProgressLogger Logger;
 
+enum class ShouldShowPromptResults {
+  kOldNoNewNo = 0,
+  kOldNoNewYes,
+  kOldYesNewNo,
+  kOldYesNewYes,
+  kMaxValue = kOldYesNewYes,
+};
+
 bool URLsEqualUpToScheme(const GURL& a, const GURL& b) {
   return (a.GetContent() == b.GetContent());
 }
@@ -171,6 +179,8 @@ bool AreAllFieldsEmpty(const PasswordForm& form) {
 
 // Helper function that determines whether update or save prompt should be
 // shown for credentials in |provisional_save_manager|.
+// TODO(https://crbug.com/831123): Move to NewPasswordFormManager when the old
+// PasswordFormManager is gone.
 bool IsPasswordUpdate(const PasswordFormManager& provisional_save_manager) {
   return (!provisional_save_manager.GetBestMatches().empty() &&
           provisional_save_manager
@@ -223,6 +233,43 @@ PasswordFormManager* FindMatchedManager(
   return matched_manager_it == pending_login_managers.end()
              ? nullptr
              : matched_manager_it->get();
+}
+
+void LogShouldShouldPromptComparison(bool should_show_prompt_old,
+                                     bool should_show_prompt) {
+  ShouldShowPromptResults outcome = ShouldShowPromptResults::kMaxValue;
+  if (!should_show_prompt_old && !should_show_prompt)
+    outcome = ShouldShowPromptResults::kOldNoNewNo;
+  if (!should_show_prompt_old && should_show_prompt)
+    outcome = ShouldShowPromptResults::kOldNoNewYes;
+  if (should_show_prompt_old && !should_show_prompt)
+    outcome = ShouldShowPromptResults::kOldYesNewNo;
+  if (should_show_prompt_old && should_show_prompt)
+    outcome = ShouldShowPromptResults::kOldYesNewYes;
+
+  UMA_HISTOGRAM_ENUMERATION("PasswordManager.ShouldShowPromptComparison",
+                            outcome);
+}
+
+// Returns true if the user needs to be prompted before a password can be
+// saved (instead of automatically saving the password), based on inspecting
+// the state of |manager|.
+bool ShouldPromptUserToSavePassword(const PasswordFormManager& manager) {
+  if (IsPasswordUpdate(manager)) {
+    // Updating a credential might erase a useful stored value by accident.
+    // Always ask the user to confirm.
+    return true;
+  }
+
+  // User successfully signed-in with PSL match credentials. These credentials
+  // should be automatically saved in order to be autofilled on next login.
+  if (manager.IsPendingCredentialsPublicSuffixMatch())
+    return false;
+
+  if (manager.has_generated_password())
+    return false;
+
+  return manager.IsNewLogin();
 }
 
 }  // namespace
@@ -510,7 +557,8 @@ void PasswordManager::ShowManualFallbackForSaving(
     password_manager::PasswordManagerDriver* driver,
     const PasswordForm& password_form) {
   if (!client_->IsSavingAndFillingEnabledForCurrentPage() ||
-      ShouldBlockPasswordForSameOriginButDifferentScheme(password_form))
+      ShouldBlockPasswordForSameOriginButDifferentScheme(password_form) ||
+      !client_->GetStoreResultFilter()->ShouldSave(password_form))
     return;
 
   PasswordFormManager* matched_manager = FindMatchedManager(
@@ -523,16 +571,20 @@ void PasswordManager::ShowManualFallbackForSaving(
       FormFetcher::State::WAITING) {
     return;
   }
-  ProvisionallySaveManager(password_form, matched_manager, nullptr);
+
+  std::unique_ptr<PasswordFormManager> manager = matched_manager->Clone();
+  PasswordForm form(password_form);
+  form.preferred = true;
+  manager->ProvisionallySave(form);
 
   // Show the fallback if a prompt or a confirmation bubble should be available.
-  bool has_generated_password =
-      provisional_save_manager_->has_generated_password();
-  if (ShouldPromptUserToSavePassword() || has_generated_password) {
-    DCHECK(provisional_save_manager_);
-    bool is_update = IsPasswordUpdate(*provisional_save_manager_);
-    client_->ShowManualFallbackForSaving(std::move(provisional_save_manager_),
+  bool has_generated_password = manager->has_generated_password();
+  if (ShouldPromptUserToSavePassword(*manager) || has_generated_password) {
+    bool is_update = IsPasswordUpdate(*manager);
+    client_->ShowManualFallbackForSaving(std::move(manager),
                                          has_generated_password, is_update);
+    matched_manager->GetMetricsRecorder()->RecordShowManualFallbackForSaving(
+        has_generated_password, is_update);
   } else {
     HideManualFallbackForSaving();
   }
@@ -710,6 +762,16 @@ void PasswordManager::ProcessSubmittedForm(
   }
 }
 
+void PasswordManager::ReportSpecPriorityForGeneratedPassword(
+    const autofill::PasswordForm& password_form,
+    uint32_t spec_priority) {
+  PasswordFormManager* form_manager = GetMatchingPendingManager(password_form);
+  if (form_manager && form_manager->GetMetricsRecorder()) {
+    form_manager->GetMetricsRecorder()->ReportSpecPriorityForGeneratedPassword(
+        spec_priority);
+  }
+}
+
 void PasswordManager::OnStartNavigation(PasswordManagerDriver* driver) {
   // TODO(crbug/842643): use this signal instead of DidStartProvisionalLoad in
   // the renderer.
@@ -769,7 +831,7 @@ bool PasswordManager::ShouldBlockPasswordForSameOriginButDifferentScheme(
          !new_origin.SchemeIsCryptographic();
 }
 
-bool PasswordManager::ShouldPromptUserToSavePassword() const {
+bool PasswordManager::ShouldPromptUserToSavePasswordOld() const {
   return (provisional_save_manager_->IsNewLogin() ||
           provisional_save_manager_
               ->is_possible_change_password_form_without_username() ||
@@ -859,12 +921,6 @@ void PasswordManager::OnPasswordFormsRendered(
   }
 }
 
-void PasswordManager::OnSameDocumentNavigation(
-    password_manager::PasswordManagerDriver* driver,
-    const PasswordForm& password_form) {
-  OnPasswordFormSubmittedNoChecks(driver, password_form);
-}
-
 void PasswordManager::OnLoginSuccessful() {
   std::unique_ptr<BrowserSavePasswordProgressLogger> logger;
   if (password_manager_util::IsLoggingActive(client_)) {
@@ -905,7 +961,11 @@ void PasswordManager::OnLoginSuccessful() {
   // If the form is eligible only for saving fallback, it shouldn't go here.
   DCHECK(!provisional_save_manager_->GetPendingCredentials()
               .only_for_fallback_saving);
-  if (ShouldPromptUserToSavePassword()) {
+
+  LogShouldShouldPromptComparison(
+      ShouldPromptUserToSavePasswordOld(),
+      ShouldPromptUserToSavePassword(*provisional_save_manager_));
+  if (ShouldPromptUserToSavePassword(*provisional_save_manager_)) {
     bool empty_password = provisional_save_manager_->GetPendingCredentials()
                               .username_value.empty();
     UMA_HISTOGRAM_BOOLEAN("PasswordManager.EmptyUsernames.OfferedToSave",

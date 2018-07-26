@@ -22,6 +22,7 @@ import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.preferences.PreferenceUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -95,7 +96,8 @@ public class AddLanguageFragment extends Fragment {
         super.onCreate(savedInstanceState);
         getActivity().setTitle(R.string.prefs_add_language);
         setHasOptionsMenu(true);
-        LanguagesManager.recordImpression(LanguagesManager.PAGE_ADD_LANGUAGE);
+        LanguagesManager.recordImpression(
+                LanguagesManager.LanguageSettingsPageType.PAGE_ADD_LANGUAGE);
     }
 
     @Override
@@ -123,6 +125,9 @@ public class AddLanguageFragment extends Fragment {
 
         mRecyclerView.setAdapter(mAdapter);
         mAdapter.reload(mFullLanguageList);
+        mRecyclerView.getViewTreeObserver().addOnScrollChangedListener(
+                PreferenceUtils.getShowShadowOnScrollListener(
+                        mRecyclerView, view.findViewById(R.id.shadow)));
         return view;
     }
 

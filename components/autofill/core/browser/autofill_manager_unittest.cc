@@ -290,7 +290,8 @@ class AutofillManagerTest : public testing::Test {
 
   void SetUp() override {
     autofill_client_.SetPrefs(test::PrefServiceForTesting());
-    personal_data_.set_database(autofill_client_.GetDatabase());
+    personal_data_.Init(autofill_client_.GetDatabase(), nullptr,
+                        autofill_client_.GetPrefs(), nullptr, false);
     personal_data_.SetPrefService(autofill_client_.GetPrefs());
     autofill_driver_ =
         std::make_unique<testing::NiceMock<MockAutofillDriver>>();
@@ -369,9 +370,6 @@ class AutofillManagerTest : public testing::Test {
     autofill_manager_.reset();
     autofill_driver_.reset();
 
-    // Remove the AutofillWebDataService so TestPersonalDataManager does not
-    // need to care about removing self as an observer in destruction.
-    personal_data_.set_database(scoped_refptr<AutofillWebDataService>(nullptr));
     personal_data_.SetPrefService(nullptr);
     personal_data_.ClearCreditCards();
 
@@ -381,8 +379,9 @@ class AutofillManagerTest : public testing::Test {
   void GetAutofillSuggestions(int query_id,
                               const FormData& form,
                               const FormFieldData& field) {
-    autofill_manager_->OnQueryFormFieldAutofill(query_id, form, field,
-                                                gfx::RectF());
+    autofill_manager_->OnQueryFormFieldAutofill(
+        query_id, form, field, gfx::RectF(),
+        /*autoselect_first_suggestion=*/false);
   }
 
   void GetAutofillSuggestions(const FormData& form,
@@ -996,9 +995,10 @@ TEST_F(AutofillManagerTest,
 
   // Test that we sent the right values to the external delegate. No labels,
   // with duplicate values "Grimes" merged.
-  CheckSuggestions(kDefaultPageID,
-                   Suggestion("Googler", "" /* no label */, "", 1),
-                   Suggestion("Grimes", "" /* no label */, "", 2));
+  CheckSuggestions(
+      kDefaultPageID, Suggestion("Googler", "1600 Amphitheater pkwy", "", 1),
+      Suggestion("Grimes", "1234 Smith Blvd., Carl Grimes", "", 2),
+      Suggestion("Grimes", "1234 Smith Blvd., Robin Grimes", "", 3));
 }
 
 // Tests that we return address profile suggestions values when the section
@@ -1020,7 +1020,7 @@ TEST_F(AutofillManagerTest, GetProfileSuggestions_AlreadyAutofilledNoLabels) {
 
   // Test that we sent the right values to the external delegate. No labels.
   CheckSuggestions(kDefaultPageID,
-                   Suggestion("Elvis", "" /* no label */, "", 1));
+                   Suggestion("Elvis", "3734 Elvis Presley Blvd.", "", 1));
 }
 
 // Test that we return no suggestions when the form has no relevant fields.
@@ -1546,7 +1546,7 @@ TEST_F(AutofillManagerTest,
       AutofillMetrics::FORM_EVENT_SUGGESTION_SHOWN_SUBMITTED_ONCE, 1);
 }
 
-// Test that we return autocomplete-like suggestions when trying to autofill
+// Test that we return normal autofill suggestions when trying to autofill
 // already filled forms.
 TEST_F(AutofillManagerTest, GetFieldSuggestionsWhenFormIsAutofilled) {
   // Set up our form data.
@@ -1561,8 +1561,9 @@ TEST_F(AutofillManagerTest, GetFieldSuggestionsWhenFormIsAutofilled) {
   GetAutofillSuggestions(form, field);
 
   // Test that we sent the right values to the external delegate.
-  CheckSuggestions(kDefaultPageID, Suggestion("Charles", "", "", 1),
-                   Suggestion("Elvis", "", "", 2));
+  CheckSuggestions(kDefaultPageID,
+                   Suggestion("Charles", "123 Apple St.", "", 1),
+                   Suggestion("Elvis", "3734 Elvis Presley Blvd.", "", 2));
 }
 
 // Test that nothing breaks when there are autocomplete suggestions but no
@@ -1613,7 +1614,8 @@ TEST_F(AutofillManagerTest, GetFieldSuggestionsWithDuplicateValues) {
   GetAutofillSuggestions(form, field);
 
   // Test that we sent the right values to the external delegate.
-  CheckSuggestions(kDefaultPageID, Suggestion("Elvis", "", "", 1));
+  CheckSuggestions(kDefaultPageID,
+                   Suggestion("Elvis", "3734 Elvis Presley Blvd.", "", 1));
 }
 
 TEST_F(AutofillManagerTest, GetProfileSuggestions_FancyPhone) {
@@ -5274,6 +5276,41 @@ TEST_F(AutofillManagerTest, FillInUpdatedExpirationDate) {
                                      "4012888888881881");
 }
 
+TEST_F(AutofillManagerTest, ProfileDisabledDoesNotFillFormData) {
+  autofill_manager_->SetProfileEnabled(false);
+
+  // Set up our form data.
+  FormData form;
+  test::CreateTestAddressFormData(&form);
+  std::vector<FormData> forms(1, form);
+  FormsSeen(forms);
+
+  const char guid[] = "00000000-0000-0000-0000-000000000001";
+
+  // Expect no fields filled, no form data sent to renderer.
+  EXPECT_CALL(*autofill_driver_, SendFormDataToRenderer(_, _, _)).Times(0);
+
+  FillAutofillFormData(kDefaultPageID, form, *form.fields.begin(),
+                       MakeFrontendID(std::string(), guid));
+}
+
+TEST_F(AutofillManagerTest, ProfileDisabledDoesNotSuggest) {
+  autofill_manager_->SetProfileEnabled(false);
+
+  // Set up our form data.
+  FormData form;
+  test::CreateTestAddressFormData(&form);
+  std::vector<FormData> forms(1, form);
+  FormsSeen(forms);
+
+  FormFieldData field;
+  test::CreateTestFormField("Email", "email", "", "email", &field);
+  GetAutofillSuggestions(form, field);
+  // Expect no suggestions as autofill and autocomplete are disabled for
+  // addresses.
+  EXPECT_FALSE(external_delegate_->on_suggestions_returned_seen());
+}
+
 TEST_F(AutofillManagerTest, CreditCardDisabledDoesNotFillFormData) {
   autofill_manager_->SetCreditCardEnabled(false);
 
@@ -5303,8 +5340,7 @@ TEST_F(AutofillManagerTest, CreditCardDisabledDoesNotSuggest) {
   FormsSeen(forms);
 
   FormFieldData field;
-  test::CreateTestFormField("Name on Card", "nameoncard", "pres", "text",
-                            &field);
+  test::CreateTestFormField("Name on Card", "nameoncard", "", "text", &field);
   GetAutofillSuggestions(form, field);
   // Expect no suggestions as autofill and autocomplete are disabled for credit
   // cards.

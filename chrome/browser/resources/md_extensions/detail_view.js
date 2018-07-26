@@ -161,8 +161,7 @@ cr.define('extensions', function() {
      */
     shouldShowOptionsSection_: function() {
       return this.data.incognitoAccess.isEnabled ||
-          this.data.fileAccess.isEnabled || this.data.runOnAllUrls.isEnabled ||
-          this.data.errorCollection.isEnabled;
+          this.data.fileAccess.isEnabled || this.data.errorCollection.isEnabled;
     },
 
     /**
@@ -227,12 +226,6 @@ cr.define('extensions', function() {
     },
 
     /** @private */
-    onAllowOnAllSitesChange_: function() {
-      this.delegate.setItemAllowedOnAllSites(
-          this.data.id, this.$$('#allow-on-all-sites').checked);
-    },
-
-    /** @private */
     onCollectErrorsChange_: function() {
       this.delegate.setItemCollectsErrors(
           this.data.id, this.$$('#collect-errors').checked);
@@ -282,6 +275,23 @@ cr.define('extensions', function() {
         default:
           return '';
       }
+    },
+
+    /**
+     * @return {boolean}
+     * @private
+     */
+    hasPermissions_: function() {
+      return this.data.permissions.simplePermissions.length > 0 ||
+          !!this.data.permissions.hostAccess;
+    },
+
+    /**
+     * @return {boolean}
+     * @private
+     */
+    showRuntimeHostPermissions_: function() {
+      return !!this.data.permissions.hostAccess;
     },
   });
 

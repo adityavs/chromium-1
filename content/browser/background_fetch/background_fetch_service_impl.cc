@@ -106,10 +106,12 @@ void BackgroundFetchServiceImpl::UpdateUI(
     int64_t service_worker_registration_id,
     const std::string& developer_id,
     const std::string& unique_id,
-    const std::string& title,
+    const base::Optional<std::string>& title,
+    const SkBitmap& icon,
     UpdateUICallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  if (!ValidateUniqueId(unique_id) || !ValidateTitle(title)) {
+
+  if (!ValidateUniqueId(unique_id) || (title && !ValidateTitle(*title))) {
     std::move(callback).Run(
         blink::mojom::BackgroundFetchError::INVALID_ARGUMENT);
     return;
@@ -117,7 +119,12 @@ void BackgroundFetchServiceImpl::UpdateUI(
 
   BackgroundFetchRegistrationId registration_id(
       service_worker_registration_id, origin_, developer_id, unique_id);
-  background_fetch_context_->UpdateUI(registration_id, title,
+
+  // Wrap the icon in an optional for clarity.
+  auto optional_icon =
+      icon.isNull() ? base::nullopt : base::Optional<SkBitmap>(icon);
+
+  background_fetch_context_->UpdateUI(registration_id, title, optional_icon,
                                       std::move(callback));
 }
 

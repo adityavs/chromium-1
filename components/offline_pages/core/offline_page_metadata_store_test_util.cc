@@ -19,7 +19,7 @@ namespace offline_pages {
 namespace {
 
 int64_t GetPageCountSync(sql::Connection* db) {
-  const char kSql[] = "SELECT count(*) FROM offlinepages_v1";
+  static const char kSql[] = "SELECT count(*) FROM offlinepages_v1";
   sql::Statement statement(db->GetCachedStatement(SQL_FROM_HERE, kSql));
   if (statement.Step()) {
     return statement.ColumnInt64(0);
@@ -80,7 +80,8 @@ int64_t OfflinePageMetadataStoreTestUtil::GetPageCount() {
       base::BindOnce(&GetPageCountSync),
       base::BindOnce(
           [](int64_t* out_count, int64_t cb_count) { *out_count = cb_count; },
-          &count));
+          &count),
+      int64_t());
   task_runner_->RunUntilIdle();
   return count;
 }

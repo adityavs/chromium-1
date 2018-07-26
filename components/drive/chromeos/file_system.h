@@ -250,6 +250,12 @@ class FileSystem : public FileSystemInterface,
   void OnGetResourceEntryForGetShareUrl(const GetShareUrlCallback& callback,
                                         google_apis::DriveApiErrorCode status,
                                         const GURL& share_url);
+
+  void OnGetMetadata(
+      const GetFilesystemMetadataCallback& callback,
+      drive::FileSystemMetadata* default_corpus_metadata,
+      std::map<std::string, drive::FileSystemMetadata>* team_drive_metadata);
+
   // Part of AddPermission.
   void AddPermissionAfterGetResourceEntry(
       const std::string& email,
@@ -270,11 +276,8 @@ class FileSystem : public FileSystemInterface,
   JobScheduler* scheduler_;
   internal::ResourceMetadata* resource_metadata_;
 
-  // Time of the last update check.
-  base::Time last_update_check_time_;
-
-  // Error of the last update check.
-  FileError last_update_check_error_;
+  // Stores debug update metadata for default corpus and team drive.
+  std::map<std::string, FileSystemMetadata> last_update_metadata_;
 
   // Used to load about resource.
   std::unique_ptr<internal::AboutResourceLoader> about_resource_loader_;

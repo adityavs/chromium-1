@@ -42,6 +42,7 @@
 #include "chrome/browser/themes/theme_properties.h"
 #include "chrome/browser/themes/theme_service.h"
 #include "chrome/browser/translate/chrome_translate_client.h"
+#include "chrome/browser/ui/autofill/local_card_migration_bubble.h"
 #include "chrome/browser/ui/autofill/save_card_bubble_view.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_command_controller.h"
@@ -60,6 +61,8 @@
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/accelerator_table.h"
 #include "chrome/browser/ui/views/accessibility/invert_bubble_view.h"
+#include "chrome/browser/ui/views/autofill/local_card_migration_bubble_views.h"
+#include "chrome/browser/ui/views/autofill/local_card_migration_icon_view.h"
 #include "chrome/browser/ui/views/autofill/save_card_bubble_views.h"
 #include "chrome/browser/ui/views/autofill/save_card_icon_view.h"
 #include "chrome/browser/ui/views/bookmarks/bookmark_bar_view.h"
@@ -125,6 +128,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/content_switches.h"
 #include "ui/accessibility/ax_node_data.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/hit_test.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -320,9 +324,8 @@ class BrowserViewLayoutDelegateImpl : public BrowserViewLayoutDelegate {
     return gfx::ToEnclosingRect(bounds_f);
   }
 
-  int GetTopInsetInBrowserView(bool restored) const override {
-    return browser_view_->frame()->GetTopInset(restored) -
-        browser_view_->y();
+  int GetTopInsetInBrowserView() const override {
+    return browser_view_->frame()->GetTopInset() - browser_view_->y();
   }
 
   int GetThemeBackgroundXInset() const override {
@@ -496,7 +499,8 @@ gfx::Rect BrowserView::GetToolbarBounds() const {
   if (toolbar_bounds.IsEmpty())
     return toolbar_bounds;
   // The apparent toolbar edges are outside the "real" toolbar edges.
-  toolbar_bounds.Inset(-views::NonClientFrameView::kClientEdgeThickness, 0);
+  if (HasClientEdge())
+    toolbar_bounds.Inset(-views::NonClientFrameView::kClientEdgeThickness, 0);
   return toolbar_bounds;
 }
 
@@ -518,7 +522,7 @@ gfx::Point BrowserView::OffsetPointForToolbarBackgroundImage(
   // be).  We expect our parent's origin to be the window origin.
   gfx::Point window_point(point + GetMirroredPosition().OffsetFromOrigin());
   window_point.Offset(frame_->GetThemeBackgroundXInset(),
-                      -frame_->GetTopInset(false));
+                      -frame_->GetTopInset());
   return window_point;
 }
 
@@ -535,6 +539,10 @@ bool BrowserView::IsTabStripVisible() const {
 }
 
 bool BrowserView::IsIncognito() const {
+  // TODO(pbos): This is confusing or incorrect as IsIncognito() returns true
+  // for Guest sessions. We should probably rename this function and audit
+  // callers to make sure that's actually what was intended, or make this return
+  // false for Guest sessions.
   return browser_->profile()->IsOffTheRecord();
 }
 
@@ -547,12 +555,7 @@ bool BrowserView::IsRegularOrGuestSession() const {
 }
 
 bool BrowserView::HasClientEdge() const {
-#if defined(OS_WIN)
-  return base::win::GetVersion() < base::win::VERSION_WIN10 ||
-         !frame_->ShouldUseNativeFrame();
-#else
-  return true;
-#endif
+  return frame()->GetFrameView()->HasClientEdge();
 }
 
 bool BrowserView::GetAccelerator(int cmd_id,
@@ -698,7 +701,7 @@ StatusBubble* BrowserView::GetStatusBubble() {
 
 void BrowserView::UpdateTitleBar() {
   frame_->UpdateWindowTitle();
-  if (ShouldShowWindowIcon() && !loading_animation_timer_.IsRunning())
+  if (!loading_animation_timer_.IsRunning())
     frame_->UpdateWindowIcon();
 }
 
@@ -844,10 +847,11 @@ void BrowserView::OnActiveTabChanged(content::WebContents* old_contents,
 
 void BrowserView::ZoomChangedForActiveTab(bool can_show_bubble) {
   const AppMenuButton* app_menu_button =
-      toolbar_button_provider_->GetAppMenuButton();
+      toolbar_button_provider()->GetAppMenuButton();
   bool app_menu_showing = app_menu_button && app_menu_button->IsMenuShowing();
-  GetLocationBarView()->ZoomChangedForActiveTab(can_show_bubble &&
-                                                !app_menu_showing);
+  toolbar_button_provider()
+      ->GetPageActionIconContainerView()
+      ->ZoomChangedForActiveTab(can_show_bubble && !app_menu_showing);
 }
 
 gfx::Rect BrowserView::GetRestoredBounds() const {
@@ -974,6 +978,7 @@ void BrowserView::FullscreenStateChanged() {
       fullscreen
           ? GetExclusiveAccessManager()->GetExclusiveAccessExitBubbleType()
           : EXCLUSIVE_ACCESS_BUBBLE_TYPE_NONE);
+  frame_->GetFrameView()->OnFullscreenStateChanged();
 }
 
 void BrowserView::SetToolbarButtonProvider(ToolbarButtonProvider* provider) {
@@ -1033,11 +1038,6 @@ void BrowserView::UpdateToolbar(content::WebContents* contents) {
   // We may end up here during destruction.
   if (toolbar_)
     toolbar_->Update(contents);
-}
-
-void BrowserView::RevertToolbarUrl() {
-  if (toolbar_)
-    toolbar_->RevertUrl();
 }
 
 void BrowserView::ResetToolbarTabState(content::WebContents* contents) {
@@ -1233,10 +1233,40 @@ autofill::SaveCardBubbleView* BrowserView::ShowSaveCreditCardBubble(
       anchor_view, gfx::Point(), web_contents, controller);
   views::Widget* bubble_widget =
       views::BubbleDialogDelegateView::CreateBubble(bubble);
+
   if (card_view)
     card_view->OnBubbleWidgetCreated(bubble_widget);
   bubble->Show(user_gesture ? autofill::SaveCardBubbleViews::USER_GESTURE
                             : autofill::SaveCardBubbleViews::AUTOMATIC);
+  return bubble;
+}
+
+autofill::LocalCardMigrationBubble* BrowserView::ShowLocalCardMigrationBubble(
+    content::WebContents* web_contents,
+    autofill::LocalCardMigrationBubbleController* controller,
+    bool user_gesture) {
+  LocationBarView* location_bar = GetLocationBarView();
+  PageActionIconView* card_view =
+      location_bar->local_card_migration_icon_view();
+
+  views::View* anchor_view = location_bar;
+  if (!ui::MaterialDesignController::IsSecondaryUiMaterial()) {
+    if (card_view && card_view->visible())
+      anchor_view = card_view;
+    else
+      anchor_view = toolbar_button_provider()->GetAppMenuButton();
+  }
+
+  autofill::LocalCardMigrationBubbleViews* bubble =
+      new autofill::LocalCardMigrationBubbleViews(anchor_view, gfx::Point(),
+                                                  web_contents, controller);
+  views::Widget* bubble_widget =
+      views::BubbleDialogDelegateView::CreateBubble(bubble);
+  if (card_view)
+    card_view->OnBubbleWidgetCreated(bubble_widget);
+  bubble->Show(user_gesture
+                   ? autofill::LocalCardMigrationBubbleViews::USER_GESTURE
+                   : autofill::LocalCardMigrationBubbleViews::AUTOMATIC);
   return bubble;
 }
 
@@ -1601,7 +1631,19 @@ bool BrowserView::CanActivate() const {
 }
 
 base::string16 BrowserView::GetWindowTitle() const {
-  return browser_->GetWindowTitleForCurrentTab(true /* include_app_name */);
+  base::string16 title =
+      browser_->GetWindowTitleForCurrentTab(true /* include_app_name */);
+#if defined(OS_MACOSX)
+  TabAlertState state =
+      chrome::GetTabAlertStateForContents(GetActiveWebContents());
+  if (state == TabAlertState::AUDIO_PLAYING)
+    title = l10n_util::GetStringFUTF16(IDS_WINDOW_AUDIO_PLAYING_MAC, title,
+                                       base::WideToUTF16(L"\U0001F50A"));
+  else if (state == TabAlertState::AUDIO_MUTING)
+    title = l10n_util::GetStringFUTF16(IDS_WINDOW_AUDIO_MUTING_MAC, title,
+                                       base::WideToUTF16(L"\U0001F507"));
+#endif
+  return title;
 }
 
 base::string16 BrowserView::GetAccessibleWindowTitle() const {
@@ -1734,15 +1776,23 @@ gfx::ImageSkia BrowserView::GetWindowIcon() {
   if (app_controller)
     return app_controller->GetWindowIcon();
 
-  if (browser_->is_app() || browser_->is_type_popup())
-    return browser_->GetCurrentPageIcon().AsImageSkia();
-
 #if defined(OS_CHROMEOS)
   if (browser_->is_type_tabbed()) {
     ui::ResourceBundle& rb = ui::ResourceBundle::GetSharedInstance();
     return rb.GetImageNamed(IDR_PRODUCT_LOGO_32).AsImageSkia();
   }
+
+  // For the settings window, use whatever icon was previously set.
+  if (!browser_->is_app() && browser_->is_trusted_source() &&
+      GetNativeWindow()) {
+    auto* image = GetNativeWindow()->GetProperty(aura::client::kWindowIconKey);
+    if (image)
+      return *image;
+  }
 #endif
+
+  if (browser_->is_app() || browser_->is_type_popup())
+    return browser_->GetCurrentPageIcon().AsImageSkia();
 
   return gfx::ImageSkia();
 }
@@ -2641,6 +2691,9 @@ void BrowserView::ShowAvatarBubbleFromAvatarButton(
     signin_metrics::AccessPoint access_point,
     bool focus_first_profile_button) {
 #if !defined(OS_CHROMEOS)
+  // Never show any avatar bubble in Incognito.
+  if (!IsRegularOrGuestSession())
+    return;
   views::Button* avatar_button = toolbar_->avatar_button();
   if (!avatar_button)
     avatar_button = frame_->GetNewAvatarMenuButton();

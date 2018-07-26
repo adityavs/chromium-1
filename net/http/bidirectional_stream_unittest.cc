@@ -94,11 +94,11 @@ class TestDelegateBase : public BidirectionalStream::Delegate {
   TestDelegateBase(IOBuffer* read_buf, int read_buf_len)
       : TestDelegateBase(read_buf,
                          read_buf_len,
-                         std::make_unique<base::Timer>(false, false)) {}
+                         std::make_unique<base::OneShotTimer>()) {}
 
   TestDelegateBase(IOBuffer* read_buf,
                    int read_buf_len,
-                   std::unique_ptr<base::Timer> timer)
+                   std::unique_ptr<base::OneShotTimer> timer)
       : read_buf_(read_buf),
         read_buf_len_(read_buf_len),
         timer_(std::move(timer)),
@@ -286,7 +286,7 @@ class TestDelegateBase : public BidirectionalStream::Delegate {
   std::unique_ptr<BidirectionalStream> stream_;
   scoped_refptr<IOBuffer> read_buf_;
   int read_buf_len_;
-  std::unique_ptr<base::Timer> timer_;
+  std::unique_ptr<base::OneShotTimer> timer_;
   std::string data_received_;
   std::unique_ptr<base::RunLoop> loop_;
   spdy::SpdyHeaderBlock response_headers_;
@@ -384,10 +384,11 @@ class MockTimer : public base::MockOneShotTimer {
 
   void Start(const base::Location& posted_from,
              base::TimeDelta delay,
-             const base::Closure& user_task) override {
+             base::OnceClosure user_task) override {
     // Sets a maximum delay, so the timer does not fire unless it is told to.
     base::TimeDelta infinite_delay = base::TimeDelta::Max();
-    base::MockOneShotTimer::Start(posted_from, infinite_delay, user_task);
+    base::MockOneShotTimer::Start(posted_from, infinite_delay,
+                                  std::move(user_task));
   }
 
  private:

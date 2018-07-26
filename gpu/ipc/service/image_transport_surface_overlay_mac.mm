@@ -4,6 +4,8 @@
 
 #include "gpu/ipc/service/image_transport_surface_overlay_mac.h"
 
+#include <sstream>
+
 #include "base/bind.h"
 #include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
@@ -19,21 +21,9 @@
 #include "ui/base/ui_base_switches.h"
 #include "ui/gl/ca_renderer_layer_params.h"
 #include "ui/gl/gl_context.h"
-#include "ui/gl/gl_fence.h"
 #include "ui/gl/gl_image_io_surface.h"
 #include "ui/gl/gpu_switching_manager.h"
 #include "ui/gl/scoped_cgl.h"
-
-namespace {
-
-void CheckGLErrors(const char* msg) {
-  GLenum gl_error;
-  while ((gl_error = glGetError()) != GL_NO_ERROR) {
-    LOG(ERROR) << "OpenGL error hit " << msg << ": " << gl_error;
-  }
-}
-
-}  // namespace
 
 namespace gpu {
 
@@ -78,102 +68,34 @@ bool ImageTransportSurfaceOverlayMac::Initialize(gl::GLSurfaceFormat format) {
 }
 
 void ImageTransportSurfaceOverlayMac::PrepareToDestroy(bool have_context) {
-  if (!previous_frame_fence_)
-    return;
-  if (!have_context) {
-    // If we have no context, leak the GL objects, since we have no way to
-    // delete them.
-    DLOG(ERROR) << "Leaking GL fences.";
-    previous_frame_fence_.release();
-    return;
-  }
-  // Ensure we are using the context with which the fence was created.
-  DCHECK_EQ(fence_context_obj_, CGLGetCurrentContext());
-  CheckGLErrors("Before destroy fence");
-  previous_frame_fence_.reset();
-  CheckGLErrors("After destroy fence");
 }
 
 void ImageTransportSurfaceOverlayMac::Destroy() {
   ca_layer_tree_coordinator_.reset();
-  DCHECK(!previous_frame_fence_);
 }
 
 bool ImageTransportSurfaceOverlayMac::IsOffscreen() {
   return false;
 }
 
-void ImageTransportSurfaceOverlayMac::ApplyBackpressure(
-    base::TimeTicks* before_flush_time,
-    base::TimeTicks* after_flush_before_commit_time) {
+void ImageTransportSurfaceOverlayMac::ApplyBackpressure() {
+  // TODO(ccameron): This early-out is to determine if https://crbug.com/863817
+  // is caused by ApplyBackpressure, or if ApplyBackpressure happens to be
+  // what triggers a crash that was already going to happen.
+  return;
+
   TRACE_EVENT0("gpu", "ImageTransportSurfaceOverlayMac::ApplyBackpressure");
 
-  // If supported, use GLFence to ensure that we haven't gotten more than one
-  // frame ahead of GL.
-  if (gl::GLFence::IsSupported()) {
-    CheckGLErrors("Before fence/flush");
+  gl::GLContext* current_context = gl::GLContext::GetCurrent();
+  // TODO(ccameron): Remove these CHECKs.
+  CHECK(current_context);
+  CHECK(current_context->IsCurrent(this));
 
-    // If we have gotten more than one frame ahead of GL, wait for the previous
-    // frame to complete.
-    if (previous_frame_fence_) {
-      TRACE_EVENT1("gpu", "ClientWait", "context switch",
-                   fence_context_obj_.get() != CGLGetCurrentContext());
-
-      // Ensure we are using the context with which the fence was created.
-      gl::ScopedCGLSetCurrentContext scoped_set_current(fence_context_obj_);
-
-      // While we could call GLFence::ClientWait, this performs a busy wait on
-      // Mac, leading to high CPU usage. Instead we poll with a 1ms delay. This
-      // should have minimal impact, as we will only hit this path when we are
-      // more than one frame (16ms) behind.
-      //
-      // Note that on some platforms (10.9), fences appear to sometimes get
-      // lost and will never pass. Add a 32ms timout to prevent these
-      // situations from causing a GPU process hang. crbug.com/618075
-      {
-        TRACE_EVENT0("gpu", "Fence poll");
-        int timeout_msec = 32;
-        while (!previous_frame_fence_->HasCompleted() && timeout_msec > 0) {
-          --timeout_msec;
-          base::PlatformThread::Sleep(base::TimeDelta::FromMilliseconds(1));
-        }
-      }
-      if (!previous_frame_fence_->HasCompleted()) {
-        TRACE_EVENT0("gpu", "Finish");
-        // We timed out waiting for the above fence, just issue a glFinish.
-        glFinish();
-      }
-    }
-
-    *before_flush_time = base::TimeTicks::Now();
-
-    // Create a fence for the current frame's work and save the context.
-    {
-      TRACE_EVENT0("gpu", "Create GLFence");
-      previous_frame_fence_ = gl::GLFence::Create();
-      fence_context_obj_.reset(CGLGetCurrentContext(),
-                               base::scoped_policy::RETAIN);
-    }
-
-    // A glFlush is necessary to ensure correct content appears.
-    {
-      TRACE_EVENT0("gpu", "glFlush");
-      glFlush();
-      CheckGLErrors("After fence/flush");
-    }
-
-    *after_flush_before_commit_time = base::TimeTicks::Now();
-    UMA_HISTOGRAM_TIMES("GPU.IOSurface.GLFlushTime",
-                        *after_flush_before_commit_time - *before_flush_time);
-  } else {
-    // GLFence isn't supported - issue a glFinish on each frame to ensure
-    // there is backpressure from GL.
-    TRACE_EVENT0("gpu", "glFinish");
-    CheckGLErrors("Before finish");
-    glFinish();
-    CheckGLErrors("After finish");
-    *after_flush_before_commit_time = base::TimeTicks::Now();
-  }
+  // Create the fence for the current frame before waiting on the previous
+  // frame's fence (to maximize CPU and GPU execution overlap).
+  uint64_t this_frame_fence = current_context->BackpressureFenceCreate();
+  current_context->BackpressureFenceWait(previous_frame_fence_);
+  previous_frame_fence_ = this_frame_fence;
 }
 
 void ImageTransportSurfaceOverlayMac::BufferPresented(
@@ -191,18 +113,17 @@ gfx::SwapResult ImageTransportSurfaceOverlayMac::SwapBuffersInternal(
   TRACE_EVENT0("gpu", "ImageTransportSurfaceOverlayMac::SwapBuffersInternal");
 
   // Do a GL fence for flush to apply back-pressure before drawing.
-  base::TimeTicks before_flush_time;
-  base::TimeTicks after_flush_before_commit_time;
-  ApplyBackpressure(&before_flush_time, &after_flush_before_commit_time);
+  ApplyBackpressure();
 
+  // Update the CALayer tree in the GPU process.
+  base::TimeTicks before_transaction_time = base::TimeTicks::Now();
   {
     TRACE_EVENT0("gpu", "CommitPendingTreesToCA");
     ca_layer_tree_coordinator_->CommitPendingTreesToCA(pixel_damage_rect);
+    base::TimeTicks after_transaction_time = base::TimeTicks::Now();
+    UMA_HISTOGRAM_TIMES("GPU.IOSurface.CATransactionTime",
+                        after_transaction_time - before_transaction_time);
   }
-
-  base::TimeTicks after_transaction_time = base::TimeTicks::Now();
-  UMA_HISTOGRAM_TIMES("GPU.IOSurface.CATransactionTime",
-                      after_transaction_time - after_flush_before_commit_time);
 
   // Populate the swap-complete parameters to send to the browser.
   SwapBuffersCompleteParams params;
@@ -226,8 +147,8 @@ gfx::SwapResult ImageTransportSurfaceOverlayMac::SwapBuffersInternal(
     params.swap_response.swap_id = 0;  // Set later, in DecoderClient.
     params.swap_response.result = gfx::SwapResult::SWAP_ACK;
     // TODO(brianderson): Tie swap_start to before_flush_time.
-    params.swap_response.swap_start = after_flush_before_commit_time;
-    params.swap_response.swap_end = after_flush_before_commit_time;
+    params.swap_response.swap_start = before_transaction_time;
+    params.swap_response.swap_end = before_transaction_time;
     for (auto& query : ca_layer_in_use_queries_) {
       gpu::TextureInUseResponse response;
       response.texture = query.texture;
@@ -306,6 +227,10 @@ bool ImageTransportSurfaceOverlayMac::ScheduleOverlayPlane(
     const gfx::RectF& crop_rect,
     bool enable_blend,
     std::unique_ptr<gfx::GpuFence> gpu_fence) {
+  // Temporary flush for debugging https://crbug.com/863817.
+  // TODO(ccameron): Remove this.
+  glFlush();
+
   if (transform != gfx::OVERLAY_TRANSFORM_NONE) {
     DLOG(ERROR) << "Invalid overlay plane transform.";
     return false;
@@ -337,6 +262,10 @@ bool ImageTransportSurfaceOverlayMac::ScheduleOverlayPlane(
 
 bool ImageTransportSurfaceOverlayMac::ScheduleCALayer(
     const ui::CARendererLayerParams& params) {
+  // Temporary flush for debugging https://crbug.com/863817.
+  // TODO(ccameron): Remove this.
+  glFlush();
+
   if (params.image) {
     gl::GLImageIOSurface* io_surface_image =
         gl::GLImageIOSurface::FromGLImage(params.image);

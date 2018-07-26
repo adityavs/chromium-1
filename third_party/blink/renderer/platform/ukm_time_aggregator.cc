@@ -31,7 +31,7 @@ UkmTimeAggregator::ScopedUkmTimer::ScopedUkmTimer(ScopedUkmTimer&& other)
 }
 
 UkmTimeAggregator::ScopedUkmTimer::~ScopedUkmTimer() {
-  if (aggregator_) {
+  if (aggregator_ && base::TimeTicks::IsHighResolution()) {
     aggregator_->RecordSample(metric_index_, start_time_, CurrentTimeTicks(),
                               histogram_counter_);
   }
@@ -76,7 +76,7 @@ void UkmTimeAggregator::RecordSample(size_t metric_index,
   // Record the UMA if we have a counter.
   TimeDelta duration = end - start;
   if (histogram_counter)
-    histogram_counter->Count(duration.InMicroseconds());
+    histogram_counter->CountMicroseconds(duration);
 
   // Append the duration to the appropriate metrics record.
   DCHECK_LT(metric_index, metric_records_.size());

@@ -27,9 +27,10 @@
 #include "chrome/browser/ui/extensions/app_launch_params.h"
 #include "chrome/browser/ui/extensions/application_launch.h"
 #include "chrome/browser/ui/extensions/extension_enable_flow.h"
-#include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/common/extensions/manifest_handlers/app_launch_info.h"
 #include "components/arc/arc_util.h"
+#include "components/arc/metrics/arc_metrics_constants.h"
 #include "content/public/browser/navigation_entry.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/extension_registry.h"
@@ -203,7 +204,9 @@ void LauncherControllerHelper::LaunchApp(const ash::ShelfID& id,
   const std::string& app_id = id.app_id;
   const ArcAppListPrefs* arc_prefs = GetArcAppListPrefs();
   if (arc_prefs && arc_prefs->IsRegistered(app_id)) {
-    arc::LaunchApp(profile_, app_id, event_flags, display_id);
+    arc::LaunchApp(profile_, app_id, event_flags,
+                   arc::UserInteractionType::APP_STARTED_FROM_SHELF,
+                   display_id);
     return;
   }
 
@@ -218,7 +221,7 @@ void LauncherControllerHelper::LaunchApp(const ash::ShelfID& id,
   }
 
   if (app_list::IsInternalApp(app_id)) {
-    app_list::OpenInternalApp(app_id, profile_);
+    app_list::OpenInternalApp(app_id, profile_, event_flags);
     return;
   }
 

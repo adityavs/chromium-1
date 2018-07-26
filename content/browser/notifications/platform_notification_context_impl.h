@@ -16,6 +16,7 @@
 #include "base/files/file_path.h"
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "content/browser/notifications/notification_database.h"
 #include "content/browser/notifications/notification_id_generator.h"
 #include "content/browser/service_worker/service_worker_context_core_observer.h"
 #include "content/common/content_export.h"
@@ -37,7 +38,6 @@ namespace content {
 
 class BlinkNotificationServiceImpl;
 class BrowserContext;
-class NotificationDatabase;
 struct NotificationDatabaseData;
 class ServiceWorkerContextWrapper;
 
@@ -83,7 +83,8 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
       const GURL& origin,
       Interaction interaction,
       const ReadResultCallback& callback) override;
-  void WriteNotificationData(const GURL& origin,
+  void WriteNotificationData(int64_t persistent_notification_id,
+                             const GURL& origin,
                              const NotificationDatabaseData& database_data,
                              const WriteResultCallback& callback) override;
   void DeleteNotificationData(const std::string& notification_id,
@@ -164,7 +165,8 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   // Actually writes the notification database to the database. Must only be
   // called on the |task_runner_| thread. |callback| will be invoked on the
   // IO thread when the operation has completed.
-  void DoWriteNotificationData(const GURL& origin,
+  void DoWriteNotificationData(int64_t persistent_notification_id,
+                               const GURL& origin,
                                const NotificationDatabaseData& database_data,
                                const WriteResultCallback& callback);
 
@@ -209,6 +211,8 @@ class CONTENT_EXPORT PlatformNotificationContextImpl
   // The notification services are owned by the platform context, and will be
   // removed when either this class is destroyed or the Mojo pipe disconnects.
   std::vector<std::unique_ptr<BlinkNotificationServiceImpl>> services_;
+
+  NotificationDatabase::UkmCallback ukm_callback_;
 
   DISALLOW_COPY_AND_ASSIGN(PlatformNotificationContextImpl);
 };

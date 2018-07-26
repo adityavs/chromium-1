@@ -11,11 +11,12 @@
 #include "ash/public/cpp/ash_features.h"
 #include "ash/public/cpp/ash_switches.h"
 #include "ash/public/cpp/window_properties.h"
-#include "ash/public/interfaces/kiosk_app_info.mojom.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller.h"
 #include "ash/shelf/app_list_button.h"
 #include "ash/shelf/login_shelf_view.h"
+#include "ash/shelf/overflow_bubble.h"
+#include "ash/shelf/overflow_bubble_view.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_background_animator_observer.h"
 #include "ash/shelf/shelf_constants.h"
@@ -25,6 +26,7 @@
 #include "ash/system/status_area_layout_manager.h"
 #include "ash/system/status_area_widget.h"
 #include "ash/system/tray/system_tray.h"
+#include "ash/wm/window_util.h"
 #include "base/command_line.h"
 #include "ui/compositor/layer.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -148,6 +150,22 @@ void ShelfWidget::DelegateView::SetParentLayer(ui::Layer* layer) {
 }
 
 bool ShelfWidget::DelegateView::CanActivate() const {
+  // Allow activations coming from the overflow bubble if it is currently shown
+  // and active.
+  aura::Window* active_window = wm::GetActiveWindow();
+  aura::Window* bubble_window = nullptr;
+  aura::Window* shelf_window = shelf_widget_->GetNativeWindow();
+  if (shelf_widget_->IsShowingOverflowBubble()) {
+    bubble_window = shelf_widget_->shelf_view_->overflow_bubble()
+                        ->bubble_view()
+                        ->GetWidget()
+                        ->GetNativeWindow();
+  }
+  if (active_window &&
+      (active_window == bubble_window || active_window == shelf_window)) {
+    return true;
+  }
+
   // Only allow activation from the focus cycler, not from mouse events, etc.
   return focus_cycler_ && focus_cycler_->widget_activating() == GetWidget();
 }
@@ -357,15 +375,6 @@ ShelfWidget::GetDragAndDropHostForAppList() {
   return shelf_view_;
 }
 
-void ShelfWidget::SetLoginKioskApps(
-    std::vector<mojom::KioskAppInfoPtr> kiosk_apps) {
-  login_shelf_view_->SetKioskApps(std::move(kiosk_apps));
-}
-
-void ShelfWidget::SetLoginDialogVisible(bool visible) {
-  login_shelf_view_->SetLoginDialogVisible(visible);
-}
-
 void ShelfWidget::set_default_last_focusable_child(
     bool default_last_focusable_child) {
   delegate_view_->set_default_last_focusable_child(
@@ -374,10 +383,19 @@ void ShelfWidget::set_default_last_focusable_child(
 
 void ShelfWidget::OnWidgetActivationChanged(views::Widget* widget,
                                             bool active) {
-  if (active)
+  if (active) {
+    // Do not focus the default element if the widget activation came from the
+    // overflow bubble focus cycling. The setter of
+    // |activated_from_overflow_bubble_| should handle focusing the correct
+    // view.
+    if (activated_from_overflow_bubble_) {
+      activated_from_overflow_bubble_ = false;
+      return;
+    }
     delegate_view_->SetPaneFocusAndFocusDefault();
-  else
+  } else {
     delegate_view_->GetFocusManager()->ClearFocus();
+  }
 }
 
 void ShelfWidget::UpdateShelfItemBackground(SkColor color) {

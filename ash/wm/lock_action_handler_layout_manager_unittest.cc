@@ -125,20 +125,20 @@ class LockActionHandlerLayoutManagerTest : public AshTestBase {
   void ShowKeyboard(bool show) {
     auto* keyboard = keyboard::KeyboardController::Get();
     ASSERT_TRUE(keyboard->enabled());
-    if (show == keyboard->keyboard_visible())
+    if (show == keyboard->IsKeyboardVisible())
       return;
 
     if (show) {
       keyboard->ShowKeyboard(true);
-      keyboard->ui()->GetContentsWindow()->SetBounds(
+      keyboard->ui()->GetKeyboardWindow()->SetBounds(
           keyboard::KeyboardBoundsFromRootBounds(
               Shell::GetPrimaryRootWindow()->bounds(), kVirtualKeyboardHeight));
-      keyboard->NotifyContentsLoaded();
+      keyboard->NotifyKeyboardWindowLoaded();
     } else {
       keyboard->HideKeyboardByUser();
     }
 
-    DCHECK_EQ(show, keyboard->keyboard_visible());
+    DCHECK_EQ(show, keyboard->IsKeyboardVisible());
   }
 
   void SetUpTrayActionClientAndLockSession(mojom::TrayActionState state) {

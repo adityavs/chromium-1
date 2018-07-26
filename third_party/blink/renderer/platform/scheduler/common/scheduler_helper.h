@@ -10,10 +10,10 @@
 
 #include "base/macros.h"
 #include "base/message_loop/message_loop.h"
+#include "base/task/sequence_manager/sequence_manager.h"
 #include "base/time/tick_clock.h"
 #include "third_party/blink/public/platform/task_type.h"
-#include "third_party/blink/renderer/platform/scheduler/base/sequence_manager_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_selector.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace blink {
 namespace scheduler {
@@ -24,10 +24,10 @@ class PLATFORM_EXPORT SchedulerHelper
  public:
   explicit SchedulerHelper(
       std::unique_ptr<base::sequence_manager::SequenceManager>
-          task_queue_manager);
+          sequence_manager);
   ~SchedulerHelper() override;
 
-  // TaskQueueManager::Observer implementation:
+  // SequenceManager::Observer implementation:
   void OnBeginNestedRunLoop() override;
   void OnExitNestedRunLoop() override;
 
@@ -43,6 +43,9 @@ class PLATFORM_EXPORT SchedulerHelper
   // task queues.
   virtual scoped_refptr<base::sequence_manager::TaskQueue>
   ControlTaskQueue() = 0;
+
+  // Returns task runner for the default queue.
+  scoped_refptr<base::SingleThreadTaskRunner> DefaultTaskRunner();
 
   // Adds or removes a task observer from the scheduler. The observer will be
   // notified before and after every executed task. These functions can only be
@@ -61,7 +64,7 @@ class PLATFORM_EXPORT SchedulerHelper
   void Shutdown();
 
   // Returns true if Shutdown() has been called. Otherwise returns false.
-  bool IsShutdown() const { return !task_queue_manager_.get(); }
+  bool IsShutdown() const { return !sequence_manager_.get(); }
 
   inline void CheckOnValidThread() const {
     DCHECK(thread_checker_.CalledOnValidThread());
@@ -92,6 +95,7 @@ class PLATFORM_EXPORT SchedulerHelper
   void UnregisterTimeDomain(base::sequence_manager::TimeDomain* time_domain);
   bool GetAndClearSystemIsQuiescentBit();
   double GetSamplingRateForRecordingCPUTime() const;
+  bool HasCPUTimingForEachTask() const;
 
   // Test helpers.
   void SetWorkBatchSizeForTesting(size_t work_batch_size);
@@ -103,10 +107,12 @@ class PLATFORM_EXPORT SchedulerHelper
       TaskType default_task_type);
 
   base::ThreadChecker thread_checker_;
-  std::unique_ptr<base::sequence_manager::SequenceManager> task_queue_manager_;
+  std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager_;
 
  private:
   friend class SchedulerHelperTest;
+
+  scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
 
   Observer* observer_;  // NOT OWNED
 

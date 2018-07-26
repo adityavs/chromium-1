@@ -2866,8 +2866,8 @@
       "os": {
         "type": "linux"
       },
-      "vendor_id": "0x15ad",
-      "device_id": ["0x0405"],
+      "gl_vendor": "VMware.*",
+      "gl_renderer": "Gallium.*",
       "features": [
         "disable_timestamp_queries"
       ],
@@ -2930,6 +2930,50 @@
       },
       "features": [
         "disable_2d_canvas_auto_flush"
+      ]
+    },
+    {
+      "id": 270,
+      "cr_bugs": [859998],
+      "description": "AMD Linux driver crashes when copyTexImage2D is called with PIXEL_UNPACK_BUFFER set to an uninitialized buffer",
+      "os": {
+        "type": "linux"
+      },
+      "vendor_id": "0x1002",
+      "features": [
+        "clear_pixel_unpack_buffer_before_copyteximage"
+      ]
+    },
+    {
+      "id": 271,
+      "cr_bugs": [860418],
+      "description": "Frequent crashes in glClear on Mali-T7xx on N with driver 12.1.01alp0",
+      "os": {
+        "type": "android",
+        "version": {
+          "op": "<",
+          "value": "8.0"
+        }
+      },
+      "driver_version": {
+        "op": "=",
+        "value": "12.1.01alp0"
+      },
+      "gl_renderer": ".*Mali-T7.*",
+      "features": [
+        "gl_clear_broken"
+      ]
+    },
+    {
+      "id": 272,
+      "cr_bugs": [858879],
+      "description": "A deleted query id for GL_TIMESTAMP cannot be reused for other query targets",
+      "os": {
+        "type": "android"
+      },
+      "gl_vendor": "Qualcomm.*",
+      "features": [
+        "disable_timestamp_queries"
       ]
     }
   ]

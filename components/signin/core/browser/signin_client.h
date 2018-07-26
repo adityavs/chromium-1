@@ -10,6 +10,7 @@
 #include "base/callback.h"
 #include "base/callback_list.h"
 #include "base/time/time.h"
+#include "build/build_config.h"
 #include "components/keyed_service/core/keyed_service.h"
 #include "components/signin/core/browser/account_info.h"
 #include "components/signin/core/browser/profile_management_switches.h"
@@ -41,12 +42,6 @@ class SharedURLLoaderFactory;
 // embedder.
 class SigninClient : public KeyedService {
  public:
-  // The subcription for cookie changed notifications.
-  class CookieChangeSubscription {
-   public:
-    virtual ~CookieChangeSubscription() = default;
-  };
-
   ~SigninClient() override = default;
 
   // If |for_ephemeral| is true, special kind of device ID for ephemeral users
@@ -89,15 +84,6 @@ class SigninClient : public KeyedService {
   // Signin component is being used.
   virtual std::string GetProductVersion() = 0;
 
-  // Adds a callback to be called each time a cookie for |url| with name |name|
-  // changes.
-  // Note that |callback| will always be called on the thread that
-  // |AddCookieChangeCallback| was called on.
-  virtual std::unique_ptr<CookieChangeSubscription> AddCookieChangeCallback(
-      const GURL& url,
-      const std::string& name,
-      net::CookieChangeCallback callback) = 0;
-
   // Called after Google signin has succeeded.
   virtual void OnSignedIn(const std::string& account_id,
                           const std::string& gaia_id,
@@ -138,13 +124,19 @@ class SigninClient : public KeyedService {
   virtual std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
       GaiaAuthConsumer* consumer,
       const std::string& source,
-      net::URLRequestContextGetter* getter) = 0;
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) = 0;
 
   // Called once the credentials has been copied to another SigninManager.
   virtual void AfterCredentialsCopied() {}
 
   // Schedules migration to happen at next startup.
   virtual void SetReadyForDiceMigration(bool is_ready) {}
+
+#if !defined(OS_CHROMEOS)
+  // Forces the generation of a new device ID, and stores it in the pref
+  // service.
+  void RecreateSigninScopedDeviceId();
+#endif
 
  protected:
   // Returns device id that is scoped to single signin.

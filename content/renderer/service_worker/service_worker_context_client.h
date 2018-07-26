@@ -21,7 +21,7 @@
 #include "base/time/time.h"
 #include "content/common/service_worker/controller_service_worker.mojom.h"
 #include "content/common/service_worker/embedded_worker.mojom.h"
-#include "content/common/service_worker/service_worker_event_dispatcher.mojom.h"
+#include "content/common/service_worker/service_worker.mojom.h"
 #include "content/common/service_worker/service_worker_provider.mojom.h"
 #include "content/common/service_worker/service_worker_types.h"
 #include "ipc/ipc_listener.h"
@@ -33,9 +33,9 @@
 #include "third_party/blink/public/mojom/service_worker/service_worker_event_status.mojom.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 #include "third_party/blink/public/platform/modules/payments/payment_app.mojom.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_error.h"
-#include "third_party/blink/public/web/modules/serviceworker/web_service_worker_context_client.h"
-#include "third_party/blink/public/web/modules/serviceworker/web_service_worker_context_proxy.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_error.h"
+#include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_client.h"
+#include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_proxy.h"
 #include "v8/include/v8.h"
 
 namespace base {
@@ -73,7 +73,7 @@ class WebWorkerFetchContext;
 // called on the worker thread.
 class CONTENT_EXPORT ServiceWorkerContextClient
     : public blink::WebServiceWorkerContextClient,
-      public mojom::ServiceWorkerEventDispatcher {
+      public mojom::ServiceWorker {
  public:
   // Returns a thread-specific client instance.  This does NOT create a
   // new instance.
@@ -92,7 +92,8 @@ class CONTENT_EXPORT ServiceWorkerContextClient
       const GURL& service_worker_scope,
       const GURL& script_url,
       bool is_starting_installed_worker,
-      mojom::ServiceWorkerEventDispatcherRequest dispatcher_request,
+      RendererPreferences renderer_preferences,
+      mojom::ServiceWorkerRequest service_worker_request,
       mojom::ControllerServiceWorkerRequest controller_request,
       mojom::EmbeddedWorkerInstanceHostAssociatedPtrInfo instance_host,
       mojom::ServiceWorkerProviderInfoForStartWorkerPtr provider_info,
@@ -271,9 +272,9 @@ class CONTENT_EXPORT ServiceWorkerContextClient
   // in the browser process.
   int GetRoutingID() const { return embedded_worker_id_; }
 
-  void SendWorkerStarted();
+  void SendWorkerStarted(blink::mojom::ServiceWorkerStartStatus status);
 
-  // Implements mojom::ServiceWorkerEventDispatcher.
+  // Implements mojom::ServiceWorker.
   void InitializeGlobalScope(
       blink::mojom::ServiceWorkerHostAssociatedPtrInfo service_worker_host,
       blink::mojom::ServiceWorkerRegistrationObjectInfoPtr registration_info)
@@ -410,6 +411,8 @@ class CONTENT_EXPORT ServiceWorkerContextClient
   // startup time.
   const bool is_starting_installed_worker_;
 
+  RendererPreferences renderer_preferences_;
+
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;
   scoped_refptr<base::TaskRunner> worker_task_runner_;
 
@@ -419,7 +422,7 @@ class CONTENT_EXPORT ServiceWorkerContextClient
   blink::WebServiceWorkerContextProxy* proxy_;
 
   // These Mojo objects are bound on the worker thread.
-  mojom::ServiceWorkerEventDispatcherRequest pending_dispatcher_request_;
+  mojom::ServiceWorkerRequest pending_service_worker_request_;
   mojom::ControllerServiceWorkerRequest pending_controller_request_;
 
   // This is bound on the main thread.

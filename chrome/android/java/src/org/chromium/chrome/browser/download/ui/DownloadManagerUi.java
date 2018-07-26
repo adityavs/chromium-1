@@ -7,7 +7,6 @@ package org.chromium.chrome.browser.download.ui;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
-import android.os.AsyncTask;
 import android.os.Handler;
 import android.support.annotation.IntDef;
 import android.support.graphics.drawable.VectorDrawableCompat;
@@ -19,6 +18,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 
+import org.chromium.base.AsyncTask;
 import org.chromium.base.Callback;
 import org.chromium.base.CollectionUtil;
 import org.chromium.base.DiscardableReferencePool;
@@ -168,13 +168,14 @@ public class DownloadManagerUi implements OnMenuItemClickListener, SearchDelegat
             MENU_ACTION_SHOW_INFO, MENU_ACTION_HIDE_INFO, MENU_ACTION_SEARCH})
     public @interface MenuAction {}
 
-    private static final int MENU_ACTION_CLOSE = 0;
-    private static final int MENU_ACTION_MULTI_DELETE = 1;
-    private static final int MENU_ACTION_MULTI_SHARE = 2;
-    private static final int MENU_ACTION_SHOW_INFO = 3;
-    private static final int MENU_ACTION_HIDE_INFO = 4;
-    private static final int MENU_ACTION_SEARCH = 5;
-    private static final int MENU_ACTION_BOUNDARY = 6;
+    // TODO(shaktisahu): Move these to new download home and make them private.
+    public static final int MENU_ACTION_CLOSE = 0;
+    public static final int MENU_ACTION_MULTI_DELETE = 1;
+    public static final int MENU_ACTION_MULTI_SHARE = 2;
+    public static final int MENU_ACTION_SHOW_INFO = 3;
+    public static final int MENU_ACTION_HIDE_INFO = 4;
+    public static final int MENU_ACTION_SEARCH = 5;
+    public static final int MENU_ACTION_BOUNDARY = 6;
 
     private static final int PREFETCH_BUNDLE_OPEN_DELAY_MS = 500;
 
@@ -243,7 +244,7 @@ public class DownloadManagerUi implements OnMenuItemClickListener, SearchDelegat
             }
         });
 
-        mFilterAdapter = new FilterAdapter();
+        mFilterAdapter = new FilterAdapter(mActivity.getResources());
         mFilterAdapter.initialize(this);
 
         boolean isLocationEnabled =
@@ -327,11 +328,7 @@ public class DownloadManagerUi implements OnMenuItemClickListener, SearchDelegat
      */
     @Override
     public boolean onBackPressed() {
-        if (mBackendProvider.getSelectionDelegate().isSelectionEnabled()) {
-            mBackendProvider.getSelectionDelegate().clearSelection();
-            return true;
-        }
-        return false;
+        return mSelectableListLayout.onBackPressed();
     }
 
     /**
@@ -456,8 +453,8 @@ public class DownloadManagerUi implements OnMenuItemClickListener, SearchDelegat
             mNativePage.onStateChange(DownloadFilter.getUrlForFilter(filter));
         }
 
-        RecordHistogram.recordEnumeratedHistogram("Android.DownloadManager.Filter", filter,
-                DownloadFilter.FILTER_BOUNDARY);
+        RecordHistogram.recordEnumeratedHistogram(
+                "Android.DownloadManager.Filter", filter, DownloadFilter.Type.NUM_ENTRIES);
     }
 
     @Override
@@ -622,7 +619,7 @@ public class DownloadManagerUi implements OnMenuItemClickListener, SearchDelegat
         sProviderForTests = provider;
     }
 
-    private static void recordMenuActionHistogram(@MenuAction int action) {
+    public static void recordMenuActionHistogram(@MenuAction int action) {
         RecordHistogram.recordEnumeratedHistogram(
                 "Android.DownloadManager.Menu.Action", action, MENU_ACTION_BOUNDARY);
     }

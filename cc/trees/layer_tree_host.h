@@ -171,6 +171,10 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // synchronization.
   virtual void SetNeedsCommit();
 
+  // Returns true after SetNeedsAnimate(), SetNeedsUpdateLayers() or
+  // SetNeedsCommit(), until it is satisfied.
+  bool RequestedMainFramePending();
+
   // Requests that the next frame re-chooses crisp raster scales for all layers.
   void SetNeedsRecalculateRasterScales();
 
@@ -181,6 +185,9 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Enables/disables the compositor from requesting main frame updates from the
   // client.
   void SetDeferCommits(bool defer_commits);
+  // Returns the value last passed to SetDeferCommits(), though commits may be
+  // deferred also when the local_surface_id_from_parent() is not valid.
+  bool defer_commits() const { return defer_commits_; }
 
   // Synchronously performs a main frame update and layer updates. Used only in
   // single threaded mode when the compositor's internal scheduling is disabled.
@@ -215,10 +222,6 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   // Returns a reference to the InputHandler used to respond to input events on
   // the compositor thread.
   const base::WeakPtr<InputHandler>& GetInputHandler() const;
-
-  // Informs the compositor that an active fling gesture being processed on the
-  // main thread has been finished.
-  void DidStopFlinging();
 
   // Debugging and benchmarks ---------------------------------
   void SetDebugState(const LayerTreeDebugState& debug_state);
@@ -379,8 +382,6 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   void UnregisterLayer(Layer* layer);
   Layer* LayerById(int id) const;
 
-  size_t NumLayers() const;
-
   bool in_update_property_trees() const { return in_update_property_trees_; }
   bool PaintContent(const LayerList& update_layer_list,
                     bool* content_has_slow_paths,
@@ -390,9 +391,9 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   void SetHasCopyRequest(bool has_copy_request);
   bool has_copy_request() const { return has_copy_request_; }
 
-  void AddSurfaceLayerId(const viz::SurfaceId& surface_id);
-  void RemoveSurfaceLayerId(const viz::SurfaceId& surface_id);
-  base::flat_set<viz::SurfaceId> SurfaceLayerIds() const;
+  void AddSurfaceRange(const viz::SurfaceRange& surface_range);
+  void RemoveSurfaceRange(const viz::SurfaceRange& surface_range);
+  base::flat_set<viz::SurfaceRange> SurfaceRanges() const;
 
   void AddLayerShouldPushProperties(Layer* layer);
   void RemoveLayerShouldPushProperties(Layer* layer);
@@ -409,16 +410,16 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   virtual void SetNeedsFullTreeSync();
   bool needs_full_tree_sync() const { return needs_full_tree_sync_; }
 
-  bool needs_surface_ids_sync() const { return needs_surface_ids_sync_; }
-  void set_needs_surface_ids_sync(bool needs_surface_ids_sync) {
-    needs_surface_ids_sync_ = needs_surface_ids_sync;
+  bool needs_surface_ranges_sync() const { return needs_surface_ranges_sync_; }
+  void set_needs_surface_ranges_sync(bool needs_surface_ranges_sync) {
+    needs_surface_ranges_sync_ = needs_surface_ranges_sync;
   }
 
   void SetPropertyTreesNeedRebuild();
 
   void PushPropertyTreesTo(LayerTreeImpl* tree_impl);
   void PushLayerTreePropertiesTo(LayerTreeImpl* tree_impl);
-  void PushSurfaceIdsTo(LayerTreeImpl* tree_impl);
+  void PushSurfaceRangesTo(LayerTreeImpl* tree_impl);
   void PushLayerTreeHostPropertiesTo(LayerTreeHostImpl* host_impl);
 
   MutatorHost* mutator_host() const { return mutator_host_; }
@@ -672,8 +673,8 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
   gfx::Rect viewport_visible_rect_;
 
   bool have_scroll_event_handlers_ = false;
-  EventListenerProperties event_listener_properties_[static_cast<size_t>(
-      EventListenerClass::kNumClasses)];
+  EventListenerProperties event_listener_properties_
+      [static_cast<size_t>(EventListenerClass::kLast) + 1];
 
   std::unique_ptr<PendingPageScaleAnimation> pending_page_scale_animation_;
 
@@ -681,14 +682,15 @@ class CC_EXPORT LayerTreeHost : public MutatorHostClient {
 
   bool needs_full_tree_sync_ = true;
 
-  bool needs_surface_ids_sync_ = false;
+  bool needs_surface_ranges_sync_ = false;
 
   gfx::Vector2dF elastic_overscroll_;
 
   scoped_refptr<HeadsUpDisplayLayer> hud_layer_;
 
-  // The number of SurfaceLayers that have fallback set to viz::SurfaceId.
-  base::flat_map<viz::SurfaceId, int> surface_layer_ids_;
+  // The number of SurfaceRanges that have (fallback,primary) set to
+  // viz::SurfaceRange.
+  base::flat_map<viz::SurfaceRange, int> surface_ranges_;
 
   // Set of layers that need to push properties.
   std::unordered_set<Layer*> layers_that_should_push_properties_;

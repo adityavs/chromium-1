@@ -30,6 +30,7 @@
 #include "third_party/blink/renderer/core/css_property_names.h"
 #include "third_party/blink/renderer/core/dom/attribute.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/frame/deprecation.h"
@@ -57,7 +58,7 @@
 #include "third_party/blink/renderer/core/page/page.h"
 #include "third_party/blink/renderer/core/style/content_data.h"
 #include "third_party/blink/renderer/core/svg/graphics/svg_image_for_container.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
+#include "third_party/blink/renderer/core/trustedtypes/trusted_url.h"
 #include "third_party/blink/renderer/platform/network/mime/content_type.h"
 #include "third_party/blink/renderer/platform/network/mime/mime_type_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
@@ -411,10 +412,12 @@ Node::InsertionNotificationRequest HTMLImageElement::InsertedInto(
 
   // If we have been inserted from a layoutObject-less document,
   // our loader may have not fetched the image, so do it now.
-  if ((insertion_point->isConnected() && !GetImageLoader().GetContent()) ||
-      image_was_modified)
+  if ((insertion_point->isConnected() && !GetImageLoader().GetContent() &&
+       !GetImageLoader().HasPendingActivity()) ||
+      image_was_modified) {
     GetImageLoader().UpdateFromElement(ImageLoader::kUpdateNormal,
                                        referrer_policy_);
+  }
 
   return HTMLElement::InsertedInto(insertion_point);
 }
@@ -562,6 +565,11 @@ KURL HTMLImageElement::Src() const {
 
 void HTMLImageElement::SetSrc(const String& value) {
   setAttribute(srcAttr, AtomicString(value));
+}
+
+void HTMLImageElement::SetSrc(const USVStringOrTrustedURL& value,
+                              ExceptionState& exception_state) {
+  setAttribute(srcAttr, value, exception_state);
 }
 
 void HTMLImageElement::setWidth(unsigned value) {

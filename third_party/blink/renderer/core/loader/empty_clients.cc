@@ -29,8 +29,8 @@
 
 #include <memory>
 #include "cc/layers/layer.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider_client.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_client.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_application_cache_host.h"
 #include "third_party/blink/public/platform/web_media_player.h"
@@ -119,7 +119,9 @@ DocumentLoader* EmptyLocalFrameClient::CreateDocumentLoader(
     const ResourceRequest& request,
     const SubstituteData& substitute_data,
     ClientRedirectPolicy client_redirect_policy,
-    const base::UnguessableToken& devtools_navigation_token) {
+    const base::UnguessableToken& devtools_navigation_token,
+    std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+    const WebNavigationTimings& navigation_timings) {
   DCHECK(frame);
 
   return DocumentLoader::Create(frame, request, substitute_data,

@@ -9,7 +9,7 @@
 #include "base/bind.h"
 #include "base/logging.h"
 #include "content/common/input_messages.h"
-#include "content/renderer/gpu/render_widget_compositor.h"
+#include "content/renderer/gpu/layer_tree_view.h"
 #include "content/renderer/ime_event_guard.h"
 #include "content/renderer/input/widget_input_handler_impl.h"
 #include "content/renderer/render_thread_impl.h"
@@ -161,7 +161,7 @@ void WidgetInputHandlerManager::Init() {
         FROM_HERE,
         base::BindOnce(
             &WidgetInputHandlerManager::InitOnCompositorThread, this,
-            render_widget_->compositor()->GetInputHandler(),
+            render_widget_->layer_tree_view()->GetInputHandler(),
             render_widget_->compositor_deps()->IsScrollAnimatorEnabled(),
             sync_compositing));
   }
@@ -225,15 +225,6 @@ void WidgetInputHandlerManager::DispatchNonBlockingEventToMainThread(
       INPUT_EVENT_ACK_STATE_SET_NON_BLOCKING, HandledEventCallback());
 }
 
-std::unique_ptr<blink::WebGestureCurve>
-WidgetInputHandlerManager::CreateFlingAnimationCurve(
-    blink::WebGestureDevice device_source,
-    const blink::WebFloatPoint& velocity,
-    const blink::WebSize& cumulative_scroll) {
-  return blink::Platform::Current()->CreateFlingAnimationCurve(
-      device_source, velocity, cumulative_scroll);
-}
-
 void WidgetInputHandlerManager::DidOverscroll(
     const gfx::Vector2dF& accumulated_overscroll,
     const gfx::Vector2dF& latest_overscroll_delta,
@@ -250,13 +241,6 @@ void WidgetInputHandlerManager::DidOverscroll(
   params.causal_event_viewport_point = causal_event_viewport_point;
   params.overscroll_behavior = overscroll_behavior;
   host->DidOverscroll(params);
-}
-
-void WidgetInputHandlerManager::DidStopFlinging() {
-  mojom::WidgetInputHandlerHost* host = GetWidgetInputHandlerHost();
-  if (!host)
-    return;
-  host->DidStopFlinging();
 }
 
 void WidgetInputHandlerManager::DidAnimateForInput() {
@@ -389,10 +373,8 @@ void WidgetInputHandlerManager::InitOnCompositorThread(
     const base::WeakPtr<cc::InputHandler>& input_handler,
     bool smooth_scroll_enabled,
     bool sync_compositing) {
-  input_handler_proxy_ = std::make_unique<ui::InputHandlerProxy>(
-      input_handler.get(), this,
-      base::FeatureList::IsEnabled(features::kTouchpadAndWheelScrollLatching),
-      base::FeatureList::IsEnabled(features::kAsyncWheelEvents));
+  input_handler_proxy_ =
+      std::make_unique<ui::InputHandlerProxy>(input_handler.get(), this);
   input_handler_proxy_->set_smooth_scroll_enabled(smooth_scroll_enabled);
 
 #if defined(OS_ANDROID)

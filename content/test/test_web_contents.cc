@@ -115,6 +115,13 @@ const GURL& TestWebContents::GetLastCommittedURL() const {
   return WebContentsImpl::GetLastCommittedURL();
 }
 
+const base::string16& TestWebContents::GetTitle() const {
+  if (title_)
+    return title_.value();
+
+  return WebContentsImpl::GetTitle();
+}
+
 void TestWebContents::TestDidNavigate(RenderFrameHost* render_frame_host,
                                       int nav_entry_id,
                                       bool did_create_new_entry,
@@ -214,6 +221,10 @@ void TestWebContents::SetLastCommittedURL(const GURL& url) {
   last_committed_url_ = url;
 }
 
+void TestWebContents::SetTitle(const base::string16& title) {
+  title_ = title;
+}
+
 void TestWebContents::SetMainFrameMimeType(const std::string& mime_type) {
   WebContentsImpl::SetMainFrameMimeType(mime_type);
 }
@@ -302,6 +313,7 @@ void TestWebContents::CommitPendingNavigation() {
   DCHECK(entry);
 
   TestRenderFrameHost* old_rfh = GetMainFrame();
+  NavigationRequest* request = old_rfh->frame_tree_node()->navigation_request();
 
   // PlzNavigate: the pending RenderFrameHost is not created before the
   // navigation commit, so it is necessary to simulate the IO thread response
@@ -319,11 +331,14 @@ void TestWebContents::CommitPendingNavigation() {
   TestRenderFrameHost* rfh = GetPendingMainFrame();
   if (!rfh)
     rfh = old_rfh;
-  const bool browser_side_navigation = IsBrowserSideNavigationEnabled();
-  CHECK(!browser_side_navigation || rfh->is_loading() ||
-        IsRendererDebugURL(entry->GetURL()));
-  CHECK(!browser_side_navigation ||
-        !rfh->frame_tree_node()->navigation_request());
+  CHECK(rfh->is_loading() || IsRendererDebugURL(entry->GetURL()));
+  CHECK(!rfh->frame_tree_node()->navigation_request());
+
+  if (request && !request->navigation_handle()->IsSameDocument()) {
+    rfh->SimulateCommitProcessed(
+        request->navigation_handle()->GetNavigationId(),
+        true /* was successful */);
+  }
 
   rfh->SendNavigateWithTransition(entry->GetUniqueID(),
                                   GetController().GetPendingEntryIndex() == -1,
@@ -348,8 +363,9 @@ void TestWebContents::SetOpener(WebContents* opener) {
 void TestWebContents::AddPendingContents(
     std::unique_ptr<WebContents> contents) {
   // This is normally only done in WebContentsImpl::CreateNewWindow.
-  ProcessRoutingIdPair key(contents->GetRenderViewHost()->GetProcess()->GetID(),
-                           contents->GetRenderViewHost()->GetRoutingID());
+  ProcessRoutingIdPair key(
+      contents->GetRenderViewHost()->GetProcess()->GetID(),
+      contents->GetRenderViewHost()->GetWidget()->GetRoutingID());
   WebContentsImpl* raw_contents = static_cast<WebContentsImpl*>(contents.get());
   AddDestructionObserver(raw_contents);
   pending_contents_[key] = std::move(contents);

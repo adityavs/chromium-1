@@ -69,7 +69,7 @@ CommandUtil.getCommandEntries = function(element) {
  *
  * @param {EventTarget} element Element which is the command event's target.
  * @param {DirectoryModel} directoryModel
- * @return {DirectoryEntry|FakeEntry} The extracted parent entry.
+ * @return {DirectoryEntry|FakeEntry|FilesAppEntry} The extracted parent entry.
  */
 CommandUtil.getParentEntry = function(element, directoryModel) {
   if (element instanceof DirectoryTree) {
@@ -275,14 +275,38 @@ CommandUtil.shouldShowMenuItemsForEntry = function(volumeManager, entry) {
   if (!volumeManager || !volumeManager.getVolumeInfo(entry))
     return false;
 
-  // If the entry is root entry of its volume, hide context menu entries.
-  if (CommandUtil.isRootEntry(volumeManager, entry))
+  // If the entry is root entry of its volume (but not a team drive root), hide
+  // context menu entries.
+  if (CommandUtil.isRootEntry(volumeManager, entry) &&
+      !util.isTeamDriveRoot(entry))
     return false;
 
-  if (util.isTeamDrivesGrandRoot(entry) || util.isTeamDriveRoot(entry))
+  if (util.isTeamDrivesGrandRoot(entry))
     return false;
 
   return true;
+};
+
+/**
+ * Returns whether all of the given entries have the given capability.
+ *
+ * @param {!Array<Entry>} entries List of entries to check capabilities for.
+ * @param {!string} capability Name of the capability to check for.
+ */
+CommandUtil.hasCapability = function(entries, capability) {
+  if (entries.length == 0) {
+    return false;
+  }
+
+  // Check if the capability is true or undefined, but not false. A capability
+  // can be undefined if the metadata is not fetched from the server yet (e.g.
+  // if we create a new file in offline mode), or if there is a problem with the
+  // cache and we don't have data yet. For this reason, we need to allow the
+  // functionality even if it's not set.
+  // TODO(crbug.com/849999): Store restrictions instead of capabilities.
+  var metadata = fileManager.metadataModel.getCache(entries, [capability]);
+  return metadata.length === entries.length &&
+      metadata.every(item => item[capability] !== false);
 };
 
 /**
@@ -693,14 +717,17 @@ CommandHandler.COMMANDS_['new-folder'] = (function() {
       }
 
       var locationInfo = fileManager.volumeManager.getLocationInfo(entry);
-      event.canExecute = locationInfo && !locationInfo.isReadOnly;
+      event.canExecute = locationInfo && !locationInfo.isReadOnly &&
+          CommandUtil.hasCapability([entry], 'canAddChildren');
       event.command.setHidden(
           CommandUtil.isRootEntry(fileManager.volumeManager, entry));
     } else {
       var directoryModel = fileManager.directoryModel;
+      var directoryEntry = fileManager.getCurrentDirectoryEntry();
       event.canExecute = !fileManager.directoryModel.isReadOnly() &&
           !fileManager.namingController.isRenamingInProgress() &&
-          !directoryModel.isSearching() && !directoryModel.isScanning();
+          !directoryModel.isSearching() && !directoryModel.isScanning() &&
+          CommandUtil.hasCapability([directoryEntry], 'canAddChildren');
       event.command.setHidden(false);
     }
   };
@@ -747,7 +774,13 @@ CommandHandler.COMMANDS_['select-all'] = /** @type {Command} */ ({
    * @param {!CommandHandlerDeps} fileManager CommandHandlerDeps to use.
    */
   canExecute: function(event, fileManager) {
-    event.canExecute = fileManager.directoryModel.getFileList().length > 0;
+    // Check we are not inside an input element (e.g. the search box).
+    const inputElementActive =
+        document.activeElement instanceof HTMLInputElement ||
+        document.activeElement instanceof HTMLTextAreaElement ||
+        document.activeElement.tagName.toLowerCase() === 'cr-input';
+    event.canExecute = !inputElementActive &&
+        fileManager.directoryModel.getFileList().length > 0;
   }
 });
 
@@ -800,6 +833,8 @@ CommandHandler.COMMANDS_['toggle-hidden-android-folders'] =
             !!fileManager.volumeManager.getCurrentProfileVolumeInfo(
                 VolumeManagerCommon.VolumeType.ANDROID_FILES);
         event.command.setHidden(!event.canExecute);
+        event.command.checked =
+            fileManager.fileFilter.isAllAndroidFoldersVisible();
       }
     });
 
@@ -922,19 +957,10 @@ CommandHandler.COMMANDS_['delete'] = (function() {
         return;
       }
 
-      // Check if canDelete is true or undefined, but not false. canDelete can
-      // be undefined if the metadata is not fetched from the server yet (e.g.
-      // if we create a new file in offline mode), or if there is a problem with
-      // the cache and we don't have data on canDelete. For this reason, we need
-      // to allow deletion functionality even if it's not set.
-      // TODO(sashab): Re-work the capabilities model to store restrictions
-      // instead, see https://crbug.com/849999.
-      var metadata =
-          fileManager.metadataModel_.getCache(entries, ['canDelete']);
       event.canExecute = entries.length > 0 &&
           !this.containsReadOnlyEntry_(entries, fileManager) &&
           !fileManager.directoryModel.isReadOnly() &&
-          metadata.every(item => item.canDelete !== false);
+          CommandUtil.hasCapability(entries, 'canDelete');
       event.command.setHidden(false);
     },
 
@@ -1182,11 +1208,8 @@ CommandHandler.COMMANDS_['rename'] = /** @type {Command} */ ({
     var locationInfo = parentEntry ?
         fileManager.volumeManager.getLocationInfo(parentEntry) : null;
     const volumeIsNotReadOnly = !!locationInfo && !locationInfo.isReadOnly;
-    // Check if canRename is true or undefined, but not false.
-    var metadata = fileManager.metadataModel_.getCache(entries, ['canRename']);
-    const canRenameAllItems = metadata.every(item => item.canRename !== false);
-    event.canExecute =
-        entries.length === 1 && volumeIsNotReadOnly && canRenameAllItems;
+    event.canExecute = entries.length === 1 && volumeIsNotReadOnly &&
+        CommandUtil.hasCapability(entries, 'canRename');
     event.command.setHidden(false);
   }
 });

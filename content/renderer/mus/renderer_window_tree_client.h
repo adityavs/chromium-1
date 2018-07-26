@@ -72,11 +72,11 @@ class RendererWindowTreeClient : public ui::mojom::WindowTreeClient,
   void SetVisible(bool visible);
 
   using LayerTreeFrameSinkCallback =
-      base::Callback<void(std::unique_ptr<cc::LayerTreeFrameSink>)>;
+      base::OnceCallback<void(std::unique_ptr<cc::LayerTreeFrameSink>)>;
   void RequestLayerTreeFrameSink(
       scoped_refptr<viz::ContextProvider> context_provider,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      const LayerTreeFrameSinkCallback& callback);
+      LayerTreeFrameSinkCallback callback);
 
   // Creates a new MusEmbeddedFrame. |token| is an UnguessableToken that was
   // registered for an embedding with mus (specifically ui::mojom::WindowTree).
@@ -93,7 +93,7 @@ class RendererWindowTreeClient : public ui::mojom::WindowTreeClient,
   void RequestLayerTreeFrameSinkInternal(
       scoped_refptr<viz::ContextProvider> context_provider,
       gpu::GpuMemoryBufferManager* gpu_memory_buffer_manager,
-      const LayerTreeFrameSinkCallback& callback);
+      LayerTreeFrameSinkCallback callback);
 
   // Called from ~MusEmbeddedFrame to cleanup up internall mapping.
   void OnEmbeddedFrameDestroyed(MusEmbeddedFrame* frame);
@@ -142,10 +142,6 @@ class RendererWindowTreeClient : public ui::mojom::WindowTreeClient,
   void OnWindowTransformChanged(ui::Id window_id,
                                 const gfx::Transform& old_transform,
                                 const gfx::Transform& new_transform) override;
-  void OnClientAreaChanged(
-      ui::Id window_id,
-      const gfx::Insets& new_client_area,
-      const std::vector<gfx::Rect>& new_additional_client_areas) override;
   void OnTransientWindowAdded(ui::Id window_id,
                               ui::Id transient_window_id) override;
   void OnTransientWindowRemoved(ui::Id window_id,
@@ -172,8 +168,6 @@ class RendererWindowTreeClient : public ui::mojom::WindowTreeClient,
       uint32_t event_id,
       ui::Id window_id,
       int64_t display_id,
-      ui::Id display_root_window_id,
-      const gfx::PointF& event_location_in_screen_pixel_layout,
       std::unique_ptr<ui::Event> event,
       bool matches_pointer_watcher) override;
   void OnPointerEventObserved(std::unique_ptr<ui::Event> event,
@@ -207,9 +201,8 @@ class RendererWindowTreeClient : public ui::mojom::WindowTreeClient,
   void OnDragDropDone() override;
   void OnChangeCompleted(uint32_t change_id, bool success) override;
   void RequestClose(ui::Id window_id) override;
-  void GetWindowManager(
-      mojo::AssociatedInterfaceRequest<ui::mojom::WindowManager> internal)
-      override;
+  void GetScreenProviderObserver(
+      ui::mojom::ScreenProviderObserverAssociatedRequest observer) override;
 
   const int routing_id_;
   ui::Id root_window_id_ = 0u;

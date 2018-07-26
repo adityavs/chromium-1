@@ -14,7 +14,7 @@
 #include "chrome/browser/vr/elements/ui_element_name.h"
 #include "chrome/browser/vr/keyboard_delegate.h"
 #include "chrome/browser/vr/sequence.h"
-#include "chrome/browser/vr/vr_export.h"
+#include "chrome/browser/vr/vr_ui_export.h"
 #include "third_party/skia/include/core/SkColor.h"
 
 namespace base {
@@ -29,7 +29,7 @@ namespace vr {
 
 class UiElement;
 
-class VR_EXPORT UiScene {
+class VR_UI_EXPORT UiScene {
  public:
   typedef base::RepeatingCallback<void()> PerFrameCallback;
 
@@ -50,8 +50,10 @@ class VR_EXPORT UiScene {
   bool OnBeginFrame(const base::TimeTicks& current_time,
                     const gfx::Transform& head_pose);
 
-  // Returns true if any textures were redrawn.
-  bool UpdateTextures();
+  // Returns true if any visible textures need to be redrawn.
+  bool HasDirtyTextures() const;
+
+  void UpdateTextures();
 
   UiElement& root_element();
 

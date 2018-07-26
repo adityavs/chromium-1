@@ -136,9 +136,6 @@ class OmniboxEditModel {
   // URL/navigation, as opposed to a search.
   bool CurrentTextIsURL() const;
 
-  // Returns the match type for the current edit contents.
-  AutocompleteMatch::Type CurrentTextType() const;
-
   // Invoked to adjust the text before writting to the clipboard for a copy
   // (e.g. by adding 'http' to the front). |sel_min| gives the minimum position
   // of the selection e.g. min(selection_start, selection_end). |text| is the
@@ -233,6 +230,8 @@ class OmniboxEditModel {
 
   OmniboxFocusState focus_state() const { return focus_state_; }
   bool has_focus() const { return focus_state_ != OMNIBOX_FOCUS_NONE; }
+
+  // This is the same as when the Omnibox is visibly focused.
   bool is_caret_visible() const {
     return focus_state_ == OMNIBOX_FOCUS_VISIBLE;
   }

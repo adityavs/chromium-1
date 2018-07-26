@@ -42,8 +42,7 @@ bool LayoutSVGForeignObject::IsChildAllowed(LayoutObject* child,
   return !child->IsSVGChild();
 }
 
-void LayoutSVGForeignObject::Paint(const PaintInfo& paint_info,
-                                   const LayoutPoint&) const {
+void LayoutSVGForeignObject::Paint(const PaintInfo& paint_info) const {
   SVGForeignObjectPainter(*this).Paint(paint_info);
 }
 
@@ -137,9 +136,10 @@ bool LayoutSVGForeignObject::NodeAtFloatPoint(HitTestResult& result,
   // |local_point| already includes the offset of the <foreignObject> element,
   // but PaintLayer::HitTestLayer assumes it has not been.
   point_in_foreign_object.MoveBy(-Layer()->LayoutBoxLocation());
-  HitTestResult layer_result(result.GetHitTestRequest(),
-                             point_in_foreign_object);
-  bool retval = Layer()->HitTest(layer_result);
+  HitTestLocation location(point_in_foreign_object);
+  HitTestResult layer_result(result.GetHitTestRequest(), location);
+  bool retval = Layer()->HitTest(location, layer_result,
+                                 LayoutRect(LayoutRect::InfiniteIntRect()));
 
   // Preserve the "point in inner node frame" from the original request,
   // since |layer_result| is a hit test rooted at the <foreignObject> element,

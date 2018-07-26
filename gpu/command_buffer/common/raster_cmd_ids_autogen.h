@@ -26,7 +26,7 @@
   OP(InsertFenceSyncCHROMIUM)                  /* 267 */ \
   OP(WaitSyncTokenCHROMIUM)                    /* 268 */ \
   OP(UnpremultiplyAndDitherCopyCHROMIUM)       /* 269 */ \
-  OP(BeginRasterCHROMIUM)                      /* 270 */ \
+  OP(BeginRasterCHROMIUMImmediate)             /* 270 */ \
   OP(RasterCHROMIUM)                           /* 271 */ \
   OP(EndRasterCHROMIUM)                        /* 272 */ \
   OP(CreateTransferCacheEntryINTERNAL)         /* 273 */ \
@@ -42,7 +42,9 @@
   OP(TexStorage2D)                             /* 283 */ \
   OP(CopySubTexture)                           /* 284 */ \
   OP(TraceBeginCHROMIUM)                       /* 285 */ \
-  OP(TraceEndCHROMIUM)                         /* 286 */
+  OP(TraceEndCHROMIUM)                         /* 286 */ \
+  OP(SetActiveURLCHROMIUM)                     /* 287 */ \
+  OP(ResetActiveURLCHROMIUM)                   /* 288 */
 
 enum CommandId {
   kOneBeforeStartPoint =

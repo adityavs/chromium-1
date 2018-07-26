@@ -9,15 +9,20 @@ service("test_ws") {
   testonly = true
 
   sources = [
+    "test_gpu_interface_provider.cc",
+    "test_gpu_interface_provider.h",
     "test_ws.cc",
   ]
 
   deps = [
     "//base",
     "//services/service_manager/public/cpp",
+    "//services/service_manager/public/mojom",
     "//services/ui/public/cpp",
     "//services/ui/public/interfaces",
+    "//services/ui/public/interfaces:test_interfaces",
     "//services/ui/ws2:lib",
+    "//services/ui/ws2:test_support",
     "//ui/aura",
     "//ui/aura:test_support",
     "//ui/compositor:test_support",
@@ -28,4 +33,5 @@ service("test_ws") {
 service_manifest("manifest") {
   name = "test_ws"
   source = "manifest.json"
+  packaged_services = [ "//services/ui:manifest" ]
 }

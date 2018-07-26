@@ -27,6 +27,10 @@ const base::Feature kEnableAppsGridGapFeature{
     "EnableAppsGridGapFeature", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kEnableNewStyleLauncher{"EnableNewStyleLauncher",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kEnableContinueReading{"EnableContinueReading",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kEnableZeroStateSuggestions{
+    "EnableZeroStateSuggestions", base::FEATURE_DISABLED_BY_DEFAULT};
 
 bool IsAnswerCardEnabled() {
   // Not using local static variable to allow tests to change this value.
@@ -60,6 +64,14 @@ bool IsAppsGridGapFeatureEnabled() {
 
 bool IsNewStyleLauncherEnabled() {
   return base::FeatureList::IsEnabled(kEnableNewStyleLauncher);
+}
+
+bool IsContinueReadingEnabled() {
+  return base::FeatureList::IsEnabled(kEnableContinueReading);
+}
+
+bool IsZeroStateSuggestionsEnabled() {
+  return base::FeatureList::IsEnabled(kEnableZeroStateSuggestions);
 }
 
 std::string AnswerServerUrl() {

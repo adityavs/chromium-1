@@ -15,6 +15,7 @@
 #include "base/macros.h"
 #include "base/message_loop/message_loop.h"
 #include "base/stl_util.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/values.h"
 #include "net/base/net_errors.h"
@@ -59,6 +60,10 @@ std::string BuildResponse(bool is_porn) {
   return result;
 }
 
+std::string BuildPornResponse() {
+  return BuildResponse(true);
+}
+
 }  // namespace
 
 class SafeSearchURLCheckerTest : public testing::Test {
@@ -70,6 +75,7 @@ class SafeSearchURLCheckerTest : public testing::Test {
                 &test_url_loader_factory_)),
         checker_(test_shared_loader_factory_,
                  TRAFFIC_ANNOTATION_FOR_TESTS,
+                 "us",
                  kCacheSize) {}
 
   MOCK_METHOD3(OnCheckDone,
@@ -193,6 +199,46 @@ TEST_F(SafeSearchURLCheckerTest, CacheTimeout) {
   // immediately.
   EXPECT_CALL(*this, OnCheckDone(url, Classification::UNSAFE, false));
   ASSERT_FALSE(SendValidResponse(url, true));
+}
+
+TEST_F(SafeSearchURLCheckerTest, AllowAllGoogleURLs) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndEnableFeature(kAllowAllGoogleUrls);
+  {
+    GURL url("https://sites.google.com/porn");
+    EXPECT_CALL(*this, OnCheckDone(url, Classification::SAFE, _));
+    // No server interaction.
+    bool cache_hit = CheckURL(url);
+    ASSERT_TRUE(cache_hit);
+  }
+  {
+    GURL url("https://youtube.com/porn");
+    EXPECT_CALL(*this, OnCheckDone(url, Classification::SAFE, _));
+    // No server interaction
+    bool cache_hit = CheckURL(url);
+    ASSERT_TRUE(cache_hit);
+  }
+}
+
+TEST_F(SafeSearchURLCheckerTest, NoAllowAllGoogleURLs) {
+  base::test::ScopedFeatureList feature_list;
+  feature_list.InitAndDisableFeature(kAllowAllGoogleUrls);
+  {
+    GURL url("https://sites.google.com/porn");
+    EXPECT_CALL(*this, OnCheckDone(url, Classification::UNSAFE, _));
+    SetupResponse(url, net::OK, BuildPornResponse());
+    bool cache_hit = CheckURL(url);
+    ASSERT_FALSE(cache_hit);
+    WaitForResponse();
+  }
+  {
+    GURL url("https://youtube.com/porn");
+    EXPECT_CALL(*this, OnCheckDone(url, Classification::UNSAFE, _));
+    SetupResponse(url, net::OK, BuildPornResponse());
+    bool cache_hit = CheckURL(url);
+    ASSERT_FALSE(cache_hit);
+    WaitForResponse();
+  }
 }
 
 }  // namespace safe_search_api

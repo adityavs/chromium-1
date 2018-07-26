@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">भाषांतर वापरले, परंतु मॅनिफेस्टमध्ये डीफॉल्ट_लोकॅल निर्दिष्ट नाही.</translation>
 <translation id="2576842806987913196">या नावाने आधीपासूनच CRX फाइल उपस्थित आहे.</translation>
 <translation id="2753617847762399167">बेकायदेशीर पथ ('..' सह अचूक किंवा संबंधित): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">हा विस्तार नेटवर्क विनंती सुधारण्‍यात अयशस्वी झाला कारण सुधारणेचा दुसर्‍या विस्ताराशी विवाद झाला.</translation>
 <translation id="2785530881066938471">सामग्री स्क्रिप्टसाठी '<ph name="RELATIVE_PATH" />' फाइल लोड करणे शक्य नाही. ही UTF-8 द्वारे एन्कोड केलेली नाही.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> विस्तार आयडी "<ph name="EXTENSION_ID" />") प्रशासकाने ब्लॉक केलेला आहे. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">हे पॅकेज इंस्टॉल करणे शक्य नाही: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529"><ph name="VENDOR_NAME" /> कडील <ph name="PRODUCT_ID" /> अज्ञात उत्पादन</translation>
 <translation id="7068383018033524534">मॅनिफेस्ट फाइल चुकीची आहे</translation>
 <translation id="7217838517480956708">या मशीनच्या प्रशासकास <ph name="EXTENSION_NAME" /> स्थापन करणे आवश्यक आहे. हे काढले किंवा सुधारित केले जाऊ शकत नाही.</translation>
+<translation id="7939686037314084444">एक्सटेंशन योग्यरित्या लोड होऊ शकले नाही. हे कदाचित नेटवर्क विनंत्या व्यत्यय आणू शकत नाही.</translation>
 <translation id="7972881773422714442">पर्याय: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">वापरकर्ता-समोरील</translation>
 <translation id="8047248493720652249">दुसर्‍या विस्ताराने (<ph name="EXTENSION_NAME" />) एक वेगळे फाईलनाव "<ph name="ACTUAL_FILENAME" />" निर्धारित केल्यामुळे डाउनलोड "<ph name="ATTEMPTED_FILENAME" />" ला नाव देण्यात हा विस्तार अयशस्वी झाला.</translation>

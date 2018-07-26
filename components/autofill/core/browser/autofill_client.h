@@ -46,6 +46,7 @@ namespace autofill {
 
 class AddressNormalizer;
 class AutofillPopupDelegate;
+class AutofillProfile;
 class AutofillWebDataService;
 class CardUnmaskDelegate;
 class CreditCard;
@@ -125,12 +126,19 @@ class AutofillClient : public RiskDataLoader {
   // Causes the Autofill settings UI to be shown.
   virtual void ShowAutofillSettings() = 0;
 
+  // Runs |callback| if the |profile| should be imported as personal data.
+  virtual void ConfirmSaveAutofillProfile(const AutofillProfile& profile,
+                                          base::OnceClosure callback) = 0;
+
   // A user has attempted to use a masked card. Prompt them for further
   // information to proceed.
   virtual void ShowUnmaskPrompt(const CreditCard& card,
                                 UnmaskCardReason reason,
                                 base::WeakPtr<CardUnmaskDelegate> delegate) = 0;
   virtual void OnUnmaskVerificationResult(PaymentsRpcResult result) = 0;
+
+  // Runs |closure| if the user accepts the migration process.
+  virtual void ShowLocalCardMigrationPrompt(base::OnceClosure closure) = 0;
 
   // Runs |callback| if the |card| should be imported as personal data.
   // |metric_logger| can be used to log user actions.
@@ -167,6 +175,7 @@ class AutofillClient : public RiskDataLoader {
       const gfx::RectF& element_bounds,
       base::i18n::TextDirection text_direction,
       const std::vector<Suggestion>& suggestions,
+      bool autoselect_first_suggestion,
       base::WeakPtr<AutofillPopupDelegate> delegate) = 0;
 
   // Update the data list values shown by the Autofill popup, if visible.

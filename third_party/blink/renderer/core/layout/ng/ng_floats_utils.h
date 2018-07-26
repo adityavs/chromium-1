@@ -13,6 +13,7 @@
 
 namespace blink {
 
+class NGBlockNode;
 class NGConstraintSpace;
 class NGContainerFragmentBuilder;
 class NGExclusionSpace;
@@ -28,11 +29,10 @@ enum NGFloatTypeValue {
 typedef int NGFloatTypes;
 
 // Returns the inline size (relative to {@code parent_space}) of the
-// unpositioned float. If the float is in a different writing mode, this will
-// perform a layout.
-CORE_EXPORT LayoutUnit
-ComputeInlineSizeForUnpositionedFloat(const NGConstraintSpace& parent_space,
-                                      NGUnpositionedFloat* unpositioned_float);
+// unpositioned float.
+CORE_EXPORT LayoutUnit ComputeMarginBoxInlineSizeForUnpositionedFloat(
+    const NGConstraintSpace& parent_space,
+    NGUnpositionedFloat* unpositioned_float);
 
 // Positions {@code unpositioned_float} into {@code new_parent_space}.
 // @returns A positioned float.
@@ -58,6 +58,11 @@ void AddUnpositionedFloat(
     Vector<scoped_refptr<NGUnpositionedFloat>>* unpositioned_floats,
     NGContainerFragmentBuilder* fragment_builder,
     scoped_refptr<NGUnpositionedFloat> unpositioned_float);
+
+// Remove a pending float from the list.
+bool RemoveUnpositionedFloat(
+    Vector<scoped_refptr<NGUnpositionedFloat>>* unpositioned_floats,
+    NGBlockNode float_node);
 
 NGFloatTypes ToFloatTypes(EClear clear);
 

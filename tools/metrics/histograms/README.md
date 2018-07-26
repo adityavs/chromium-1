@@ -264,7 +264,7 @@ The code to record it becomes dead code, and should be removed from the
 codebase along with marking the histogram definition as obsolete. However, if
 histogram would remain useful, the expiration should be extended accordingly
 before it becomes expired. If histogram you care about already expired, see
-[Expired Histogram Whitelist](###Expired histogram whitelist).
+[Expired Histogram Whitelist](#Expired-histogram-whitelist).
 
 For all the new histograms the use of expiry attribute will be strongly
 encouraged and enforced by Chrome metrics team through reviews.
@@ -307,6 +307,10 @@ Test your histograms using `chrome://histograms`.  Make sure they're being
 emitted to when you expect and not emitted to at other times. Also check that
 the values emitted to are correct.  Finally, for count histograms, make sure
 that buckets capture enough precision for your needs over the range.
+
+Pro tip: You can filter the set of histograms shown on `chrome://histograms` by
+specifying a prefix. For example, `chrome://histograms/Extensions.Load` will
+show only histograms whose names match the pattern "Extensions.Load*".
 
 In addition to testing interactively, you can have unit tests examine the
 values emitted to histograms.  See [histogram_tester.h](https://cs.chromium.org/chromium/src/base/test/metrics/histogram_tester.h)

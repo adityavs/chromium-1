@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/callback.h"
+#include "base/feature_list.h"
 #include "base/json/json_reader.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/stl_util.h"
@@ -33,15 +34,18 @@ namespace {
 const char kSafeSearchApiUrl[] =
     "https://safesearch.googleapis.com/v1:classify";
 const char kDataContentType[] = "application/x-www-form-urlencoded";
-const char kDataFormat[] = "key=%s&urls=%s";
+const char kDataFormat[] = "key=%s&urls=%s&region_code=%s";
 
 const size_t kDefaultCacheSize = 1000;
 const size_t kDefaultCacheTimeoutSeconds = 3600;
 
 // Builds the POST data for SafeSearch API requests.
-std::string BuildRequestData(const std::string& api_key, const GURL& url) {
+std::string BuildRequestData(const std::string& api_key,
+                             const GURL& url,
+                             const std::string& region_code) {
   std::string query = net::EscapeQueryParamValue(url.spec(), true);
-  return base::StringPrintf(kDataFormat, api_key.c_str(), query.c_str());
+  return base::StringPrintf(kDataFormat, api_key.c_str(), query.c_str(),
+                            region_code.c_str());
 }
 
 // Parses a SafeSearch API |response| and stores the result in |is_porn|.
@@ -72,6 +76,10 @@ bool ParseResponse(const std::string& response, bool* is_porn) {
 }
 
 }  // namespace
+
+// Consider all URLs within a google domain to be safe.
+const base::Feature kAllowAllGoogleUrls{"SafeSearchAllowAllGoogleURLs",
+                                        base::FEATURE_DISABLED_BY_DEFAULT};
 
 struct URLChecker::Check {
   Check(const GURL& url,
@@ -109,17 +117,21 @@ URLChecker::CheckResult::CheckResult(Classification classification,
 
 URLChecker::URLChecker(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
-    const net::NetworkTrafficAnnotationTag& traffic_annotation)
+    const net::NetworkTrafficAnnotationTag& traffic_annotation,
+    const std::string& country)
     : URLChecker(std::move(url_loader_factory),
                  traffic_annotation,
+                 country,
                  kDefaultCacheSize) {}
 
 URLChecker::URLChecker(
     scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const net::NetworkTrafficAnnotationTag& traffic_annotation,
+    const std::string& country,
     size_t cache_size)
     : url_loader_factory_(std::move(url_loader_factory)),
       traffic_annotation_(traffic_annotation),
+      country_(country),
       cache_(cache_size),
       cache_timeout_(
           base::TimeDelta::FromSeconds(kDefaultCacheTimeoutSeconds)) {}
@@ -127,19 +139,21 @@ URLChecker::URLChecker(
 URLChecker::~URLChecker() = default;
 
 bool URLChecker::CheckURL(const GURL& url, CheckCallback callback) {
-  // TODO(treib): Hack: For now, allow all Google URLs to save QPS. If we ever
-  // remove this, we should find a way to allow at least the NTP.
-  if (google_util::IsGoogleDomainUrl(url, google_util::ALLOW_SUBDOMAIN,
-                                     google_util::ALLOW_NON_STANDARD_PORTS)) {
-    std::move(callback).Run(url, Classification::SAFE, false);
-    return true;
-  }
-  // TODO(treib): Hack: For now, allow all YouTube URLs since YouTube has its
-  // own Safety Mode anyway.
-  if (google_util::IsYoutubeDomainUrl(url, google_util::ALLOW_SUBDOMAIN,
-                                      google_util::ALLOW_NON_STANDARD_PORTS)) {
-    std::move(callback).Run(url, Classification::SAFE, false);
-    return true;
+  if (base::FeatureList::IsEnabled(kAllowAllGoogleUrls)) {
+    // TODO(treib): Hack: For now, allow all Google URLs to save QPS.
+    if (google_util::IsGoogleDomainUrl(url, google_util::ALLOW_SUBDOMAIN,
+                                       google_util::ALLOW_NON_STANDARD_PORTS)) {
+      std::move(callback).Run(url, Classification::SAFE, false);
+      return true;
+    }
+    // TODO(treib): Hack: For now, allow all YouTube URLs since YouTube has its
+    // own Safety Mode anyway.
+    if (google_util::IsYoutubeDomainUrl(
+            url, google_util::ALLOW_SUBDOMAIN,
+            google_util::ALLOW_NON_STANDARD_PORTS)) {
+      std::move(callback).Run(url, Classification::SAFE, false);
+      return true;
+    }
   }
 
   auto cache_it = cache_.Get(url);
@@ -176,8 +190,8 @@ bool URLChecker::CheckURL(const GURL& url, CheckCallback callback) {
   std::unique_ptr<network::SimpleURLLoader> simple_url_loader =
       network::SimpleURLLoader::Create(std::move(resource_request),
                                        traffic_annotation_);
-  simple_url_loader->AttachStringForUpload(BuildRequestData(api_key, url),
-                                           kDataContentType);
+  simple_url_loader->AttachStringForUpload(
+      BuildRequestData(api_key, url, country_), kDataContentType);
   auto it = checks_in_progress_.insert(
       checks_in_progress_.begin(),
       std::make_unique<Check>(url, std::move(simple_url_loader),

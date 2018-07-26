@@ -67,14 +67,6 @@ void OzonePlatform::InitializeForGPU(const InitParams& args) {
 }
 
 // static
-void OzonePlatform::Shutdown() {
-  base::AutoLock lock(GetOzoneInstanceLock());
-  auto* tmp = instance_;
-  instance_ = nullptr;
-  delete tmp;
-}
-
-// static
 OzonePlatform* OzonePlatform::GetInstance() {
   base::AutoLock lock(GetOzoneInstanceLock());
   DCHECK(instance_) << "OzonePlatform is not initialized";
@@ -130,9 +122,7 @@ base::MessageLoop::Type OzonePlatform::GetMessageLoopTypeForGpu() {
   return base::MessageLoop::TYPE_DEFAULT;
 }
 
-void OzonePlatform::AddInterfaces(
-    service_manager::BinderRegistryWithArgs<
-        const service_manager::BindSourceInfo&>* registry) {}
+void OzonePlatform::AddInterfaces(service_manager::BinderRegistry* registry) {}
 
 void OzonePlatform::AfterSandboxEntry() {}
 

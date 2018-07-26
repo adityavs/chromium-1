@@ -39,8 +39,10 @@
 #include "chrome/browser/vr/pose_util.h"
 #include "chrome/browser/vr/ui.h"
 #include "chrome/browser/vr/ui_element_renderer.h"
+#include "chrome/browser/vr/ui_interface.h"
 #include "chrome/browser/vr/ui_scene.h"
 #include "chrome/browser/vr/ui_test_input.h"
+#include "chrome/browser/vr/vr_geometry_util.h"
 #include "chrome/browser/vr/vr_gl_util.h"
 #include "chrome/common/chrome_features.h"
 #include "content/public/common/content_features.h"
@@ -49,7 +51,6 @@
 #include "device/vr/android/gvr/gvr_gamepad_data_provider.h"
 #include "gpu/config/gpu_driver_bug_workaround_type.h"
 #include "gpu/ipc/common/gpu_memory_buffer_impl_android_hardware_buffer.h"
-#include "third_party/blink/public/platform/web_gesture_event.h"
 #include "ui/gfx/geometry/angle_conversions.h"
 #include "ui/gfx/gpu_fence.h"
 #include "ui/gl/android/scoped_java_surface.h"
@@ -96,15 +97,6 @@ constexpr int kWebXrFrameCount = 3;
 // as used for estimating prediction times.
 constexpr unsigned kWebVRSlidingAverageSize = 5;
 
-// Criteria for considering holding the app button in combination with
-// controller movement as a gesture.
-constexpr float kMinAppButtonGestureAngleRad = 0.25;
-
-// Exceeding pressing the appbutton for longer than this threshold will result
-// in a long press.
-constexpr base::TimeDelta kLongPressThreshold =
-    base::TimeDelta::FromMilliseconds(900);
-
 // Timeout for checking for the WebVR rendering GL fence. If the timeout is
 // reached, yield to let other tasks execute before rechecking.
 constexpr base::TimeDelta kWebVRFenceCheckTimeout =
@@ -127,8 +119,6 @@ constexpr base::TimeDelta kWebVrSlowAcquireThreshold =
 // If running too fast, allow dropping frames occasionally to let GVR catch up.
 // Drop at most one frame in MaxDropRate.
 constexpr int kWebVrUnstuffMaxDropRate = 7;
-
-constexpr float kRedrawSceneAngleDeltaDegrees = 1.0;
 
 // Taken from the GVR source code, this is the default vignette border fraction.
 constexpr float kContentVignetteBorder = 0.04;
@@ -191,6 +181,19 @@ gfx::RectF GfxRectFromUV(gvr::Rectf rect) {
 gfx::RectF ClampRect(gfx::RectF bounds) {
   bounds.AdjustToFit(gfx::RectF(0, 0, 1, 1));
   return bounds;
+}
+
+gvr::Rectf GetMinimalFov(const gfx::Transform& view_matrix,
+                         const std::vector<const UiElement*>& elements,
+                         const gvr::Rectf& recommended,
+                         float z_near,
+                         UiInterface* ui) {
+  Ui::FovRectangle rect =
+      ui->GetMinimalFov(view_matrix, elements,
+                        Ui::FovRectangle{recommended.left, recommended.right,
+                                         recommended.bottom, recommended.top},
+                        z_near);
+  return gvr::Rectf{rect.left, rect.right, rect.bottom, rect.top};
 }
 
 }  // namespace
@@ -321,7 +324,7 @@ void WebXrPresentationState::EndPresentation() {
 }
 
 VrShellGl::VrShellGl(GlBrowserInterface* browser_interface,
-                     std::unique_ptr<Ui> ui,
+                     std::unique_ptr<UiInterface> ui,
                      gvr_context* gvr_api,
                      bool reprojected_rendering,
                      bool daydream_support,
@@ -335,7 +338,8 @@ VrShellGl::VrShellGl(GlBrowserInterface* browser_interface,
       daydream_support_(daydream_support),
       content_paused_(pause_content),
       task_runner_(base::ThreadTaskRunnerHandle::Get()),
-      binding_(this),
+      presentation_binding_(this),
+      frame_data_binding_(this),
       browser_(browser_interface),
       vr_ui_fps_meter_(),
       webvr_fps_meter_(),
@@ -441,8 +445,6 @@ void VrShellGl::InitializeGl(gfx::AcceleratedWidget window) {
       content_tex_buffer_size_.width(), content_tex_buffer_size_.height());
   content_overlay_surface_texture_->SetDefaultBufferSize(
       content_tex_buffer_size_.width(), content_tex_buffer_size_.height());
-  ui_surface_texture_->SetDefaultBufferSize(content_tex_buffer_size_.width(),
-                                            content_tex_buffer_size_.height());
 
   webvr_vsync_align_ = base::FeatureList::IsEnabled(features::kWebVrVsyncAlign);
 
@@ -590,8 +592,9 @@ void VrShellGl::WebVrCreateOrResizeSharedBufferImage(WebXrSharedBuffer* buffer,
   scoped_refptr<gl::GLImageAHardwareBuffer> img(
       new gl::GLImageAHardwareBuffer(webvr_surface_size_));
 
-  AHardwareBuffer* ahb = buffer->gmb->GetHandle().android_hardware_buffer;
-  bool ret = img->Initialize(ahb, false /* preserved */);
+  base::android::ScopedHardwareBufferHandle ahb =
+      buffer->gmb->CloneHandle().android_hardware_buffer;
+  bool ret = img->Initialize(ahb.get(), false /* preserved */);
   if (!ret) {
     DLOG(WARNING) << __FUNCTION__ << ": ERROR: failed to initialize image!";
     // Exiting VR is a bit drastic, but this error shouldn't occur under normal
@@ -679,7 +682,8 @@ bool VrShellGl::IsSubmitFrameExpected(int16_t frame_index) {
     DVLOG(1) << __FUNCTION__ << ": wrong frame index, got " << frame_index
              << ", expected " << animating_frame->index;
     mojo::ReportBadMessage("SubmitFrame called with wrong frame index");
-    binding_.Close();
+    presentation_binding_.Close();
+    frame_data_binding_.Close();
     return false;
   }
 
@@ -844,8 +848,10 @@ void VrShellGl::ConnectPresentingService(
     device::mojom::XRDeviceRuntimeSessionOptionsPtr options) {
   ClosePresentationBindings();
 
-  device::mojom::VRPresentationProviderPtr provider;
-  binding_.Bind(mojo::MakeRequest(&provider));
+  device::mojom::XRPresentationProviderPtr presentation_provider;
+  presentation_binding_.Bind(mojo::MakeRequest(&presentation_provider));
+  device::mojom::XRFrameDataProviderPtr frame_data_provider;
+  frame_data_binding_.Bind(mojo::MakeRequest(&frame_data_provider));
 
   gfx::Size webvr_size(
       display_info->leftEye->renderWidth + display_info->rightEye->renderWidth,
@@ -855,11 +861,15 @@ void VrShellGl::ConnectPresentingService(
 
   // Decide which transport mechanism we want to use. This sets
   // the webxr_use_* options as a side effect.
-  device::mojom::VRDisplayFrameTransportOptionsPtr transport_options =
+  device::mojom::XRPresentationTransportOptionsPtr transport_options =
       GetWebVrFrameTransportOptions(options);
 
   if (webxr_use_shared_buffer_draw_) {
-    CreateSurfaceBridge(nullptr);
+    // Create the mailbox bridge if it doesn't exist yet. We can continue
+    // reusing the existing one if it does, its resources such as mailboxes
+    // are still valid.
+    if (!mailbox_bridge_)
+      CreateSurfaceBridge(nullptr);
   } else {
     if (!webvr_surface_texture_) {
       webvr_surface_texture_ = gl::SurfaceTexture::Create(webvr_texture_id_);
@@ -871,9 +881,16 @@ void VrShellGl::ConnectPresentingService(
 
   ScheduleOrCancelWebVrFrameTimeout();
 
-  browser_->SendRequestPresentReply(true, mojo::MakeRequest(&submit_client_),
-                                    std::move(provider),
-                                    std::move(transport_options));
+  auto submit_frame_sink = device::mojom::XRPresentationConnection::New();
+  submit_frame_sink->client_request = mojo::MakeRequest(&submit_client_);
+  submit_frame_sink->provider = presentation_provider.PassInterface();
+  submit_frame_sink->transport_options = std::move(transport_options);
+
+  auto session = device::mojom::XRSession::New();
+  session->data_provider = frame_data_provider.PassInterface();
+  session->submit_frame_sink = std::move(submit_frame_sink);
+
+  browser_->SendRequestPresentReply(std::move(session));
 }
 
 void VrShellGl::OnSwapContents(int new_content_id) {
@@ -886,9 +903,15 @@ void VrShellGl::EnableAlertDialog(PlatformInputHandler* input_handler,
   showing_vr_dialog_ = true;
   vr_dialog_input_delegate_.reset(new PlatformUiInputDelegate(input_handler));
   vr_dialog_input_delegate_->SetSize(width, height);
-  ui_->SetAlertDialogEnabled(true, vr_dialog_input_delegate_.get(),
-                             width / content_tex_buffer_size_.width(),
-                             height / content_tex_buffer_size_.width());
+  if (web_vr_mode_) {
+    ui_->SetAlertDialogEnabled(true, vr_dialog_input_delegate_.get(), width,
+                               height);
+  } else {
+    ui_->SetContentOverlayAlertDialogEnabled(
+        true, vr_dialog_input_delegate_.get(),
+        width / content_tex_buffer_size_.width(),
+        height / content_tex_buffer_size_.width());
+  }
   ScheduleOrCancelWebVrFrameTimeout();
 }
 
@@ -902,8 +925,17 @@ void VrShellGl::DisableAlertDialog() {
 void VrShellGl::SetAlertDialogSize(float width, float height) {
   if (vr_dialog_input_delegate_)
     vr_dialog_input_delegate_->SetSize(width, height);
-  ui_->SetAlertDialogSize(width / content_tex_buffer_size_.width(),
-                          height / content_tex_buffer_size_.width());
+  // If not floating, dialogs are rendered with a fixed width, so that only the
+  // ratio matters. But, if they are floating, its size should be relative to
+  // the contents. During a WebXR presentation, the contents might not have been
+  // initialized but, in this case, the dialogs are never floating.
+  if (web_vr_mode_) {
+    ui_->SetAlertDialogSize(width, height);
+  } else {
+    ui_->SetContentOverlayAlertDialogSize(
+        width / content_tex_buffer_size_.width(),
+        height / content_tex_buffer_size_.width());
+  }
 }
 
 void VrShellGl::SetDialogLocation(float x, float y) {
@@ -1056,7 +1088,7 @@ void VrShellGl::GvrInit(gvr_context* gvr_api) {
   }
 }
 
-device::mojom::VRDisplayFrameTransportOptionsPtr
+device::mojom::XRPresentationTransportOptionsPtr
 VrShellGl::GetWebVrFrameTransportOptions(
     const device::mojom::XRDeviceRuntimeSessionOptionsPtr& options) {
   DVLOG(1) << __FUNCTION__;
@@ -1099,19 +1131,19 @@ VrShellGl::GetWebVrFrameTransportOptions(
   DVLOG(1) << __FUNCTION__ << ": render_path=" << static_cast<int>(render_path);
   MetricsUtilAndroid::LogXrRenderPathUsed(render_path);
 
-  device::mojom::VRDisplayFrameTransportOptionsPtr transport_options =
-      device::mojom::VRDisplayFrameTransportOptions::New();
+  device::mojom::XRPresentationTransportOptionsPtr transport_options =
+      device::mojom::XRPresentationTransportOptions::New();
   // Only set boolean options that we need. Default is false, and we should be
   // able to safely ignore ones that our implementation doesn't care about.
   transport_options->wait_for_transfer_notification = true;
   if (webxr_use_shared_buffer_draw_) {
     transport_options->transport_method =
-        device::mojom::VRDisplayFrameTransportMethod::DRAW_INTO_TEXTURE_MAILBOX;
+        device::mojom::XRPresentationTransportMethod::DRAW_INTO_TEXTURE_MAILBOX;
     DCHECK(webxr_use_gpu_fence_);
     transport_options->wait_for_gpu_fence = true;
   } else {
     transport_options->transport_method =
-        device::mojom::VRDisplayFrameTransportMethod::SUBMIT_AS_MAILBOX_HOLDER;
+        device::mojom::XRPresentationTransportMethod::SUBMIT_AS_MAILBOX_HOLDER;
     transport_options->wait_for_transfer_notification = true;
     if (webxr_use_gpu_fence_) {
       transport_options->wait_for_gpu_fence = true;
@@ -1211,20 +1243,18 @@ void VrShellGl::UpdateController(const RenderInfo& render_info,
     controller_data.connected = false;
   browser_->UpdateGamepadData(controller_data);
 
-  HandleControllerInput(laser_origin, render_info, current_time);
+  if (ShouldDrawWebVr()) {
+    auto gestures = controller_->DetectGestures();
+    ui_->HandleMenuButtonEvents(&gestures);
+  } else {
+    HandleControllerInput(laser_origin, render_info, current_time);
+  }
 }
 
 void VrShellGl::HandleControllerInput(const gfx::Point3F& laser_origin,
                                       const RenderInfo& render_info,
                                       base::TimeTicks current_time) {
   gfx::Vector3dF head_direction = GetForwardVector(render_info.head_pose);
-  if (is_exiting_) {
-    // When we're exiting, we don't show the reticle and the only input
-    // processing we do is to handle immediate exits.
-    SendImmediateExitRequestIfNecessary();
-    return;
-  }
-
   gfx::Vector3dF ergo_neutral_pose;
   if (!controller_->IsConnected()) {
     // No controller detected, set up a gaze cursor that tracks the
@@ -1241,19 +1271,12 @@ void VrShellGl::HandleControllerInput(const gfx::Point3F& laser_origin,
   gfx::Vector3dF controller_direction = ergo_neutral_pose;
   mat.TransformVector(&controller_direction);
 
-  HandleControllerAppButtonActivity(controller_direction);
-
-  if (ShouldDrawWebVr() && !ShouldSendGesturesToWebVr()) {
-    return;
-  }
-
   ControllerModel controller_model;
   controller_->GetTransform(&controller_model.transform);
-  std::unique_ptr<GestureList> gesture_list_ptr = controller_->DetectGestures();
-  GestureList& gesture_list = *gesture_list_ptr;
+  auto input_event_list = controller_->DetectGestures();
   controller_model.touchpad_button_state = UiInputManager::ButtonState::UP;
-  DCHECK(!(controller_->ButtonUpHappened(gvr::kControllerButtonClick) &&
-           controller_->ButtonDownHappened(gvr::kControllerButtonClick)))
+  DCHECK(!(controller_->ButtonUpHappened(PlatformController::kButtonSelect) &&
+           controller_->ButtonDownHappened(PlatformController::kButtonSelect)))
       << "Cannot handle a button down and up event within one frame.";
   if (controller_->ButtonState(gvr::kControllerButtonClick)) {
     controller_model.touchpad_button_state = UiInputManager::ButtonState::DOWN;
@@ -1271,97 +1294,37 @@ void VrShellGl::HandleControllerInput(const gfx::Point3F& laser_origin,
   controller_model.laser_origin = laser_origin;
   controller_model.handedness = controller_->GetHandedness();
   controller_model.recentered = controller_->GetRecentered();
-  controller_model.touching_touchpad = controller_->IsTouching();
+  controller_model.touching_touchpad = controller_->IsTouchingTrackpad();
   controller_model.touchpad_touch_position =
-      gfx::PointF(controller_->TouchPosX(), controller_->TouchPosY());
-  controller_model.app_button_long_pressed = app_button_long_pressed_;
+      controller_->GetPositionInTrackpad();
   controller_model.last_orientation_timestamp =
       controller_->GetLastOrientationTimestamp();
   controller_model.last_touch_timestamp = controller_->GetLastTouchTimestamp();
   controller_model.last_button_timestamp =
       controller_->GetLastButtonTimestamp();
+  controller_model.battery_level = controller_->GetBatteryLevel();
 
   if (!test_controller_model_queue_.empty()) {
     cached_test_controller_model_ = test_controller_model_queue_.front();
     test_controller_model_queue_.pop();
   }
   if (using_test_controller_model_) {
+    // We need to copy the timestamps, otherwise we hit a DCHECK when submitting
+    // motion events due to invalid timestamps.
+    cached_test_controller_model_.last_orientation_timestamp =
+        controller_model.last_orientation_timestamp;
+    cached_test_controller_model_.last_touch_timestamp =
+        controller_model.last_touch_timestamp;
+    cached_test_controller_model_.last_button_timestamp =
+        controller_model.last_button_timestamp;
     controller_model = cached_test_controller_model_;
   }
   controller_model_ = controller_model;
 
   ReticleModel reticle_model;
-  ui_->input_manager()->HandleInput(current_time, render_info, controller_model,
-                                    &reticle_model, &gesture_list);
+  ui_->HandleInput(current_time, render_info, controller_model, &reticle_model,
+                   &input_event_list);
   ui_->OnControllerUpdated(controller_model, reticle_model);
-}
-
-void VrShellGl::SendImmediateExitRequestIfNecessary() {
-  gvr::ControllerButton buttons[] = {
-      gvr::kControllerButtonClick, gvr::kControllerButtonApp,
-      gvr::kControllerButtonHome,
-  };
-  for (size_t i = 0; i < arraysize(buttons); ++i) {
-    if (controller_->ButtonUpHappened(buttons[i]) ||
-        controller_->ButtonDownHappened(buttons[i])) {
-      browser_->ForceExitVr();
-    }
-  }
-}
-
-void VrShellGl::HandleControllerAppButtonActivity(
-    const gfx::Vector3dF& controller_direction) {
-  // Note that button up/down state is transient, so ButtonDownHappened only
-  // returns true for a single frame (and we're guaranteed not to miss it).
-  if (controller_->ButtonDownHappened(
-          gvr::ControllerButton::GVR_CONTROLLER_BUTTON_APP)) {
-    controller_start_direction_ = controller_direction;
-    app_button_down_time_ = base::TimeTicks::Now();
-    app_button_long_pressed_ = false;
-  }
-
-  if (controller_->ButtonUpHappened(
-          gvr::ControllerButton::GVR_CONTROLLER_BUTTON_APP)) {
-    // A gesture is a movement of the controller while holding the App button.
-    // If the angle of the movement is within a threshold, the action is
-    // considered a regular click
-    // TODO(asimjour1): We need to refactor the gesture recognition outside of
-    // VrShellGl.
-    PlatformController::SwipeDirection direction =
-        PlatformController::kSwipeDirectionNone;
-    gfx::Vector3dF a = controller_start_direction_;
-    gfx::Vector3dF b = controller_direction;
-    a.set_y(0);
-    b.set_y(0);
-    if (a.LengthSquared() * b.LengthSquared() > 0.0) {
-      float gesture_xz_angle =
-          acos(gfx::DotProduct(a, b) / a.Length() / b.Length());
-      if (fabs(gesture_xz_angle) > kMinAppButtonGestureAngleRad) {
-        direction = gesture_xz_angle < 0
-                        ? PlatformController::kSwipeDirectionLeft
-                        : PlatformController::kSwipeDirectionRight;
-        // Post a task, rather than calling the UI directly, so as not to modify
-        // UI state in the midst of frame rendering.
-        base::ThreadTaskRunnerHandle::Get()->PostTask(
-            FROM_HERE,
-            base::BindRepeating(&Ui::OnAppButtonSwipePerformed,
-                                base::Unretained(ui_.get()), direction));
-      }
-    }
-    if (direction == PlatformController::kSwipeDirectionNone &&
-        !app_button_long_pressed_) {
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
-          FROM_HERE, base::BindRepeating(&Ui::OnAppButtonClicked,
-                                         base::Unretained(ui_.get())));
-    }
-  }
-
-  if (!app_button_long_pressed_ &&
-      controller_->ButtonState(
-          gvr::ControllerButton::GVR_CONTROLLER_BUTTON_APP) &&
-      (base::TimeTicks::Now() - app_button_down_time_) > kLongPressThreshold) {
-    app_button_long_pressed_ = true;
-  }
 }
 
 bool VrShellGl::ResizeForWebVR(int16_t frame_index) {
@@ -1441,7 +1404,7 @@ void VrShellGl::UpdateEyeInfos(const gfx::Transform& head_pose,
     eye_info.view_matrix = eye_matrix * head_pose;
 
     const gfx::RectF& rect = GfxRectFromUV(vp.GetSourceUv());
-    eye_info.viewport = CalculatePixelSpaceRect(render_size, rect);
+    eye_info.viewport = vr::CalculatePixelSpaceRect(render_size, rect);
 
     eye_info.proj_matrix =
         PerspectiveMatrixFromView(vp.GetSourceFov(), kZNear, kZFar);
@@ -1503,14 +1466,15 @@ void VrShellGl::DrawFrame(int16_t frame_index, base::TimeTicks current_time) {
 
   // From this point on, the current frame is either a pure UI frame
   // (frame_index==-1), or a WebVR frame (frame_index >= 0). If it's a WebVR
-  // frame, it must be the current processing frame, and ShouldDrawWebVr() must
-  // be true (not in UI-only mode). Careful, we may still have a processing
-  // frame in UI mode that couldn't be cancelled yet. Also, WebVR frames
-  // can still have overlay UI drawn on top of them.
+  // frame, it must be the current processing frame. Careful, we may still have
+  // a processing frame in UI mode that couldn't be cancelled yet. For example
+  // when showing a permission prompt, ShouldDrawWebVr() may have become false
+  // in the time between SubmitFrame and OnWebVRFrameAvailable or
+  // OnWebVRTokenSignaled. In that case we continue handling the current frame
+  // as a WebVR frame. Also, WebVR frames can still have overlay UI drawn on top
+  // of them.
   bool is_webvr_frame = frame_index >= 0;
-  DCHECK_EQ(is_webvr_frame, ShouldDrawWebVr());
   DCHECK(!is_webvr_frame || webxr_->HaveProcessingFrame());
-
   CHECK(!acquired_frame_);
 
   // When using async reprojection, we need to know which pose was
@@ -1518,8 +1482,9 @@ void VrShellGl::DrawFrame(int16_t frame_index, base::TimeTicks current_time) {
   // submitting. Technically we don't need a pose if not reprojecting,
   // but keeping it uninitialized seems likely to cause problems down
   // the road. Copying it is cheaper than fetching a new one.
-  if (is_webvr_frame && webxr_->HaveProcessingFrame()) {
+  if (is_webvr_frame) {
     // Copy into render info for overlay UI. WebVR doesn't use this.
+    DCHECK(webxr_->HaveProcessingFrame());
     WebXrFrame* frame = webxr_->GetProcessingFrame();
     render_info_.head_pose = frame->head_pose;
   } else {
@@ -1530,8 +1495,7 @@ void VrShellGl::DrawFrame(int16_t frame_index, base::TimeTicks current_time) {
   // Update the render position of all UI elements (including desktop).
   TRACE_EVENT_BEGIN0("gpu", "SceneUpdate");
   base::TimeTicks scene_start = base::TimeTicks::Now();
-  bool scene_changed =
-      ui_->scene()->OnBeginFrame(current_time, render_info_.head_pose);
+  bool ui_updated = ui_->OnBeginFrame(current_time, render_info_.head_pose);
 
   // WebVR handles controller input in OnVsync.
   base::TimeDelta controller_time = base::TimeDelta();
@@ -1543,41 +1507,26 @@ void VrShellGl::DrawFrame(int16_t frame_index, base::TimeTicks current_time) {
     ui_controller_update_time_.AddSample(controller_time);
   }
 
-  if (!graphics_delegate_->MakeSkiaContextCurrent()) {
-    ForceExitVr();
-    return;
-  }
-  bool textures_changed = ui_->scene()->UpdateTextures();
-  if (!graphics_delegate_->MakeMainContextCurrent()) {
-    ForceExitVr();
-    return;
+  if (ui_->SceneHasDirtyTextures()) {
+    if (!graphics_delegate_->MakeSkiaContextCurrent()) {
+      ForceExitVr();
+      return;
+    }
+    ui_->UpdateSceneTextures();
+    if (!graphics_delegate_->MakeMainContextCurrent()) {
+      ForceExitVr();
+      return;
+    }
+    ui_updated = true;
   }
 
-  // TODO(mthiesse): Determine if a visible controller is actually drawn in the
-  // viewport.
-  bool controller_dirty = ui_->IsControllerVisible();
-
-  bool ui_updated =
-      scene_changed || textures_changed || content_frame_available_;
+  ui_updated |= content_frame_available_;
   ReportUiStatusForTesting(scene_start, ui_updated);
-
-  // TODO(mthiesse): Refine this notion of when we need to redraw. If only a
-  // portion of the screen is dirtied, we can update just redraw that portion.
-  bool redraw_needed = controller_dirty || ui_updated;
-
-  bool head_moved =
-      HeadMoveExceedsThreshold(last_used_head_pose_, render_info_.head_pose,
-                               kRedrawSceneAngleDeltaDegrees);
-
-  bool dirty = is_webvr_frame || head_moved || redraw_needed;
 
   base::TimeDelta scene_time = base::TimeTicks::Now() - scene_start;
   // Don't double-count the controller time that was part of the scene time.
   ui_processing_time_.AddSample(scene_time - controller_time);
   TRACE_EVENT_END0("gpu", "SceneUpdate");
-
-  if (!dirty && ui_->SkipsRedrawWhenNotDirty())
-    return;
 
   UpdateViewports();
 
@@ -1694,7 +1643,7 @@ void VrShellGl::DrawIntoAcquiredFrame(int16_t frame_index,
     // splash screen showing in WebVR mode that must also fill the screen. That
     // said, while the splash screen is up ShouldDrawWebVr() will return false,
     // and we only draw UI frames, not WebVR frames.
-    ui_->ui_renderer()->Draw(render_info_);
+    ui_->Draw(render_info_);
     acquired_frame_.Unbind();
   }
 
@@ -1702,7 +1651,7 @@ void VrShellGl::DrawIntoAcquiredFrame(int16_t frame_index,
 
   std::vector<const UiElement*> overlay_elements;
   if (is_webvr_frame) {
-    overlay_elements = ui_->scene()->GetWebVrOverlayElementsToDraw();
+    overlay_elements = ui_->GetWebVrOverlayElementsToDraw();
   }
 
   TRACE_COUNTER1("gpu", "VR overlay element count", overlay_elements.size());
@@ -1721,21 +1670,16 @@ void VrShellGl::DrawIntoAcquiredFrame(int16_t frame_index,
     // optimization.
     RenderInfo render_info_webvr_browser_ui;
     render_info_webvr_browser_ui.head_pose = render_info_.head_pose;
-    webvr_overlay_viewport_.left.SetSourceFov(fov_recommended_left);
-    webvr_overlay_viewport_.right.SetSourceFov(fov_recommended_right);
 
     UpdateEyeInfos(render_info_webvr_browser_ui.head_pose,
                    webvr_overlay_viewport_, render_size_webvr_ui_,
                    &render_info_webvr_browser_ui);
-    gvr::Rectf minimal_fov;
-    GetMinimalFov(render_info_webvr_browser_ui.left_eye_model.view_matrix,
-                  overlay_elements, fov_recommended_left, kZNear, &minimal_fov);
-    webvr_overlay_viewport_.left.SetSourceFov(minimal_fov);
-
-    GetMinimalFov(render_info_webvr_browser_ui.right_eye_model.view_matrix,
-                  overlay_elements, fov_recommended_right, kZNear,
-                  &minimal_fov);
-    webvr_overlay_viewport_.right.SetSourceFov(minimal_fov);
+    webvr_overlay_viewport_.left.SetSourceFov(GetMinimalFov(
+        render_info_webvr_browser_ui.left_eye_model.view_matrix,
+        overlay_elements, fov_recommended_left, kZNear, ui_.get()));
+    webvr_overlay_viewport_.right.SetSourceFov(GetMinimalFov(
+        render_info_webvr_browser_ui.right_eye_model.view_matrix,
+        overlay_elements, fov_recommended_right, kZNear, ui_.get()));
 
     DCHECK(viewport_list_.GetSize() == 2);
     viewport_list_.SetBufferViewport(2, webvr_overlay_viewport_.left);
@@ -1744,8 +1688,7 @@ void VrShellGl::DrawIntoAcquiredFrame(int16_t frame_index,
                    webvr_overlay_viewport_, render_size_webvr_ui_,
                    &render_info_webvr_browser_ui);
 
-    ui_->ui_renderer()->DrawWebVrOverlayForeground(
-        render_info_webvr_browser_ui);
+    ui_->DrawWebVrOverlayForeground(render_info_webvr_browser_ui);
 
     acquired_frame_.Unbind();
   }
@@ -2001,10 +1944,6 @@ bool VrShellGl::ShouldDrawWebVr() {
   return web_vr_mode_ && ui_->ShouldRenderWebVr() && webvr_frames_received_ > 0;
 }
 
-bool VrShellGl::ShouldSendGesturesToWebVr() {
-  return ui_->IsAppButtonLongPressed() != app_button_long_pressed_;
-}
-
 void VrShellGl::DrawWebVr() {
   TRACE_EVENT0("gpu", "VrShellGl::DrawWebVr");
   // Don't need face culling, depth testing, blending, etc. Turn it all off.
@@ -2023,12 +1962,11 @@ void VrShellGl::DrawWebVr() {
     CHECK(buffer);
 
     // Use an identity UV transform, the image is already oriented correctly.
-    ui_->ui_element_renderer()->DrawWebVr(buffer->local_texture,
-                                          kWebVrIdentityUvTransform, 0, 0);
+    ui_->DrawWebVr(buffer->local_texture, kWebVrIdentityUvTransform, 0, 0);
   } else {
     // Apply the UV transform from the SurfaceTexture, that's usually a Y flip.
-    ui_->ui_element_renderer()->DrawWebVr(
-        webvr_texture_id_, webvr_surface_texture_uv_transform_, 0, 0);
+    ui_->DrawWebVr(webvr_texture_id_, webvr_surface_texture_uv_transform_, 0,
+                   0);
   }
 }
 
@@ -2048,17 +1986,15 @@ void VrShellGl::DrawContentQuad(bool draw_overlay_texture) {
       content_tex_buffer_size_.height() * kContentVignetteBorder - kBorder,
       content_tex_buffer_size_.width() + 2 * kBorder,
       content_tex_buffer_size_.height() + 2 * kBorder);
-  ui_->ui_element_renderer()->DrawWebVr(
-      content_texture_id_, kContentUvTransform,
-      kBorder / content_tex_buffer_size_.width(),
-      kBorder / content_tex_buffer_size_.height());
+  ui_->DrawWebVr(content_texture_id_, kContentUvTransform,
+                 kBorder / content_tex_buffer_size_.width(),
+                 kBorder / content_tex_buffer_size_.height());
   if (draw_overlay_texture) {
     glEnable(GL_BLEND);
     glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
-    ui_->ui_element_renderer()->DrawWebVr(
-        content_overlay_texture_id_, kContentUvTransform,
-        kBorder / content_tex_buffer_size_.width(),
-        kBorder / content_tex_buffer_size_.height());
+    ui_->DrawWebVr(content_overlay_texture_id_, kContentUvTransform,
+                   kBorder / content_tex_buffer_size_.width(),
+                   kBorder / content_tex_buffer_size_.height());
   }
 }
 
@@ -2066,7 +2002,7 @@ void VrShellGl::OnPause() {
   paused_ = true;
   vsync_helper_.CancelVSyncRequest();
   controller_->OnPause();
-  ui_->input_manager()->OnPause();
+  ui_->OnPause();
   gvr_api_->PauseTracking();
   webvr_frame_timeout_.Cancel();
   webvr_spinner_timeout_.Cancel();
@@ -2307,7 +2243,7 @@ void VrShellGl::OnVSync(base::TimeTicks frame_time) {
 }
 
 void VrShellGl::GetFrameData(
-    device::mojom::VRPresentationProvider::GetFrameDataCallback callback) {
+    device::mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   TRACE_EVENT0("gpu", __FUNCTION__);
   if (!get_frame_data_callback_.is_null()) {
     DLOG(WARNING) << ": previous get_frame_data_callback_ was not used yet";
@@ -2341,14 +2277,16 @@ void VrShellGl::UpdateLayerBounds(int16_t frame_index,
                                   const gfx::Size& source_size) {
   if (!ValidateRect(left_bounds) || !ValidateRect(right_bounds)) {
     mojo::ReportBadMessage("UpdateLayerBounds called with invalid bounds");
-    binding_.Close();
+    presentation_binding_.Close();
+    frame_data_binding_.Close();
     return;
   }
 
   if (frame_index >= 0 && !webxr_->HaveAnimatingFrame()) {
     // The optional UpdateLayerBounds call must happen before SubmitFrame.
     mojo::ReportBadMessage("UpdateLayerBounds called without animating frame");
-    binding_.Close();
+    presentation_binding_.Close();
+    frame_data_binding_.Close();
     return;
   }
 
@@ -2522,7 +2460,8 @@ void VrShellGl::ClosePresentationBindings() {
     // the connection is closing.
     base::ResetAndReturn(&get_frame_data_callback_).Run(nullptr);
   }
-  binding_.Close();
+  presentation_binding_.Close();
+  frame_data_binding_.Close();
 }
 
 device::mojom::XRInputSourceStatePtr VrShellGl::GetGazeInputSourceState() {
@@ -2541,7 +2480,7 @@ device::mojom::XRInputSourceStatePtr VrShellGl::GetGazeInputSourceState() {
   state->description = device::mojom::XRInputSourceDescription::New();
 
   // It's a gaze-cursor-based device.
-  state->description->pointer_origin = device::mojom::XRPointerOrigin::HEAD;
+  state->description->target_ray_mode = device::mojom::XRTargetRayMode::GAZING;
   state->description->emulated_position = true;
 
   // No implicit handedness
@@ -2572,6 +2511,12 @@ void VrShellGl::SetUiExpectingActivityForTesting(
   ui_test_state_ = std::make_unique<UiTestState>();
   ui_test_state_->quiescence_timeout_ms =
       base::TimeDelta::FromMilliseconds(ui_expectation.quiescence_timeout_ms);
+  // The controller is pretty much perpetually dirty due to noise, even during
+  // tests, so we need to apply a deadzone to it. We can't apply this deadzone
+  // all the time since it results in grid-like pointer movement.
+  // TODO(https://crbug.com/861807): Remove this workaround once the controller
+  // can be dirty with affecting quiescence.
+  controller_->EnableDeadzoneForTesting();
 }
 
 void VrShellGl::PerformControllerActionForTesting(

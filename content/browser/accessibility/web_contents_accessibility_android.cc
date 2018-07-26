@@ -855,7 +855,7 @@ void WebContentsAccessibilityAndroid::SetTextFieldValue(
   BrowserAccessibilityAndroid* node = GetAXFromUniqueID(unique_id);
   if (node) {
     node->manager()->SetValue(
-        *node, base::android::ConvertJavaStringToUTF16(env, value));
+        *node, base::android::ConvertJavaStringToUTF8(env, value));
   }
 }
 
@@ -909,7 +909,7 @@ jboolean WebContentsAccessibilityAndroid::AdjustSlider(
   value += (increment ? delta : -delta);
   value = std::max(std::min(value, max), min);
   if (value != original_value) {
-    node->manager()->SetValue(*node, base::NumberToString16(value));
+    node->manager()->SetValue(*node, base::NumberToString(value));
     return true;
   }
   return false;
@@ -1189,7 +1189,7 @@ WebContentsAccessibilityAndroid::GetCharacterBoundingBoxes(
   gfx::Rect object_bounds = node->GetPageBoundsRect();
   int coords[4 * len];
   for (int i = 0; i < len; i++) {
-    gfx::Rect char_bounds = node->GetPageBoundsForRange(start + i, 1);
+    gfx::Rect char_bounds = node->GetPageBoundsForRange(start + i, 1, false);
     if (char_bounds.IsEmpty())
       char_bounds = object_bounds;
     coords[4 * i + 0] = char_bounds.x();

@@ -1914,13 +1914,15 @@ IN_PROC_BROWSER_TEST_F(KioskUpdateTest, PreserveLocalData) {
 //      compliant.
 //   3. Platform version changed and the new app is installed because it is
 //      compliant now.
+// Flaky tests - crbug.com/859715
 IN_PROC_BROWSER_TEST_F(KioskUpdateTest,
-                       PRE_PRE_IncompliantPlatformDelayInstall) {
+                       DISABLED_PRE_PRE_IncompliantPlatformDelayInstall) {
   PreCacheAndLaunchApp(kTestOfflineEnabledKioskApp, "1.0.0",
                        std::string(kTestOfflineEnabledKioskApp) + "_v1.crx");
 }
 
-IN_PROC_BROWSER_TEST_F(KioskUpdateTest, PRE_IncompliantPlatformDelayInstall) {
+// Flaky tests - crbug.com/859715
+IN_PROC_BROWSER_TEST_F(KioskUpdateTest, DISABLED_PRE_IncompliantPlatformDelayInstall) {
   SetPlatformVersion("1233.0.0");
 
   set_test_app_id(kTestOfflineEnabledKioskApp);
@@ -1941,7 +1943,8 @@ IN_PROC_BROWSER_TEST_F(KioskUpdateTest, PRE_IncompliantPlatformDelayInstall) {
   EXPECT_TRUE(PrimaryAppUpdateIsPending());
 }
 
-IN_PROC_BROWSER_TEST_F(KioskUpdateTest, IncompliantPlatformDelayInstall) {
+// Flaky tests - crbug.com/859715
+IN_PROC_BROWSER_TEST_F(KioskUpdateTest, DISABLED_IncompliantPlatformDelayInstall) {
   SetPlatformVersion("1234.0.0");
 
   set_test_app_id(kTestOfflineEnabledKioskApp);
@@ -2355,8 +2358,13 @@ class KioskVirtualKeyboardTestSoundsManagerTestImpl
 class KioskVirtualKeyboardTest : public KioskTest,
                                  public audio::FakeSystemInfo {
  public:
-  KioskVirtualKeyboardTest() {}
-  ~KioskVirtualKeyboardTest() override = default;
+  KioskVirtualKeyboardTest() {
+    audio::FakeSystemInfo::OverrideGlobalBinderForAudioService(this);
+  }
+
+  ~KioskVirtualKeyboardTest() override {
+    audio::FakeSystemInfo::ClearGlobalBinderForAudioService();
+  }
 
  protected:
   // KioskVirtualKeyboardTest overrides:
@@ -2396,7 +2404,6 @@ IN_PROC_BROWSER_TEST_F(KioskVirtualKeyboardTest, RestrictFeatures) {
   mock_audio_manager_ = std::make_unique<media::MockAudioManager>(
       std::make_unique<media::TestAudioThread>());
   mock_audio_manager_->SetHasInputDevices(true);
-  audio::FakeSystemInfo::OverrideGlobalBinderForAudioService(this);
 
   set_test_app_id(kTestVirtualKeyboardKioskApp);
   set_test_app_version("0.1");

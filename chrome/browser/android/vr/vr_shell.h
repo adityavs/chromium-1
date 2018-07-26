@@ -38,10 +38,6 @@ namespace base {
 class Version;
 }  // namespace base
 
-namespace blink {
-class WebInputEvent;
-}  // namespace blink
-
 namespace content {
 class WebContents;
 }  // namespace content
@@ -82,6 +78,8 @@ class VrShell : device::GvrGamepadDataProvider,
           int display_height_pixels,
           bool pause_content,
           bool low_density);
+  bool HasUiFinishedLoading(JNIEnv* env,
+                            const base::android::JavaParamRef<jobject>& obj);
   void SwapContents(JNIEnv* env,
                     const base::android::JavaParamRef<jobject>& obj,
                     const base::android::JavaParamRef<jobject>& web_contents);
@@ -146,7 +144,6 @@ class VrShell : device::GvrGamepadDataProvider,
   void CloseAllTabs();
   void CloseAllIncognitoTabs();
   void OpenFeedback();
-  void ExitCct();
   void CloseHostedDialog();
   void ToggleCardboardGamepad(bool enabled);
   void ToggleGvrGamepad(bool enabled);
@@ -184,11 +181,7 @@ class VrShell : device::GvrGamepadDataProvider,
   void ContentOverlaySurfaceCreated(jobject surface,
                                     gl::SurfaceTexture* texture);
   void GvrDelegateReady(gvr::ViewerType viewer_type);
-  void SendRequestPresentReply(
-      bool success,
-      device::mojom::VRSubmitFrameClientRequest,
-      device::mojom::VRPresentationProviderPtrInfo,
-      device::mojom::VRDisplayFrameTransportOptionsPtr);
+  void SendRequestPresentReply(device::mojom::XRSessionPtr);
 
   void DialogSurfaceCreated(jobject surface, gl::SurfaceTexture* texture);
 
@@ -216,10 +209,9 @@ class VrShell : device::GvrGamepadDataProvider,
   bool HasAudioPermission();
 
   void ClearFocusedElement();
-  void ProcessContentGesture(std::unique_ptr<blink::WebInputEvent> event,
-                             int content_id);
+  void ProcessContentGesture(std::unique_ptr<InputEvent> event, int content_id);
 
-  void ProcessDialogGesture(std::unique_ptr<blink::WebInputEvent> event);
+  void ProcessDialogGesture(std::unique_ptr<InputEvent> event);
 
   void SetAlertDialog(JNIEnv* env,
                       const base::android::JavaParamRef<jobject>& obj,
@@ -229,8 +221,8 @@ class VrShell : device::GvrGamepadDataProvider,
                         const base::android::JavaParamRef<jobject>& obj);
   void SetDialogBufferSize(JNIEnv* env,
                            const base::android::JavaParamRef<jobject>& obj,
-                           float width,
-                           float height);
+                           int width,
+                           int height);
   void SetAlertDialogSize(JNIEnv* env,
                           const base::android::JavaParamRef<jobject>& obj,
                           float width,
@@ -306,8 +298,6 @@ class VrShell : device::GvrGamepadDataProvider,
 
   bool HasDaydreamSupport(JNIEnv* env);
 
-  void ExitVrDueToUnsupportedMode(UiUnsupportedMode mode);
-
   content::WebContents* GetNonNativePageWebContents() const;
 
   void LoadAssets();
@@ -375,8 +365,9 @@ class VrShell : device::GvrGamepadDataProvider,
   gl::SurfaceTexture* overlay_surface_texture_ = nullptr;
   gl::SurfaceTexture* ui_surface_texture_ = nullptr;
 
-  base::Timer waiting_for_assets_component_timer_;
+  base::OneShotTimer waiting_for_assets_component_timer_;
   bool can_load_new_assets_ = false;
+  bool ui_finished_loading_ = false;
 
   base::WaitableEvent gl_surface_created_event_;
   gfx::AcceleratedWidget surface_window_ = nullptr;

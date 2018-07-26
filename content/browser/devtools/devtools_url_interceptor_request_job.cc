@@ -9,7 +9,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "content/browser/devtools/protocol/network_handler.h"
 #include "content/browser/devtools/protocol/page.h"
-#include "content/browser/loader/navigation_loader_util.h"
+#include "content/browser/loader/download_utils_impl.h"
 #include "content/browser/loader/resource_request_info_impl.h"
 #include "ipc/ipc_channel.h"
 #include "net/base/completion_once_callback.h"
@@ -552,8 +552,8 @@ bool IsDownload(net::URLRequest* orig_request, net::URLRequest* subrequest) {
   std::string mime_type;
   subrequest->GetMimeType(&mime_type);
   return req_info->allow_download() &&
-         navigation_loader_util::IsDownload(
-             orig_request->url(), subrequest->response_headers(), mime_type);
+         download_utils::IsDownload(orig_request->url(),
+                                    subrequest->response_headers(), mime_type);
 }
 
 }  // namespace
@@ -566,7 +566,6 @@ DevToolsURLInterceptorRequestJob::DevToolsURLInterceptorRequestJob(
     net::NetworkDelegate* original_network_delegate,
     const base::UnguessableToken& devtools_token,
     DevToolsNetworkInterceptor::RequestInterceptedCallback callback,
-    bool is_redirect,
     ResourceType resource_type,
     InterceptionStage stage_to_intercept)
     : net::URLRequestJob(original_request, original_network_delegate),
@@ -584,7 +583,6 @@ DevToolsURLInterceptorRequestJob::DevToolsURLInterceptorRequestJob(
       owning_entry_id_(owning_entry_id),
       devtools_token_(devtools_token),
       callback_(callback),
-      is_redirect_(is_redirect),
       resource_type_(resource_type),
       stage_to_intercept_(stage_to_intercept),
       weak_ptr_factory_(this) {
@@ -632,26 +630,6 @@ void DevToolsURLInterceptorRequestJob::StartWithCookies(
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   if (stage_to_intercept_ == InterceptionStage::DONT_INTERCEPT) {
     sub_request_.reset(new SubRequest(request_details_, this, interceptor_));
-    return;
-  }
-
-  if (is_redirect_) {
-    if (stage_to_intercept_ == InterceptionStage::REQUEST) {
-      // If we are a redirect and we do not plan on grabbing the response we are
-      // done. If we are here this means we must have already sent an
-      // intercepted event to front-end for this redirect and the front-end
-      // allowed it. Since we have already allowed the redirect and we are only
-      // intercepting the request, we only need to catch it again if it's
-      // another redirect, which SubRequest will send the
-      // OnSubRequestRedirectReceived event.
-      sub_request_.reset(new SubRequest(request_details_, this, interceptor_));
-    } else {
-      // Otherwise we have already issued the request interception and had a
-      // continue and now we must issue a response interception for the
-      // redirect.
-      sub_request_.reset(
-          new InterceptedRequest(request_details_, this, interceptor_));
-    }
     return;
   }
 
@@ -821,8 +799,7 @@ void DevToolsURLInterceptorRequestJob::OnSubRequestRedirectReceived(
 
   // If we're not intercepting results or are a response then cancel this
   // redirect and tell the parent request it was redirected through |redirect_|.
-  if (stage_to_intercept_ == InterceptionStage::DONT_INTERCEPT ||
-      stage_to_intercept_ == InterceptionStage::RESPONSE) {
+  if (!(stage_to_intercept_ & InterceptionStage::RESPONSE)) {
     *defer_redirect = false;
     ProcessRedirect(redirectinfo.status_code, redirectinfo.new_url.spec());
     redirect_.reset();
@@ -1045,7 +1022,6 @@ void DevToolsURLInterceptorRequestJob::ProcessRedirect(
       base::MakeRefCounted<net::HttpResponseHeaders>(raw_headers), "", 0,
       base::TimeTicks::Now()));
 
-  interceptor_->ExpectRequestAfterRedirect(request(), interception_id_);
   NotifyHeadersComplete();
 }
 
@@ -1123,11 +1099,6 @@ void DevToolsURLInterceptorRequestJob::ProcessInterceptionResponse(
   if (modifications->raw_response) {
     mock_response_details_.reset(new MockResponseDetails(
         std::move(*modifications->raw_response), base::TimeTicks::Now()));
-
-    std::string value;
-    if (mock_response_details_->response_headers()->IsRedirect(&value)) {
-      interceptor_->ExpectRequestAfterRedirect(request(), interception_id_);
-    }
 
     // Set cookies in the network stack.
     net::CookieOptions options;

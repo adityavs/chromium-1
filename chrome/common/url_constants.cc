@@ -16,15 +16,11 @@ const char kBluetoothAdapterOffHelpURL[] =
     "https://support.google.com/chrome?p=bluetooth";
 #endif
 
-// TODO(https://crbug.com/852139): Replace this numbered link with a P-link once
-// we have one.
 const char kCastCloudServicesHelpURL[] =
-    "https://support.google.com/chromecast/answer/6320939";
+    "https://support.google.com/chromecast/?p=casting_cloud_services";
 
-// TODO(https://crbug.com/852139): Replace this numbered link with a P-link once
-// we have one.
 const char kCastNoDestinationFoundURL[] =
-    "https://support.google.com/chromecast/answer/3249268";
+    "https://support.google.com/chromecast/?p=no_cast_destination";
 
 const char kChooserBluetoothOverviewURL[] =
     "https://support.google.com/chrome?p=bluetooth";
@@ -41,7 +37,7 @@ const char kChromeHelpViaKeyboardURL[] =
     "chrome-extension://honijodknafkokifofgiaalefdiedpko/main.html";
 #else
     "https://support.google.com/chromebook/?p=help&ctx=keyboard";
-#endif  // defined(GOOGLE_CHROME_BUILD
+#endif  // defined(GOOGLE_CHROME_BUILD)
 #else
     "https://support.google.com/chrome/?p=help&ctx=keyboard";
 #endif  // defined(OS_CHROMEOS)
@@ -52,7 +48,7 @@ const char kChromeHelpViaMenuURL[] =
     "chrome-extension://honijodknafkokifofgiaalefdiedpko/main.html";
 #else
     "https://support.google.com/chromebook/?p=help&ctx=menu";
-#endif  // defined(GOOGLE_CHROME_BUILD
+#endif  // defined(GOOGLE_CHROME_BUILD)
 #else
     "https://support.google.com/chrome/?p=help&ctx=menu";
 #endif  // defined(OS_CHROMEOS)
@@ -63,7 +59,7 @@ const char kChromeHelpViaWebUIURL[] =
     "chrome-extension://honijodknafkokifofgiaalefdiedpko/main.html";
 #else
     "https://support.google.com/chromebook/?p=help&ctx=settings";
-#endif  // defined(GOOGLE_CHROME_BUILD
+#endif  // defined(GOOGLE_CHROME_BUILD)
 #else
     "https://support.google.com/chrome/?p=help&ctx=settings";
 #endif  // defined(OS_CHROMEOS)
@@ -76,6 +72,10 @@ const char kChromeSearchLocalNtpUrl[] =
 
 const char kChromeSearchMostVisitedHost[] = "most-visited";
 const char kChromeSearchMostVisitedUrl[] = "chrome-search://most-visited/";
+
+const char kChromeSearchLocalNtpBackgroundUrl[] =
+    "chrome-search://local-ntp/background.jpg";
+const char kChromeSearchLocalNtpBackgroundFilename[] = "background.jpg";
 
 const char kChromeSearchRemoteNtpHost[] = "remote-ntp";
 
@@ -278,6 +278,9 @@ const char kLanguageSettingsLearnMoreUrl[] =
 
 const char kLearnMoreEnterpriseURL[] =
     "https://support.google.com/chromebook/?p=managed";
+
+const char kLinuxAppsLearnMoreURL[] =
+    "https://support.google.com/chromebook?p=chromebook_linuxapps";
 
 const char kNaturalScrollHelpURL[] =
     "https://support.google.com/chromebook/?p=simple_scrolling";

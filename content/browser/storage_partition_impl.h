@@ -129,6 +129,7 @@ class CONTENT_EXPORT StoragePartitionImpl
       const base::Callback<bool(const GURL&)>& url_matcher,
       base::OnceClosure callback) override;
   void Flush() override;
+  void ResetURLLoaderFactories() override;
   void ClearBluetoothAllowedDevicesMapForTesting() override;
   void FlushNetworkInterfaceForTesting() override;
   void WaitForDeletionTasksForTesting() override;
@@ -272,6 +273,10 @@ class CONTENT_EXPORT StoragePartitionImpl
   // Function used by the quota system to ask the embedder for the
   // storage configuration info.
   void GetQuotaSettings(storage::OptionalQuotaSettingsCallback callback);
+
+  // Called to initialize |network_context_| when |GetNetworkContext()| is
+  // first called or there is an error.
+  void InitNetworkContext();
 
   network::mojom::URLLoaderFactory*
   GetURLLoaderFactoryForBrowserProcessInternal();

@@ -9,7 +9,6 @@
 
 #include "ash/metrics/user_metrics_recorder.h"
 #include "ash/public/cpp/ash_view_ids.h"
-#include "ash/public/cpp/config.h"
 #include "ash/resources/vector_icons/vector_icons.h"
 #include "ash/session/session_controller.h"
 #include "ash/shell.h"
@@ -22,7 +21,6 @@
 #include "ash/system/network/network_info.h"
 #include "ash/system/network/network_row_title_view.h"
 #include "ash/system/network/network_state_list_detailed_view.h"
-#include "ash/system/networking_config_delegate.h"
 #include "ash/system/power/power_status.h"
 #include "ash/system/tray/hover_highlight_view.h"
 #include "ash/system/tray/system_menu_button.h"
@@ -50,6 +48,7 @@
 #include "third_party/cros_system_api/dbus/service_constants.h"
 #include "third_party/skia/include/core/SkColor.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/ui_base_features.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/font.h"
 #include "ui/gfx/image/image_skia.h"
@@ -64,7 +63,6 @@
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/controls/separator.h"
 #include "ui/views/layout/fill_layout.h"
-
 #include "ui/views/view.h"
 
 using chromeos::ManagedNetworkConfigurationHandler;
@@ -646,7 +644,7 @@ NetworkListView::UpdateNetworkListEntries() {
   // TODO(jamescook): Create UIProxyConfigService under mash. This will require
   // the mojo pref service to work with prefs in Local State.
   // http://crbug.com/718072
-  if (Shell::GetAshConfig() != Config::MASH) {
+  if (::features::IsAshInBrowserProcess()) {
     using_proxy = NetworkHandler::Get()
                       ->ui_proxy_config_service()
                       ->HasDefaultNetworkProxyConfigured();
@@ -826,14 +824,10 @@ views::View* NetworkListView::CreatePolicyView(const NetworkInfo& info) {
 
 views::View* NetworkListView::CreateControlledByExtensionView(
     const NetworkInfo& info) {
-  NetworkingConfigDelegate* networking_config_delegate =
-      Shell::Get()->shell_delegate()->GetNetworkingConfigDelegate();
-  if (!networking_config_delegate)
-    return nullptr;
-  std::unique_ptr<const NetworkingConfigDelegate::ExtensionInfo>
-      extension_info =
-          networking_config_delegate->LookUpExtensionForNetwork(info.guid);
-  if (!extension_info)
+  const chromeos::NetworkState* network =
+      NetworkHandler::Get()->network_state_handler()->GetNetworkStateFromGuid(
+          info.guid);
+  if (!network || !network->captive_portal_provider())
     return nullptr;
 
   views::ImageView* controlled_icon = TrayPopupUtils::CreateMainImageView();
@@ -841,7 +835,7 @@ views::View* NetworkListView::CreateControlledByExtensionView(
       gfx::CreateVectorIcon(kCaptivePortalIcon, kMenuIconColor));
   controlled_icon->SetTooltipText(l10n_util::GetStringFUTF16(
       IDS_ASH_STATUS_TRAY_EXTENSION_CONTROLLED_WIFI,
-      base::UTF8ToUTF16(extension_info->extension_name)));
+      base::UTF8ToUTF16(network->captive_portal_provider()->name)));
   controlled_icon->set_id(VIEW_ID_EXTENSION_CONTROLLED_WIFI);
   return controlled_icon;
 }

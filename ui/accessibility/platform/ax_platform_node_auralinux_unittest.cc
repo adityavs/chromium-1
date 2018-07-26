@@ -35,6 +35,44 @@ class AXPlatformNodeAuraLinuxTest : public AXPlatformNodeTest {
   AtkObject* GetRootAtkObject() { return AtkObjectFromNode(GetRootNode()); }
 };
 
+static void EnsureAtkObjectHasAttributeWithValue(
+    AtkObject* atk_object,
+    const gchar* attribute_name,
+    const gchar* attribute_value) {
+  AtkAttributeSet* attributes = atk_object_get_attributes(atk_object);
+  bool saw_attribute = false;
+
+  AtkAttributeSet* current = attributes;
+  while (current) {
+    AtkAttribute* attribute = static_cast<AtkAttribute*>(current->data);
+
+    if (0 == strcmp(attribute_name, attribute->name)) {
+      // Ensure that we only see this attribute once.
+      ASSERT_FALSE(saw_attribute);
+
+      EXPECT_STREQ(attribute_value, attribute->value);
+      saw_attribute = true;
+    }
+
+    current = current->next;
+  }
+
+  ASSERT_TRUE(saw_attribute);
+  atk_attribute_set_free(attributes);
+}
+
+static void EnsureAtkObjectDoesNotHaveAttribute(
+    AtkObject* atk_object,
+    const gchar* attribute_name) {
+  AtkAttributeSet* attributes = atk_object_get_attributes(atk_object);
+  AtkAttributeSet* current = attributes;
+  while (current) {
+    AtkAttribute* attribute = static_cast<AtkAttribute*>(current->data);
+    ASSERT_NE(0, strcmp(attribute_name, attribute->name));
+  }
+  atk_attribute_set_free(attributes);
+}
+
 //
 // AtkObject tests
 //
@@ -105,12 +143,19 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkObjectRole) {
   AXNodeData root;
   root.id = 1;
   root.child_ids.push_back(2);
+  root.role = ax::mojom::Role::kApplication;
 
   AXNodeData child;
   child.id = 2;
 
   Init(root, child);
   AXNode* child_node = GetRootNode()->children()[0];
+
+  AtkObject* root_obj(AtkObjectFromNode(GetRootNode()));
+  ASSERT_TRUE(ATK_IS_OBJECT(root_obj));
+  g_object_ref(root_obj);
+  EXPECT_EQ(ATK_ROLE_APPLICATION, atk_object_get_role(root_obj));
+  g_object_unref(root_obj);
 
   child.role = ax::mojom::Role::kAlert;
   child_node->SetData(child);
@@ -134,6 +179,14 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkObjectRole) {
   ASSERT_TRUE(ATK_IS_OBJECT(child_obj));
   g_object_ref(child_obj);
   EXPECT_EQ(ATK_ROLE_CANVAS, atk_object_get_role(child_obj));
+  g_object_unref(child_obj);
+
+  child.role = ax::mojom::Role::kApplication;
+  child_node->SetData(child);
+  child_obj = AtkObjectFromNode(child_node);
+  ASSERT_TRUE(ATK_IS_OBJECT(child_obj));
+  g_object_ref(child_obj);
+  EXPECT_EQ(ATK_ROLE_EMBEDDED, atk_object_get_role(child_obj));
   g_object_unref(child_obj);
 }
 
@@ -242,6 +295,39 @@ TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkObjectIndexInParent) {
   g_object_unref(left_obj);
   g_object_unref(right_obj);
   g_object_unref(root_obj);
+}
+
+TEST_F(AXPlatformNodeAuraLinuxTest, TestAtkObjectAttributes) {
+  AXNodeData root_data;
+  root_data.id = 1;
+
+  Init(root_data);
+
+  AXNode* root_node = GetRootNode();
+  AtkObject* root_atk_object(AtkObjectFromNode(root_node));
+  ASSERT_TRUE(ATK_IS_OBJECT(root_atk_object));
+  g_object_ref(root_atk_object);
+  EnsureAtkObjectDoesNotHaveAttribute(root_atk_object, "level");
+
+  root_data = AXNodeData();
+  root_data.id = 1;
+  root_data.AddIntAttribute(ax::mojom::IntAttribute::kHierarchicalLevel, 1);
+  root_node->SetData(root_data);
+  EnsureAtkObjectHasAttributeWithValue(root_atk_object, "level", "1");
+
+  root_data = AXNodeData();
+  root_data.id = 1;
+  root_data.AddIntAttribute(ax::mojom::IntAttribute::kHierarchicalLevel, 2);
+  root_node->SetData(root_data);
+  EnsureAtkObjectHasAttributeWithValue(root_atk_object, "level", "2");
+
+  root_data = AXNodeData();
+  root_data.id = 1;
+  root_data.AddIntAttribute(ax::mojom::IntAttribute::kHierarchicalLevel, 34);
+  root_node->SetData(root_data);
+  EnsureAtkObjectHasAttributeWithValue(root_atk_object, "level", "34");
+
+  g_object_unref(root_atk_object);
 }
 
 //

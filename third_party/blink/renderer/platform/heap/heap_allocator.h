@@ -72,7 +72,7 @@ class PLATFORM_EXPORT HeapAllocator {
     ThreadState* state =
         ThreadStateFor<ThreadingTrait<T>::kAffinity>::GetState();
     DCHECK(state->IsAllocationAllowed());
-    size_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
+    uint32_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
     NormalPageArena* arena = static_cast<NormalPageArena*>(
         state->Heap().VectorBackingArena(gc_info_index));
     return reinterpret_cast<T*>(arena->AllocateObject(
@@ -83,7 +83,7 @@ class PLATFORM_EXPORT HeapAllocator {
     ThreadState* state =
         ThreadStateFor<ThreadingTrait<T>::kAffinity>::GetState();
     DCHECK(state->IsAllocationAllowed());
-    size_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
+    uint32_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
     NormalPageArena* arena = static_cast<NormalPageArena*>(
         state->Heap().ExpandedVectorBackingArena(gc_info_index));
     return reinterpret_cast<T*>(arena->AllocateObject(
@@ -96,7 +96,7 @@ class PLATFORM_EXPORT HeapAllocator {
                                   size_t quantized_shrunk_size);
   template <typename T>
   static T* AllocateInlineVectorBacking(size_t size) {
-    size_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
+    uint32_t gc_info_index = GCInfoTrait<HeapVectorBacking<T>>::Index();
     ThreadState* state =
         ThreadStateFor<ThreadingTrait<T>::kAffinity>::GetState();
     const char* type_name = WTF_HEAP_PROFILER_TYPE_NAME(HeapVectorBacking<T>);
@@ -112,7 +112,7 @@ class PLATFORM_EXPORT HeapAllocator {
 
   template <typename T, typename HashTable>
   static T* AllocateHashTableBacking(size_t size) {
-    size_t gc_info_index =
+    uint32_t gc_info_index =
         GCInfoTrait<HeapHashTableBacking<HashTable>>::Index();
     ThreadState* state =
         ThreadStateFor<ThreadingTrait<T>::kAffinity>::GetState();
@@ -166,6 +166,10 @@ class PLATFORM_EXPORT HeapAllocator {
 
   static bool IsObjectResurrectionForbidden() {
     return ThreadState::Current()->IsObjectResurrectionForbidden();
+  }
+
+  static bool IsSweepForbidden() {
+    return ThreadState::Current()->SweepForbidden();
   }
 
   template <typename T>
@@ -501,12 +505,37 @@ class HeapHashCountedSet
 template <typename T, size_t inlineCapacity = 0>
 class HeapVector : public Vector<T, inlineCapacity, HeapAllocator> {
   IS_GARBAGE_COLLECTED_TYPE();
+  using Base = Vector<T, inlineCapacity, HeapAllocator>;
 
  public:
   HeapVector() {
     static_assert(WTF::IsTraceable<T>::value,
                   "For vectors without traceable elements, use Vector<> "
                   "instead of HeapVector<>");
+  }
+
+  void* operator new(size_t size) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapVector<Persistent<>> should not have an inline capacity");
+    return Base::operator new(size);
+  }
+  void operator delete(void* p) { return Base::operator delete(p); };
+  void* operator new[](size_t size) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapVector<Persistent<>> should not have an inline capacity");
+    return Base::operator new[](size);
+  }
+  void operator delete[](void* p) { return Base::operator delete[](p); };
+  void* operator new(size_t size, NotNullTag null_tag, void* location) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapVector<Persistent<>> should not have an inline capacity");
+    return Base::operator new(size, null_tag, location);
+  }
+  void* operator new(size_t size, void* location) {
+    return Base::operator new(size, location);
   }
 
   explicit HeapVector(size_t size)
@@ -523,12 +552,37 @@ class HeapVector : public Vector<T, inlineCapacity, HeapAllocator> {
 template <typename T, size_t inlineCapacity = 0>
 class HeapDeque : public Deque<T, inlineCapacity, HeapAllocator> {
   IS_GARBAGE_COLLECTED_TYPE();
+  using Base = Deque<T, inlineCapacity, HeapAllocator>;
 
  public:
   HeapDeque() {
     static_assert(WTF::IsTraceable<T>::value,
                   "For vectors without traceable elements, use Deque<> instead "
                   "of HeapDeque<>");
+  }
+
+  void* operator new(size_t size) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapDeque<Persistent<>> should not have an inline capacity");
+    return Base::operator new(size);
+  }
+  void operator delete(void* p) { return Base::operator delete(p); };
+  void* operator new[](size_t size) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapDequer<Persistent<>> should not have an inline capacity");
+    return Base::operator new[](size);
+  }
+  void operator delete[](void* p) { return Base::operator delete[](p); };
+  void* operator new(size_t size, NotNullTag null_tag, void* location) {
+    static_assert(
+        inlineCapacity == 0 || !VectorTraits<T>::kNeedsDestruction,
+        "on-heap HeapDeque<Persistent<>> should not have an inline capacity");
+    return Base::operator new(size, null_tag, location);
+  }
+  void* operator new(size_t size, void* location) {
+    return Base::operator new(size, location);
   }
 
   explicit HeapDeque(size_t size)

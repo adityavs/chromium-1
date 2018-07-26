@@ -55,6 +55,7 @@ class LoginDisplayHostWebUI : public LoginDisplayHostCommon,
 
   // LoginDisplayHost:
   LoginDisplay* GetLoginDisplay() override;
+  ExistingUserController* GetExistingUserController() override;
   gfx::NativeWindow GetNativeWindow() const override;
   OobeUI* GetOobeUI() const override;
   content::WebContents* GetOobeWebContents() const override;
@@ -75,13 +76,16 @@ class LoginDisplayHostWebUI : public LoginDisplayHostCommon,
   void ShowGaiaDialog(
       bool can_close,
       const base::Optional<AccountId>& prefilled_account) override;
-  void HideGaiaDialog() override;
-  void UpdateGaiaDialogSize(int width, int height) override;
+  void HideOobeDialog() override;
+  void UpdateOobeDialogSize(int width, int height) override;
   const user_manager::UserList GetUsers() override;
   void ShowFeedback() override;
+  void ShowResetScreen() override;
+  void ShowDialogForCaptivePortal() override;
+  void HideDialogForCaptivePortal() override;
+  void UpdateAddUserButtonStatus() override;
 
-  // Creates WizardController instance.
-  WizardController* CreateWizardController();
+  void OnCancelPasswordChangedFlow() override;
 
   // Trace id for ShowLoginWebUI event (since there exists at most one login
   // WebUI at a time).

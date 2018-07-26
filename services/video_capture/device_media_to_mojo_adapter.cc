@@ -59,6 +59,15 @@ void DeviceMediaToMojoAdapter::Start(
   auto media_receiver = std::make_unique<media::VideoFrameReceiverOnTaskRunner>(
       receiver_->GetWeakPtr(), base::ThreadTaskRunnerHandle::Get());
 
+  if (requested_settings.buffer_type !=
+          media::VideoCaptureBufferType::kSharedMemory &&
+      requested_settings.buffer_type !=
+          media::VideoCaptureBufferType::kSharedMemoryViaRawFileDescriptor) {
+    // Buffer types other than shared memory are not supported.
+    media_receiver->OnError();
+    return;
+  }
+
   // Create a dedicated buffer pool for the device usage session.
   auto buffer_tracker_factory =
       std::make_unique<media::VideoCaptureBufferTrackerFactoryImpl>();
@@ -67,7 +76,7 @@ void DeviceMediaToMojoAdapter::Start(
                                             max_buffer_pool_buffer_count()));
 
   auto device_client = std::make_unique<media::VideoCaptureDeviceClient>(
-      std::move(media_receiver), buffer_pool,
+      requested_settings.buffer_type, std::move(media_receiver), buffer_pool,
       base::BindRepeating(
           &CreateGpuJpegDecoder, jpeg_decoder_task_runner_,
           jpeg_decoder_factory_callback_,
@@ -136,7 +145,12 @@ void DeviceMediaToMojoAdapter::Stop() {
   device_started_ = false;
   weak_factory_.InvalidateWeakPtrs();
   device_->StopAndDeAllocate();
-  receiver_.reset();
+  // We need to post the deletion of receiver to the end of the message queue,
+  // because |device_->StopAndDeAllocate()| may post messages (e.g.
+  // OnBufferRetired()) to a WeakPtr to |receiver_| to this queue, and we need
+  // those messages to be sent before we invalidate the WeakPtr.
+  base::ThreadTaskRunnerHandle::Get()->DeleteSoon(FROM_HERE,
+                                                  std::move(receiver_));
 }
 
 void DeviceMediaToMojoAdapter::OnClientConnectionErrorOrClose() {

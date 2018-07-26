@@ -31,6 +31,7 @@
 #include "ash/wm/overview/window_selector.h"
 #include "ash/wm/overview/window_selector_delegate.h"
 #include "ash/wm/overview/window_selector_item.h"
+#include "ash/wm/splitview/split_view_drag_indicators.h"
 #include "ash/wm/window_state.h"
 #include "base/i18n/string_search.h"
 #include "base/numerics/ranges.h"
@@ -344,10 +345,13 @@ void WindowGrid::PrepareForOverview() {
   prepared_for_overview_ = true;
 }
 
-void WindowGrid::PositionWindows(bool animate,
-                                 WindowSelectorItem* ignored_item) {
+void WindowGrid::PositionWindows(
+    bool animate,
+    WindowSelectorItem* ignored_item,
+    WindowSelector::OverviewTransition transition) {
   if (window_selector_->IsShuttingDown())
     return;
+  DCHECK_NE(transition, WindowSelector::OverviewTransition::kExit);
 
   DCHECK(shield_widget_.get());
   // Keep the background shield widget covering the whole screen. A grid without
@@ -367,15 +371,26 @@ void WindowGrid::PositionWindows(bool animate,
   // position |ignored_item| if it is not nullptr and matches a item in
   // |window_list_|.
   for (size_t i = 0; i < window_list_.size(); ++i) {
-    if (window_list_[i]->animating_to_close() ||
-        (ignored_item != nullptr && window_list_[i].get() == ignored_item)) {
+    WindowSelectorItem* window_item = window_list_[i].get();
+    if (window_item->animating_to_close() ||
+        (ignored_item != nullptr && window_item == ignored_item)) {
       continue;
     }
 
-    const bool should_animate = window_list_[i]->ShouldAnimateWhenEntering();
-    window_list_[i]->SetBounds(
+    // Calculate if each window item needs animation.
+    bool should_animate_item = animate;
+    // If we're in entering overview process, not all window items in the grid
+    // might need animation even if the grid needs animation.
+    if (animate && transition == WindowSelector::OverviewTransition::kEnter)
+      should_animate_item = window_item->should_animate_when_entering();
+    // Do not do the bounds animation for the new selector item. We'll do the
+    // opacity animation by ourselves.
+    if (IsNewSelectorItemWindow(window_item->GetWindow()))
+      should_animate_item = false;
+
+    window_item->SetBounds(
         rects[i],
-        animate && should_animate
+        should_animate_item
             ? OverviewAnimationType::OVERVIEW_ANIMATION_LAY_OUT_SELECTOR_ITEMS
             : OverviewAnimationType::OVERVIEW_ANIMATION_NONE);
   }
@@ -461,7 +476,7 @@ WindowSelectorItem* WindowGrid::GetWindowSelectorItemContaining(
   return nullptr;
 }
 
-void WindowGrid::AddItem(aura::Window* window) {
+void WindowGrid::AddItem(aura::Window* window, bool reposition) {
   DCHECK(!GetWindowSelectorItemContaining(window));
 
   window_observer_.Add(window);
@@ -470,17 +485,12 @@ void WindowGrid::AddItem(aura::Window* window) {
       std::make_unique<WindowSelectorItem>(window, window_selector_, this));
   window_list_.back()->PrepareForOverview();
 
-  if (IsNewSelectorItemWindow(window)) {
-    // If we're adding the new selector item, don't do the layout animation.
-    // We'll do opacity animation by ourselves.
-    window_list_.back()->set_should_animate_when_entering(false);
-    window_list_.back()->set_should_animate_when_exiting(false);
-  }
-
-  PositionWindows(/*animate=*/true);
+  if (reposition)
+    PositionWindows(/*animate=*/true);
 }
 
-void WindowGrid::RemoveItem(WindowSelectorItem* selector_item) {
+void WindowGrid::RemoveItem(WindowSelectorItem* selector_item,
+                            bool reposition) {
   auto iter =
       GetWindowSelectorItemIterContainingWindow(selector_item->GetWindow());
   if (iter != window_list_.end()) {
@@ -490,7 +500,8 @@ void WindowGrid::RemoveItem(WindowSelectorItem* selector_item) {
     window_list_.erase(iter);
   }
 
-  PositionWindows(/*animate=*/true);
+  if (reposition)
+    PositionWindows(/*animate=*/true);
 }
 
 void WindowGrid::FilterItems(const base::string16& pattern) {
@@ -570,7 +581,8 @@ void WindowGrid::OnWindowDragStarted(aura::Window* dragged_window) {
   DCHECK_EQ(dragged_window->GetRootWindow(), root_window_);
   DCHECK(!new_selector_item_widget_);
   new_selector_item_widget_ = CreateNewSelectorItemWidget(dragged_window);
-  window_selector_->AddItem(new_selector_item_widget_->GetNativeWindow());
+  window_selector_->AddItem(new_selector_item_widget_->GetNativeWindow(),
+                            /*reposition=*/true);
 
   // Stack the newly added window item below |dragged_window|.
   DCHECK_EQ(dragged_window->parent(),
@@ -583,7 +595,8 @@ void WindowGrid::OnWindowDragStarted(aura::Window* dragged_window) {
 }
 
 void WindowGrid::OnWindowDragContinued(aura::Window* dragged_window,
-                                       const gfx::Point& location_in_screen) {
+                                       const gfx::Point& location_in_screen,
+                                       IndicatorState indicator_state) {
   DCHECK_EQ(dragged_window->GetRootWindow(), root_window_);
   // Find the window selector item that contains |location_in_screen|.
   auto iter = std::find_if(
@@ -594,6 +607,25 @@ void WindowGrid::OnWindowDragContinued(aura::Window* dragged_window,
 
   aura::Window* target_window =
       (iter != window_list_.end()) ? (*iter)->GetWindow() : nullptr;
+
+  if (indicator_state == IndicatorState::kPreviewAreaLeft ||
+      indicator_state == IndicatorState::kPreviewAreaRight) {
+    // If the dragged window is currently dragged into preview window area,
+    // clear the selection widget.
+    if (SelectedWindow()) {
+      SelectedWindow()->set_selected(false);
+      selection_widget_.reset();
+    }
+
+    // Also clear ash::kIsDeferredTabDraggingTargetWindowKey key on the target
+    // window selector item so that it can't merge into this window selector
+    // item if the dragged window is currently in preview window area.
+    if (target_window && !IsNewSelectorItemWindow(target_window))
+      target_window->ClearProperty(ash::kIsDeferredTabDraggingTargetWindowKey);
+
+    return;
+  }
+
   // If |location_in_screen| is contained by one of the eligible window selector
   // item in overview, show the selection widget.
   if (target_window && (IsNewSelectorItemWindow(target_window) ||
@@ -628,20 +660,28 @@ void WindowGrid::OnWindowDragEnded(aura::Window* dragged_window,
   DCHECK_EQ(dragged_window->GetRootWindow(), root_window_);
   DCHECK(new_selector_item_widget_.get());
 
-  // Check to see if the dragged window needs to be added to overview.
+  // Check to see if the dragged window needs to be added to overview. If so,
+  // add it to overview without repositioning the grid. It will be done at the
+  // end of this function.
   if (SelectedWindow()) {
     if (IsNewSelectorItemWindow(SelectedWindow()->GetWindow()))
-      window_selector_->AddItem(dragged_window);
+      window_selector_->AddItem(dragged_window, /*reposition=*/false);
     SelectedWindow()->set_selected(false);
     selection_widget_.reset();
   }
 
-  window_selector_->RemoveWindowSelectorItem(GetWindowSelectorItemContaining(
-      new_selector_item_widget_->GetNativeWindow()));
+  window_selector_->RemoveWindowSelectorItem(
+      GetWindowSelectorItemContaining(
+          new_selector_item_widget_->GetNativeWindow()),
+      /*reposition=*/false);
   new_selector_item_widget_.reset();
 
   // Called to reset caption and title visibility after dragging.
   OnSelectorItemDragEnded();
+
+  // Need to call PositionWindows() here as the above two functions AddItem()
+  // and RemoveWindowSelectorItem() are called without repositioning windows.
+  PositionWindows(/*animate=*/true);
 }
 
 bool WindowGrid::IsNewSelectorItemWindow(aura::Window* window) const {
@@ -802,16 +842,21 @@ void WindowGrid::SetWindowListNotAnimatedWhenExiting() {
   }
 }
 
-void WindowGrid::ResetWindowListAnimationStates() {
-  for (const auto& selector_item : window_list_)
-    selector_item->ResetAnimationStates();
-}
-
 void WindowGrid::StartNudge(WindowSelectorItem* item) {
   // When there is one window left, there is no need to nudge.
   if (window_list_.size() <= 1) {
     nudge_data_.clear();
     return;
+  }
+
+  // If any of the items are being animated to close, do not nudge any windows
+  // otherwise we have to deal with potential items getting removed from
+  // |window_list_| midway through a nudge.
+  for (const auto& window_item : window_list_) {
+    if (window_item->animating_to_close()) {
+      nudge_data_.clear();
+      return;
+    }
   }
 
   DCHECK(item);

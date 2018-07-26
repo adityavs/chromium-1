@@ -15,7 +15,7 @@
 #include "content/browser/service_worker/embedded_worker_test_helper.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/storage_partition_impl.h"
-#include "content/common/service_worker/service_worker_event_dispatcher.mojom.h"
+#include "content/common/service_worker/service_worker.mojom.h"
 #include "content/public/test/test_browser_context.h"
 #include "content/public/test/test_browser_thread_bundle.h"
 #include "mojo/public/cpp/bindings/associated_interface_ptr.h"
@@ -32,16 +32,16 @@ void RegisterServiceWorkerCallback(bool* called,
                                    blink::ServiceWorkerStatusCode status,
                                    const std::string& status_message,
                                    int64_t registration_id) {
-  EXPECT_EQ(blink::SERVICE_WORKER_OK, status)
-      << ServiceWorkerStatusToString(status);
+  EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status)
+      << blink::ServiceWorkerStatusToString(status);
   *called = true;
   *out_registration_id = registration_id;
 }
 
 void UnregisterServiceWorkerCallback(bool* called,
                                      blink::ServiceWorkerStatusCode status) {
-  EXPECT_EQ(blink::SERVICE_WORKER_OK, status)
-      << ServiceWorkerStatusToString(status);
+  EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status)
+      << blink::ServiceWorkerStatusToString(status);
   *called = true;
 }
 
@@ -66,7 +66,7 @@ class PaymentAppContentUnitTestBase::PaymentAppForWorkerTestHelper
       const GURL& scope,
       const GURL& script_url,
       bool pause_after_download,
-      mojom::ServiceWorkerEventDispatcherRequest dispatcher_request,
+      mojom::ServiceWorkerRequest service_worker_request,
       mojom::ControllerServiceWorkerRequest controller_request,
       mojom::EmbeddedWorkerInstanceHostAssociatedPtrInfo instance_host,
       mojom::ServiceWorkerProviderInfoForStartWorkerPtr provider_info,
@@ -78,7 +78,7 @@ class PaymentAppContentUnitTestBase::PaymentAppForWorkerTestHelper
     last_sw_scope_ = scope;
     EmbeddedWorkerTestHelper::OnStartWorker(
         embedded_worker_id, service_worker_version_id, scope, script_url,
-        pause_after_download, std::move(dispatcher_request),
+        pause_after_download, std::move(service_worker_request),
         std::move(controller_request), std::move(instance_host),
         std::move(provider_info), std::move(installed_scripts_info));
   }
@@ -86,8 +86,8 @@ class PaymentAppContentUnitTestBase::PaymentAppForWorkerTestHelper
   void OnPaymentRequestEvent(
       payments::mojom::PaymentRequestEventDataPtr event_data,
       payments::mojom::PaymentHandlerResponseCallbackPtr response_callback,
-      mojom::ServiceWorkerEventDispatcher::DispatchPaymentRequestEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchPaymentRequestEventCallback callback)
+      override {
     if (respond_payment_request_immediately) {
       EmbeddedWorkerTestHelper::OnPaymentRequestEvent(
           std::move(event_data), std::move(response_callback),
@@ -102,8 +102,8 @@ class PaymentAppContentUnitTestBase::PaymentAppForWorkerTestHelper
   void OnCanMakePaymentEvent(
       payments::mojom::CanMakePaymentEventDataPtr event_data,
       payments::mojom::PaymentHandlerResponseCallbackPtr response_callback,
-      mojom::ServiceWorkerEventDispatcher::DispatchCanMakePaymentEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchCanMakePaymentEventCallback callback)
+      override {
     EmbeddedWorkerTestHelper::OnCanMakePaymentEvent(
         std::move(event_data), std::move(response_callback),
         std::move(callback));
@@ -111,8 +111,8 @@ class PaymentAppContentUnitTestBase::PaymentAppForWorkerTestHelper
 
   void OnAbortPaymentEvent(
       payments::mojom::PaymentHandlerResponseCallbackPtr response_callback,
-      mojom::ServiceWorkerEventDispatcher::DispatchCanMakePaymentEventCallback
-          callback) override {
+      mojom::ServiceWorker::DispatchCanMakePaymentEventCallback callback)
+      override {
     EmbeddedWorkerTestHelper::OnAbortPaymentEvent(std::move(response_callback),
                                                   std::move(callback));
   }

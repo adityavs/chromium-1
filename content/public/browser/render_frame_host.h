@@ -15,6 +15,7 @@
 #include "content/public/common/file_chooser_params.h"
 #include "ipc/ipc_listener.h"
 #include "ipc/ipc_sender.h"
+#include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "third_party/blink/public/mojom/loader/pause_subresource_loading_handle.mojom.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom.h"
 #include "third_party/blink/public/platform/web_sudden_termination_disabler_type.h"
@@ -200,9 +201,8 @@ class CONTENT_EXPORT RenderFrameHost : public IPC::Listener,
   // call are visible on screen. The call completes asynchronously by running
   // the supplied |callback| with a value of true upon successful completion and
   // false otherwise (when the frame is destroyed, detached, etc..).
-  typedef base::Callback<void(bool)> VisualStateCallback;
-  virtual void InsertVisualStateCallback(
-      const VisualStateCallback& callback) = 0;
+  using VisualStateCallback = base::OnceCallback<void(bool)>;
+  virtual void InsertVisualStateCallback(VisualStateCallback callback) = 0;
 
   // Copies the image at the location in viewport coordinates (not frame
   // coordinates) to the clipboard. If there is no image at that location, does
@@ -314,6 +314,10 @@ class CONTENT_EXPORT RenderFrameHost : public IPC::Listener,
   virtual void ExecuteMediaPlayerActionAtLocation(
       const gfx::Point& location,
       const blink::WebMediaPlayerAction& action) = 0;
+
+  // Creates a Network Service-backed factory from appropriate |NetworkContext|.
+  virtual void CreateNetworkServiceDefaultFactory(
+      network::mojom::URLLoaderFactoryRequest default_factory_request) = 0;
 
  private:
   // This interface should only be implemented inside content.

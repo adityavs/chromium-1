@@ -606,11 +606,12 @@ std::unique_ptr<StoragePartitionImpl> StoragePartitionImpl::Create(
   partition->service_worker_context_ = new ServiceWorkerContextWrapper(context);
   partition->service_worker_context_->set_storage_partition(partition.get());
 
-  partition->shared_worker_service_ = std::make_unique<SharedWorkerServiceImpl>(
-      partition.get(), partition->service_worker_context_);
-
   partition->appcache_service_ =
-      new ChromeAppCacheService(quota_manager_proxy.get());
+      base::MakeRefCounted<ChromeAppCacheService>(quota_manager_proxy.get());
+
+  partition->shared_worker_service_ = std::make_unique<SharedWorkerServiceImpl>(
+      partition.get(), partition->service_worker_context_,
+      partition->appcache_service_);
 
   partition->push_messaging_context_ =
       new PushMessagingContext(context, partition->service_worker_context_);
@@ -687,23 +688,8 @@ StoragePartitionImpl::GetMediaURLRequestContext() {
 }
 
 network::mojom::NetworkContext* StoragePartitionImpl::GetNetworkContext() {
-  if (!network_context_.is_bound() || network_context_.encountered_error()) {
-    network_context_ = GetContentClient()->browser()->CreateNetworkContext(
-        browser_context_, is_in_memory_, relative_partition_path_);
-    if (!network_context_) {
-      // TODO(mmenke): Remove once https://crbug.com/827928 is fixed.
-      CHECK(url_request_context_);
-
-      DCHECK(!base::FeatureList::IsEnabled(network::features::kNetworkService));
-      DCHECK(!network_context_owner_);
-      network_context_owner_ = std::make_unique<NetworkContextOwner>();
-      BrowserThread::PostTask(
-          BrowserThread::IO, FROM_HERE,
-          base::BindOnce(&NetworkContextOwner::Initialize,
-                         base::Unretained(network_context_owner_.get()),
-                         MakeRequest(&network_context_), url_request_context_));
-    }
-  }
+  if (!network_context_.is_bound())
+    InitNetworkContext();
   return network_context_.get();
 }
 
@@ -1178,6 +1164,11 @@ void StoragePartitionImpl::Flush() {
     GetDOMStorageContext()->Flush();
 }
 
+void StoragePartitionImpl::ResetURLLoaderFactories() {
+  GetNetworkContext()->ResetURLLoaderFactories();
+  url_loader_factory_for_browser_process_.reset();
+}
+
 void StoragePartitionImpl::ClearBluetoothAllowedDevicesMapForTesting() {
   bluetooth_allowed_devices_map_->Clear();
 }
@@ -1233,6 +1224,26 @@ void StoragePartitionImpl::GetQuotaSettings(
                                                   std::move(callback));
 }
 
+void StoragePartitionImpl::InitNetworkContext() {
+  network_context_ = GetContentClient()->browser()->CreateNetworkContext(
+      browser_context_, is_in_memory_, relative_partition_path_);
+  if (!network_context_) {
+    // TODO(mmenke): Remove once https://crbug.com/827928 is fixed.
+    CHECK(url_request_context_);
+
+    DCHECK(!base::FeatureList::IsEnabled(network::features::kNetworkService));
+    DCHECK(!network_context_owner_);
+    network_context_owner_ = std::make_unique<NetworkContextOwner>();
+    BrowserThread::PostTask(
+        BrowserThread::IO, FROM_HERE,
+        base::BindOnce(&NetworkContextOwner::Initialize,
+                       base::Unretained(network_context_owner_.get()),
+                       MakeRequest(&network_context_), url_request_context_));
+  }
+  network_context_.set_connection_error_handler(base::BindOnce(
+      &StoragePartitionImpl::InitNetworkContext, weak_factory_.GetWeakPtr()));
+}
+
 network::mojom::URLLoaderFactory*
 StoragePartitionImpl::GetURLLoaderFactoryForBrowserProcessInternal() {
   // Create the URLLoaderFactory as needed, but make sure not to reuse a
@@ -1248,6 +1259,9 @@ StoragePartitionImpl::GetURLLoaderFactoryForBrowserProcessInternal() {
       network::mojom::URLLoaderFactoryParams::New();
   params->process_id = network::mojom::kBrowserProcessId;
   params->is_corb_enabled = false;
+  params->disable_web_security =
+      base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kDisableWebSecurity);
   if (g_url_loader_factory_callback_for_test.Get().is_null()) {
     auto request = mojo::MakeRequest(&url_loader_factory_for_browser_process_);
     GetContentClient()->browser()->WillCreateURLLoaderFactory(

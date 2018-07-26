@@ -38,7 +38,10 @@ RendererWebMediaPlayerDelegate::RendererWebMediaPlayerDelegate(
     content::RenderFrame* render_frame)
     : RenderFrameObserver(render_frame),
       allow_idle_cleanup_(
-          content::GetContentClient()->renderer()->AllowIdleMediaSuspend()),
+          content::GetContentClient()->renderer()->IsIdleMediaSuspendEnabled()),
+      background_suspend_enabled_(content::GetContentClient()
+                                      ->renderer()
+                                      ->IsBackgroundMediaSuspendEnabled()),
       tick_clock_(base::DefaultTickClock::GetInstance()) {
   idle_cleanup_interval_ = base::TimeDelta::FromSeconds(5);
   idle_timeout_ = base::TimeDelta::FromSeconds(15);
@@ -156,6 +159,10 @@ void RendererWebMediaPlayerDelegate::
       std::make_pair(player_id, std::move(callback));
 }
 
+bool RendererWebMediaPlayerDelegate::IsBackgroundMediaSuspendEnabled() {
+  return background_suspend_enabled_;
+}
+
 void RendererWebMediaPlayerDelegate::DidPause(int player_id) {
   DVLOG(2) << __func__ << "(" << player_id << ")";
   DCHECK(id_map_.Lookup(player_id));
@@ -215,8 +222,8 @@ void RendererWebMediaPlayerDelegate::ClearStaleFlag(int player_id) {
   if (!idle_cleanup_timer_.IsRunning() && !pending_update_task_) {
     idle_cleanup_timer_.Start(
         FROM_HERE, idle_cleanup_interval_,
-        base::Bind(&RendererWebMediaPlayerDelegate::UpdateTask,
-                   base::Unretained(this)));
+        base::BindOnce(&RendererWebMediaPlayerDelegate::UpdateTask,
+                       base::Unretained(this)));
   }
 }
 
@@ -397,10 +404,11 @@ void RendererWebMediaPlayerDelegate::OnPictureInPictureModeEnded(
 }
 
 void RendererWebMediaPlayerDelegate::OnPictureInPictureControlClicked(
-    int player_id) {
+    int player_id,
+    const std::string& control_id) {
   Observer* observer = id_map_.Lookup(player_id);
   if (observer)
-    observer->OnPictureInPictureControlClicked();
+    observer->OnPictureInPictureControlClicked(control_id);
 }
 
 void RendererWebMediaPlayerDelegate::OnPictureInPictureModeEndedAck(
@@ -484,8 +492,8 @@ void RendererWebMediaPlayerDelegate::UpdateTask() {
   if (!idle_player_map_.empty()) {
     idle_cleanup_timer_.Start(
         FROM_HERE, idle_cleanup_interval_,
-        base::Bind(&RendererWebMediaPlayerDelegate::UpdateTask,
-                   base::Unretained(this)));
+        base::BindOnce(&RendererWebMediaPlayerDelegate::UpdateTask,
+                       base::Unretained(this)));
   }
 }
 

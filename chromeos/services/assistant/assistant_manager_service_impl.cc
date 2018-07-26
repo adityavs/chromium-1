@@ -18,18 +18,19 @@
 #include "chromeos/assistant/internal/internal_constants.h"
 #include "chromeos/assistant/internal/internal_util.h"
 #include "chromeos/assistant/internal/proto/google3/assistant/api/client_op/device_args.pb.h"
+#include "chromeos/dbus/util/version_loader.h"
 #include "chromeos/services/assistant/public/proto/assistant_device_settings_ui.pb.h"
 #include "chromeos/services/assistant/public/proto/settings_ui.pb.h"
 #include "chromeos/services/assistant/service.h"
 #include "chromeos/services/assistant/utils.h"
-#include "chromeos/system/version_loader.h"
 #include "libassistant/shared/internal_api/assistant_manager_delegate.h"
 #include "libassistant/shared/internal_api/assistant_manager_internal.h"
 #include "libassistant/shared/internal_api/media_manager.h"
 #include "services/service_manager/public/cpp/connector.h"
 #include "url/gurl.h"
 
-using assistant_client::ActionModule;
+using ActionModule = assistant_client::ActionModule;
+using Resolution = assistant_client::ConversationStateListener::Resolution;
 
 namespace api = ::assistant::api;
 
@@ -42,17 +43,15 @@ const char kBluetoothDeviceSettingId[] = "BLUETOOTH";
 AssistantManagerServiceImpl::AssistantManagerServiceImpl(
     service_manager::Connector* connector,
     device::mojom::BatteryMonitorPtr battery_monitor,
-    mojom::Client* client,
-    mojom::DeviceActionsPtr device_actions)
-    : platform_api_(CreateLibAssistantConfig(),
-                    connector,
-                    std::move(battery_monitor)),
-      device_actions_(std::move(device_actions)),
+    Service* service,
+    bool enable_hotword)
+    : platform_api_(connector, std::move(battery_monitor), enable_hotword),
+      enable_hotword_(enable_hotword),
       action_module_(std::make_unique<action::CrosActionModule>(this)),
-      display_connection_(std::make_unique<CrosDisplayConnection>(this)),
       main_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()),
+      display_connection_(std::make_unique<CrosDisplayConnection>(this)),
       voice_interaction_observer_binding_(this),
-      assistant_client_(client),
+      service_(service),
       background_thread_("background thread"),
       weak_factory_(this) {
   background_thread_.Start();
@@ -180,59 +179,125 @@ void AssistantManagerServiceImpl::RequestScreenContext(
     return;
   }
 
+  // We wait for the closure to execute twice: once for the screenshot and once
+  // for the view hierarchy.
   auto on_done = base::BarrierClosure(
-      2,  // We wait for the closure execute twice: 1 for screenshot and 1 for
-          // view hierarchy.
-      base::BindOnce(
-          &AssistantManagerServiceImpl::SendContextQueryAndRunCallback,
-          weak_factory_.GetWeakPtr(), std::move(callback)));
-  assistant_client_->RequestAssistantStructure(
+      2, base::BindOnce(
+             &AssistantManagerServiceImpl::SendContextQueryAndRunCallback,
+             weak_factory_.GetWeakPtr(), std::move(callback)));
+
+  service_->client()->RequestAssistantStructure(
       base::BindOnce(&AssistantManagerServiceImpl::OnAssistantStructureReceived,
                      weak_factory_.GetWeakPtr(), on_done));
-  // TODO(muyuanli): handle metalayer and grab only part of the screen.
-  assistant_controller_->RequestScreenshot(
+
+  service_->assistant_controller()->RequestScreenshot(
       region, base::BindOnce(
                   &AssistantManagerServiceImpl::OnAssistantScreenshotReceived,
                   weak_factory_.GetWeakPtr(), on_done));
 }
 
-void AssistantManagerServiceImpl::SetAssistantController(
-    ash::mojom::AssistantController* controller) {
-  assistant_controller_ = controller;
-}
-
 void AssistantManagerServiceImpl::StartVoiceInteraction() {
+  platform_api_.SetMicState(true);
   assistant_manager_->StartAssistantInteraction();
 }
 
 void AssistantManagerServiceImpl::StopActiveInteraction() {
+  platform_api_.SetMicState(false);
   assistant_manager_->StopAssistantInteraction();
 }
 
 void AssistantManagerServiceImpl::SendTextQuery(const std::string& query) {
-  assistant_manager_internal_->SendTextQuery(query);
+  assistant_client::VoicelessOptions options;
+  options.is_user_initiated = true;
+  options.modality =
+      assistant_client::VoicelessOptions::Modality::TYPING_MODALITY;
+
+  std::string interaction = CreateTextQueryInteraction(query);
+  assistant_manager_internal_->SendVoicelessInteraction(
+      interaction, /*description=*/"text_query", options, [](auto) {});
 }
 
-void AssistantManagerServiceImpl::AddAssistantEventSubscriber(
-    mojom::AssistantEventSubscriberPtr subscriber) {
-  subscribers_.AddPtr(std::move(subscriber));
+void AssistantManagerServiceImpl::AddAssistantInteractionSubscriber(
+    mojom::AssistantInteractionSubscriberPtr subscriber) {
+  interaction_subscribers_.AddPtr(std::move(subscriber));
 }
 
-void AssistantManagerServiceImpl::OnConversationTurnStarted() {
+void AssistantManagerServiceImpl::AddAssistantNotificationSubscriber(
+    mojom::AssistantNotificationSubscriberPtr subscriber) {
+  notification_subscribers_.AddPtr(std::move(subscriber));
+}
+
+void AssistantManagerServiceImpl::AddAssistantScreenContextSubscriber(
+    mojom::AssistantScreenContextSubscriberPtr subscriber) {
+  screen_context_subscribers_.AddPtr(std::move(subscriber));
+}
+
+void AssistantManagerServiceImpl::RetrieveNotification(
+    mojom::AssistantNotificationPtr notification,
+    int action_index) {
+  const std::string& notification_id = notification->notification_id;
+  const std::string& consistency_token = notification->consistency_token;
+  const std::string& opaque_token = notification->opaque_token;
+
+  const std::string request_interaction =
+      SerializeNotificationRequestInteraction(
+          notification_id, consistency_token, opaque_token, action_index);
+
+  assistant_client::VoicelessOptions options;
+  options.is_user_initiated = true;
+
+  assistant_manager_internal_->SendVoicelessInteraction(
+      request_interaction, "RequestNotification", options, [](auto) {});
+}
+
+void AssistantManagerServiceImpl::DismissNotification(
+    mojom::AssistantNotificationPtr notification) {
+  const std::string& notification_id = notification->notification_id;
+  const std::string& consistency_token = notification->consistency_token;
+  const std::string& opaque_token = notification->opaque_token;
+  const std::string& grouping_key = notification->grouping_key;
+
+  const std::string dismissed_interaction =
+      SerializeNotificationDismissedInteraction(
+          notification_id, consistency_token, opaque_token, {grouping_key});
+
+  assistant_client::VoicelessOptions options;
+  options.obfuscated_gaia_id = notification->obfuscated_gaia_id;
+
+  assistant_manager_internal_->SendVoicelessInteraction(
+      dismissed_interaction, "DismissNotification", options, [](auto) {});
+}
+
+void AssistantManagerServiceImpl::OnConversationTurnStarted(bool is_mic_open) {
   main_thread_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(
           &AssistantManagerServiceImpl::OnConversationTurnStartedOnMainThread,
-          weak_factory_.GetWeakPtr()));
+          weak_factory_.GetWeakPtr(), is_mic_open));
 }
 
 void AssistantManagerServiceImpl::OnConversationTurnFinished(
-    assistant_client::ConversationStateListener::Resolution resolution) {
+    Resolution resolution) {
+  // TODO(updowndota): Find a better way to handle the edge cases.
+  if (resolution != Resolution::NORMAL_WITH_FOLLOW_ON &&
+      resolution != Resolution::CANCELLED &&
+      resolution != Resolution::BARGE_IN) {
+    platform_api_.SetMicState(false);
+  }
   main_thread_task_runner_->PostTask(
       FROM_HERE,
       base::BindOnce(
           &AssistantManagerServiceImpl::OnConversationTurnFinishedOnMainThread,
           weak_factory_.GetWeakPtr(), resolution));
+}
+
+void AssistantManagerServiceImpl::OnShowContextualHtml(
+    const std::string& html) {
+  main_thread_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &AssistantManagerServiceImpl::OnShowContextualHtmlOnMainThread,
+          weak_factory_.GetWeakPtr(), html));
 }
 
 void AssistantManagerServiceImpl::OnShowHtml(const std::string& html) {
@@ -275,6 +340,26 @@ void AssistantManagerServiceImpl::OnOpenUrl(const std::string& url) {
                      weak_factory_.GetWeakPtr(), url));
 }
 
+void AssistantManagerServiceImpl::OnShowNotification(
+    const action::Notification& notification) {
+  mojom::AssistantNotificationPtr notification_ptr =
+      mojom::AssistantNotification::New();
+  notification_ptr->title = notification.title;
+  notification_ptr->message = notification.text;
+  notification_ptr->action_url = GURL(notification.action_url);
+  notification_ptr->notification_id = notification.notification_id;
+  notification_ptr->consistency_token = notification.consistency_token;
+  notification_ptr->opaque_token = notification.opaque_token;
+  notification_ptr->grouping_key = notification.grouping_key;
+  notification_ptr->obfuscated_gaia_id = notification.obfuscated_gaia_id;
+
+  main_thread_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &AssistantManagerServiceImpl::OnShowNotificationOnMainThread,
+          weak_factory_.GetWeakPtr(), std::move(notification_ptr)));
+}
+
 void AssistantManagerServiceImpl::OnRecognitionStateChanged(
     assistant_client::ConversationStateListener::RecognitionState state,
     const assistant_client::ConversationStateListener::RecognitionResult&
@@ -295,32 +380,44 @@ void AssistantManagerServiceImpl::OnSpeechLevelUpdated(
           weak_factory_.GetWeakPtr(), speech_level));
 }
 
+void HandleOnOffChange(api::client_op::ModifySettingArgs modify_setting_args,
+                       std::function<void(bool)> on_off_handler) {
+  switch (modify_setting_args.change()) {
+    case api::client_op::ModifySettingArgs_Change_ON:
+      on_off_handler(true);
+      return;
+    case api::client_op::ModifySettingArgs_Change_OFF:
+      on_off_handler(false);
+      return;
+
+    case api::client_op::ModifySettingArgs_Change_TOGGLE:
+    case api::client_op::ModifySettingArgs_Change_INCREASE:
+    case api::client_op::ModifySettingArgs_Change_DECREASE:
+    case api::client_op::ModifySettingArgs_Change_SET:
+    case api::client_op::ModifySettingArgs_Change_UNSPECIFIED:
+      break;
+  }
+  DLOG(ERROR) << "Unsupported change operation: "
+              << modify_setting_args.change() << " for setting "
+              << modify_setting_args.setting_id();
+}
+
 void AssistantManagerServiceImpl::OnModifySettingsAction(
     const std::string& modify_setting_args_proto) {
   api::client_op::ModifySettingArgs modify_setting_args;
   modify_setting_args.ParseFromString(modify_setting_args_proto);
   DCHECK(IsSettingSupported(modify_setting_args.setting_id()));
 
-  // TODO(rcui): Add support for bluetooth, etc.
   if (modify_setting_args.setting_id() == kWiFiDeviceSettingId) {
-    switch (modify_setting_args.change()) {
-      case api::client_op::ModifySettingArgs_Change_ON:
-        device_actions_->SetWifiEnabled(true);
-        return;
-      case api::client_op::ModifySettingArgs_Change_OFF:
-        device_actions_->SetWifiEnabled(false);
-        return;
+    HandleOnOffChange(modify_setting_args, [this](bool enabled) {
+      this->service_->device_actions()->SetWifiEnabled(enabled);
+    });
+  }
 
-      case api::client_op::ModifySettingArgs_Change_TOGGLE:
-      case api::client_op::ModifySettingArgs_Change_INCREASE:
-      case api::client_op::ModifySettingArgs_Change_DECREASE:
-      case api::client_op::ModifySettingArgs_Change_SET:
-      case api::client_op::ModifySettingArgs_Change_UNSPECIFIED:
-        break;
-    }
-    DLOG(ERROR) << "Unsupported change operation: "
-                << modify_setting_args.change() << " for setting "
-                << modify_setting_args.setting_id();
+  if (modify_setting_args.setting_id() == kBluetoothDeviceSettingId) {
+    HandleOnOffChange(modify_setting_args, [this](bool enabled) {
+      this->service_->device_actions()->SetBluetoothEnabled(enabled);
+    });
   }
 }
 
@@ -345,6 +442,15 @@ bool AssistantManagerServiceImpl::SupportsModifySettings() {
   return true;
 }
 
+void AssistantManagerServiceImpl::OnNotificationRemoved(
+    const std::string& grouping_key) {
+  main_thread_task_runner_->PostTask(
+      FROM_HERE,
+      base::BindOnce(
+          &AssistantManagerServiceImpl::OnNotificationRemovedOnMainThread,
+          weak_factory_.GetWeakPtr(), grouping_key));
+}
+
 void AssistantManagerServiceImpl::OnVoiceInteractionSettingsEnabled(
     bool enabled) {
   assistant_enabled_ = enabled;
@@ -366,7 +472,7 @@ void AssistantManagerServiceImpl::StartAssistantInternal(
   DCHECK(background_thread_.task_runner()->BelongsToCurrentThread());
 
   assistant_manager_.reset(assistant_client::AssistantManager::Create(
-      &platform_api_, CreateLibAssistantConfig()));
+      &platform_api_, CreateLibAssistantConfig(!enable_hotword_)));
   assistant_manager_internal_ =
       UnwrapAssistantManagerInternal(assistant_manager_.get());
 
@@ -486,45 +592,46 @@ void AssistantManagerServiceImpl::OnStartFinished() {
   RegisterFallbackMediaHandler();
 }
 
-void AssistantManagerServiceImpl::OnConversationTurnStartedOnMainThread() {
-  subscribers_.ForAllPtrs([](auto* ptr) { ptr->OnInteractionStarted(); });
+void AssistantManagerServiceImpl::OnConversationTurnStartedOnMainThread(
+    bool is_mic_open) {
+  interaction_subscribers_.ForAllPtrs([is_mic_open](auto* ptr) {
+    ptr->OnInteractionStarted(/*is_voice_interaction=*/is_mic_open);
+  });
 }
 
 void AssistantManagerServiceImpl::OnConversationTurnFinishedOnMainThread(
-    assistant_client::ConversationStateListener::Resolution resolution) {
+    Resolution resolution) {
   switch (resolution) {
     // Interaction ended normally.
     // Note that TIMEOUT here does not refer to server timeout, but rather mic
     // timeout due to speech inactivity. As this case does not require special
     // UI logic, it is treated here as a normal interaction completion.
-    case assistant_client::ConversationStateListener::Resolution::NORMAL:
-    case assistant_client::ConversationStateListener::Resolution::
-        NORMAL_WITH_FOLLOW_ON:
-    case assistant_client::ConversationStateListener::Resolution::TIMEOUT:
-      subscribers_.ForAllPtrs([](auto* ptr) {
+    case Resolution::NORMAL:
+    case Resolution::NORMAL_WITH_FOLLOW_ON:
+    case Resolution::TIMEOUT:
+      interaction_subscribers_.ForAllPtrs([](auto* ptr) {
         ptr->OnInteractionFinished(
             mojom::AssistantInteractionResolution::kNormal);
       });
       break;
     // Interaction ended due to interruption.
-    case assistant_client::ConversationStateListener::Resolution::BARGE_IN:
-    case assistant_client::ConversationStateListener::Resolution::CANCELLED:
-      subscribers_.ForAllPtrs([](auto* ptr) {
+    case Resolution::BARGE_IN:
+    case Resolution::CANCELLED:
+      interaction_subscribers_.ForAllPtrs([](auto* ptr) {
         ptr->OnInteractionFinished(
             mojom::AssistantInteractionResolution::kInterruption);
       });
       break;
     // Interaction ended due to multi-device hotword loss.
-    case assistant_client::ConversationStateListener::Resolution::NO_RESPONSE:
-      subscribers_.ForAllPtrs([](auto* ptr) {
+    case Resolution::NO_RESPONSE:
+      interaction_subscribers_.ForAllPtrs([](auto* ptr) {
         ptr->OnInteractionFinished(
             mojom::AssistantInteractionResolution::kMultiDeviceHotwordLoss);
       });
       break;
     // Interaction ended due to error.
-    case assistant_client::ConversationStateListener::Resolution::
-        COMMUNICATION_ERROR:
-      subscribers_.ForAllPtrs([](auto* ptr) {
+    case Resolution::COMMUNICATION_ERROR:
+      interaction_subscribers_.ForAllPtrs([](auto* ptr) {
         ptr->OnInteractionFinished(
             mojom::AssistantInteractionResolution::kError);
       });
@@ -532,27 +639,48 @@ void AssistantManagerServiceImpl::OnConversationTurnFinishedOnMainThread(
   }
 }
 
+void AssistantManagerServiceImpl::OnShowContextualHtmlOnMainThread(
+    const std::string& html) {
+  screen_context_subscribers_.ForAllPtrs(
+      [&html](auto* ptr) { ptr->OnContextualHtmlResponse(html); });
+}
+
 void AssistantManagerServiceImpl::OnShowHtmlOnMainThread(
     const std::string& html) {
-  subscribers_.ForAllPtrs([&html](auto* ptr) { ptr->OnHtmlResponse(html); });
+  interaction_subscribers_.ForAllPtrs(
+      [&html](auto* ptr) { ptr->OnHtmlResponse(html); });
 }
 
 void AssistantManagerServiceImpl::OnShowSuggestionsOnMainThread(
     const std::vector<mojom::AssistantSuggestionPtr>& suggestions) {
-  subscribers_.ForAllPtrs([&suggestions](auto* ptr) {
+  interaction_subscribers_.ForAllPtrs([&suggestions](auto* ptr) {
     ptr->OnSuggestionsResponse(mojo::Clone(suggestions));
   });
 }
 
 void AssistantManagerServiceImpl::OnShowTextOnMainThread(
     const std::string& text) {
-  subscribers_.ForAllPtrs([&text](auto* ptr) { ptr->OnTextResponse(text); });
+  interaction_subscribers_.ForAllPtrs(
+      [&text](auto* ptr) { ptr->OnTextResponse(text); });
 }
 
 void AssistantManagerServiceImpl::OnOpenUrlOnMainThread(
     const std::string& url) {
-  subscribers_.ForAllPtrs(
+  interaction_subscribers_.ForAllPtrs(
       [&url](auto* ptr) { ptr->OnOpenUrlResponse(GURL(url)); });
+}
+
+void AssistantManagerServiceImpl::OnShowNotificationOnMainThread(
+    const mojom::AssistantNotificationPtr& notification) {
+  notification_subscribers_.ForAllPtrs([&notification](auto* ptr) {
+    ptr->OnShowNotification(notification.Clone());
+  });
+}
+
+void AssistantManagerServiceImpl::OnNotificationRemovedOnMainThread(
+    const std::string& grouping_key) {
+  notification_subscribers_.ForAllPtrs(
+      [grouping_key](auto* ptr) { ptr->OnRemoveNotification(grouping_key); });
 }
 
 void AssistantManagerServiceImpl::OnRecognitionStateChangedOnMainThread(
@@ -561,12 +689,12 @@ void AssistantManagerServiceImpl::OnRecognitionStateChangedOnMainThread(
         recognition_result) {
   switch (state) {
     case assistant_client::ConversationStateListener::RecognitionState::STARTED:
-      subscribers_.ForAllPtrs(
+      interaction_subscribers_.ForAllPtrs(
           [](auto* ptr) { ptr->OnSpeechRecognitionStarted(); });
       break;
     case assistant_client::ConversationStateListener::RecognitionState::
         INTERMEDIATE_RESULT:
-      subscribers_.ForAllPtrs([&recognition_result](auto* ptr) {
+      interaction_subscribers_.ForAllPtrs([&recognition_result](auto* ptr) {
         ptr->OnSpeechRecognitionIntermediateResult(
             recognition_result.high_confidence_text,
             recognition_result.low_confidence_text);
@@ -574,12 +702,12 @@ void AssistantManagerServiceImpl::OnRecognitionStateChangedOnMainThread(
       break;
     case assistant_client::ConversationStateListener::RecognitionState::
         END_OF_UTTERANCE:
-      subscribers_.ForAllPtrs(
+      interaction_subscribers_.ForAllPtrs(
           [](auto* ptr) { ptr->OnSpeechRecognitionEndOfUtterance(); });
       break;
     case assistant_client::ConversationStateListener::RecognitionState::
         FINAL_RESULT:
-      subscribers_.ForAllPtrs([&recognition_result](auto* ptr) {
+      interaction_subscribers_.ForAllPtrs([&recognition_result](auto* ptr) {
         ptr->OnSpeechRecognitionFinalResult(
             recognition_result.recognized_speech);
       });
@@ -589,7 +717,7 @@ void AssistantManagerServiceImpl::OnRecognitionStateChangedOnMainThread(
 
 void AssistantManagerServiceImpl::OnSpeechLevelUpdatedOnMainThread(
     const float speech_level) {
-  subscribers_.ForAllPtrs(
+  interaction_subscribers_.ForAllPtrs(
       [&speech_level](auto* ptr) { ptr->OnSpeechLevelUpdated(speech_level); });
 }
 

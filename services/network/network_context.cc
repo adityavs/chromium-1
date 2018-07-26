@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/command_line.h"
+#include "base/containers/unique_ptr_adapters.h"
 #include "base/debug/dump_without_crashing.h"
 #include "base/logging.h"
 #include "base/memory/ref_counted.h"
@@ -15,6 +16,7 @@
 #include "base/metrics/histogram_functions.h"
 #include "base/optional.h"
 #include "base/sequenced_task_runner.h"
+#include "base/stl_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/task_scheduler/post_task.h"
 #include "base/task_scheduler/task_traits.h"
@@ -62,6 +64,7 @@
 #include "net/url_request/static_http_user_agent_settings.h"
 #include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_builder.h"
+#include "services/network/cors/cors_url_loader_factory.h"
 #include "services/network/expect_ct_reporter.h"
 #include "services/network/http_server_properties_pref_delegate.h"
 #include "services/network/ignore_errors_cert_verifier.h"
@@ -80,8 +83,6 @@
 #include "services/network/throttling/network_conditions.h"
 #include "services/network/throttling/throttling_controller.h"
 #include "services/network/throttling/throttling_network_transaction_factory.h"
-#include "services/network/url_loader.h"
-#include "services/network/url_loader_factory.h"
 #include "services/network/url_request_context_builder_mojo.h"
 
 #if !defined(OS_IOS)
@@ -124,14 +125,14 @@ class WrappedTestingCertVerifier : public net::CertVerifier {
   int Verify(const RequestParams& params,
              net::CRLSet* crl_set,
              net::CertVerifyResult* verify_result,
-             const net::CompletionCallback& callback,
+             net::CompletionOnceCallback callback,
              std::unique_ptr<Request>* out_req,
              const net::NetLogWithSource& net_log) override {
     verify_result->Reset();
     if (!g_cert_verifier_for_testing)
       return net::ERR_FAILED;
-    return g_cert_verifier_for_testing->Verify(params, crl_set, verify_result,
-                                               callback, out_req, net_log);
+    return g_cert_verifier_for_testing->Verify(
+        params, crl_set, verify_result, std::move(callback), out_req, net_log);
   }
 };
 
@@ -472,7 +473,7 @@ void NetworkContext::CreateURLLoaderFactory(
     mojom::URLLoaderFactoryRequest request,
     mojom::URLLoaderFactoryParamsPtr params,
     scoped_refptr<ResourceSchedulerClient> resource_scheduler_client) {
-  url_loader_factories_.emplace(std::make_unique<URLLoaderFactory>(
+  url_loader_factories_.emplace(std::make_unique<cors::CORSURLLoaderFactory>(
       this, std::move(params), std::move(resource_scheduler_client),
       std::move(request)));
 }
@@ -511,7 +512,7 @@ void NetworkContext::DisableQuic() {
 }
 
 void NetworkContext::DestroyURLLoaderFactory(
-    URLLoaderFactory* url_loader_factory) {
+    cors::CORSURLLoaderFactory* url_loader_factory) {
   auto it = url_loader_factories_.find(url_loader_factory);
   DCHECK(it != url_loader_factories_.end());
   url_loader_factories_.erase(it);
@@ -536,11 +537,23 @@ void NetworkContext::ClearHttpCache(base::Time start_time,
                                     base::Time end_time,
                                     mojom::ClearDataFilterPtr filter,
                                     ClearHttpCacheCallback callback) {
-  // It's safe to use Unretained below as the HttpCacheDataRemover is owner by
+  // It's safe to use Unretained below as the HttpCacheDataRemover is owned by
   // |this| and guarantees it won't call its callback if deleted.
   http_cache_data_removers_.push_back(HttpCacheDataRemover::CreateAndStart(
       url_request_context_, std::move(filter), start_time, end_time,
       base::BindOnce(&NetworkContext::OnHttpCacheCleared,
+                     base::Unretained(this), std::move(callback))));
+}
+
+void NetworkContext::ComputeHttpCacheSize(
+    base::Time start_time,
+    base::Time end_time,
+    ComputeHttpCacheSizeCallback callback) {
+  // It's safe to use Unretained below as the HttpCacheDataCounter is owned by
+  // |this| and guarantees it won't call its callback if deleted.
+  http_cache_data_counters_.push_back(HttpCacheDataCounter::CreateAndStart(
+      url_request_context_, start_time, end_time,
+      base::BindOnce(&NetworkContext::OnHttpCacheSizeComputed,
                      base::Unretained(this), std::move(callback))));
 }
 
@@ -563,10 +576,9 @@ void NetworkContext::ClearChannelIds(base::Time start_time,
 
   channel_id_store->DeleteForDomainsCreatedBetween(
       MakeDomainFilter(filter.get()), start_time, end_time,
-      base::BindOnce(
-          &OnClearedChannelIds,
-          base::RetainedRef(url_request_context_->ssl_config_service()),
-          std::move(callback)));
+      base::BindOnce(&OnClearedChannelIds,
+                     url_request_context_->ssl_config_service(),
+                     std::move(callback)));
 }
 
 void NetworkContext::ClearHostCache(mojom::ClearDataFilterPtr filter,
@@ -663,6 +675,16 @@ void NetworkContext::ClearNetworkErrorLogging(
   NOTREACHED();
 }
 #endif  // BUILDFLAG(ENABLE_REPORTING)
+
+void NetworkContext::CloseAllConnections(CloseAllConnectionsCallback callback) {
+  net::HttpNetworkSession* http_session =
+      url_request_context_->http_transaction_factory()->GetSession();
+  DCHECK(http_session);
+
+  http_session->CloseAllConnections();
+
+  std::move(callback).Run();
+}
 
 void NetworkContext::SetNetworkConditions(
     const base::UnguessableToken& throttling_profile_id,
@@ -787,6 +809,43 @@ void NetworkContext::SetFailingHttpTransactionForTesting(
   std::move(callback).Run();
 }
 
+void NetworkContext::PreconnectSockets(uint32_t num_streams,
+                                       const GURL& url,
+                                       int32_t load_flags,
+                                       bool privacy_mode_enabled) {
+  // |PreconnectSockets| may receive arguments from the renderer, which is not
+  // guaranteed to validate them.
+  if (num_streams == 0)
+    return;
+
+  std::string user_agent;
+  if (url_request_context_->http_user_agent_settings()) {
+    user_agent =
+        url_request_context_->http_user_agent_settings()->GetUserAgent();
+  }
+  net::HttpRequestInfo request_info;
+  request_info.url = url;
+  request_info.method = "GET";
+  request_info.extra_headers.SetHeader(net::HttpRequestHeaders::kUserAgent,
+                                       user_agent);
+
+  request_info.privacy_mode = privacy_mode_enabled ? net::PRIVACY_MODE_ENABLED
+                                                   : net::PRIVACY_MODE_DISABLED;
+  request_info.load_flags = load_flags;
+
+  net::HttpTransactionFactory* factory =
+      url_request_context_->http_transaction_factory();
+  net::HttpNetworkSession* session = factory->GetSession();
+  net::HttpStreamFactory* http_stream_factory = session->http_stream_factory();
+  http_stream_factory->PreconnectStreams(
+      base::saturated_cast<int32_t>(num_streams), request_info);
+}
+
+void NetworkContext::ResetURLLoaderFactories() {
+  for (const auto& factory : url_loader_factories_)
+    factory->ClearBindings();
+}
+
 // ApplyContextParamsToBuilder represents the core configuration for
 // translating |network_context_params| into a set of configuration that can
 // be used to build a request context. All new initialization should be done
@@ -841,7 +900,7 @@ URLRequestContextOwner NetworkContext::ApplyContextParamsToBuilder(
     builder->EnableHttpCache(cache_params);
   }
 
-  builder->set_ssl_config_service(base::MakeRefCounted<SSLConfigServiceMojo>(
+  builder->set_ssl_config_service(std::make_unique<SSLConfigServiceMojo>(
       std::move(params_->initial_ssl_config),
       std::move(params_->ssl_config_client_request)));
 
@@ -1073,6 +1132,15 @@ void NetworkContext::OnHttpCacheCleared(ClearHttpCacheCallback callback,
   std::move(callback).Run();
 }
 
+void NetworkContext::OnHttpCacheSizeComputed(
+    ComputeHttpCacheSizeCallback callback,
+    HttpCacheDataCounter* counter,
+    bool is_upper_limit,
+    int64_t result_or_error) {
+  EraseIf(http_cache_data_counters_, base::MatchesUniquePtr(counter));
+  std::move(callback).Run(is_upper_limit, result_or_error);
+}
+
 void NetworkContext::OnConnectionError() {
   // If owned by the network service, this call will delete |this|.
   if (on_connection_close_callback_)
@@ -1093,8 +1161,6 @@ URLRequestContextOwner NetworkContext::MakeURLRequestContext(
   // have to figure out which of the latter needs to move to the network
   // process). TODO: http://crbug.com/789644
   if (params_->cookie_path) {
-    net::CookieCryptoDelegate* crypto_delegate = nullptr;
-
     scoped_refptr<base::SequencedTaskRunner> client_task_runner =
         base::MessageLoopCurrent::Get()->task_runner();
     scoped_refptr<base::SequencedTaskRunner> background_task_runner =
@@ -1111,6 +1177,15 @@ URLRequestContextOwner NetworkContext::MakeURLRequestContext(
           new net::DefaultChannelIDStore(channel_id_db.get()));
     }
 
+    net::CookieCryptoDelegate* crypto_delegate = nullptr;
+    if (params_->enable_encrypted_cookies) {
+#if defined(OS_LINUX) && !defined(OS_CHROMEOS) && !defined(IS_CHROMECAST)
+      DCHECK(network_service_->os_crypt_config_set())
+          << "NetworkService::SetCryptConfig must be called before creating a "
+             "NetworkContext with encrypted cookies.";
+#endif
+      crypto_delegate = cookie_config::GetCookieCryptoDelegate();
+    }
     scoped_refptr<net::SQLitePersistentCookieStore> sqlite_store(
         new net::SQLitePersistentCookieStore(
             params_->cookie_path.value(), client_task_runner,

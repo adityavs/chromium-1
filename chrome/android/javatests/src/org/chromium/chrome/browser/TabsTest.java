@@ -1375,7 +1375,8 @@ public class TabsTest {
                 mTestServer.getURL("/chrome/test/data/android/tabstest/text_page.html"));
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             WebContents webContents = mActivityTestRule.getWebContents();
-            webContents.getEventForwarder().startFling(SystemClock.uptimeMillis(), 0, -2000, false);
+            webContents.getEventForwarder().startFling(
+                    SystemClock.uptimeMillis(), 0, -2000, false, true);
         });
         ChromeTabUtils.closeCurrentTab(
                 InstrumentationRegistry.getInstrumentation(), mActivityTestRule.getActivity());
@@ -1488,6 +1489,7 @@ public class TabsTest {
     @Feature({"Android-TabSwitcher"})
     @Restriction(RESTRICTION_TYPE_NON_LOW_END_DEVICE)
     @RetryOnFailure
+    @DisabledTest(message = "crbug.com/863676")
     public void testToolbarSwipePrevTab() throws InterruptedException, TimeoutException {
         ChromeTabUtils.newTabFromMenu(
                 InstrumentationRegistry.getInstrumentation(), mActivityTestRule.getActivity());

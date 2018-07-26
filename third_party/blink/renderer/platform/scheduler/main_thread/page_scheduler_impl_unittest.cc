@@ -14,11 +14,12 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequence_manager/test/fake_task.h"
+#include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_mock_time_task_runner.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/task_queue_manager_for_test.h"
 #include "third_party/blink/renderer/platform/scheduler/child/task_queue_with_task_type.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
@@ -26,6 +27,8 @@
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
 
 using base::sequence_manager::TaskQueue;
+using base::sequence_manager::FakeTask;
+using base::sequence_manager::FakeTaskTiming;
 using testing::ElementsAre;
 using VirtualTimePolicy = blink::PageScheduler::VirtualTimePolicy;
 
@@ -56,7 +59,7 @@ class PageSchedulerImplTest : public testing::Test {
     test_task_runner_->AdvanceMockTickClock(
         base::TimeDelta::FromMilliseconds(5));
     scheduler_.reset(new MainThreadSchedulerImpl(
-        base::sequence_manager::TaskQueueManagerForTest::Create(
+        base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, test_task_runner_, test_task_runner_->GetMockTickClock()),
         base::nullopt));
     page_scheduler_.reset(new PageSchedulerImpl(nullptr, scheduler_.get()));
@@ -126,7 +129,6 @@ class PageSchedulerImplTest : public testing::Test {
   // set the page as visible or unfreezes it while still hidden (depending on
   // the argument), and verifies that tasks can run.
   void TestFreeze(bool make_page_visible) {
-    ScopedStopLoadingInBackgroundForTest stop_loading_enabler(true);
     ScopedStopNonTimersInBackgroundForTest stop_non_timers_enabler(true);
 
     int counter = 0;
@@ -782,11 +784,17 @@ TEST_F(PageSchedulerImplTest, NestedMessageLoop_DETERMINISTIC_LOADING) {
       VirtualTimePolicy::kDeterministicLoading);
   EXPECT_TRUE(scheduler_->VirtualTimeAllowedToAdvance());
 
+  scheduler_->OnTaskStarted(
+      nullptr, FakeTask(),
+      FakeTaskTiming(base::TimeTicks(), base::TimeTicks()));
   scheduler_->OnBeginNestedRunLoop();
   EXPECT_FALSE(scheduler_->VirtualTimeAllowedToAdvance());
 
   scheduler_->OnExitNestedRunLoop();
   EXPECT_TRUE(scheduler_->VirtualTimeAllowedToAdvance());
+  scheduler_->OnTaskCompleted(
+      nullptr, FakeTask(),
+      FakeTaskTiming(base::TimeTicks(), scheduler_->real_time_domain()->Now()));
 }
 
 TEST_F(PageSchedulerImplTest, PauseTimersWhileVirtualTimeIsPaused) {
@@ -984,6 +992,10 @@ TEST_F(PageSchedulerImplTest,
   page_scheduler_->EnableVirtualTime();
   page_scheduler_->SetMaxVirtualTimeTaskStarvationCount(100);
   page_scheduler_->SetVirtualTimePolicy(VirtualTimePolicy::kAdvance);
+
+  scheduler_->OnTaskStarted(
+      nullptr, FakeTask(),
+      FakeTaskTiming(base::TimeTicks(), base::TimeTicks()));
   scheduler_->OnBeginNestedRunLoop();
 
   int count = 0;
@@ -1317,8 +1329,6 @@ TEST_F(PageSchedulerImplTest, KeepActiveSetForNewPages) {
 }
 
 TEST_F(PageSchedulerImplTest, TestPageBackgroundedTimerSuspension) {
-  ScopedStopLoadingInBackgroundForTest stop_loading_enabler(true);
-
   int counter = 0;
   ThrottleableTaskQueue()->PostTask(
       FROM_HERE, base::BindOnce(&IncrementCounter, base::Unretained(&counter)));
@@ -1370,8 +1380,6 @@ TEST_F(PageSchedulerImplTest, TestPageBackgroundedTimerSuspension) {
 }
 
 TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileAudioSilent) {
-  ScopedStopLoadingInBackgroundForTest stop_loading_enabler(true);
-
   page_scheduler_->AudioStateChanged(true);
   page_scheduler_->SetPageVisible(false);
   EXPECT_TRUE(page_scheduler_->IsAudioPlaying());
@@ -1401,8 +1409,6 @@ TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileAudioSilent) {
 }
 
 TEST_F(PageSchedulerImplTest, PageFrozenOnlyWhileNotVisible) {
-  ScopedStopLoadingInBackgroundForTest stop_loading_enabler(true);
-
   page_scheduler_->SetPageVisible(true);
   EXPECT_FALSE(ShouldFreezePage());
   EXPECT_FALSE(page_scheduler_->IsFrozen());
@@ -1472,8 +1478,6 @@ class PageSchedulerImplPageTransitionTest : public PageSchedulerImplTest {
 
 TEST_F(PageSchedulerImplPageTransitionTest,
        PageLifecycleStateTransitionMetric) {
-  ScopedStopLoadingInBackgroundForTest stop_loading_enabler(true);
-
   typedef PageSchedulerImpl::PageLifecycleStateTransition Transition;
 
   base::HistogramTester histogram_tester_;

@@ -36,6 +36,7 @@
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_metrics.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_request_options.h"
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_test_utils.h"
+#include "components/data_reduction_proxy/core/browser/data_reduction_proxy_util.h"
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_features.h"
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_headers.h"
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_headers_test_utils.h"
@@ -45,6 +46,7 @@
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_switches.h"
 #include "components/data_reduction_proxy/core/common/lofi_decider.h"
 #include "components/data_reduction_proxy/proto/client_config.pb.h"
+#include "components/data_reduction_proxy/proto/data_store.pb.h"
 #include "components/previews/core/previews_experiments.h"
 #include "components/previews/core/previews_features.h"
 #include "components/previews/core/test_previews_decider.h"
@@ -158,7 +160,6 @@ const char kReceivedVideoSecureBypassedHistogramName[] =
     "Net.HttpContentLengthV2.Https.BypassedDRP.Video";
 const char kReceivedVideoSecureOtherHistogramName[] =
     "Net.HttpContentLengthV2.Https.Other.Video";
-const char kOriginalHistogramName[] = "Net.HttpOriginalContentLength";
 const char kFreshnessLifetimeHistogramName[] =
     "Net.HttpContentFreshnessLifetime";
 const int64_t kResponseContentLength = 100;
@@ -239,13 +240,6 @@ class TestLoFiDecider : public LoFiDecider {
     return false;
   }
 
-  void MaybeApplyAMPPreview(
-      net::URLRequest* request,
-      GURL* new_url,
-      previews::PreviewsDecider* previews_decider) const override {
-    return;
-  }
-
   void RemoveAcceptTransformHeader(
       net::HttpRequestHeaders* headers) const override {
     if (ignore_is_using_data_reduction_proxy_check_)
@@ -292,6 +286,28 @@ class TestLoFiUIService : public LoFiUIService {
 
  private:
   bool on_lofi_response_;
+};
+
+class TestResourceTypeProvider : public ResourceTypeProvider {
+ public:
+  void SetContentType(const net::URLRequest& request) override {}
+
+  ContentType GetContentType(const GURL& url) const override {
+    return ResourceTypeProvider::CONTENT_TYPE_UNKNOWN;
+  }
+
+  bool IsNonContentInitiatedRequest(
+      const net::URLRequest& request) const override {
+    return is_non_content_initiated_request_;
+  }
+
+  void set_is_non_content_initiated_request(
+      bool is_non_content_initiated_request) {
+    is_non_content_initiated_request_ = is_non_content_initiated_request;
+  }
+
+ private:
+  bool is_non_content_initiated_request_ = false;
 };
 
 enum ProxyTestConfig { USE_SECURE_PROXY, USE_INSECURE_PROXY, BYPASS_PROXY };
@@ -789,6 +805,23 @@ class DataReductionProxyNetworkDelegateTest : public testing::Test {
         request, data_reduction_proxy_info, proxy_retry_info, headers);
   }
 
+  void EnableDataUsageReporting() {
+    test_context_->pref_service()->SetBoolean(prefs::kDataUsageReportingEnabled,
+                                              true);
+    // Give the setting notification a chance to propagate.
+    base::RunLoop().RunUntilIdle();
+  }
+
+  size_t GetOtherHostDataUsage() {
+    const auto& data_usage_map = test_context_->data_reduction_proxy_service()
+                                     ->compression_stats()
+                                     ->DataUsageMapForTesting();
+    const auto& it = data_usage_map.find(util::GetSiteBreakdownOtherHostName());
+    if (it != data_usage_map.end())
+      return it->second->data_used();
+    return 0;
+  }
+
   net::MockClientSocketFactory* mock_socket_factory() {
     return mock_socket_factory_.get();
   }
@@ -1251,8 +1284,6 @@ TEST_F(DataReductionProxyNetworkDelegateTest, NetHistograms) {
                                     0);
   histogram_tester.ExpectUniqueSample(kReceivedInsecureViaDRPHistogramName,
                                       kResponseContentLength, 1);
-  histogram_tester.ExpectUniqueSample(kOriginalHistogramName,
-                                      kOriginalContentLength, 1);
   histogram_tester.ExpectUniqueSample(kFreshnessLifetimeHistogramName,
                                       freshness_lifetime.InSeconds(), 1);
 }
@@ -2249,6 +2280,32 @@ TEST_F(DataReductionProxyNetworkDelegateTest, TestAcceptTransformHistogram) {
   histogram_tester.ExpectBucketCount(
       "DataReductionProxy.Protocol.AcceptTransform",
       9 /* UNKNOWN_TRANSFORM_RECEIVED */, 1);
+}
+
+TEST_F(DataReductionProxyNetworkDelegateTest, RecordNonContentToOtherHost) {
+  const std::string response_headers =
+      "HTTP/1.1 200 OK\r\n"
+      "Date: Wed, 28 Nov 2007 09:40:09 GMT\r\n"
+      "Expires: Mon, 24 Nov 2014 12:45:26 GMT\r\n"
+      "Via: 1.1 Chrome-Compression-Proxy\r\n"
+      "\r\n";
+
+  base::test::ScopedFeatureList scoped_feature_list;
+  scoped_feature_list.InitAndEnableFeature(
+      data_reduction_proxy::features::
+          kDataSaverSiteBreakdownUsingPageLoadMetrics);
+  Init(USE_INSECURE_PROXY, false);
+  EnableDataUsageReporting();
+  auto test_resource_type_provider =
+      std::make_unique<TestResourceTypeProvider>();
+  test_resource_type_provider->set_is_non_content_initiated_request(true);
+  io_data()->set_resource_type_provider(std::move(test_resource_type_provider));
+
+  FetchURLRequest(GURL(kTestURL), nullptr, response_headers,
+                  kResponseContentLength, 0);
+  base::RunLoop().RunUntilIdle();
+  DCHECK_EQ(response_headers.size() + kResponseContentLength,
+            GetOtherHostDataUsage());
 }
 
 }  // namespace

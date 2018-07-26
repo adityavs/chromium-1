@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/macros.h"
+#include "base/process/kill.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "content/public/browser/web_contents_observer.h"
@@ -40,6 +41,7 @@ class ResourceCoordinatorTabHelper
                    const GURL& validated_url,
                    int error_code,
                    const base::string16& error_description) override;
+  void RenderProcessGone(base::TerminationStatus status) override;
   void OnVisibilityChanged(content::Visibility visibility) override;
   void WebContentsDestroyed() override;
   void DidFinishNavigation(
@@ -51,6 +53,13 @@ class ResourceCoordinatorTabHelper
   void UpdateUkmRecorder(int64_t navigation_id);
   ukm::SourceId ukm_source_id() const { return ukm_source_id_; }
   void SetUkmSourceIdForTest(ukm::SourceId id) { ukm_source_id_ = id; }
+
+#if !defined(OS_ANDROID)
+  LocalSiteCharacteristicsWebContentsObserver*
+  local_site_characteristics_wc_observer_for_testing() {
+    return local_site_characteristics_wc_observer_.get();
+  }
+#endif
 
  private:
   explicit ResourceCoordinatorTabHelper(content::WebContents* web_contents);

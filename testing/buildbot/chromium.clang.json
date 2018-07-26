@@ -49,6 +49,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -388,12 +394,6 @@
         },
         "test": "gl_unittests",
         "use_xvfb": false
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -763,6 +763,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -1102,12 +1108,6 @@
         },
         "test": "gl_unittests",
         "use_xvfb": false
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -1517,6 +1517,17 @@
             }
           ]
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -1962,6 +1973,17 @@
             }
           ]
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -1985,17 +2007,6 @@
           ]
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "os": "Windows-10-15063"
-            }
-          ]
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -2124,6 +2135,17 @@
           ]
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -2423,6 +2445,17 @@
           ]
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -2646,6 +2679,17 @@
             }
           ]
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -3091,6 +3135,17 @@
             }
           ]
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -3114,17 +3169,6 @@
           ]
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "os": "Windows-10-15063"
-            }
-          ]
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -3253,6 +3297,17 @@
           ]
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -3552,6 +3607,17 @@
           ]
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -3775,6 +3841,17 @@
             }
           ]
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -4208,6 +4285,17 @@
             }
           ]
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -4231,17 +4319,6 @@
           ]
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "os": "Windows-10-15063"
-            }
-          ]
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -4370,6 +4447,17 @@
           ]
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -4669,6 +4757,17 @@
           ]
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10-15063"
+            }
+          ]
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -4852,6 +4951,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -5112,6 +5217,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -5125,12 +5236,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -5208,6 +5313,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -5380,6 +5491,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -5503,6 +5620,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -5763,6 +5886,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -5776,12 +5905,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -5859,6 +5982,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -6031,6 +6160,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -6154,6 +6289,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -6414,6 +6555,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -6427,12 +6574,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -6510,6 +6651,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -6682,6 +6829,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -6805,6 +6958,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -7065,6 +7224,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -7078,12 +7243,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -7161,6 +7320,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -7333,6 +7498,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -7959,7 +8130,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -8003,7 +8173,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -8014,7 +8183,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -8091,7 +8260,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -8178,7 +8346,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -8223,7 +8390,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -8268,7 +8434,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -8313,7 +8478,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -8573,7 +8737,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -8703,7 +8866,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -8790,7 +8952,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -9092,7 +9253,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -9179,7 +9339,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -9223,7 +9382,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -9267,7 +9425,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -9355,7 +9512,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -9700,7 +9856,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -9978,6 +10133,7 @@
       {
         "isolate_name": "monochrome_apk_checker",
         "name": "monochrome_apk_checker",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "dimension_sets": [
@@ -10565,6 +10721,49 @@
             "--bucket",
             "chromium-result-details",
             "--test-name",
+            "cast_unittests"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "MMB29Q",
+              "device_type": "bullhead",
+              "os": "Android"
+            }
+          ],
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ]
+        },
+        "test": "cast_unittests"
+      },
+      {
+        "args": [
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
             "cc_unittests"
           ],
           "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
@@ -10585,7 +10784,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -10758,7 +10956,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -10803,7 +11000,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -10857,7 +11053,8 @@
               ],
               "name": "shard #${SHARD_INDEX} logcats"
             }
-          ]
+          ],
+          "shards": 3
         },
         "test": "content_shell_test_apk"
       },
@@ -10891,7 +11088,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -11151,7 +11347,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -11281,7 +11476,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -11368,7 +11562,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -11670,7 +11863,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -11800,7 +11992,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -11844,7 +12035,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -11932,7 +12122,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -12277,7 +12466,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -12644,6 +12832,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -12965,12 +13159,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -13354,6 +13542,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -13669,12 +13863,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gfx_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -14034,6 +14222,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -14355,12 +14549,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -14724,6 +14912,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -14797,6 +14991,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "capture_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "cast_unittests"
       },
       {
         "swarming": {
@@ -15039,12 +15239,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -15417,6 +15611,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -15739,12 +15939,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -16088,8 +16282,7 @@
       },
       {
         "swarming": {
-          "can_use_on_swarming_builders": true,
-          "shards": 5
+          "can_use_on_swarming_builders": true
         },
         "test": "base_unittests"
       },
@@ -16104,6 +16297,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "blink_common_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "blink_fuzzer_unittests"
       },
       {
         "swarming": {
@@ -16252,6 +16451,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "events_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "extensions_browsertests"
       },
       {
@@ -16259,6 +16464,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "extensions_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "filesystem_service_unittests"
       },
       {
         "swarming": {
@@ -16277,12 +16488,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -16326,6 +16531,18 @@
           "can_use_on_swarming_builders": true
         },
         "test": "jingle_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -16475,7 +16692,19 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "traffic_annotation_auditor_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "ui_base_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "ui_touch_selection_unittests"
       },
       {
         "swarming": {
@@ -16521,6 +16750,7 @@
         ],
         "isolate_name": "chromedriver_py_tests",
         "name": "chromedriver_py_tests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16528,6 +16758,7 @@
       {
         "isolate_name": "components_perftests",
         "name": "components_perftests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16535,6 +16766,7 @@
       {
         "isolate_name": "content_shell_crash_test",
         "name": "content_shell_crash_test",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16542,6 +16774,7 @@
       {
         "isolate_name": "metrics_python_tests",
         "name": "metrics_python_tests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16549,6 +16782,7 @@
       {
         "isolate_name": "telemetry_gpu_unittests",
         "name": "telemetry_gpu_unittests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16556,6 +16790,7 @@
       {
         "isolate_name": "telemetry_perf_unittests",
         "name": "telemetry_perf_unittests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "hard_timeout": 960,
@@ -16568,6 +16803,7 @@
         ],
         "isolate_name": "telemetry_unittests",
         "name": "telemetry_unittests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "shards": 4
@@ -16576,6 +16812,7 @@
       {
         "isolate_name": "views_perftests",
         "name": "views_perftests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16606,6 +16843,7 @@
       {
         "isolate_name": "webkit_python_tests",
         "name": "webkit_python_tests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true
         }
@@ -16649,6 +16887,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "blink_common_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "blink_fuzzer_unittests"
       },
       {
         "swarming": {
@@ -16797,6 +17041,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "events_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "extensions_browsertests"
       },
       {
@@ -16804,6 +17054,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "extensions_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "filesystem_service_unittests"
       },
       {
         "swarming": {
@@ -16822,12 +17078,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -16871,6 +17121,18 @@
           "can_use_on_swarming_builders": true
         },
         "test": "jingle_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -17014,7 +17276,19 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "traffic_annotation_auditor_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "ui_base_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "ui_touch_selection_unittests"
       },
       {
         "swarming": {
@@ -17097,6 +17371,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "blink_common_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "blink_fuzzer_unittests"
       },
       {
         "swarming": {
@@ -17362,6 +17642,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -17375,12 +17661,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -17458,6 +17738,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -17630,6 +17916,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -17753,6 +18045,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -18013,6 +18311,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -18026,12 +18330,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -18109,6 +18407,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -18281,6 +18585,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -18404,6 +18714,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -18664,6 +18980,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -18677,12 +18999,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -18760,6 +19076,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -18932,6 +19254,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -19055,6 +19383,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -19315,6 +19649,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -19328,12 +19668,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -19411,6 +19745,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -19583,6 +19923,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -19706,6 +20052,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -19966,6 +20318,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -19979,12 +20337,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -20062,6 +20414,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -20234,6 +20592,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -20357,6 +20721,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -20617,6 +20987,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -20630,12 +21006,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -20713,6 +21083,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -20885,6 +21261,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -21008,6 +21390,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -21268,6 +21656,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -21281,12 +21675,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -21364,6 +21752,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -21536,6 +21930,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -21659,6 +22059,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -21919,6 +22325,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -21932,12 +22344,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -22015,6 +22421,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -22187,6 +22599,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -22310,6 +22728,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -22570,6 +22994,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -22583,12 +23013,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -22666,6 +23090,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -22838,6 +23268,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {
@@ -22961,6 +23397,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -23221,6 +23663,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -23234,12 +23682,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -23317,6 +23759,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -23494,6 +23942,12 @@
         "swarming": {
           "can_use_on_swarming_builders": true
         },
+        "test": "traffic_annotation_auditor_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
         "test": "ui_base_unittests"
       },
       {
@@ -23607,6 +24061,12 @@
           "can_use_on_swarming_builders": true
         },
         "test": "blink_common_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true
+        },
+        "test": "blink_fuzzer_unittests"
       },
       {
         "swarming": {
@@ -23933,12 +24393,6 @@
           "can_use_on_swarming_builders": true
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -24348,6 +24802,17 @@
             }
           ]
         },
+        "test": "blink_fuzzer_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10"
+            }
+          ]
+        },
         "test": "blink_heap_unittests"
       },
       {
@@ -24771,6 +25236,17 @@
             }
           ]
         },
+        "test": "filesystem_service_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10"
+            }
+          ]
+        },
         "test": "gcm_unit_tests"
       },
       {
@@ -24794,17 +25270,6 @@
           ]
         },
         "test": "gin_unittests"
-      },
-      {
-        "swarming": {
-          "can_use_on_swarming_builders": true,
-          "dimension_sets": [
-            {
-              "os": "Windows-10"
-            }
-          ]
-        },
-        "test": "gn_unittests"
       },
       {
         "swarming": {
@@ -24933,6 +25398,17 @@
           ]
         },
         "test": "latency_unittests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10"
+            }
+          ]
+        },
+        "test": "leveldb_service_unittests"
       },
       {
         "swarming": {
@@ -25232,6 +25708,17 @@
           ]
         },
         "test": "sync_integration_tests"
+      },
+      {
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "dimension_sets": [
+            {
+              "os": "Windows-10"
+            }
+          ]
+        },
+        "test": "traffic_annotation_auditor_unittests"
       },
       {
         "swarming": {

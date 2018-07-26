@@ -405,12 +405,12 @@ AtomicString Resource::HttpContentType() const {
 
 bool Resource::PassesAccessControlCheck(
     const SecurityOrigin& security_origin) const {
-  base::Optional<network::mojom::CORSError> cors_error = CORS::CheckAccess(
+  base::Optional<network::CORSErrorStatus> cors_status = CORS::CheckAccess(
       GetResponse().Url(), GetResponse().HttpStatusCode(),
       GetResponse().HttpHeaderFields(),
       LastResourceRequest().GetFetchCredentialsMode(), security_origin);
 
-  return !cors_error;
+  return !cors_status;
 }
 
 bool Resource::MustRefetchDueToIntegrityMetadata(
@@ -602,13 +602,12 @@ String Resource::ReasonNotDeletable() const {
 
 void Resource::DidAddClient(ResourceClient* c) {
   if (scoped_refptr<SharedBuffer> data = Data()) {
-    data->ForEachSegment([this, &c](const char* segment, size_t segment_size,
-                                    size_t segment_offset) -> bool {
-      c->DataReceived(this, segment, segment_size);
-
+    for (const auto& span : *data) {
+      c->DataReceived(this, span.data(), span.size());
       // Stop pushing data if the client removed itself.
-      return HasClient(c);
-    });
+      if (!HasClient(c))
+        break;
+    }
   }
   if (!HasClient(c))
     return;
@@ -874,19 +873,19 @@ bool Resource::CanReuse(
     case network::mojom::FetchRequestMode::kCORS:
     case network::mojom::FetchRequestMode::kSameOrigin:
     case network::mojom::FetchRequestMode::kCORSWithForcedPreflight:
-      // We have two separate CORS handling logics in DocumentThreadableLoader
+      // We have two separate CORS handling logics in ThreadableLoader
       // and ResourceLoader and sharing resources is difficult when they are
       // handled differently.
       if (options_.cors_handling_by_resource_fetcher !=
           new_options.cors_handling_by_resource_fetcher) {
-        // If the existing one is handled in DocumentThreadableLoader and the
+        // If the existing one is handled in ThreadableLoader and the
         // new one is handled in ResourceLoader, reusing the existing one will
         // lead to CORS violations.
         if (!options_.cors_handling_by_resource_fetcher)
           return false;
 
         // Otherwise (i.e., if the existing one is handled in ResourceLoader
-        // and the new one is handled in DocumentThreadableLoader), reusing
+        // and the new one is handled in ThreadableLoader), reusing
         // the existing one will lead to double check which is harmless.
       }
       break;
@@ -1105,7 +1104,7 @@ bool Resource::ShouldRevalidateStaleResponse() const {
       GetResourceRequest(), GetResponse(), response_timestamp_);
 }
 
-bool Resource::AsyncRevalidationRequested() const {
+bool Resource::StaleRevalidationRequested() const {
   if (GetResponse().AsyncRevalidationRequested())
     return true;
 

@@ -25,12 +25,18 @@
 #include "components/crash/content/app/crash_reporter_client.h"
 #include "content/public/common/content_descriptors.h"
 #include "sandbox/linux/services/syscall_wrappers.h"
+#include "third_party/crashpad/crashpad/client/annotation.h"
 #include "third_party/crashpad/crashpad/client/crashpad_client.h"
 #include "third_party/crashpad/crashpad/snapshot/sanitized/sanitization_information.h"
 #include "third_party/crashpad/crashpad/util/linux/exception_handler_client.h"
 #include "third_party/crashpad/crashpad/util/linux/exception_information.h"
 #include "third_party/crashpad/crashpad/util/misc/from_pointer_cast.h"
 #include "third_party/crashpad/crashpad/util/posix/signals.h"
+
+#if defined(OS_ANDROID)
+#include "base/android/build_info.h"
+#include "base/android/java_exception_reporter.h"
+#endif  // OS_ANDROID
 
 namespace crashpad {
 namespace {
@@ -144,6 +150,45 @@ class SandboxedHandler {
 }  // namespace
 }  // namespace crashpad
 
+#if defined(OS_ANDROID)
+
+namespace {
+
+void SetJavaExceptionInfo(const char* info_string) {
+  static crashpad::StringAnnotation<5 * 4096> exception_info("exception_info");
+  if (info_string) {
+    exception_info.Set(info_string);
+  } else {
+    exception_info.Clear();
+  }
+}
+
+void SetBuildInfoAnnotations(std::map<std::string, std::string>* annotations) {
+  base::android::BuildInfo* info = base::android::BuildInfo::GetInstance();
+
+  (*annotations)["android_build_id"] = info->android_build_id();
+  (*annotations)["android_build_fp"] = info->android_build_fp();
+  (*annotations)["device"] = info->device();
+  (*annotations)["model"] = info->model();
+  (*annotations)["brand"] = info->brand();
+  (*annotations)["board"] = info->board();
+  (*annotations)["installer_package_name"] = info->installer_package_name();
+  (*annotations)["abi_name"] = info->abi_name();
+  (*annotations)["custom_themes"] = info->custom_themes();
+  (*annotations)["resources_verison"] = info->resources_version();
+  (*annotations)["gms_core_version"] = info->gms_version_code();
+
+  if (info->firebase_app_id()[0] != '\0') {
+    (*annotations)["package"] = std::string(info->firebase_app_id()) + " v" +
+                                info->package_version_code() + " (" +
+                                info->package_version_name() + ")";
+  }
+}
+
+}  // namespace
+
+#endif  // OS_ANDROID
+
 namespace crash_reporter {
 namespace internal {
 
@@ -217,6 +262,10 @@ bool BuildHandlerArgs(base::FilePath* handler_path,
   (*process_annotations)["prod"] = product_name;
   (*process_annotations)["ver"] = product_version;
 
+#if defined(OS_ANDROID)
+  SetBuildInfoAnnotations(process_annotations);
+#endif  // OS_ANDROID
+
 #if defined(GOOGLE_CHROME_BUILD)
   // Empty means stable.
   const bool allow_empty_channel = true;
@@ -254,6 +303,10 @@ base::FilePath PlatformCrashpadInitialization(bool initial_client,
   // Not used on Linux/Android.
   DCHECK(!embedded_handler);
   DCHECK(exe_path.empty());
+
+#if defined(OS_ANDROID)
+  base::android::SetJavaExceptionCallback(SetJavaExceptionInfo);
+#endif  // OS_ANDROID
 
   if (browser_process) {
     base::FilePath handler_path;

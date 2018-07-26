@@ -158,10 +158,9 @@ newUserFeedbackController:(ios::ChromeBrowserState*)browserState
   DCHECK(ios::GetChromeBrowserProvider()
              ->GetUserFeedbackProvider()
              ->IsUserFeedbackEnabled());
-  UIViewController* controller =
-      ios::GetChromeBrowserProvider()
-          ->GetUserFeedbackProvider()
-          ->CreateViewController(dataSource, [delegate dispatcherForSettings]);
+  UIViewController* controller = ios::GetChromeBrowserProvider()
+                                     ->GetUserFeedbackProvider()
+                                     ->CreateViewController(dataSource);
   DCHECK(controller);
   SettingsNavigationController* nc = [[SettingsNavigationController alloc]
       initWithRootViewController:controller
@@ -538,6 +537,13 @@ initWithRootViewController:(UIViewController*)rootViewController
     // Configure the style.
     appBarContainer.view.backgroundColor = [UIColor whiteColor];
     ConfigureAppBarWithCardStyle(appBarContainer.appBar);
+
+    // Override the header view's background color if the UIRefresh experiment
+    // is enabled.
+    if (experimental_flags::IsSettingsUIRebootEnabled()) {
+      appBarContainer.appBar.headerViewController.headerView.backgroundColor =
+          [UIColor groupTableViewBackgroundColor];
+    }
 
     // Register the app bar container and return it.
     [self registerAppBarContainer:appBarContainer];

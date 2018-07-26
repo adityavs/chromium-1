@@ -45,7 +45,7 @@ const int kMinPlayPauseButtonSize = 48;
 
 // Colors for the control buttons.
 SkColor kBgColor = SK_ColorWHITE;
-SkColor kControlIconColor = gfx::kChromeIconGrey;
+SkColor kControlIconColor = SK_ColorBLACK;
 }  // namespace
 
 // OverlayWindow implementation of NonClientFrameView.
@@ -131,6 +131,7 @@ OverlayWindowViews::OverlayWindowViews(
     : controller_(controller),
       close_button_size_(gfx::Size()),
       play_pause_button_size_(gfx::Size()),
+      window_background_view_(new views::View()),
       video_view_(new views::View()),
       controls_background_view_(new views::View()),
       close_controls_view_(new views::ImageButton(nullptr)),
@@ -168,44 +169,48 @@ gfx::Rect OverlayWindowViews::CalculateAndUpdateWindowBounds() {
   // on UI affordances, such as buttons.
   min_size_ = kMinWindowSize;
 
-  // Initial size of the window is always 20% of the display width and height,
-  // constrained by the min and max sizes. Only explicitly update this the first
-  // time |window_size| is being calculated.
-  // Once |window_size| is calculated at least once, it should stay within the
-  // bounds of |min_size_| and |max_size_|.
   gfx::Size window_size;
-  if (!window_bounds_.size().IsEmpty()) {
+  gfx::Point origin;
+
+  if (is_initialized_) {
     window_size = window_bounds_.size();
+    origin = window_bounds_.origin();
   } else {
+    // Determine the initial window bounds:
+    // The initial window size is 20% of the |work_area| screen.
     window_size = gfx::Size(work_area.width() / 5, work_area.height() / 5);
     window_size.set_width(std::min(
         max_size_.width(), std::max(min_size_.width(), window_size.width())));
     window_size.set_height(
         std::min(max_size_.height(),
                  std::max(min_size_.height(), window_size.height())));
+
+    // Determine the initial origin point:
+    // The window is positioned on the bottom right of the |work_area| screen.
+    int window_diff_width = work_area.right() - window_size.width();
+    int window_diff_height = work_area.bottom() - window_size.height();
+
+    // There will be a margin between the edges of the Picture-in-Picture
+    // window and the |work_area| screen by taking 2% of the average of the
+    // window dimensions.
+    int margin = (window_diff_width + window_diff_height) / 2 * 0.02;
+
+    origin =
+        gfx::Point(window_diff_width - margin, window_diff_height - margin);
   }
 
-  // Determine the window size by fitting |natural_size_| within
-  // |window_size|, keeping to |natural_size_|'s aspect ratio.
-  if (!natural_size_.IsEmpty()) {
-    UpdateVideoLayerSizeWithAspectRatio(window_size);
-    window_size = video_bounds_.size();
-  }
+  UpdateVideoLayerSizeWithAspectRatio(window_size);
 
-  int window_diff_width = work_area.right() - window_size.width();
-  int window_diff_height = work_area.bottom() - window_size.height();
-
-  // Keep a margin distance of 2% the average of the two window size
-  // differences, keeping the margins consistent.
-  int buffer = (window_diff_width + window_diff_height) / 2 * 0.02;
-  window_bounds_ = gfx::Rect(
-      gfx::Point(window_diff_width - buffer, window_diff_height - buffer),
-      window_size);
-
+  window_bounds_ = gfx::Rect(origin, window_size);
   return window_bounds_;
 }
 
 void OverlayWindowViews::SetUpViews() {
+  // views::View that is displayed when video is hidden. ----------------------
+  window_background_view_->SetSize(GetBounds().size());
+  window_background_view_->SetPaintToLayer(ui::LAYER_SOLID_COLOR);
+  GetWindowBackgroundLayer()->SetColor(SK_ColorBLACK);
+
   // views::View that slightly darkens the video so the media controls appear
   // more prominently. This is especially important in cases with a very light
   // background. --------------------------------------------------------------
@@ -232,7 +237,7 @@ void OverlayWindowViews::SetUpViews() {
   // views::View that toggles play/pause. -------------------------------------
   play_pause_controls_view_->SetImageAlignment(
       views::ImageButton::ALIGN_CENTER, views::ImageButton::ALIGN_MIDDLE);
-  play_pause_controls_view_->SetToggled(!controller_->IsPlayerActive());
+  play_pause_controls_view_->SetToggled(controller_->IsPlayerActive());
   play_pause_controls_view_->SetBackgroundImageAlignment(
       views::ImageButton::ALIGN_LEFT, views::ImageButton::ALIGN_TOP);
   UpdatePlayPauseControlsSize();
@@ -252,11 +257,19 @@ void OverlayWindowViews::SetUpViews() {
   play_pause_controls_view_->SetToggledTooltipText(pause_button_label);
   play_pause_controls_view_->SetInstallFocusRingOnFocus(true);
 
-  // --------------------------------------------------------------------------
-  // Paint to ui::Layers to use in the OverlaySurfaceEmbedder.
+  // Add as child views to this widget. ---------------------------------------
+  GetContentsView()->AddChildView(controls_background_view_.get());
+  GetContentsView()->AddChildView(close_controls_view_.get());
+  GetContentsView()->AddChildView(play_pause_controls_view_.get());
+
+  // Paint to ui::Layers. -----------------------------------------------------
   video_view_->SetPaintToLayer(ui::LAYER_TEXTURED);
   close_controls_view_->SetPaintToLayer(ui::LAYER_TEXTURED);
   play_pause_controls_view_->SetPaintToLayer(ui::LAYER_TEXTURED);
+
+  // Controls should have a transparent background. ---------------------------
+  close_controls_view_->layer()->SetFillsBoundsOpaquely(false);
+  play_pause_controls_view_->layer()->SetFillsBoundsOpaquely(false);
 
   UpdateControlsVisibility(false);
 }
@@ -281,6 +294,9 @@ void OverlayWindowViews::UpdateVideoLayerSizeWithAspectRatio(
   video_bounds_.set_origin(origin);
   video_bounds_.set_size(letterbox_region.size());
 
+  // Update the layout of the controls.
+  UpdateControlsBounds();
+
   // Update the surface layer bounds to scale with window size changes.
   controller_->UpdateLayerBounds();
 }
@@ -289,6 +305,13 @@ void OverlayWindowViews::UpdateControlsVisibility(bool is_visible) {
   GetControlsBackgroundLayer()->SetVisible(is_visible);
   GetCloseControlsLayer()->SetVisible(is_visible);
   GetPlayPauseControlsLayer()->SetVisible(is_visible);
+}
+
+void OverlayWindowViews::UpdateControlsBounds() {
+  controls_background_view_->SetBoundsRect(
+      gfx::Rect(gfx::Point(0, 0), GetBounds().size()));
+  close_controls_view_->SetBoundsRect(GetCloseControlsBounds());
+  play_pause_controls_view_->SetBoundsRect(GetPlayPauseControlsBounds());
 }
 
 void OverlayWindowViews::UpdateCloseControlsSize() {
@@ -385,13 +408,44 @@ gfx::Rect OverlayWindowViews::GetBounds() const {
 void OverlayWindowViews::UpdateVideoSize(const gfx::Size& natural_size) {
   DCHECK(!natural_size.IsEmpty());
   natural_size_ = natural_size;
+  SetAspectRatio(gfx::SizeF(natural_size_));
+
+  if (IsVisible())
+    return;
 
   // Update the views::Widget bounds to adhere to sizing spec.
   SetBounds(CalculateAndUpdateWindowBounds());
+
+  // Update the layout of the controls.
+  UpdateControlsBounds();
 }
 
-void OverlayWindowViews::UpdatePlayPauseControlsIcon(bool is_playing) {
-  play_pause_controls_view_->SetToggled(is_playing);
+void OverlayWindowViews::SetPlaybackState(PlaybackState playback_state) {
+  // TODO(apacible): have machine state for controls visibility.
+  bool play_pause_layer_visible = GetPlayPauseControlsLayer()->visible();
+
+  switch (playback_state) {
+    case kPlaying:
+      play_pause_controls_view_->SetToggled(true);
+      play_pause_controls_view_->SetVisible(true);
+      video_view_->SetVisible(true);
+      break;
+    case kPaused:
+      play_pause_controls_view_->SetToggled(false);
+      play_pause_controls_view_->SetVisible(true);
+      video_view_->SetVisible(true);
+      break;
+    case kNoVideo:
+      play_pause_controls_view_->SetVisible(false);
+      video_view_->SetVisible(false);
+      break;
+  }
+
+  GetPlayPauseControlsLayer()->SetVisible(play_pause_layer_visible);
+}
+
+ui::Layer* OverlayWindowViews::GetWindowBackgroundLayer() {
+  return window_background_view_->layer();
 }
 
 ui::Layer* OverlayWindowViews::GetVideoLayer() {
@@ -448,24 +502,11 @@ void OverlayWindowViews::OnKeyEvent(ui::KeyEvent* event) {
   if (event->type() != ui::ET_KEY_RELEASED)
     return;
 
-  if (event->key_code() == ui::VKEY_TAB) {
-    // Switch the control that is currently focused. When the window
-    // is focused, |focused_control_button_| resets to CONTROL_PLAY_PAUSE.
-    if (focused_control_button_ == CONTROL_PLAY_PAUSE)
-      focused_control_button_ = CONTROL_CLOSE;
-    else
-      focused_control_button_ = CONTROL_PLAY_PAUSE;
-
-    // The controls may be hidden after the window is already in focus, e.g.
-    // mouse exits the window space. If they are already shown, this is a
-    // no-op.
-    UpdateControlsVisibility(true);
-
-    event->SetHandled();
-  } else if (event->key_code() == ui::VKEY_RETURN) {
-    if (focused_control_button_ == CONTROL_PLAY_PAUSE) {
+  if (event->key_code() == ui::VKEY_RETURN ||
+      event->key_code() == ui::VKEY_SPACE) {
+    if (play_pause_controls_view_->HasFocus()) {
       TogglePlayPause();
-    } else /* CONTROL_CLOSE */ {
+    } else if (close_controls_view_->HasFocus()) {
       controller_->Close(true /* should_pause_video */);
     }
 
@@ -476,12 +517,22 @@ void OverlayWindowViews::OnKeyEvent(ui::KeyEvent* event) {
 void OverlayWindowViews::OnMouseEvent(ui::MouseEvent* event) {
   switch (event->type()) {
     // Only show the media controls when the mouse is hovering over the window.
+    // This is checking for both ENTERED and MOVED because ENTERED is not fired
+    // after a resize on Windows.
     case ui::ET_MOUSE_ENTERED:
+    case ui::ET_MOUSE_MOVED:
+      UpdateControlsVisibility(true);
+      break;
+
       UpdateControlsVisibility(true);
       break;
 
     case ui::ET_MOUSE_EXITED:
-      UpdateControlsVisibility(false);
+      // On Windows, ui::ET_MOUSE_EXITED is triggered when hovering over the
+      // media controls because of the HitTest. This check ensures the controls
+      // are visible if the mouse is still over the window.
+      if (!GetVideoBounds().Contains(event->location()))
+        UpdateControlsVisibility(false);
       break;
 
     case ui::ET_MOUSE_RELEASED:
@@ -535,9 +586,6 @@ void OverlayWindowViews::OnNativeFocus() {
     should_show_controls_ = true;
   }
 
-  // Reset the first focused control to the play/pause button. This will
-  // always be called before key events can be handled.
-  focused_control_button_ = CONTROL_PLAY_PAUSE;
   views::Widget::OnNativeFocus();
 }
 
@@ -551,6 +599,13 @@ void OverlayWindowViews::OnNativeBlur() {
   views::Widget::OnNativeBlur();
 }
 
+void OverlayWindowViews::OnNativeWidgetMove() {
+  // Update the existing |window_bounds_| when the window moves. This allows
+  // the window to reappear with the same origin point when a new video is
+  // shown.
+  window_bounds_ = GetBounds();
+}
+
 void OverlayWindowViews::OnNativeWidgetSizeChanged(const gfx::Size& new_size) {
   // Update the view layers to scale to |new_size|.
   UpdateCloseControlsSize();
@@ -560,10 +615,22 @@ void OverlayWindowViews::OnNativeWidgetSizeChanged(const gfx::Size& new_size) {
   views::Widget::OnNativeWidgetSizeChanged(new_size);
 }
 
+void OverlayWindowViews::OnNativeWidgetDestroyed() {
+  controller_->OnWindowDestroyed();
+}
+
 void OverlayWindowViews::TogglePlayPause() {
   // Retrieve expected active state based on what command was sent in
   // TogglePlayPause() since the IPC message may not have been propogated
   // the media player yet.
   bool is_active = controller_->TogglePlayPause();
   play_pause_controls_view_->SetToggled(is_active);
+}
+
+void OverlayWindowViews::ClickCustomControl(const std::string& control_id) {
+  controller_->ClickCustomControl(control_id);
+}
+
+views::View* OverlayWindowViews::play_pause_controls_view_for_testing() const {
+  return play_pause_controls_view_.get();
 }

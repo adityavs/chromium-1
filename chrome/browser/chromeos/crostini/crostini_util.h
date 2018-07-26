@@ -8,10 +8,16 @@
 #include <string>
 
 #include "base/optional.h"
+#include "ui/base/resource/scale_factor.h"
 
 namespace base {
 class FilePath;
+class TimeDelta;
 }  // namespace base
+
+namespace gfx {
+class ImageSkia;
+}  // namespace gfx
 
 class Profile;
 
@@ -32,6 +38,9 @@ bool IsCrostiniUIAllowedForProfile(Profile* profile);
 // at least once and not deleted it.
 bool IsCrostiniEnabled(Profile* profile);
 
+// Returns whether the default Crostini VM is running for the user.
+bool IsCrostiniRunning(Profile* profile);
+
 // Launches the Crostini app with ID of |app_id| on the display with ID of
 // |display_id|. |app_id| should be a valid Crostini app list id.
 void LaunchCrostiniApp(Profile* profile,
@@ -45,6 +54,17 @@ void LaunchCrostiniApp(Profile* profile,
                        const std::string& app_id,
                        int64_t display_id,
                        const std::vector<std::string>& files);
+
+// Convenience wrapper around CrostiniAppIconLoader. As requesting icons from
+// the container can be slow, we just use the default (penguin) icons after the
+// timeout elapses. Subsequent calls would get the correct icons once loaded.
+void LoadIcons(Profile* profile,
+               const std::vector<std::string>& app_ids,
+               int resource_size_in_dip,
+               ui::ScaleFactor scale_factor,
+               base::TimeDelta timeout,
+               base::OnceCallback<void(const std::vector<gfx::ImageSkia>&)>
+                   icons_loaded_callback);
 
 // Retrieves cryptohome_id from profile.
 std::string CryptohomeIdForProfile(Profile* profile);
@@ -82,5 +102,8 @@ constexpr char kCrostiniDefaultVmName[] = "termina";
 constexpr char kCrostiniDefaultContainerName[] = "penguin";
 constexpr char kCrostiniCroshBuiltinAppId[] =
     "nkoccljplnhpfnfiajclkommnmllphnl";
+// In order to be compatible with sync folder id must match standard.
+// Generated using crx_file::id_util::GenerateId("LinuxAppsFolder")
+constexpr char kCrostiniFolderId[] = "ddolnhmblagmcagkedkbfejapapdimlk";
 
 #endif  // CHROME_BROWSER_CHROMEOS_CROSTINI_CROSTINI_UTIL_H_

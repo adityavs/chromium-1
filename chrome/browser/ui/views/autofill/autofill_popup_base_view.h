@@ -30,6 +30,15 @@ namespace autofill {
 class AutofillPopupBaseView : public views::WidgetDelegateView,
                               public views::WidgetFocusChangeListener,
                               public views::WidgetObserver {
+ public:
+  static const SkColor kBackgroundColor;
+  static const SkColor kSelectedBackgroundColor;
+  static const SkColor kFooterBackgroundColor;
+  static const SkColor kSeparatorColor;
+  static const SkColor kWarningColor;
+
+  static int GetCornerRadius();
+
  protected:
   explicit AutofillPopupBaseView(AutofillPopupViewDelegate* delegate,
                                  views::Widget* parent_widget);
@@ -41,10 +50,9 @@ class AutofillPopupBaseView : public views::WidgetDelegateView,
   // Hide the widget and delete |this|.
   void DoHide();
 
-  // Grows |bounds| to account for the border of the popup.
-  void AdjustBoundsForBorder(gfx::Rect* bounds) const;
-
-  virtual void AddExtraInitParams(views::Widget::InitParams* params) {}
+  // TODO(crbug.com/831603): make the methods private and non-virtual when
+  // AutofillPopupViewViews is gone.
+  virtual void AddExtraInitParams(views::Widget::InitParams* params);
 
   // Returns the widget's contents view.
   virtual std::unique_ptr<views::View> CreateWrapperView();
@@ -52,8 +60,16 @@ class AutofillPopupBaseView : public views::WidgetDelegateView,
   // Returns the border to be applied to the popup.
   virtual std::unique_ptr<views::Border> CreateBorder();
 
+  // Ensure the child views are not rendered beyond the bubble border
+  // boundaries. Should be overridden together with CreateBorder.
+  virtual void SetClipPath();
+
   // Update size of popup and paint (virtual for testing).
   virtual void DoUpdateBoundsAndRedrawPopup();
+
+  // Compute the space available for the popup. It's the space between its top
+  // and the bottom of its parent view, minus some margin space.
+  gfx::Rect CalculateClippingBounds() const;
 
   const AutofillPopupViewDelegate* delegate() { return delegate_; }
 
@@ -76,9 +92,10 @@ class AutofillPopupBaseView : public views::WidgetDelegateView,
   // views::WidgetObserver implementation.
   void OnWidgetBoundsChanged(views::Widget* widget,
                              const gfx::Rect& new_bounds) override;
+  void OnWidgetDestroying(views::Widget* widget) override;
 
   // Stop observing the widget.
-  void RemoveObserver();
+  void RemoveWidgetObservers();
 
   void SetSelection(const gfx::Point& point);
   void AcceptSelection(const gfx::Point& point);
@@ -88,10 +105,6 @@ class AutofillPopupBaseView : public views::WidgetDelegateView,
   // eventually hide this view in the process.
   void HideController();
 
-  // Compute the space available for the popup. It's the space between its top
-  // and the bottom of its parent view, minus some margin space.
-  gfx::Rect CalculateClippingBounds() const;
-
   // Must return the container view for this popup.
   gfx::NativeView container_view();
 
@@ -100,8 +113,6 @@ class AutofillPopupBaseView : public views::WidgetDelegateView,
 
   // The widget of the window that triggered this popup. Weak reference.
   views::Widget* parent_widget_;
-
-  views::ScrollView* scroll_view_;
 
   // The time when the popup was shown.
   base::Time show_time_;

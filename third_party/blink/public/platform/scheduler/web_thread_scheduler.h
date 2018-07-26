@@ -12,6 +12,7 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/scheduler/single_thread_idle_task_runner.h"
+#include "third_party/blink/public/platform/scheduler/web_rail_mode_observer.h"
 #include "third_party/blink/public/platform/scheduler/web_render_widget_scheduling_state.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_input_event_result.h"
@@ -40,12 +41,6 @@ enum class RendererProcessType;
 
 class BLINK_PLATFORM_EXPORT WebThreadScheduler {
  public:
-  class BLINK_PLATFORM_EXPORT RAILModeObserver {
-   public:
-    virtual ~RAILModeObserver();
-    virtual void OnRAILModeChanged(v8::RAILMode rail_mode) = 0;
-  };
-
   virtual ~WebThreadScheduler();
 
   // ==== Functions for any scheduler =========================================
@@ -73,6 +68,10 @@ class BLINK_PLATFORM_EXPORT WebThreadScheduler {
   // start at |initial_virtual_time|.
   static std::unique_ptr<WebThreadScheduler> CreateMainThreadScheduler(
       base::Optional<base::Time> initial_virtual_time = base::nullopt);
+
+  // Returns compositor thread scheduler for the compositor thread
+  // of the current process.
+  static WebThreadScheduler* CompositorThreadScheduler();
 
   // Returns the default task runner.
   virtual scoped_refptr<base::SingleThreadTaskRunner> DefaultTaskRunner();
@@ -207,7 +206,7 @@ class BLINK_PLATFORM_EXPORT WebThreadScheduler {
   // called on the main thread and must outlive this class.
   // [1]
   // https://developers.google.com/web/tools/chrome-devtools/profile/evaluate-performance/rail
-  virtual void SetRAILModeObserver(RAILModeObserver* observer);
+  virtual void AddRAILModeObserver(WebRAILModeObserver* observer);
 
   // Sets the kind of renderer process. Should be called on the main thread
   // once.

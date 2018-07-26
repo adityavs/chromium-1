@@ -27,19 +27,20 @@ extern const base::Feature kAutofillCreateDataForTest;
 extern const base::Feature kAutofillCreditCardAssist;
 extern const base::Feature kAutofillScanCardholderName;
 extern const base::Feature kAutofillCreditCardAblationExperiment;
-extern const base::Feature kAutofillCreditCardBankNameDisplay;
-extern const base::Feature kAutofillCreditCardLastUsedDateDisplay;
+extern const base::Feature kAutofillCreditCardLocalCardMigration;
 extern const base::Feature kAutofillDeleteDisusedAddresses;
 extern const base::Feature kAutofillDeleteDisusedCreditCards;
 extern const base::Feature kAutofillExpandedPopupViews;
 extern const base::Feature kAutofillPreferServerNamePredictions;
 extern const base::Feature kAutofillRationalizeFieldTypePredictions;
+extern const base::Feature kAutofillSaveCardDialogUnlabeledExpirationDate;
 extern const base::Feature kAutofillSuggestInvalidProfileData;
 extern const base::Feature kAutofillSuppressDisusedAddresses;
 extern const base::Feature kAutofillSuppressDisusedCreditCards;
 extern const base::Feature kAutofillUpstream;
 extern const base::Feature kAutofillUpstreamAllowAllEmailDomains;
 extern const base::Feature kAutofillUpstreamAlwaysRequestCardholderName;
+extern const base::Feature kAutofillUpstreamBlankCardholderNameField;
 extern const base::Feature kAutofillUpstreamEditableCardholderName;
 extern const base::Feature kAutofillUpstreamSendPanFirstSix;
 extern const base::Feature kAutofillUpstreamUpdatePromptExplanation;
@@ -77,15 +78,9 @@ bool IsCreditCardUploadEnabled(const PrefService* pref_service,
                                const syncer::SyncService* sync_service,
                                const std::string& user_email);
 
-// Returns whether Autofill credit card last used date display experiment is
+// Returns whether Autofill credit card local card migration experiment is
 // enabled.
-bool IsAutofillCreditCardLastUsedDateDisplayExperimentEnabled();
-
-// Returns whether Autofill credit card last used date shows expiration date.
-bool ShowExpirationDateInAutofillCreditCardLastUsedDate();
-
-// Returns whether Autofill credit card bank name display experiment is enabled.
-bool IsAutofillCreditCardBankNameDisplayExperimentEnabled();
+bool IsAutofillCreditCardLocalCardMigrationExperimentEnabled();
 
 // For testing purposes; not to be launched.  When enabled, Chrome Upstream
 // always requests that the user enters/confirms cardholder name in the
@@ -93,6 +88,12 @@ bool IsAutofillCreditCardBankNameDisplayExperimentEnabled();
 // Google Payments customer.  Note that this will override the detected
 // cardholder name, if one was found.
 bool IsAutofillUpstreamAlwaysRequestCardholderNameExperimentEnabled();
+
+// For experimental purposes; not to be made available in chrome://flags. When
+// enabled and Chrome Upstream requests the cardholder name in the offer-to-save
+// dialog, the field will be blank instead of being prefilled with the name from
+// the user's Google Account.
+bool IsAutofillUpstreamBlankCardholderNameFieldExperimentEnabled();
 
 // Returns whether the experiment is enabled where Chrome Upstream can request
 // the user to enter/confirm cardholder name in the offer-to-save bubble if it
@@ -120,6 +121,10 @@ bool IsMacViewsAutofillPopupExperimentEnabled();
 // should be used. This will also be true if the kExperimentalUi flag is true,
 // which forces a bunch of forthcoming UI changes on.
 bool ShouldUseNativeViews();
+
+// Returns true if expiration dates on the save card dialog should be
+// unlabeled, i.e. not preceded by "Exp."
+bool IsAutofillSaveCardDialogUnlabeledExpirationDateEnabled();
 
 }  // namespace autofill
 

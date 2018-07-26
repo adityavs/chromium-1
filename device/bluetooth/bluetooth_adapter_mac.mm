@@ -30,6 +30,7 @@
 #include "device/bluetooth/bluetooth_discovery_session.h"
 #include "device/bluetooth/bluetooth_discovery_session_outcome.h"
 #include "device/bluetooth/bluetooth_low_energy_central_manager_delegate.h"
+#include "device/bluetooth/bluetooth_low_energy_peripheral_manager_delegate.h"
 #include "device/bluetooth/bluetooth_socket_mac.h"
 
 extern "C" {
@@ -136,6 +137,12 @@ BluetoothAdapterMac::BluetoothAdapterMac()
                    queue:dispatch_get_main_queue()]);
     low_energy_discovery_manager_->SetCentralManager(
         low_energy_central_manager_);
+    low_energy_peripheral_manager_delegate_.reset(
+        [[BluetoothLowEnergyPeripheralManagerDelegate alloc]
+            initWithAdapter:this]);
+    low_energy_peripheral_manager_.reset([[CBPeripheralManager alloc]
+        initWithDelegate:low_energy_peripheral_manager_delegate_
+                   queue:dispatch_get_main_queue()]);
   }
   DCHECK(classic_discovery_manager_);
 }
@@ -335,6 +342,10 @@ void BluetoothAdapterMac::SetCentralManagerForTesting(
 
 CBCentralManager* BluetoothAdapterMac::GetCentralManager() {
   return low_energy_central_manager_;
+}
+
+CBPeripheralManager* BluetoothAdapterMac::GetPeripheralManager() {
+  return low_energy_peripheral_manager_;
 }
 
 void BluetoothAdapterMac::SetHostControllerStateFunctionForTesting(
@@ -621,9 +632,10 @@ void BluetoothAdapterMac::LowEnergyDeviceUpdated(
   int8_t clamped_tx_power = BluetoothDevice::ClampPower([tx_power intValue]);
 
   device_mac->UpdateAdvertisementData(
-      BluetoothDevice::ClampPower(rssi), std::move(advertised_uuids),
-      std::move(service_data_map), std::move(manufacturer_data_map),
-      tx_power == nil ? nullptr : &clamped_tx_power, nullptr /* flags */);
+      BluetoothDevice::ClampPower(rssi), base::nullopt /* flags */,
+      std::move(advertised_uuids),
+      tx_power == nil ? base::nullopt : base::make_optional(clamped_tx_power),
+      std::move(service_data_map), std::move(manufacturer_data_map));
 
   if (is_new_device) {
     std::string device_address =

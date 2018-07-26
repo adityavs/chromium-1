@@ -4,6 +4,8 @@
 
 #include "chrome/browser/ui/bloated_renderer/bloated_renderer_tab_helper.h"
 #include "chrome/test/base/chrome_render_view_host_test_harness.h"
+#include "content/public/browser/navigation_entry.h"
+#include "content/public/browser/navigation_handle.h"
 #include "content/public/common/page_importance_signals.h"
 #include "content/public/test/web_contents_tester.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -14,20 +16,51 @@ class BloatedRendererTabHelperTest : public ChromeRenderViewHostTestHarness {
     ChromeRenderViewHostTestHarness::SetUp();
     BloatedRendererTabHelper::CreateForWebContents(web_contents());
     tab_helper_ = BloatedRendererTabHelper::FromWebContents(web_contents());
-    content::WebContentsTester::For(web_contents())
-        ->SetLastCommittedURL(GURL("https://test.test"));
+    web_contents_tester_ = content::WebContentsTester::For(web_contents());
+    web_contents_tester_->SetLastCommittedURL(GURL("https://test.test"));
   }
   BloatedRendererTabHelper* tab_helper_;
+  content::WebContentsTester* web_contents_tester_;
 };
 
 TEST_F(BloatedRendererTabHelperTest, DetectReload) {
-  EXPECT_FALSE(tab_helper_->reloading_bloated_renderer_);
-  tab_helper_->reloading_bloated_renderer_ = true;
-  tab_helper_->DidFinishNavigation(nullptr);
-  EXPECT_FALSE(tab_helper_->reloading_bloated_renderer_);
+  EXPECT_EQ(BloatedRendererTabHelper::State::kInactive, tab_helper_->state_);
+  tab_helper_->state_ = BloatedRendererTabHelper::State::kRequestingReload;
+  auto reload_navigation =
+      content::NavigationHandle::CreateNavigationHandleForTesting(
+          GURL(), web_contents()->GetMainFrame());
+  tab_helper_->DidStartNavigation(reload_navigation.get());
+  EXPECT_EQ(BloatedRendererTabHelper::State::kStartedNavigation,
+            tab_helper_->state_);
+  EXPECT_EQ(reload_navigation->GetNavigationId(),
+            tab_helper_->saved_navigation_id_);
+  tab_helper_->DidFinishNavigation(reload_navigation.get());
+  EXPECT_EQ(BloatedRendererTabHelper::State::kInactive, tab_helper_->state_);
+}
+
+TEST_F(BloatedRendererTabHelperTest, IgnoreUnrelatedNavigation) {
+  EXPECT_EQ(BloatedRendererTabHelper::State::kInactive, tab_helper_->state_);
+  tab_helper_->state_ = BloatedRendererTabHelper::State::kRequestingReload;
+  auto reload_navigation =
+      content::NavigationHandle::CreateNavigationHandleForTesting(
+          GURL(), web_contents()->GetMainFrame());
+  tab_helper_->DidStartNavigation(reload_navigation.get());
+  EXPECT_EQ(BloatedRendererTabHelper::State::kStartedNavigation,
+            tab_helper_->state_);
+  EXPECT_EQ(reload_navigation->GetNavigationId(),
+            tab_helper_->saved_navigation_id_);
+  auto unrelated_navigation =
+      content::NavigationHandle::CreateNavigationHandleForTesting(
+          GURL(), web_contents()->GetMainFrame());
+  tab_helper_->DidFinishNavigation(unrelated_navigation.get());
+  EXPECT_EQ(BloatedRendererTabHelper::State::kStartedNavigation,
+            tab_helper_->state_);
+  EXPECT_EQ(reload_navigation->GetNavigationId(),
+            tab_helper_->saved_navigation_id_);
 }
 
 TEST_F(BloatedRendererTabHelperTest, CanReloadBloatedTab) {
+  web_contents_tester_->NavigateAndCommit(GURL("https://test.test"));
   EXPECT_TRUE(tab_helper_->CanReloadBloatedTab());
 }
 
@@ -38,8 +71,14 @@ TEST_F(BloatedRendererTabHelperTest, CannotReloadBloatedTabCrashed) {
 }
 
 TEST_F(BloatedRendererTabHelperTest, CannotReloadBloatedTabInvalidURL) {
-  content::WebContentsTester::For(web_contents())
-      ->SetLastCommittedURL(GURL("invalid :)"));
+  web_contents_tester_->SetLastCommittedURL(GURL("invalid :)"));
+
+  EXPECT_FALSE(tab_helper_->CanReloadBloatedTab());
+}
+
+TEST_F(BloatedRendererTabHelperTest, CannotReloadBloatedTabWithPostData) {
+  web_contents_tester_->NavigateAndCommit(GURL("https://test.test"));
+  web_contents()->GetController().GetLastCommittedEntry()->SetHasPostData(true);
 
   EXPECT_FALSE(tab_helper_->CanReloadBloatedTab());
 }
@@ -48,7 +87,6 @@ TEST_F(BloatedRendererTabHelperTest,
        CannotReloadBloatedTabPendingUserInteraction) {
   content::PageImportanceSignals signals;
   signals.had_form_interaction = true;
-  content::WebContentsTester::For(web_contents())
-      ->SetPageImportanceSignals(signals);
+  web_contents_tester_->SetPageImportanceSignals(signals);
   EXPECT_FALSE(tab_helper_->CanReloadBloatedTab());
 }

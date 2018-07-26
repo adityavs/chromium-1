@@ -32,12 +32,12 @@
 
 #include <memory>
 #include "services/network/public/cpp/shared_url_loader_factory.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_network_provider.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/platform/web_worker_fetch_context.h"
-#include "third_party/blink/public/web/modules/serviceworker/web_service_worker_context_client.h"
+#include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_client.h"
 #include "third_party/blink/public/web/web_console_message.h"
 #include "third_party/blink/public/web/web_settings.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
@@ -56,18 +56,20 @@
 #include "third_party/blink/renderer/core/workers/worker_global_scope.h"
 #include "third_party/blink/renderer/core/workers/worker_inspector_proxy.h"
 #include "third_party/blink/renderer/modules/indexeddb/indexed_db_client.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_container_client.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_global_scope_client.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_global_scope_proxy.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_installed_scripts_manager.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_thread.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_container_client.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope_client.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope_proxy.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_installed_scripts_manager.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_thread.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/loader/fetch/substitute_data.h"
 #include "third_party/blink/renderer/platform/network/network_utils.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/shared_buffer.h"
+#include "third_party/blink/renderer/platform/weborigin/referrer_policy.h"
 #include "third_party/blink/renderer/platform/weborigin/security_origin.h"
+#include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/functional.h"
 
 namespace blink {
@@ -77,13 +79,17 @@ std::unique_ptr<WebEmbeddedWorker> WebEmbeddedWorker::Create(
     std::unique_ptr<WebServiceWorkerInstalledScriptsManager>
         installed_scripts_manager,
     mojo::ScopedMessagePipeHandle content_settings_handle,
+    mojo::ScopedMessagePipeHandle cache_storage,
     mojo::ScopedMessagePipeHandle interface_provider) {
   return std::make_unique<WebEmbeddedWorkerImpl>(
       std::move(client), std::move(installed_scripts_manager),
       std::make_unique<ServiceWorkerContentSettingsProxy>(
           // Chrome doesn't use interface versioning.
+          // TODO(falken): Is that comment about versioning correct?
           mojom::blink::WorkerContentSettingsProxyPtrInfo(
               std::move(content_settings_handle), 0u)),
+      mojom::blink::CacheStoragePtrInfo(std::move(cache_storage),
+                                        mojom::blink::CacheStorage::Version_),
       service_manager::mojom::blink::InterfaceProviderPtrInfo(
           std::move(interface_provider),
           service_manager::mojom::blink::InterfaceProvider::Version_));
@@ -94,6 +100,7 @@ WebEmbeddedWorkerImpl::WebEmbeddedWorkerImpl(
     std::unique_ptr<WebServiceWorkerInstalledScriptsManager>
         installed_scripts_manager,
     std::unique_ptr<ServiceWorkerContentSettingsProxy> content_settings_client,
+    mojom::blink::CacheStoragePtrInfo cache_storage_info,
     service_manager::mojom::blink::InterfaceProviderPtrInfo
         interface_provider_info)
     : worker_context_client_(std::move(client)),
@@ -101,6 +108,7 @@ WebEmbeddedWorkerImpl::WebEmbeddedWorkerImpl(
       worker_inspector_proxy_(WorkerInspectorProxy::Create()),
       pause_after_download_state_(kDontPauseAfterDownload),
       waiting_for_debugger_state_(kNotWaitingForDebugger),
+      cache_storage_info_(std::move(cache_storage_info)),
       interface_provider_info_(std::move(interface_provider_info)) {
   if (installed_scripts_manager) {
     installed_scripts_manager_ =
@@ -241,14 +249,6 @@ void WebEmbeddedWorkerImpl::PostMessageToPageInspector(int session_id,
   worker_inspector_proxy_->DispatchMessageFromWorker(session_id, message);
 }
 
-void WebEmbeddedWorkerImpl::SetContentSecurityPolicyAndReferrerPolicy(
-    ContentSecurityPolicy* content_security_policy,
-    String referrer_policy) {
-  DCHECK(IsMainThread());
-  shadow_page_->SetContentSecurityPolicyAndReferrerPolicy(
-      content_security_policy, std::move(referrer_policy));
-}
-
 std::unique_ptr<WebApplicationCacheHost>
 WebEmbeddedWorkerImpl::CreateApplicationCacheHost(
     WebApplicationCacheHostClient*) {
@@ -365,17 +365,21 @@ void WebEmbeddedWorkerImpl::StartWorkerThread() {
   // |main_script_loader_| isn't created if the InstalledScriptsManager had the
   // script.
   if (main_script_loader_) {
-    // We need to set the CSP to both the shadow page's document and the
-    // ServiceWorkerGlobalScope.
-    SetContentSecurityPolicyAndReferrerPolicy(
-        main_script_loader_->ReleaseContentSecurityPolicy(),
-        main_script_loader_->GetReferrerPolicy());
+    ContentSecurityPolicy* content_security_policy =
+        main_script_loader_->GetContentSecurityPolicy();
+    ReferrerPolicy referrer_policy = kReferrerPolicyDefault;
+    if (!main_script_loader_->GetReferrerPolicy().IsNull()) {
+      SecurityPolicy::ReferrerPolicyFromHeaderValue(
+          main_script_loader_->GetReferrerPolicy(),
+          kDoNotSupportReferrerPolicyLegacyKeywords, &referrer_policy);
+    }
     global_scope_creation_params = std::make_unique<GlobalScopeCreationParams>(
         worker_start_data_.script_url, script_type,
         worker_start_data_.user_agent,
-        document->GetContentSecurityPolicy()->Headers(),
-        document->GetReferrerPolicy(), starter_origin, starter_secure_context,
-        worker_clients, main_script_loader_->ResponseAddressSpace(),
+        content_security_policy ? content_security_policy->Headers()
+                                : Vector<CSPHeaderAndType>(),
+        referrer_policy, starter_origin, starter_secure_context, worker_clients,
+        main_script_loader_->ResponseAddressSpace(),
         main_script_loader_->OriginTrialTokens(), devtools_worker_token_,
         std::move(worker_settings),
         static_cast<V8CacheOptions>(worker_start_data_.v8_cache_options),
@@ -385,9 +389,8 @@ void WebEmbeddedWorkerImpl::StartWorkerThread() {
     cached_meta_data = main_script_loader_->ReleaseCachedMetadata();
     main_script_loader_ = nullptr;
   } else {
-    // ContentSecurityPolicy and ReferrerPolicy are applied to |document| at
-    // SetContentSecurityPolicyAndReferrerPolicy() before evaluating the main
-    // script.
+    // We don't have to set ContentSecurityPolicy and ReferrerPolicy. They're
+    // served by the installed scripts manager on the worker thread.
     global_scope_creation_params = std::make_unique<GlobalScopeCreationParams>(
         worker_start_data_.script_url, script_type,
         worker_start_data_.user_agent, Vector<CSPHeaderAndType>(),
@@ -408,7 +411,7 @@ void WebEmbeddedWorkerImpl::StartWorkerThread() {
   worker_thread_ = std::make_unique<ServiceWorkerThread>(
       ThreadableLoadingContext::Create(*document),
       ServiceWorkerGlobalScopeProxy::Create(*this, *worker_context_client_),
-      std::move(installed_scripts_manager_));
+      std::move(installed_scripts_manager_), std::move(cache_storage_info_));
 
   // We have a dummy document here for loading but it doesn't really represent
   // the document/frame of associated document(s) for this worker. Here we

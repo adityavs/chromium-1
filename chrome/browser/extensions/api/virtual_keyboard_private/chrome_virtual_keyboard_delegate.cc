@@ -40,7 +40,7 @@ namespace {
 
 aura::Window* GetKeyboardWindow() {
   auto* controller = keyboard::KeyboardController::Get();
-  return controller->enabled() ? controller->GetContentsWindow() : nullptr;
+  return controller->enabled() ? controller->GetKeyboardWindow() : nullptr;
 }
 
 std::string GenerateFeatureFlag(const std::string& feature, bool enabled) {
@@ -187,6 +187,17 @@ bool ChromeVirtualKeyboardDelegate::SetOccludedBounds(
   return true;
 }
 
+bool ChromeVirtualKeyboardDelegate::SetHitTestBounds(
+    const std::vector<gfx::Rect>& bounds) {
+  keyboard::KeyboardController* controller =
+      keyboard::KeyboardController::Get();
+  if (!controller->enabled())
+    return false;
+
+  controller->SetHitTestBounds(bounds);
+  return true;
+}
+
 keyboard::ContainerType
 ChromeVirtualKeyboardDelegate::ConvertKeyboardModeToContainerType(
     int mode) const {
@@ -211,7 +222,7 @@ bool ChromeVirtualKeyboardDelegate::SetDraggableArea(
   if (!controller->enabled())
     return true;
   return controller->SetDraggableArea(
-      gfx::Rect(rect.top, rect.left, rect.width, rect.height));
+      gfx::Rect(rect.left, rect.top, rect.width, rect.height));
 }
 
 bool ChromeVirtualKeyboardDelegate::SetRequestedKeyboardState(int state_enum) {

@@ -12,9 +12,7 @@
 #include <string>
 #include <vector>
 
-#include "base/atomicops.h"
 #include "base/base_export.h"
-#include "base/callback.h"
 #include "base/files/file_path.h"
 #include "base/macros.h"
 #include "base/strings/string16.h"
@@ -38,18 +36,12 @@ class NativeStackSamplerTestDelegate;
 //
 //   // Create and customize params as desired.
 //   base::StackStackSamplingProfiler::SamplingParams params;
-//   // Any thread's ID may be passed as the target.
-//   base::StackSamplingProfiler profiler(base::PlatformThread::CurrentId()),
-//       params);
 //
-//   // To process the profiles, use a custom completed callback:
-//   base::StackStackSamplingProfiler::CompletedCallback
-//       thread_safe_callback = ...;
-//   auto profile_builder =
-//       std::make_unique<base::StackSamplingProfiler::SamplingProfileBuilder>(
-//       thread_safe_callback);
+//   // To process the profiles, use a custom ProfileBuilder subclass:
+//   class SubProfileBuilder :
+//       public base::StackSamplingProfiler::ProfileBuilder{...}
 //   base::StackSamplingProfiler profiler(base::PlatformThread::CurrentId()),
-//       params, std::move(profile_builder));
+//       params, std::make_unique<SubProfileBuilder>(...));
 //
 //   profiler.Start();
 //   // ... work being done on the target thread here ...
@@ -60,8 +52,8 @@ class NativeStackSamplerTestDelegate;
 // altered as desired.
 //
 // When a call stack profile is complete, or the profiler is stopped,
-// SamplingProfileBuilder's OnProfileCompleted function is called from a thread
-// created by the profiler.
+// ProfileBuilder's OnProfileCompleted function is called from a thread created
+// by the profiler.
 class BASE_EXPORT StackSamplingProfiler {
  public:
   // Module represents the module (DLL or exe) corresponding to a stack frame.
@@ -92,12 +84,16 @@ class BASE_EXPORT StackSamplingProfiler {
   // Different from Module, it has an additional field "is_valid".
   //
   // This struct is only used for sampling data transfer from NativeStackSampler
-  // to SamplingProfileBuilder.
+  // to ProfileBuilder.
   struct BASE_EXPORT InternalModule {
     InternalModule();
     InternalModule(uintptr_t base_address,
                    const std::string& id,
                    const FilePath& filename);
+    InternalModule(uintptr_t base_address,
+                   const std::string& id,
+                   const FilePath& filename,
+                   size_t size);
     ~InternalModule();
 
     // Points to the base address of the module.
@@ -117,6 +113,9 @@ class BASE_EXPORT StackSamplingProfiler {
 
     // The validness of the module.
     bool is_valid;
+
+    // Size of the module.
+    size_t size;
   };
 
   // Frame represents an individual sampled stack frame with module information.
@@ -139,7 +138,7 @@ class BASE_EXPORT StackSamplingProfiler {
   // information. This is different from Frame which only contains module index.
   //
   // This struct is only used for sampling data transfer from NativeStackSampler
-  // to SamplingProfileBuilder.
+  // to ProfileBuilder.
   struct BASE_EXPORT InternalFrame {
     InternalFrame(uintptr_t instruction_pointer,
                   InternalModule internal_module);
@@ -224,9 +223,6 @@ class BASE_EXPORT StackSamplingProfiler {
     // so that tests don't inherit state from previous tests.
     static void Reset();
 
-    // Resets internal annotations (like process phase) to initial values.
-    static void ResetAnnotations();
-
     // Returns whether the sampling thread is currently running or not.
     static bool IsSamplingThreadRunning();
 
@@ -246,59 +242,34 @@ class BASE_EXPORT StackSamplingProfiler {
         bool simulate_intervening_start);
   };
 
-  // The callback type used to collect a completed profile. The passed |profile|
-  // is move-only. Other threads, including the UI thread, may block on callback
-  // completion so this should run as quickly as possible.
-  //
-  // IMPORTANT NOTE: The callback is invoked on a thread the profiler
-  // constructs, rather than on the thread used to construct the profiler, and
-  // thus the callback must be callable on any thread. For threads with message
-  // loops that create StackSamplingProfilers, posting a task to the message
-  // loop with the moved (i.e. std::move) profile is the thread-safe callback
-  // implementation.
-  using CompletedCallback = Callback<void(CallStackProfile)>;
-
-  // SamplingProfileBuilder receives the sampling data from NativeSampler and
-  // builds a CallStackProfile.
-  //
-  // The results of the profile building -- a CallStackProfile, is passed to the
-  // completed callback. A CallStackProfile contains a set of Samples and
-  // Modules, and other sampling information. One Sample corresponds to a single
-  // recorded stack, and the Modules record those modules associated with the
-  // recorded stack frames.
-  class BASE_EXPORT SamplingProfileBuilder {
+  // The ProfileBuilder interface allows the user to record profile information
+  // on the fly in whatever format is desired. Functions are invoked by the
+  // profiler on its own thread so must not block or perform expensive
+  // operations.
+  class BASE_EXPORT ProfileBuilder {
    public:
-    SamplingProfileBuilder(const CompletedCallback& callback);
+    ProfileBuilder() = default;
+    virtual ~ProfileBuilder() = default;
 
-    ~SamplingProfileBuilder();
+    // Metadata associated with the sample to be saved off.
+    // The code implementing this method must not do anything that could acquire
+    // a mutex, including allocating memory (which includes LOG messages)
+    // because that mutex could be held by a stopped thread, thus resulting in
+    // deadlock.
+    virtual void RecordAnnotations() = 0;
 
-    // Records metadata associated with sample_.
-    void RecordAnnotations();
-
-    // Finishes the construction of profile_ with |profile_duration| and
-    // |sampling_period|. Runs callback_ to pass profile_. Invoked when sampling
-    // a Profile completes.
-    void OnProfileCompleted(TimeDelta profile_duration,
-                            TimeDelta sampling_period);
-
-    // Records a new set of frames to sample_. Invoked when sampling a Sample
+    // Records a new set of internal frames. Invoked when sampling a sample
     // completes.
-    void OnSampleCompleted(std::vector<InternalFrame> internal_frames);
+    virtual void OnSampleCompleted(
+        std::vector<InternalFrame> internal_frames) = 0;
+
+    // Finishes the profile construction with |profile_duration| and
+    // |sampling_period|. Invoked when sampling a profile completes.
+    virtual void OnProfileCompleted(TimeDelta profile_duration,
+                                    TimeDelta sampling_period) = 0;
 
    private:
-    // The collected stack samples.
-    CallStackProfile profile_;
-
-    // The current sample being recorded.
-    Sample sample_;
-
-    // The indexes of internal modules, indexed by module's base_address.
-    std::map<uintptr_t, size_t> module_index_;
-
-    // Callback made when sampling a profile completes.
-    const CompletedCallback callback_;
-
-    DISALLOW_COPY_AND_ASSIGN(SamplingProfileBuilder);
+    DISALLOW_COPY_AND_ASSIGN(ProfileBuilder);
   };
 
   // Creates a profiler for the CURRENT thread. An optional |test_delegate| can
@@ -306,7 +277,7 @@ class BASE_EXPORT StackSamplingProfiler {
   // destroyed before the current thread exits.
   StackSamplingProfiler(
       const SamplingParams& params,
-      std::unique_ptr<SamplingProfileBuilder> profile_builder,
+      std::unique_ptr<ProfileBuilder> profile_builder,
       NativeStackSamplerTestDelegate* test_delegate = nullptr);
 
   // Creates a profiler for ANOTHER thread. An optional |test_delegate| can be
@@ -317,7 +288,7 @@ class BASE_EXPORT StackSamplingProfiler {
   StackSamplingProfiler(
       PlatformThreadId thread_id,
       const SamplingParams& params,
-      std::unique_ptr<SamplingProfileBuilder> profile_builder,
+      std::unique_ptr<ProfileBuilder> profile_builder,
       NativeStackSamplerTestDelegate* test_delegate = nullptr);
 
   // Stops any profiling currently taking place before destroying the profiler.
@@ -338,27 +309,12 @@ class BASE_EXPORT StackSamplingProfiler {
   // are completed or the profiler object is destroyed, whichever occurs first.
   void Stop();
 
-  // Set the current system state that is recorded with each captured stack
-  // frame. This is thread-safe so can be called from anywhere. The parameter
-  // value should be from an enumeration of the appropriate type with values
-  // ranging from 0 to 31, inclusive. This sets bits within Sample field of
-  // |process_milestones|. The actual meanings of these bits are defined
-  // (globally) by the caller(s).
-  static void SetProcessMilestone(int milestone);
-
  private:
   friend class TestAPI;
 
   // SamplingThread is a separate thread used to suspend and sample stacks from
   // the target thread.
   class SamplingThread;
-
-  // This global variables holds the current system state and is recorded with
-  // every captured sample, done on a separate thread which is why updates to
-  // this must be atomic. A PostTask to move the the updates to that thread
-  // would skew the timing and a lock could result in deadlock if the thread
-  // making a change was also being profiled and got stopped.
-  static subtle::Atomic32 process_milestones_;
 
   // The thread whose stack will be sampled.
   PlatformThreadId thread_id_;
@@ -368,7 +324,7 @@ class BASE_EXPORT StackSamplingProfiler {
   // Receives the sampling data and builds a CallStackProfile. The ownership of
   // this object will be transferred to the sampling thread when thread sampling
   // starts.
-  std::unique_ptr<SamplingProfileBuilder> profile_builder_;
+  std::unique_ptr<ProfileBuilder> profile_builder_;
 
   // This starts "signaled", is reset when sampling begins, and is signaled
   // when that sampling is complete and the profile_builder_'s

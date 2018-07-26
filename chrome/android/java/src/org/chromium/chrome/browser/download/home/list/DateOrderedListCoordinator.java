@@ -9,8 +9,10 @@ import android.view.View;
 
 import org.chromium.base.Callback;
 import org.chromium.chrome.browser.download.home.filter.FilterCoordinator;
+import org.chromium.chrome.browser.download.home.filter.FilterCoordinatorWithNoTabs;
 import org.chromium.chrome.browser.download.home.filter.Filters.FilterType;
 import org.chromium.chrome.browser.download.home.list.ListItem.ViewListItem;
+import org.chromium.chrome.browser.widget.selection.SelectionDelegate;
 import org.chromium.components.offline_items_collection.OfflineContentProvider;
 import org.chromium.components.offline_items_collection.OfflineItem;
 
@@ -42,7 +44,7 @@ public class DateOrderedListCoordinator {
     }
 
     private final FilterCoordinator mFilterCoordinator;
-
+    private final EmptyViewCoordinator mEmptyViewCoordinator;
     private final DateOrderedListMediator mMediator;
     private final DateOrderedListView mView;
 
@@ -58,16 +60,24 @@ public class DateOrderedListCoordinator {
      */
     public DateOrderedListCoordinator(Context context, Boolean offTheRecord,
             OfflineContentProvider provider, DeleteController deleteController,
+            SelectionDelegate<ListItem> selectionDelegate,
             FilterCoordinator.Observer filterObserver) {
         ListItemModel model = new ListItemModel();
         DecoratedListItemModel decoratedModel = new DecoratedListItemModel(model);
         mView = new DateOrderedListView(context, decoratedModel);
-        mMediator = new DateOrderedListMediator(offTheRecord, provider, deleteController, model);
+        mMediator = new DateOrderedListMediator(
+                offTheRecord, provider, deleteController, selectionDelegate, model);
 
         // Hook up the FilterCoordinator with our mediator.
-        mFilterCoordinator = new FilterCoordinator(context, mMediator.getFilterSource());
+        mFilterCoordinator = shouldShowPrefetchTab()
+                ? new FilterCoordinator(context, mMediator.getFilterSource())
+                : new FilterCoordinatorWithNoTabs(context, mMediator.getFilterSource());
         mFilterCoordinator.addObserver(mMediator::onFilterTypeSelected);
         mFilterCoordinator.addObserver(filterObserver);
+
+        mEmptyViewCoordinator =
+                new EmptyViewCoordinator(context, decoratedModel, mMediator.getFilterSource());
+        mFilterCoordinator.addObserver(mEmptyViewCoordinator::onFilterTypeSelected);
         decoratedModel.setHeader(new ViewListItem(Long.MAX_VALUE, mFilterCoordinator.getView()));
     }
 
@@ -89,5 +99,15 @@ public class DateOrderedListCoordinator {
     /** Sets the UI and list to filter based on the {@code filter} {@link FilterType}. */
     public void setSelectedFilter(@FilterType int filter) {
         mFilterCoordinator.setSelectedFilter(filter);
+    }
+
+    /** Called to delete a list of items specified by {@code items}. */
+    public void onDeletionRequested(List<ListItem> items) {
+        mMediator.onDeletionRequested(items);
+    }
+
+    private boolean shouldShowPrefetchTab() {
+        // TODO(shaktisahu): Check if prefetch UI is enabled.
+        return true;
     }
 }

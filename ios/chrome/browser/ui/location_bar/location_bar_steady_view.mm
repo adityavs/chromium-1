@@ -6,6 +6,7 @@
 
 #include "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/ui/location_bar/extended_touch_target_button.h"
+#import "ios/chrome/browser/ui/toolbar/buttons/toolbar_constants.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
 #import "ios/chrome/common/ui_util/constraints_ui_util.h"
 #include "ios/chrome/grit/ios_strings.h"
@@ -18,15 +19,12 @@
 namespace {
 
 // Length of the trailing button side.
-const CGFloat kButtonSize = 28;
+const CGFloat kButtonSize = 24;
 
 // Space between the location icon and the location label.
 const CGFloat kLocationImageToLabelSpacing = 2.0;
 
 const CGFloat kButtonTrailingSpacing = 10;
-
-// Font size used in the omnibox.
-const CGFloat kFontSize = 17.0f;
 
 }  // namespace
 
@@ -73,7 +71,7 @@ const CGFloat kFontSize = 17.0f;
 
   scheme.fontColor = [UIColor colorWithWhite:0 alpha:0.7];
   scheme.placeholderColor = [UIColor colorWithWhite:0 alpha:0.3];
-  scheme.trailingButtonColor = [UIColor colorWithWhite:0 alpha:0.3];
+  scheme.trailingButtonColor = [UIColor colorWithWhite:0 alpha:0.7];
 
   return scheme;
 }
@@ -84,7 +82,7 @@ const CGFloat kFontSize = 17.0f;
 
   scheme.fontColor = [UIColor whiteColor];
   scheme.placeholderColor = [UIColor colorWithWhite:1 alpha:0.5];
-  scheme.trailingButtonColor = [UIColor colorWithWhite:1 alpha:0.5];
+  scheme.trailingButtonColor = [UIColor whiteColor];
 
   return scheme;
 }
@@ -134,7 +132,6 @@ const CGFloat kFontSize = 17.0f;
     [_locationLabel
         setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
                                         forAxis:UILayoutConstraintAxisVertical];
-    _locationLabel.font = [UIFont systemFontOfSize:kFontSize];
 
     // Container for location label and icon.
     _locationContainerView = [[UIView alloc] init];
@@ -205,8 +202,6 @@ const CGFloat kFontSize = 17.0f;
 
     // Setup and activate the show button constraints.
     _showButtonConstraints = @[
-      // TODO(crbug.com/821804) Replace the temporary size when the icon is
-      // available.
       [_trailingButton.widthAnchor constraintEqualToConstant:kButtonSize],
       [_trailingButton.heightAnchor constraintEqualToConstant:kButtonSize],
       [self.trailingButton.trailingAnchor
@@ -218,8 +213,6 @@ const CGFloat kFontSize = 17.0f;
 
   // Setup accessibility.
   _trailingButton.isAccessibilityElement = YES;
-  _trailingButton.accessibilityLabel =
-      l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_SHARE);
   _locationButton.isAccessibilityElement = YES;
   _locationButton.accessibilityLabel =
       l10n_util::GetNSString(IDS_ACCNAME_LOCATION);
@@ -286,7 +279,22 @@ const CGFloat kFontSize = 17.0f;
   [self updateAccessibility];
 }
 
-#pragma mark - UIAccessibilityContainer]
+#pragma mark - UIResponder
+
+// This is needed for UIMenu
+- (BOOL)canBecomeFirstResponder {
+  return true;
+}
+
+#pragma mark - UIView
+
+- (void)traitCollectionDidChange:(UITraitCollection*)previousTraitCollection {
+  [super traitCollectionDidChange:previousTraitCollection];
+  self.locationLabel.font =
+      [UIFont systemFontOfSize:kLocationBarSteadyFontSize];
+}
+
+#pragma mark - UIAccessibilityContainer
 
 - (NSArray*)accessibilityElements {
   return self.accessibleElements;

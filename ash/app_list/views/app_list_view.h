@@ -42,6 +42,7 @@ class HideViewAnimationObserver;
 class PaginationModel;
 class SearchBoxView;
 class SearchModel;
+class TransitionAnimationObserver;
 
 // AppListView is the top-level view and controller of app list UI. It creates
 // and hosts a AppsGridView and passes AppListModel to it for display.
@@ -103,6 +104,9 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // app list.
   static void ExcludeWindowFromEventHandling(aura::Window* window);
 
+  static void SetShortAnimationForTesting(bool enabled);
+  static bool ShortAnimationsForTesting();
+
   // Initializes the widget as a bubble or fullscreen view depending on if the
   // fullscreen app list feature is set.
   void Initialize(const InitParams& params);
@@ -161,7 +165,8 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
 
   // Changes the app list state depending on the current |app_list_state_| and
   // whether the search box is empty.
-  void SetStateFromSearchBoxView(bool search_box_is_empty);
+  void SetStateFromSearchBoxView(bool search_box_is_empty,
+                                 bool triggered_by_contents_change);
 
   // Updates y position and opacity of app list.
   void UpdateYPositionAndOpacity(int y_position_in_screen,
@@ -181,10 +186,6 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // Sets |is_in_drag_| and updates the visibility of app list items.
   void SetIsInDrag(bool is_in_drag);
 
-  void set_short_animation_for_testing() {
-    short_animations_for_testing_ = true;
-  }
-
   // Gets the PaginationModel owned by this view's apps grid.
   PaginationModel* GetAppsPaginationModel();
 
@@ -194,6 +195,9 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
 
   // Gets current screen bottom.
   int GetScreenBottom();
+
+  // Returns current app list height above display bottom.
+  int GetCurrentAppListHeight() const;
 
   views::Widget* get_fullscreen_widget_for_test() const {
     return fullscreen_widget_;
@@ -220,16 +224,11 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
 
   bool is_in_drag() const { return is_in_drag_; }
 
-  int app_list_y_position_in_screen() const {
-    return app_list_y_position_in_screen_;
-  }
-
   bool drag_started_from_peeking() const { return drag_started_from_peeking_; }
 
   void set_onscreen_keyboard_shown(bool onscreen_keyboard_shown) {
     onscreen_keyboard_shown_ = onscreen_keyboard_shown;
   }
-  bool onscreen_keyboard_shown() const { return onscreen_keyboard_shown_; }
 
   // Returns true if the home launcher is enabled in tablet mode.
   bool IsHomeLauncherEnabledInTabletMode() const;
@@ -326,6 +325,9 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // Returns true if scroll events should be ignored.
   bool ShouldIgnoreScrollEvents();
 
+  // Updates corner radius of the app list background.
+  void UpdateBackgroundRadius();
+
   AppListViewDelegate* delegate_;    // Weak. Owned by AppListService.
   AppListModel* const model_;        // Not Owned.
   SearchModel* const search_model_;  // Not Owned.
@@ -342,6 +344,10 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // Owned by the app list's widget. Null if the fullscreen app list is not
   // enabled.
   views::View* app_list_background_shield_ = nullptr;
+
+  // The mask layer to create rounded corner of the app list background.
+  std::unique_ptr<ui::LayerOwner> app_list_background_mask_ = nullptr;
+
   // Whether tablet mode is active.
   bool is_tablet_mode_ = false;
   // Whether the shelf is oriented on the side.
@@ -350,9 +356,6 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // True if the user is in the process of gesture-dragging on opened app list,
   // or dragging the app list from shelf.
   bool is_in_drag_ = false;
-
-  // Set animation durations to 0 for testing.
-  bool short_animations_for_testing_;
 
   // Y position of the app list in screen space coordinate during dragging.
   int app_list_y_position_in_screen_ = 0;
@@ -383,7 +386,9 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
   // are open.
   views::View* overlay_view_ = nullptr;
 
-  std::unique_ptr<HideViewAnimationObserver> animation_observer_;
+  std::unique_ptr<HideViewAnimationObserver> hide_view_animation_observer_;
+
+  std::unique_ptr<TransitionAnimationObserver> transition_animation_observer_;
 
   // For UMA and testing. If non-null, triggered when the app list is painted.
   base::Closure next_paint_callback_;
@@ -406,6 +411,9 @@ class APP_LIST_EXPORT AppListView : public views::WidgetDelegateView,
 
   // Whether the home launcher feature is enabled.
   const bool is_home_launcher_enabled_;
+
+  // True if new style launcher feature is enabled.
+  const bool is_new_style_launcher_enabled_;
 
   base::WeakPtrFactory<AppListView> weak_ptr_factory_;
 

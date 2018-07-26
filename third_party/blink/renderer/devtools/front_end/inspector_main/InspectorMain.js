@@ -31,9 +31,10 @@ InspectorMain.InspectorMain = class extends Common.Object {
   }
 
   _connectAndCreateMainTarget() {
+    const isNodeJS = !!Runtime.queryParam('v8only');
     const target = SDK.targetManager.createTarget(
-        'main', Common.UIString('Main'), this._capabilitiesForMainTarget(), this._createMainConnection.bind(this),
-        null);
+        'main', Common.UIString('Main'), this._capabilitiesForMainTarget(), this._createMainConnection.bind(this), null,
+        isNodeJS);
     target.runtimeAgent().runIfWaitingForDebugger();
   }
 

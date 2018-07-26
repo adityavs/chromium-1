@@ -244,6 +244,13 @@ class GFX_EXPORT RenderText {
     selection_background_focused_color_ = color;
   }
 
+  bool symmetric_selection_visual_bounds() const {
+    return symmetric_selection_visual_bounds_;
+  }
+  void set_symmetric_selection_visual_bounds(bool symmetric) {
+    symmetric_selection_visual_bounds_ = symmetric;
+  }
+
   bool focused() const { return focused_; }
   void set_focused(bool focused) { focused_ = focused; }
 
@@ -558,6 +565,9 @@ class GFX_EXPORT RenderText {
   const std::vector<BreakList<bool> >& styles() const { return styles_; }
   SkScalar strike_thickness_factor() const { return strike_thickness_factor_; }
 
+  // Whether all the BreakLists have only one break.
+  bool IsHomogeneous() const;
+
   const std::vector<internal::Line>& lines() const { return lines_; }
   void set_lines(std::vector<internal::Line>* lines) { lines_.swap(*lines); }
 
@@ -697,6 +707,11 @@ class GFX_EXPORT RenderText {
   static int DetermineBaselineCenteringText(const int display_height,
                                             const FontList& font_list);
 
+  // Returns an expanded version of |rect| that is vertically symmetric with
+  // respect to the center of |display_rect|.
+  static gfx::Rect ExpandToBeVerticallySymmetric(const gfx::Rect& rect,
+                                                 const gfx::Rect& display_rect);
+
  private:
   friend class test::RenderTextTestApi;
 
@@ -782,6 +797,11 @@ class GFX_EXPORT RenderText {
 
   // The background color used for drawing the selection when focused.
   SkColor selection_background_focused_color_;
+
+  // Whether the selection visual bounds should be expanded vertically to be
+  // vertically symmetric with respect to the display rect. Note this flag has
+  // no effect on multi-line text.
+  bool symmetric_selection_visual_bounds_ = false;
 
   // The focus state of the text.
   bool focused_;

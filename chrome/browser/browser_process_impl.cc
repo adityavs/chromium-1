@@ -53,6 +53,7 @@
 #include "chrome/browser/lifetime/application_lifetime.h"
 #include "chrome/browser/lifetime/switch_utils.h"
 #include "chrome/browser/loader/chrome_resource_dispatcher_host_delegate.h"
+#include "chrome/browser/media/router/discovery/dial/dial_registry.h"
 #include "chrome/browser/media/webrtc/webrtc_event_log_manager.h"
 #include "chrome/browser/media/webrtc/webrtc_log_uploader.h"
 #include "chrome/browser/metrics/chrome_metrics_service_accessor.h"
@@ -91,6 +92,7 @@
 #include "components/component_updater/timer_update_scheduler.h"
 #include "components/crash/core/common/crash_key.h"
 #include "components/gcm_driver/gcm_driver.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/metrics/metrics_pref_names.h"
 #include "components/metrics/metrics_service.h"
 #include "components/metrics_services_manager/metrics_services_manager.h"
@@ -151,7 +153,10 @@
 #include "ui/message_center/message_center.h"
 #endif
 
-#if !defined(OS_ANDROID)
+#if defined(OS_ANDROID)
+#include "chrome/browser/android/chrome_feature_list.h"
+#include "chrome/browser/android/component_updater/background_task_update_scheduler.h"
+#else
 #include "chrome/browser/gcm/gcm_product_util.h"
 #include "components/gcm_driver/gcm_client_factory.h"
 #include "components/gcm_driver/gcm_desktop_utils.h"
@@ -175,7 +180,7 @@
 #include "chrome/browser/plugins/plugins_resource_service.h"
 #endif
 
-#if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
+#if !defined(OS_ANDROID)
 #include "chrome/browser/resource_coordinator/tab_manager.h"
 #endif
 
@@ -331,7 +336,12 @@ BrowserProcessImpl::~BrowserProcessImpl() {
 
 #if !defined(OS_ANDROID)
   KeepAliveRegistry::GetInstance()->RemoveObserver(this);
-#endif  // !defined(OS_ANDROID)
+
+  // TabLifecycleUnitSource must be deleted before TabManager because it has a
+  // raw pointer to a UsageClock owned by TabManager.
+  tab_lifecycle_unit_source_.reset();
+  tab_manager_.reset();
+#endif
 
   g_browser_process = NULL;
 }
@@ -345,6 +355,10 @@ void BrowserProcessImpl::StartTearDown() {
   DCHECK(IsShuttingDown());
 
   KeepAliveRegistry::GetInstance()->SetIsShuttingDown();
+
+  BrowserThread::PostTask(
+      BrowserThread::IO, FROM_HERE,
+      base::BindOnce(&media_router::DialRegistry::Shutdown));
 
   // We need to destroy the MetricsServicesManager, IntranetRedirectDetector,
   // NetworkTimeTracker, and SafeBrowsing ClientSideDetectionService
@@ -623,14 +637,19 @@ BrowserProcessImpl::system_network_context_manager() {
   return system_network_context_manager_.get();
 }
 
+scoped_refptr<network::SharedURLLoaderFactory>
+BrowserProcessImpl::shared_url_loader_factory() {
+  return system_network_context_manager()->GetSharedURLLoaderFactory();
+}
+
 content::NetworkConnectionTracker*
 BrowserProcessImpl::network_connection_tracker() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(io_thread_);
   if (!network_connection_tracker_) {
     network_connection_tracker_ =
-        std::make_unique<content::NetworkConnectionTracker>();
-    network_connection_tracker_->Initialize(content::GetNetworkService());
+        std::make_unique<content::NetworkConnectionTracker>(
+            base::BindRepeating(&content::GetNetworkService));
   }
   return network_connection_tracker_.get();
 }
@@ -864,17 +883,19 @@ gcm::GCMDriver* BrowserProcessImpl::gcm_driver() {
 
 resource_coordinator::TabManager* BrowserProcessImpl::GetTabManager() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-#if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
+#if defined(OS_ANDROID)
+  return nullptr;
+#else
   if (!tab_manager_) {
     tab_manager_ = std::make_unique<resource_coordinator::TabManager>();
     tab_lifecycle_unit_source_ =
-        std::make_unique<resource_coordinator::TabLifecycleUnitSource>();
+        std::make_unique<resource_coordinator::TabLifecycleUnitSource>(
+            tab_manager_->intervention_policy_database(),
+            tab_manager_->usage_clock());
     tab_lifecycle_unit_source_->AddObserver(tab_manager_.get());
   }
   return tab_manager_.get();
-#else
-  return nullptr;
-#endif
+#endif  // defined(OS_ANDROID)
 }
 
 shell_integration::DefaultWebClientState
@@ -908,7 +929,8 @@ void BrowserProcessImpl::RegisterPrefs(PrefRegistrySimple* registry) {
   // Initialize ResourceBundle which handles files loaded from external
   // sources. This has to be done before uninstall code path and before prefs
   // are registered.
-  registry->RegisterStringPref(prefs::kApplicationLocale, std::string());
+  registry->RegisterStringPref(language::prefs::kApplicationLocale,
+                               std::string());
 #if defined(OS_CHROMEOS)
   registry->RegisterStringPref(prefs::kOwnerLocale, std::string());
   registry->RegisterStringPref(prefs::kHardwareKeyboardLayout,
@@ -1011,11 +1033,23 @@ BrowserProcessImpl::component_updater() {
   if (!BrowserThread::CurrentlyOn(BrowserThread::UI))
     return nullptr;
 
+  std::unique_ptr<component_updater::UpdateScheduler> scheduler;
+#if defined(OS_ANDROID)
+  if (base::FeatureList::IsEnabled(
+          chrome::android::kBackgroundTaskComponentUpdate) &&
+      component_updater::BackgroundTaskUpdateScheduler::IsAvailable()) {
+    scheduler =
+        std::make_unique<component_updater::BackgroundTaskUpdateScheduler>();
+  }
+#endif
+  if (!scheduler)
+    scheduler = std::make_unique<component_updater::TimerUpdateScheduler>();
+
   component_updater_ = component_updater::ComponentUpdateServiceFactory(
       component_updater::MakeChromeComponentUpdaterConfigurator(
           base::CommandLine::ForCurrentProcess(),
           g_browser_process->local_state()),
-      std::make_unique<component_updater::TimerUpdateScheduler>());
+      std::move(scheduler));
 
   return component_updater_.get();
 }

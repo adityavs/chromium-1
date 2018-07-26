@@ -152,6 +152,7 @@ public abstract class ChromeFeatureList {
     public static final String ANDROID_PAY_INTEGRATION_V1 = "AndroidPayIntegrationV1";
     public static final String ANDROID_PAY_INTEGRATION_V2 = "AndroidPayIntegrationV2";
     public static final String ANDROID_PAYMENT_APPS = "AndroidPaymentApps";
+    public static final String APP_NOTIFICATION_STATUS_MESSAGING = "AppNotificationStatusMessaging";
     public static final String AUTOFILL_KEYBOARD_ACCESSORY = "AutofillKeyboardAccessory";
     public static final String AUTOFILL_SCAN_CARDHOLDER_NAME = "AutofillScanCardholderName";
     public static final String CAF_MEDIA_ROUTER_IMPL = "CafMediaRouterImpl";
@@ -162,7 +163,7 @@ public abstract class ChromeFeatureList {
     public static final String CCT_PARALLEL_REQUEST = "CCTParallelRequest";
     public static final String CCT_POST_MESSAGE_API = "CCTPostMessageAPI";
     public static final String CCT_REDIRECT_PRECONNECT = "CCTRedirectPreconnect";
-    public static final String CHROME_DUPLEX = "ChromeDuplex";
+    public static final String CHROME_DUET = "ChromeDuet";
     // TODO(mdjones): Remove CHROME_HOME_SWIPE_VELOCITY_FEATURE or rename.
     public static final String CHROME_HOME_SWIPE_VELOCITY_FEATURE = "ChromeHomeSwipeLogicVelocity";
     public static final String CHROME_MEMEX = "ChromeMemex";
@@ -188,11 +189,14 @@ public abstract class ChromeFeatureList {
     public static final String CONTEXTUAL_SEARCH_SECOND_TAP = "ContextualSearchSecondTap";
     public static final String CONTEXTUAL_SEARCH_TAP_DISABLE_OVERRIDE =
             "ContextualSearchTapDisableOverride";
+    public static final String CONTEXTUAL_SEARCH_UNITY_INTEGRATION =
+            "ContextualSearchUnityIntegration";
     public static final String CONTEXTUAL_SUGGESTIONS_BOTTOM_SHEET =
             "ContextualSuggestionsBottomSheet";
     public static final String CONTEXTUAL_SUGGESTIONS_BUTTON = "ContextualSuggestionsButton";
     public static final String CONTEXTUAL_SUGGESTIONS_SLIM_PEEK_UI =
             "ContextualSuggestionsSlimPeekUI";
+    public static final String CONTEXTUAL_SUGGESTIONS_OPT_OUT = "ContextualSuggestionsOptOut";
     public static final String CUSTOM_CONTEXT_MENU = "CustomContextMenu";
     public static final String CUSTOM_FEEDBACK_UI = "CustomFeedbackUi";
     // Enables the Data Reduction Proxy menu item in the main menu rather than under Settings on
@@ -201,6 +205,7 @@ public abstract class ChromeFeatureList {
     public static final String DONT_PREFETCH_LIBRARIES = "DontPrefetchLibraries";
     public static final String DOWNLOAD_HOME_SHOW_STORAGE_INFO = "DownloadHomeShowStorageInfo";
     public static final String DOWNLOAD_PROGRESS_INFOBAR = "DownloadProgressInfoBar";
+    public static final String DOWNLOAD_HOME_V2 = "DownloadHomeV2";
     public static final String DOWNLOADS_FOREGROUND = "DownloadsForeground";
     public static final String DOWNLOADS_LOCATION_CHANGE = "DownloadsLocationChange";
     public static final String EXPERIMENTAL_APP_BANNERS = "ExperimentalAppBanners";
@@ -210,8 +215,11 @@ public abstract class ChromeFeatureList {
     public static final String FULLSCREEN_ACTIVITY = "FullscreenActivity";
     public static final String GRANT_NOTIFICATIONS_TO_DSE = "GrantNotificationsToDSE";
     public static final String GENERIC_SENSOR_EXTRA_CLASSES = "GenericSensorExtraClasses";
+    public static final String HANDLE_MEDIA_INTENTS = "HandleMediaIntents";
     public static final String HOME_PAGE_BUTTON_FORCE_ENABLED = "HomePageButtonForceEnabled";
+    public static final String HOMEPAGE_TILE = "HomepageTile";
     public static final String HORIZONTAL_TAB_SWITCHER_ANDROID = "HorizontalTabSwitcherAndroid";
+    public static final String INCOGNITO_STRINGS = "IncognitoStrings";
     public static final String INTEREST_FEED_CONTENT_SUGGESTIONS = "InterestFeedContentSuggestions";
     public static final String LANGUAGES_PREFERENCE = "LanguagesPreference";
     public static final String SEARCH_ENGINE_PROMO_EXISTING_DEVICE =
@@ -220,6 +228,7 @@ public abstract class ChromeFeatureList {
     public static final String MATERIAL_DESIGN_INCOGNITO_NTP = "MaterialDesignIncognitoNTP";
     public static final String MODAL_PERMISSION_PROMPTS = "ModalPermissionPrompts";
     public static final String MODAL_PERMISSION_DIALOG_VIEW = "ModalPermissionDialogView";
+    public static final String NEW_CONTACTS_PICKER = "NewContactsPicker";
     public static final String NEW_PHOTO_PICKER = "NewPhotoPicker";
 
     public static final String NO_CREDIT_CARD_ABORT = "NoCreditCardAbort";
@@ -262,7 +271,6 @@ public abstract class ChromeFeatureList {
     public static final String VIDEO_PERSISTENCE = "VideoPersistence";
     public static final String UNIFIED_CONSENT = "UnifiedConsent";
     public static final String VR_BROWSING_FEEDBACK = "VrBrowsingFeedback";
-    public static final String VR_BROWSING_IN_CUSTOM_TAB = "VrBrowsingInCustomTab";
     public static final String VR_BROWSING_NATIVE_ANDROID_UI = "VrBrowsingNativeAndroidUi";
     public static final String WEB_AUTH = "WebAuthentication";
     public static final String WEB_PAYMENTS = "WebPayments";
@@ -272,8 +280,6 @@ public abstract class ChromeFeatureList {
     public static final String WEB_PAYMENTS_RETURN_GOOGLE_PAY_IN_BASIC_CARD =
             "ReturnGooglePayInBasicCard";
     public static final String WEB_PAYMENTS_SINGLE_APP_UI_SKIP = "WebPaymentsSingleAppUiSkip";
-    public static final String WEBVR_AUTOPRESENT_FROM_INTENT = "WebVrAutopresentFromIntent";
-    public static final String WEBVR_CARDBOARD_SUPPORT = "WebVrCardboardSupport";
 
     private static native boolean nativeIsInitialized();
     private static native boolean nativeIsEnabled(String featureName);

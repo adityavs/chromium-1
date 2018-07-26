@@ -36,7 +36,7 @@ ContentScanner.prototype.cancel = function() {
 
 /**
  * Scanner of the entries in a directory.
- * @param {DirectoryEntry} entry The directory to be read.
+ * @param {DirectoryEntry|FilesAppDirEntry} entry The directory to be read.
  * @constructor
  * @extends {ContentScanner}
  */
@@ -56,8 +56,9 @@ DirectoryContentScanner.prototype.__proto__ = ContentScanner.prototype;
  */
 DirectoryContentScanner.prototype.scan = function(
     entriesCallback, successCallback, errorCallback) {
-  if (!this.entry_ || util.isFakeEntry(this.entry_)) {
-    // If entry is not specified or a fake, we cannot read it.
+  if (!this.entry_ || !this.entry_.createReader) {
+    // If entry is not specified or if entry doesn't implement createReader, we
+    // cannot read it.
     errorCallback(util.createDOMError(
         util.FileError.INVALID_MODIFICATION_ERR));
     return;
@@ -316,6 +317,53 @@ RecentContentScanner.prototype.scan = function(
 };
 
 /**
+ * Scanner of media-view volumes.
+ * @param {!DirectoryEntry} rootEntry The root entry of the media-view volume.
+ * @constructor
+ * @extends {ContentScanner}
+ */
+function MediaViewContentScanner(rootEntry) {
+  ContentScanner.call(this);
+  this.rootEntry_ = rootEntry;
+}
+
+/**
+ * Extends ContentScanner.
+ */
+MediaViewContentScanner.prototype.__proto__ = ContentScanner.prototype;
+
+/**
+ * This scanner provides flattened view of media providers. In each view all
+ * media-view files are located just under the root directory and the root
+ * directory doesn't have any directories (i.e. Directories are ignored).
+ *
+ * In FileSystem API level, the root directory contains only directories, and
+ * all files are guaranteed to be located inside first-level directories.
+ * For example, in Pictures view, we have directories in the first level and
+ * files in the second level.
+ *
+ * Pictures/
+ *     DCIM/
+ *         a.jpg
+ *     Snapsheed/
+ *         foo.jpg
+ *
+ * We can retrieve all files by scanning directories up to one level.
+ *
+ * @override
+ */
+MediaViewContentScanner.prototype.scan = function(
+    entriesCallback, successCallback, errorCallback) {
+  // To provide flatten view of files, it is enough to retrieve file recursively
+  // up to one level from the root.
+  const recursionLevel = 1;
+  util.readEntriesRecursively(
+      this.rootEntry_,
+      entries => entriesCallback(entries.filter(entry => !entry.isDirectory)),
+      successCallback, errorCallback, () => false, recursionLevel);
+};
+
+/**
  * Shows an empty list and spinner whilst starting and mounting the
  * crostini container.
  *
@@ -474,11 +522,11 @@ FileFilter.prototype.isHiddenFilesVisible = function() {
 FileFilter.prototype.setAllAndroidFoldersVisible = function(visible) {
   if (!visible) {
     this.addFilter('android_hidden', entry => {
-      if (entry.filesystem.name !== 'android_files')
+      if (entry.filesystem && entry.filesystem.name !== 'android_files')
         return true;
       // If |entry| is an Android top-level folder which is not whitelisted, it
       // should be hidden.
-      if (entry.fullPath.substr(1) == entry.name &&
+      if (entry.fullPath && entry.fullPath.substr(1) == entry.name &&
           FileFilter.DEFAULT_ANDROID_FOLDERS.indexOf(entry.name) == -1) {
         return false;
       }
@@ -592,8 +640,8 @@ FileListContext.createPrefetchPropertyNames_ = function() {
  * @param {FileListContext} context The file list context.
  * @param {boolean} isSearch True for search directory contents, otherwise
  *     false.
- * @param {DirectoryEntry|FakeEntry} directoryEntry The entry of the current
- *     directory.
+ * @param {DirectoryEntry|FakeEntry|FilesAppDirEntry} directoryEntry The entry
+ *     of the current directory.
  * @param {function():ContentScanner} scannerFactory The factory to create
  *     ContentScanner instance.
  * @constructor
@@ -731,7 +779,8 @@ DirectoryContents.prototype.isSearch = function() {
 };
 
 /**
- * @return {DirectoryEntry|FakeEntry} A DirectoryEntry for current directory.
+ * @return {DirectoryEntry|FakeEntry|FilesAppDirEntry} A DirectoryEntry for
+ *     current directory.
  *     In case of search -- the top directory from which search is run.
  */
 DirectoryContents.prototype.getDirectoryEntry = function() {
@@ -989,7 +1038,8 @@ DirectoryContents.prototype.prefetchMetadata =
  * Creates a DirectoryContents instance to show entries in a directory.
  *
  * @param {FileListContext} context File list context.
- * @param {DirectoryEntry} directoryEntry The current directory entry.
+ * @param {DirectoryEntry|FilesAppDirEntry} directoryEntry The current directory
+ *     entry.
  * @return {DirectoryContents} Created DirectoryContents instance.
  */
 DirectoryContents.createForDirectory = function(context, directoryEntry) {
@@ -1077,6 +1127,20 @@ DirectoryContents.createForDriveMetadataSearch = function(
 DirectoryContents.createForRecent = function(context, recentRootEntry, query) {
   return new DirectoryContents(context, true, recentRootEntry, function() {
     return new RecentContentScanner(query, recentRootEntry.sourceRestriction);
+  });
+};
+
+/**
+ * Creates a DirectoryContents instance to show the flatten media views.
+ *
+ * @param {FileListContext} context File list context.
+ * @param {!DirectoryEntry} rootEntry Root directory entry representing the
+ *     root of each media view volume.
+ * @return {DirectoryContents} Created DirectoryContents instance.
+ */
+DirectoryContents.createForMediaView = function(context, rootEntry) {
+  return new DirectoryContents(context, true, rootEntry, function() {
+    return new MediaViewContentScanner(rootEntry);
   });
 };
 

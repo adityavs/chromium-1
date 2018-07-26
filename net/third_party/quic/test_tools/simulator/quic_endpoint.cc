@@ -81,6 +81,7 @@ QuicEndpoint::QuicEndpoint(Simulator* simulator,
       bytes_transferred_(0),
       write_blocked_count_(0),
       wrong_data_received_(false),
+      drop_next_packet_(false),
       notifier_(nullptr) {
   nic_tx_queue_.set_listener_interface(this);
 
@@ -170,6 +171,10 @@ void QuicEndpoint::AddBytesToTransfer(QuicByteCount bytes) {
   WriteStreamData();
 }
 
+void QuicEndpoint::DropNextIncomingPacket() {
+  drop_next_packet_ = true;
+}
+
 void QuicEndpoint::RecordTrace() {
   trace_visitor_ = QuicMakeUnique<QuicTraceVisitor>(&connection_);
   connection_.set_debug_visitor(trace_visitor_.get());
@@ -177,6 +182,10 @@ void QuicEndpoint::RecordTrace() {
 
 void QuicEndpoint::AcceptPacket(std::unique_ptr<Packet> packet) {
   if (packet->destination != name_) {
+    return;
+  }
+  if (drop_next_packet_) {
+    drop_next_packet_ = false;
     return;
   }
 
@@ -307,12 +316,15 @@ WriteResult QuicEndpoint::Writer::WritePacket(
 bool QuicEndpoint::Writer::IsWriteBlockedDataBuffered() const {
   return false;
 }
+
 bool QuicEndpoint::Writer::IsWriteBlocked() const {
   return is_blocked_;
 }
+
 void QuicEndpoint::Writer::SetWritable() {
   is_blocked_ = false;
 }
+
 QuicByteCount QuicEndpoint::Writer::GetMaxPacketSize(
     const QuicSocketAddress& /*peer_address*/) const {
   return kMaxPacketSize;
@@ -320,6 +332,18 @@ QuicByteCount QuicEndpoint::Writer::GetMaxPacketSize(
 
 bool QuicEndpoint::Writer::SupportsReleaseTime() const {
   return false;
+}
+
+bool QuicEndpoint::Writer::IsBatchMode() const {
+  return false;
+}
+
+char* QuicEndpoint::Writer::GetNextWriteLocation() const {
+  return nullptr;
+}
+
+WriteResult QuicEndpoint::Writer::Flush() {
+  return WriteResult(WRITE_STATUS_OK, 0);
 }
 
 bool QuicEndpoint::DataProducer::WriteStreamData(QuicStreamId id,

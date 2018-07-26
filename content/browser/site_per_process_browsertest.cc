@@ -232,16 +232,6 @@ double GetFrameDeviceScaleFactor(const ToRenderFrameHost& adapter) {
   return device_scale_factor;
 }
 
-// This helper accounts for Android devices which use page scale factor
-// different from 1.0. Coordinate targeting needs to be adjusted before
-// hit testing.
-double GetPageScaleFactor(Shell* shell) {
-  return RenderWidgetHostImpl::From(
-             shell->web_contents()->GetRenderViewHost()->GetWidget())
-      ->last_frame_metadata()
-      .page_scale_factor;
-}
-
 class RedirectNotificationObserver : public NotificationObserver {
  public:
   // Register to listen for notifications of the given type from either a
@@ -1129,6 +1119,7 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ViewBoundsInNestedFrameTest) {
   GURL site_url(embedded_test_server()->GetURL(
       "a.com", "/frame_tree/page_with_positioned_frame.html"));
   NavigateFrameToURL(parent_iframe_node, site_url);
+  RenderFrameSubmissionObserver frame_observer(shell()->web_contents());
 
   EXPECT_EQ(
       " Site A ------------ proxies for B\n"
@@ -1147,7 +1138,8 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ViewBoundsInNestedFrameTest) {
   WaitForHitTestDataOrChildSurfaceReady(
       nested_iframe_node->current_frame_host());
 
-  float scale_factor = GetPageScaleFactor(shell());
+  float scale_factor =
+      frame_observer.LastRenderFrameMetadata().page_scale_factor;
 
   // Get the view bounds of the nested iframe, which should account for the
   // relative offset of its direct parent within the root frame.
@@ -1172,7 +1164,6 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ViewBoundsInNestedFrameTest) {
   scroll_event.delta_y = -30.0f;
   scroll_event.phase = blink::WebMouseWheelEvent::kPhaseBegan;
   rwhv_root->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-
   filter->WaitForRect();
 
   // The precise amount of scroll for the first view position update is not
@@ -1195,22 +1186,15 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
                             ->GetFrameTree()
                             ->root();
   ASSERT_EQ(1U, root->child_count());
-  RenderWidgetHost* root_rwh =
-      root->current_frame_host()->GetRenderWidgetHost();
 
   FrameTreeNode* child_iframe_node = root->child_at(0);
 
   RenderWidgetHost* child_rwh =
       child_iframe_node->current_frame_host()->GetRenderWidgetHost();
 
-  RenderWidgetHostViewBase* child_rwhv =
-      static_cast<RenderWidgetHostViewBase*>(child_rwh->GetView());
-
-  // If wheel scroll latching is enabled, the fling start won't bubble since
-  // its corresponding GSB hasn't bubbled.
+  // The fling start won't bubble since its corresponding GSB hasn't bubbled.
   InputEventAckWaiter gesture_fling_start_ack_observer(
-      (child_rwhv->wheel_scroll_latching_enabled() ? child_rwh : root_rwh),
-      blink::WebInputEvent::kGestureFlingStart);
+      child_rwh, blink::WebInputEvent::kGestureFlingStart);
 
   WaitForHitTestDataOrChildSurfaceReady(
       child_iframe_node->current_frame_host());
@@ -1345,17 +1329,14 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ScrollBubblingFromOOPIFTest) {
   scroll_event.has_precise_scrolling_deltas = true;
   rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
-  if (rwhv_parent->wheel_scroll_latching_enabled()) {
-    // When scroll latching is enabled the event router sends wheel events of a
-    // single scroll sequence to the target under the first wheel event. Send a
-    // wheel end event to the current target view before sending a wheel event
-    // to a different one.
-    scroll_event.delta_y = 0.0f;
-    scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
-    scroll_event.dispatch_type =
-        blink::WebInputEvent::DispatchType::kEventNonBlocking;
-    rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-  }
+  // The event router sends wheel events of a single scroll sequence to the
+  // target under the first wheel event. Send a wheel end event to the current
+  // target view before sending a wheel event to a different one.
+  scroll_event.delta_y = 0.0f;
+  scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
+  scroll_event.dispatch_type =
+      blink::WebInputEvent::DispatchType::kEventNonBlocking;
+  rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
   // Ensure that the view position is propagated to the child properly.
   filter->WaitForRect();
@@ -1388,17 +1369,14 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ScrollBubblingFromOOPIFTest) {
     update_rect = filter->last_rect();
   }
 
-  if (rwhv_parent->wheel_scroll_latching_enabled()) {
-    // When scroll latching is enabled the event router sends wheel events of a
-    // single scroll sequence to the target under the first wheel event. Send a
-    // wheel end event to the current target view before sending a wheel event
-    // to a different one.
-    scroll_event.delta_y = 0.0f;
-    scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
-    scroll_event.dispatch_type =
-        blink::WebInputEvent::DispatchType::kEventNonBlocking;
-    rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-  }
+  // The event router sends wheel events of a single scroll sequence to the
+  // target under the first wheel event. Send a wheel end event to the current
+  // target view before sending a wheel event to a different one.
+  scroll_event.delta_y = 0.0f;
+  scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
+  scroll_event.dispatch_type =
+      blink::WebInputEvent::DispatchType::kEventNonBlocking;
+  rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
   filter->ResetRectRunLoop();
   // Once we've sent a wheel to the nested iframe that we expect to turn into
@@ -1417,17 +1395,14 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, ScrollBubblingFromOOPIFTest) {
   scroll_event.phase = blink::WebMouseWheelEvent::kPhaseBegan;
   rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
-  if (rwhv_parent->wheel_scroll_latching_enabled()) {
-    // When scroll latching is enabled the event router sends wheel events of a
-    // single scroll sequence to the target under the first wheel event. Send a
-    // wheel end event to the current target view before sending a wheel event
-    // to a different one.
-    scroll_event.delta_y = 0.0f;
-    scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
-    scroll_event.dispatch_type =
-        blink::WebInputEvent::DispatchType::kEventNonBlocking;
-    rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-  }
+  // The event router sends wheel events of a single scroll sequence to the
+  // target under the first wheel event. Send a wheel end event to the current
+  // target view before sending a wheel event to a different one.
+  scroll_event.delta_y = 0.0f;
+  scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
+  scroll_event.dispatch_type =
+      blink::WebInputEvent::DispatchType::kEventNonBlocking;
+  rwhv_parent->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
   // Ensure ensuing offset change is received, and then reset the filter.
   filter->WaitForRect();
@@ -1707,6 +1682,7 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   GURL main_url(embedded_test_server()->GetURL(
       "/frame_tree/page_with_positioned_nested_frames.html"));
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
+  RenderFrameSubmissionObserver frame_observer(shell()->web_contents());
 
   // It is safe to obtain the root frame tree node here, as it doesn't change.
   FrameTreeNode* root = web_contents()->GetFrameTree()->root();
@@ -1739,15 +1715,11 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
       blink::WebInputEvent::kGestureScrollBegin);
 
   std::unique_ptr<ScrollObserver> scroll_observer;
-  if (root_view->wheel_scroll_latching_enabled()) {
-    // All GSU events will be wrapped between a single GSB-GSE pair. The
-    // expected delta value is equal to summation of all scroll update deltas.
-    scroll_observer = std::make_unique<ScrollObserver>(0, 15);
-  } else {
-    // Each GSU will be wrapped betweeen its own GSB-GSE pair. The expected
-    // delta value is the delta of the first GSU event.
-    scroll_observer = std::make_unique<ScrollObserver>(0, 5);
-  }
+
+  // All GSU events will be wrapped between a single GSB-GSE pair. The expected
+  // delta value is equal to summation of all scroll update deltas.
+  scroll_observer = std::make_unique<ScrollObserver>(0, 15);
+
   root->current_frame_host()->GetRenderWidgetHost()->AddInputEventObserver(
       scroll_observer.get());
 
@@ -1757,7 +1729,8 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
       blink::WebInputEvent::kMouseWheel, blink::WebInputEvent::kNoModifiers,
       blink::WebInputEvent::GetStaticTimeStampForTests());
   gfx::Rect bounds = rwhv_nested->GetViewBounds();
-  float scale_factor = GetPageScaleFactor(shell());
+  float scale_factor =
+      frame_observer.LastRenderFrameMetadata().page_scale_factor;
   scroll_event.SetPositionInWidget(
       gfx::ToCeiledInt((bounds.x() - root_view->GetViewBounds().x() + 10) *
                        scale_factor),
@@ -1770,35 +1743,22 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
   ack_observer.Wait();
 
-  // When wheel scroll latching is disabled, each wheel event will have its own
-  // complete scroll seqeunce.
-  if (!root_view->wheel_scroll_latching_enabled())
-    scroll_observer->Wait();
-
-  // Send 10 wheel events with delta_y = 1 to the nested oopif. When scroll
-  // latching is disabled, each wheel event will have its own scroll sequence.
+  // Send 10 wheel events with delta_y = 1 to the nested oopif.
   scroll_event.delta_y = 1.0f;
   scroll_event.phase = blink::WebMouseWheelEvent::kPhaseChanged;
-  for (int i = 0; i < 10; i++) {
-    if (!root_view->wheel_scroll_latching_enabled())
-      scroll_observer->Reset(0, 1);
+  for (int i = 0; i < 10; i++)
     rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-    if (!root_view->wheel_scroll_latching_enabled())
-      scroll_observer->Wait();
-  }
 
-  // Send a wheel end event to complete the scrolling sequence when wheel scroll
-  // latching is enabled.
-  if (root_view->wheel_scroll_latching_enabled()) {
-    scroll_event.delta_y = 0.0f;
-    scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
-    rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-    scroll_observer->Wait();
-  }
+  // Send a wheel end event to complete the scrolling sequence.
+  scroll_event.delta_y = 0.0f;
+  scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
+  rwhv_nested->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
+  scroll_observer->Wait();
 }
 
-#if defined(OS_CHROMEOS)
+#if defined(OS_CHROMEOS) || defined(OS_MACOSX)
 // Flaky: https://crbug.com/836200.
+// Flaky timeouts on Mac: https://crbug.com/863971.
 #define MAYBE_ScrollBubblingFromOOPIFWithBodyOverflowHidden \
   DISABLED_ScrollBubblingFromOOPIFWithBodyOverflowHidden
 #else
@@ -1812,6 +1772,7 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   GURL url_domain_a(embedded_test_server()->GetURL(
       "a.com", "/scrollable_page_with_iframe.html"));
   EXPECT_TRUE(NavigateToURL(shell(), url_domain_a));
+  RenderFrameSubmissionObserver frame_observer(shell()->web_contents());
   FrameTreeNode* root = web_contents()->GetFrameTree()->root();
 
   FrameTreeNode* iframe_node = root->child_at(0);
@@ -1836,7 +1797,8 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
       blink::WebInputEvent::kMouseWheel, blink::WebInputEvent::kNoModifiers,
       blink::WebInputEvent::GetStaticTimeStampForTests());
   gfx::Rect bounds = child_view->GetViewBounds();
-  float scale_factor = GetPageScaleFactor(shell());
+  float scale_factor =
+      frame_observer.LastRenderFrameMetadata().page_scale_factor;
   scroll_event.SetPositionInWidget(
       gfx::ToCeiledInt((bounds.x() - root_view->GetViewBounds().x() + 10) *
                        scale_factor),
@@ -1848,13 +1810,10 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   scroll_event.has_precise_scrolling_deltas = true;
   child_view->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
-  // Send a wheel end event to complete the scrolling sequence when wheel scroll
-  // latching is enabled.
-  if (root_view->wheel_scroll_latching_enabled()) {
-    scroll_event.delta_y = 0.0f;
-    scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
-    child_view->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
-  }
+  // Send a wheel end event to complete the scrolling sequence.
+  scroll_event.delta_y = 0.0f;
+  scroll_event.phase = blink::WebMouseWheelEvent::kPhaseEnded;
+  child_view->ProcessMouseWheelEvent(scroll_event, ui::LatencyInfo());
 
   scroll_observer.Wait();
 }
@@ -9030,6 +8989,64 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   EXPECT_EQ(0UL, final_effective_policy[0].origins.size());
 }
 
+// Test that creating a new remote frame at the same origin as its parent
+// results in the correct feature policy in the RemoteSecurityContext.
+// https://crbug.com/852102
+IN_PROC_BROWSER_TEST_F(SitePerProcessFeaturePolicyJavaScriptBrowserTest,
+                       FeaturePolicyConstructionInExistingProxy) {
+  WebContentsImpl* contents = web_contents();
+  FrameTreeNode* root = contents->GetFrameTree()->root();
+
+  // Navigate to a page (1) with a cross-origin iframe (2). After load, the
+  // frame tree should look like:
+  //
+  //    a.com(1)
+  //   /
+  // b.com(2)
+  EXPECT_TRUE(NavigateToURL(
+      shell(), embedded_test_server()->GetURL(
+                   "a.com", "/cross_site_iframe_factory.html?a(b)")));
+
+  // Programmatically create a new same-origin frame (3) under the root, with a
+  // cross-origin child (4). Since two SiteInstances already exist at this
+  // point, a proxy for frame 3 will be created in the renderer for frames 2 and
+  // 4. The frame tree should look like:
+  //
+  //    a.com(1)
+  //   /      \
+  // b.com(2) a.com(3)
+  //                \
+  //                b.com(4)
+  std::string create_subframe_script =
+      "var f = document.createElement('iframe'); f.src='" +
+      embedded_test_server()
+          ->GetURL("a.com",
+                   "/cross_site_iframe_factory.html?a(b{allow-autoplay})")
+          .spec() +
+      "'; document.body.appendChild(f);";
+  EXPECT_TRUE(ExecuteScript(root, create_subframe_script));
+  EXPECT_TRUE(WaitForLoadStop(contents));
+
+  // Verify the shape of the frame tree
+  EXPECT_EQ(2UL, root->child_count());
+  EXPECT_EQ(1UL, root->child_at(1)->child_count());
+
+  // Ask frame 4 to report the enabled state of the autoplay feature. Frame 3's
+  // policy should allow autoplay if created correctly, as it is same-origin
+  // with the root, where the feature is enabled by default, and therefore
+  // should be able to delegate it to frame 4.
+  // This indirectly tests the replicated policy in frame 3: Because frame 4 is
+  // cross-origin to frame 3, it will use the proxy's replicated policy as the
+  // parent policy; otherwise we would just ask frame 3 to report its own state.
+  bool success = false;
+  EXPECT_TRUE(
+      ExecuteScriptAndExtractBool(root->child_at(1)->child_at(0),
+                                  "window.domAutomationController.send("
+                                  "document.policy.allowsFeature('autoplay'));",
+                                  &success));
+  EXPECT_TRUE(success);
+}
+
 // Test harness that allows for "barrier" style delaying of requests matching
 // certain paths. Call SetDelayedRequestsForPath to delay requests, then
 // SetUpEmbeddedTestServer to register handlers and start the server.
@@ -9511,8 +9528,9 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
 
 // Verify that a remote-to-local main frame navigation doesn't overwrite
 // the previous history entry.  See https://crbug.com/725716.
-IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
-                       CrossProcessMainFrameNavigationDoesNotOverwriteHistory) {
+IN_PROC_BROWSER_TEST_F(
+    SitePerProcessBrowserTest,
+    DISABLED_CrossProcessMainFrameNavigationDoesNotOverwriteHistory) {
   GURL foo_url(embedded_test_server()->GetURL("foo.com", "/title1.html"));
   GURL bar_url(embedded_test_server()->GetURL("bar.com", "/title2.html"));
 
@@ -10985,7 +11003,7 @@ class CommitMessageOrderReverser : public DidCommitProvisionalLoadInterceptor {
   void WaitForBothCommits() { outer_run_loop.Run(); }
 
  protected:
-  void WillDispatchDidCommitProvisionalLoad(
+  bool WillDispatchDidCommitProvisionalLoad(
       RenderFrameHost* render_frame_host,
       ::FrameHostMsg_DidCommitProvisionalLoad_Params* params,
       service_manager::mojom::InterfaceProviderRequest*
@@ -11004,6 +11022,7 @@ class CommitMessageOrderReverser : public DidCommitProvisionalLoadInterceptor {
     } else if (nested_loop_quit_) {
       std::move(nested_loop_quit_).Run();
     }
+    return true;
   }
 
  private:
@@ -11829,7 +11848,9 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
 
 // Verify that OOPIF select element popup menu coordinates account for scroll
 // offset in containers embedding frame.
-IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest, PopupMenuInTallIframeTest) {
+// TODO(crbug.com/859552): Reenable this.
+IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
+                       DISABLED_PopupMenuInTallIframeTest) {
   GURL main_url(embedded_test_server()->GetURL(
       "/frame_tree/page_with_tall_positioned_frame.html"));
   EXPECT_TRUE(NavigateToURL(shell(), main_url));
@@ -11898,7 +11919,7 @@ class ClosePageBeforeCommitHelper : public DidCommitProvisionalLoadInterceptor {
 
  private:
   // DidCommitProvisionalLoadInterceptor:
-  void WillDispatchDidCommitProvisionalLoad(
+  bool WillDispatchDidCommitProvisionalLoad(
       RenderFrameHost* render_frame_host,
       ::FrameHostMsg_DidCommitProvisionalLoad_Params* params,
       service_manager::mojom::InterfaceProviderRequest*
@@ -11909,6 +11930,7 @@ class ClosePageBeforeCommitHelper : public DidCommitProvisionalLoadInterceptor {
     rvh->ClosePage();
     if (run_loop_)
       run_loop_->Quit();
+    return true;
   }
 
   std::unique_ptr<base::RunLoop> run_loop_;
@@ -12646,6 +12668,56 @@ IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
   EXPECT_EQ(expected_flags, subframe->pending_frame_policy().sandbox_flags);
   EXPECT_EQ(blink::WebSandboxFlags::kNone,
             subframe->effective_frame_policy().sandbox_flags);
+}
+
+// Ensure that when two cross-site frames have subframes with unique origins,
+// and those subframes create blob URLs and navigate to them, the blob URLs end
+// up in different processes. See https://crbug.com/863623.
+IN_PROC_BROWSER_TEST_F(SitePerProcessBrowserTest,
+                       TwoBlobURLsWithNullOriginDontShareProcess) {
+  GURL main_url(embedded_test_server()->GetURL(
+      "a.com", "/navigation_controller/page_with_data_iframe.html"));
+  EXPECT_TRUE(NavigateToURL(shell(), main_url));
+  FrameTreeNode* root = web_contents()->GetFrameTree()->root();
+  FrameTreeNode* subframe = root->child_at(0);
+
+  // Create a blob URL in the subframe, and navigate to it.
+  TestNavigationObserver observer(shell()->web_contents());
+  std::string blob_script =
+      "var blob = new Blob(['foo'], {type : 'text/html'});"
+      "var url = URL.createObjectURL(blob);"
+      "location = url;";
+  EXPECT_TRUE(ExecuteScript(subframe, blob_script));
+  observer.Wait();
+  RenderFrameHostImpl* subframe_rfh = subframe->current_frame_host();
+  EXPECT_TRUE(subframe_rfh->GetLastCommittedURL().SchemeIsBlob());
+
+  // Open a cross-site popup and repeat these steps.
+  GURL popup_url(embedded_test_server()->GetURL(
+      "b.com", "/navigation_controller/page_with_data_iframe.html"));
+  Shell* new_shell = OpenPopup(root, popup_url, "");
+  FrameTreeNode* popup_root =
+      static_cast<WebContentsImpl*>(new_shell->web_contents())
+          ->GetFrameTree()
+          ->root();
+  FrameTreeNode* popup_subframe = popup_root->child_at(0);
+
+  TestNavigationObserver popup_observer(new_shell->web_contents());
+  EXPECT_TRUE(ExecuteScript(popup_subframe, blob_script));
+  popup_observer.Wait();
+  RenderFrameHostImpl* popup_subframe_rfh =
+      popup_subframe->current_frame_host();
+  EXPECT_TRUE(popup_subframe_rfh->GetLastCommittedURL().SchemeIsBlob());
+
+  // Ensure that the two blob subframes don't share a process or SiteInstance.
+  EXPECT_NE(subframe->current_frame_host()->GetSiteInstance(),
+            popup_subframe->current_frame_host()->GetSiteInstance());
+  EXPECT_NE(
+      subframe->current_frame_host()->GetSiteInstance()->GetProcess(),
+      popup_subframe->current_frame_host()->GetSiteInstance()->GetProcess());
+  EXPECT_NE(
+      subframe->current_frame_host()->GetSiteInstance()->GetSiteURL(),
+      popup_subframe->current_frame_host()->GetSiteInstance()->GetSiteURL());
 }
 
 }  // namespace content

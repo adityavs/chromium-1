@@ -434,6 +434,7 @@ jumbo_component("platform") {
     "bindings/exception_state.h",
     "bindings/microtask.cc",
     "bindings/microtask.h",
+    "bindings/name_client.h",
     "bindings/origin_trial_features.cc",
     "bindings/origin_trial_features.h",
     "bindings/runtime_call_stats.cc",
@@ -454,7 +455,6 @@ jumbo_component("platform") {
     "bindings/string_resource.cc",
     "bindings/string_resource.h",
     "bindings/to_v8.h",
-    "bindings/trace_wrapper_base.h",
     "bindings/trace_wrapper_member.h",
     "bindings/trace_wrapper_v8_reference.h",
     "bindings/trace_wrapper_v8_string.cc",
@@ -486,10 +486,6 @@ jumbo_component("platform") {
     "bindings/wrapper_type_info.cc",
     "bindings/wrapper_type_info.h",
     "calculation_value.h",
-    "clipboard/clipboard_mime_types.cc",
-    "clipboard/clipboard_mime_types.h",
-    "clipboard/clipboard_utilities.cc",
-    "clipboard/clipboard_utilities.h",
     "content_decryption_module_result.h",
     "content_setting_callbacks.cc",
     "content_setting_callbacks.h",
@@ -509,15 +505,11 @@ jumbo_component("platform") {
     "date_components.h",
     "drag_image.cc",
     "drag_image.h",
-    "event_dispatch_forbidden_scope.cc",
-    "event_dispatch_forbidden_scope.h",
     "exported/file_path_conversion.cc",
     "exported/interface_registry.cc",
     "exported/platform.cc",
     "exported/service_registry.cc",
     "exported/url_conversion.cc",
-    "exported/web_active_gesture_animation.cc",
-    "exported/web_active_gesture_animation.h",
     "exported/web_audio_bus.cc",
     "exported/web_audio_device.cc",
     "exported/web_blob_info.cc",
@@ -570,6 +562,7 @@ jumbo_component("platform") {
     "exported/web_rtc_rtp_contributing_source.cc",
     "exported/web_rtc_rtp_receiver.cc",
     "exported/web_rtc_rtp_sender.cc",
+    "exported/web_rtc_rtp_transceiver.cc",
     "exported/web_rtc_session_description.cc",
     "exported/web_rtc_session_description_request.cc",
     "exported/web_rtc_stats.cc",
@@ -696,13 +689,13 @@ jumbo_component("platform") {
     "fonts/shaping/caching_word_shape_iterator.h",
     "fonts/shaping/caching_word_shaper.cc",
     "fonts/shaping/caching_word_shaper.h",
-    "fonts/shaping/case_mapping_harf_buzz_buffer_filler.cc",
-    "fonts/shaping/case_mapping_harf_buzz_buffer_filler.h",
-    "fonts/shaping/harf_buzz_face.cc",
-    "fonts/shaping/harf_buzz_face.h",
-    "fonts/shaping/harf_buzz_font_cache.h",
-    "fonts/shaping/harf_buzz_shaper.cc",
-    "fonts/shaping/harf_buzz_shaper.h",
+    "fonts/shaping/case_mapping_harfbuzz_buffer_filler.cc",
+    "fonts/shaping/case_mapping_harfbuzz_buffer_filler.h",
+    "fonts/shaping/harfbuzz_face.cc",
+    "fonts/shaping/harfbuzz_face.h",
+    "fonts/shaping/harfbuzz_font_cache.h",
+    "fonts/shaping/harfbuzz_shaper.cc",
+    "fonts/shaping/harfbuzz_shaper.h",
     "fonts/shaping/run_segmenter.cc",
     "fonts/shaping/run_segmenter.h",
     "fonts/shaping/shape_cache.cc",
@@ -751,6 +744,7 @@ jumbo_component("platform") {
     "fonts/win/font_fallback_win.cc",
     "fonts/win/font_fallback_win.h",
     "fonts/win/font_platform_data_win.cc",
+    "geometry/blend.h",
     "geometry/cg/float_point_cg.cc",
     "geometry/cg/float_rect_cg.cc",
     "geometry/cg/float_size_cg.cc",
@@ -1153,8 +1147,6 @@ jumbo_component("platform") {
     "json/json_values.cc",
     "json/json_values.h",
     "keyboard_codes.h",
-    "kill_ring.h",
-    "kill_ring_none.cc",
     "language.cc",
     "language.h",
     "layout_test_support.cc",
@@ -1172,15 +1164,12 @@ jumbo_component("platform") {
     "lifecycle_observer.h",
     "link_hash.cc",
     "link_hash.h",
-    "long_task_detector.cc",
-    "long_task_detector.h",
     "mac/block_exceptions.h",
     "mac/block_exceptions.mm",
     "mac/color_mac.h",
     "mac/color_mac.mm",
     "mac/graphics_context_canvas.h",
     "mac/graphics_context_canvas.mm",
-    "mac/kill_ring_mac.mm",
     "mac/local_current_graphics_context.h",
     "mac/local_current_graphics_context.mm",
     "mac/ns_scroller_imp_details.h",
@@ -1294,6 +1283,7 @@ jumbo_component("platform") {
     "scroll/smooth_scroll_sequencer.h",
     "scroll/web_scroll_into_view_params.cc",
     "scroll/web_scrollbar_theme.mm",
+    "scroll/web_scrollbar_theme_client.h",
     "serialized_resource.h",
     "shared_buffer.cc",
     "shared_buffer.h",
@@ -1377,8 +1367,6 @@ jumbo_component("platform") {
     "theme.cc",
     "theme.h",
     "theme_types.h",
-    "threading/background_task_runner.cc",
-    "threading/background_task_runner.h",
     "time_clamper.cc",
     "time_clamper.h",
     "timer.cc",
@@ -1526,10 +1514,8 @@ jumbo_component("platform") {
 
   if (is_mac) {
     sources -= [
-      # Uses KillRingMac.mm instead.
       "fonts/skia/font_cache_skia.cc",
       "fonts/web_font_render_style.cc",
-      "kill_ring_none.cc",
       "scroll/scroll_animator.cc",
       "scroll/scroll_animator.h",
 
@@ -1556,7 +1542,6 @@ jumbo_component("platform") {
   }
 
   if (is_win) {
-    sources += [ "clipboard/clipboard_utilities_win.cc" ]
     sources -= [
       # TODO(https://crbug.com/808221): Use WebFontRenderStyle on Windows.
       "fonts/web_font_render_style.cc",
@@ -1655,6 +1640,7 @@ jumbo_static_library("test_support") {
     "testing/scoped_fake_plugin_registry.h",
     "testing/scoped_mocked_url.cc",
     "testing/scoped_mocked_url.h",
+    "testing/stub_graphics_layer_client.h",
     "testing/test_paint_artifact.cc",
     "testing/test_paint_artifact.h",
     "testing/testing_platform_support.cc",
@@ -1695,7 +1681,7 @@ jumbo_static_library("test_support") {
 
   deps = [
     "//base/test:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//mojo/public/cpp/bindings",
     "//services/service_manager/public/cpp",
     "//skia",
@@ -1741,6 +1727,7 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "feature_policy/feature_policy_test.cc",
     "fonts/android/font_cache_android_test.cc",
     "fonts/bitmap_glyphs_blacklist_test.cc",
+    "fonts/cursor_position_test.cc",
     "fonts/font_cache_test.cc",
     "fonts/font_description_test.cc",
     "fonts/font_family_test.cc",
@@ -1755,7 +1742,7 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "fonts/orientation_iterator_test.cc",
     "fonts/script_run_iterator_test.cc",
     "fonts/shaping/caching_word_shaper_test.cc",
-    "fonts/shaping/harf_buzz_shaper_test.cc",
+    "fonts/shaping/harfbuzz_shaper_test.cc",
     "fonts/shaping/run_segmenter_test.cc",
     "fonts/shaping/shape_result_bloberizer_test.cc",
     "fonts/shaping/shaping_line_breaker_test.cc",
@@ -1834,7 +1821,6 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "json/json_values_test.cc",
     "layout_unit_test.cc",
     "lifecycle_context_test.cc",
-    "long_task_detector_test.cc",
     "mac/graphics_context_canvas_test.mm",
     "mac/version_util_mac_test.mm",
     "mhtml/mhtml_parser_test.cc",
@@ -1844,6 +1830,7 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "mojo/kurl_security_origin_test.cc",
     "mojo/notification_struct_traits_test.cc",
     "mojo/string16_mojom_traits_test.cc",
+    "plugins/plugin_data_test.cc",
     "pod_arena_test.cc",
     "pod_free_list_arena_test.cc",
     "pod_interval_tree_test.cc",
@@ -1873,7 +1860,6 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "text/text_run_test.cc",
     "text/unicode_utilities_test.cc",
     "text/writing_mode_utils_test.cc",
-    "threading/background_task_runner_test.cc",
     "time_clamper_test.cc",
     "timer_test.cc",
     "transforms/affine_transform_test.cc",
@@ -1925,7 +1911,7 @@ jumbo_source_set("blink_platform_unittests_sources") {
     "//base/test:test_support",
     "//cc",
     "//cc:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//mojo/public/cpp/bindings/tests:for_blink_tests",
     "//mojo/public/cpp/test_support:test_utils",
     "//mojo/public/interfaces/bindings/tests:test_interfaces_blink",
@@ -1965,7 +1951,7 @@ executable("image_decode_bench") {
 
   deps = [
     ":platform",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//third_party/blink/renderer/platform/wtf",
   ]
 
@@ -1982,6 +1968,7 @@ test("blink_platform_perftests") {
     "testing/blink_perf_test_suite.cc",
     "testing/blink_perf_test_suite.h",
     "testing/run_all_perf_tests.cc",
+    "testing/shape_result_perf_test.cc",
     "testing/shaping_line_breaker_perf_test.cc",
   ]
 
@@ -1997,6 +1984,9 @@ test("blink_platform_perftests") {
     ":test_support",
     "//base",
     "//base/test:test_support",
+    "//mojo/public/cpp/bindings/tests:for_blink_tests",
+    "//mojo/public/cpp/test_support:test_utils",
+    "//mojo/public/interfaces/bindings/tests:test_interfaces_blink",
     "//services/network/public/cpp:cpp",
     "//testing/gtest",
     "//testing/perf",
@@ -2053,6 +2043,23 @@ if (current_cpu == "x86" || current_cpu == "x64") {
   }
   source_set("blink_x86_sse") {
     sources = blink_platform_sse_files
+  }
+}
+
+test("blink_fuzzer_unittests") {
+  deps = [
+    ":test_support",
+    "//third_party/blink/public:test_support",
+  ]
+
+  sources = [
+    "testing/run_all_tests.cc",
+  ]
+
+  if (is_linux) {
+    deps += [
+      "//third_party/blink/renderer/platform/scheduler:scheduler_fuzzer_tests",
+    ]
   }
 }
 
@@ -2146,7 +2153,7 @@ fuzzer_test("feature_policy_fuzzer") {
 
 fuzzer_test("blink_harfbuzz_shaper_fuzzer") {
   sources = [
-    "fonts/shaping/harf_buzz_shaper_fuzzer.cc",
+    "fonts/shaping/harfbuzz_shaper_fuzzer.cc",
   ]
   deps = [
     ":blink_fuzzer_test_support",
@@ -2205,6 +2212,7 @@ jumbo_source_set("unit_tests") {
     "graphics/canvas_color_params_test.cc",
     "graphics/canvas_resource_test.cc",
     "graphics/color_correction_test_utils.cc",
+    "graphics/compositor_mutator_impl_test.cc",
     "graphics/deferred_image_decoder_test.cc",
     "graphics/gpu/drawing_buffer_software_rendering_test.cc",
     "graphics/graphics_layer_test.cc",
@@ -2214,7 +2222,6 @@ jumbo_source_set("unit_tests") {
     "graphics/offscreen_canvas_frame_dispatcher_test.cc",
     "graphics/test/fake_canvas_resource_host.h",
     "graphics/test/fake_gles2_interface.h",
-    "graphics/test/fake_scrollable_area.h",
     "graphics/test/fake_web_graphics_context_3d_provider.h",
     "graphics/test/mock_image_decoder.h",
     "graphics/test/mock_paint_canvas.h",

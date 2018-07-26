@@ -35,7 +35,6 @@
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#import "ios/testing/wait_util.h"
 #import "ios/web/public/test/http_server/http_server.h"
 #include "ios/web/public/test/http_server/http_server_util.h"
 #import "ios/web/public/test/web_view_interaction_test_util.h"
@@ -85,10 +84,6 @@ enum MetricsServiceType {
 // Matcher for the clear browsing data button on the clear browsing data panel.
 id<GREYMatcher> ClearBrowsingDataButton() {
   return ButtonWithAccessibilityLabelId(IDS_IOS_CLEAR_BUTTON);
-}
-// Matcher for the clear browsing data action sheet item.
-id<GREYMatcher> ConfirmClearBrowsingDataButton() {
-  return ButtonWithAccessibilityLabelId(IDS_IOS_CONFIRM_CLEAR_BUTTON);
 }
 // Matcher for the Send Usage Data cell on the Privacy screen.
 id<GREYMatcher> SendUsageDataButton() {
@@ -252,7 +247,8 @@ bool IsCertificateCleared() {
 // scheduled for removal.
 - (void)clearBrowsingData {
   [ChromeEarlGreyUI tapClearBrowsingDataMenuButton:ClearBrowsingDataButton()];
-  [[EarlGrey selectElementWithMatcher:ConfirmClearBrowsingDataButton()]
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          ConfirmClearBrowsingDataButton()]
       performAction:grey_tap()];
 
   // Before returning, make sure that the top of the Clear Browsing Data

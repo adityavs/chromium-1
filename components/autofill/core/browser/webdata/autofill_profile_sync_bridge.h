@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/macros.h"
-#include "base/memory/weak_ptr.h"
 #include "base/optional.h"
 #include "base/scoped_observer.h"
 #include "base/supports_user_data.h"
@@ -26,6 +25,7 @@ class ModelTypeChangeProcessor;
 
 namespace autofill {
 
+class AutofillProfileSyncDifferenceTracker;
 class AutofillTable;
 class AutofillWebDataBackend;
 class AutofillWebDataService;
@@ -59,7 +59,7 @@ class AutofillProfileSyncBridge
       AutofillWebDataService* web_data_service);
 
   // Retrieves the bridge from |web_data_service| which owns it.
-  static base::WeakPtr<syncer::ModelTypeSyncBridge> FromWebDataService(
+  static syncer::ModelTypeSyncBridge* FromWebDataService(
       AutofillWebDataService* web_data_service);
 
   // syncer::ModelTypeSyncBridge implementation.
@@ -86,6 +86,11 @@ class AutofillProfileSyncBridge
   // Respond to local autofill profile entry changing by notifying sync of the
   // changes.
   void ActOnLocalChange(const AutofillProfileChange& change);
+
+  // Flushes changes accumulated within |tracker| both to local and to sync.
+  base::Optional<syncer::ModelError> FlushSyncTracker(
+      std::unique_ptr<syncer::MetadataChangeList> metadata_change_list,
+      AutofillProfileSyncDifferenceTracker* tracker);
 
   // Synchronously load sync metadata from the autofill table and pass it to the
   // processor so that it can start tracking changes.

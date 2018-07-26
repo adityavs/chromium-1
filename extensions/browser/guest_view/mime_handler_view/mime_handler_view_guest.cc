@@ -64,7 +64,7 @@ StreamContainer::~StreamContainer() {
 }
 
 void StreamContainer::Abort(const base::Closure& callback) {
-  if (!stream_->handle) {
+  if (!stream_ || !stream_->handle) {
     callback.Run();
     return;
   }
@@ -140,6 +140,11 @@ void MimeHandlerViewGuest::SetEmbedderFrame(int process_id, int routing_id) {
   DCHECK_NE(MSG_ROUTING_NONE, embedder_widget_routing_id_);
 }
 
+void MimeHandlerViewGuest::SetBeforeUnloadController(
+    mime_handler::BeforeUnloadControlPtrInfo pending_before_unload_control) {
+  pending_before_unload_control_ = std::move(pending_before_unload_control);
+}
+
 const char* MimeHandlerViewGuest::GetAPINamespace() const {
   return "mimeHandlerViewGuestInternal";
 }
@@ -203,6 +208,8 @@ void MimeHandlerViewGuest::CreateWebContents(
 
   registry_.AddInterface(
       base::Bind(&MimeHandlerServiceImpl::Create, stream_->GetWeakPtr()));
+  registry_.AddInterface(base::BindRepeating(
+      &MimeHandlerViewGuest::FuseBeforeUnloadControl, base::Unretained(this)));
 }
 
 void MimeHandlerViewGuest::DidAttachToEmbedder() {
@@ -334,6 +341,30 @@ bool MimeHandlerViewGuest::IsFullscreenForTabOrPending(
   return is_guest_fullscreen_;
 }
 
+bool MimeHandlerViewGuest::ShouldCreateWebContents(
+    content::WebContents* web_contents,
+    content::RenderFrameHost* opener,
+    content::SiteInstance* source_site_instance,
+    int32_t route_id,
+    int32_t main_frame_route_id,
+    int32_t main_frame_widget_route_id,
+    content::mojom::WindowContainerType window_container_type,
+    const GURL& opener_url,
+    const std::string& frame_name,
+    const GURL& target_url,
+    const std::string& partition_id,
+    content::SessionStorageNamespace* session_storage_namespace) {
+  content::OpenURLParams open_params(target_url, content::Referrer(),
+                                     WindowOpenDisposition::NEW_FOREGROUND_TAB,
+                                     ui::PAGE_TRANSITION_LINK, true);
+  // Extensions are allowed to open popups under circumstances covered by
+  // running as a mime handler.
+  open_params.user_gesture = true;
+  embedder_web_contents()->GetDelegate()->OpenURLFromTab(
+      embedder_web_contents(), open_params);
+  return false;
+}
+
 bool MimeHandlerViewGuest::SetFullscreenState(bool is_fullscreen) {
   // Disallow fullscreen for embedded plugins.
   if (!is_full_page_plugin() || is_fullscreen == is_guest_fullscreen_)
@@ -371,6 +402,15 @@ void MimeHandlerViewGuest::ReadyToCommitNavigation(
     content::NavigationHandle* navigation_handle) {
   navigation_handle->RegisterSubresourceOverride(
       stream_->TakeTransferrableURLLoader());
+}
+
+void MimeHandlerViewGuest::FuseBeforeUnloadControl(
+    mime_handler::BeforeUnloadControlRequest request) {
+  if (!pending_before_unload_control_)
+    return;
+
+  mojo::FuseInterface(std::move(request),
+                      std::move(pending_before_unload_control_));
 }
 
 }  // namespace extensions

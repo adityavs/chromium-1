@@ -26,17 +26,24 @@ SingleKeyframeEffectAnimation::Create(int id) {
 }
 
 SingleKeyframeEffectAnimation::SingleKeyframeEffectAnimation(int id)
-    : Animation(id) {
-  DCHECK(id_);
-  AddKeyframeEffect(std::make_unique<KeyframeEffect>(NextKeyframeEffectId()));
-}
+    : SingleKeyframeEffectAnimation(id, nullptr) {}
 
 SingleKeyframeEffectAnimation::SingleKeyframeEffectAnimation(
     int id,
     size_t keyframe_effect_id)
+    : SingleKeyframeEffectAnimation(
+          id,
+          std::make_unique<KeyframeEffect>(keyframe_effect_id)) {}
+
+SingleKeyframeEffectAnimation::SingleKeyframeEffectAnimation(
+    int id,
+    std::unique_ptr<KeyframeEffect> keyframe_effect)
     : Animation(id) {
   DCHECK(id_);
-  AddKeyframeEffect(std::make_unique<KeyframeEffect>(keyframe_effect_id));
+  if (!keyframe_effect)
+    keyframe_effect.reset(new KeyframeEffect(NextKeyframeEffectId()));
+
+  AddKeyframeEffect(std::move(keyframe_effect));
 }
 
 SingleKeyframeEffectAnimation::~SingleKeyframeEffectAnimation() {}
@@ -72,16 +79,20 @@ void SingleKeyframeEffectAnimation::AddKeyframeModel(
                                     GetKeyframeEffect()->id());
 }
 
-void SingleKeyframeEffectAnimation::RemoveKeyframeModels() {
-  RemoveKeyframeModelsForKeyframeEffect(GetKeyframeEffect()->id());
+void SingleKeyframeEffectAnimation::PauseKeyframeModel(int keyframe_model_id,
+                                                       double time_offset) {
+  PauseKeyframeModelForKeyframeEffect(keyframe_model_id, time_offset,
+                                      GetKeyframeEffect()->id());
 }
 
-void SingleKeyframeEffectAnimation::PauseKeyframeEffect(double time_offset) {
-  Animation::PauseKeyframeEffect(time_offset, GetKeyframeEffect()->id());
+void SingleKeyframeEffectAnimation::RemoveKeyframeModel(int keyframe_model_id) {
+  RemoveKeyframeModelForKeyframeEffect(keyframe_model_id,
+                                       GetKeyframeEffect()->id());
 }
 
-void SingleKeyframeEffectAnimation::AbortKeyframeEffect() {
-  Animation::AbortKeyframeEffect(GetKeyframeEffect()->id());
+void SingleKeyframeEffectAnimation::AbortKeyframeModel(int keyframe_model_id) {
+  AbortKeyframeModelForKeyframeEffect(keyframe_model_id,
+                                      GetKeyframeEffect()->id());
 }
 
 bool SingleKeyframeEffectAnimation::NotifyKeyframeModelFinishedForTesting(

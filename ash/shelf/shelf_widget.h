@@ -9,7 +9,6 @@
 
 #include "ash/ash_export.h"
 #include "ash/public/cpp/shelf_types.h"
-#include "ash/public/interfaces/kiosk_app_info.mojom.h"
 #include "ash/session/session_observer.h"
 #include "ash/shelf/shelf_background_animator.h"
 #include "ash/shelf/shelf_background_animator_observer.h"
@@ -99,12 +98,8 @@ class ASH_EXPORT ShelfWidget : public views::Widget,
   // Returns the ApplicationDragAndDropHost for this shelf.
   app_list::ApplicationDragAndDropHost* GetDragAndDropHostForAppList();
 
-  // Updates the list of kiosk apps for the login shelf view.
-  void SetLoginKioskApps(std::vector<mojom::KioskAppInfoPtr> kiosk_apps);
-
-  // Sets if the login dialog is visible. This hides some of the buttons on the
-  // LoginShelf.
-  void SetLoginDialogVisible(bool visible);
+  // Fetch the LoginShelfView instance.
+  LoginShelfView* login_shelf_view() { return login_shelf_view_; }
 
   void set_default_last_focusable_child(bool default_last_focusable_child);
 
@@ -123,9 +118,8 @@ class ASH_EXPORT ShelfWidget : public views::Widget,
   // Internal implementation detail. Do not expose outside of tests.
   ShelfView* shelf_view_for_testing() const { return shelf_view_; }
 
-  // Internal implementation detail. Do not expose outside of tests.
-  LoginShelfView* login_shelf_view_for_testing() const {
-    return login_shelf_view_;
+  void set_activated_from_overflow_bubble(bool val) {
+    activated_from_overflow_bubble_ = val;
   }
 
  private:
@@ -156,6 +150,11 @@ class ASH_EXPORT ShelfWidget : public views::Widget,
   // View containing the shelf items for Login/Lock/OOBE/Add User screens.
   // Owned by the views hierarchy.
   LoginShelfView* const login_shelf_view_;
+
+  // Set to true when the widget is activated from the shelf overflow bubble.
+  // Do not focus the default element in this case. This should be set when
+  // cycling focus from the overflow bubble to the main shelf.
+  bool activated_from_overflow_bubble_ = false;
 
   ShelfBackgroundAnimator background_animator_;
 

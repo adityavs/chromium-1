@@ -94,15 +94,12 @@ class SyncAuthManager : public identity::IdentityManager::Observer {
   void ResetRequestAccessTokenBackoffForTest();
 
  private:
-  void UpdateAuthErrorState(const GoogleServiceAuthError& error);
-  void ClearAuthError();
-
   void ClearAccessTokenAndRequest();
 
   void RequestAccessToken();
 
   void AccessTokenFetched(GoogleServiceAuthError error,
-                          std::string access_token);
+                          identity::AccessTokenInfo access_token_info);
 
   syncer::SyncPrefs* const sync_prefs_;
   identity::IdentityManager* const identity_manager_;
@@ -114,6 +111,10 @@ class SyncAuthManager : public identity::IdentityManager::Observer {
 
   // This is a cache of the last authentication response we received either
   // from the sync server or from Chrome's identity/token management system.
+  // TODO(crbug.com/839834): Differentiate between these types of auth errors,
+  // since their semantics and lifetimes are quite different: e.g. the former
+  // can only exist while the Sync engine is initialized; the latter exists
+  // independent of Sync state, and probably shouldn't get reset in Clear().
   GoogleServiceAuthError last_auth_error_;
 
   // The current access token. This is mutually exclusive with

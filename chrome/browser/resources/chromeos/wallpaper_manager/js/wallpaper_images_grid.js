@@ -89,13 +89,16 @@ cr.define('wallpapers', function() {
       if (loadTimeData.getBoolean('useNewWallpaperPicker')) {
         // On the new picker, do not show the image until |cropImageToFitGrid_|
         // is done.
-        imageEl.hidden = true;
+        imageEl.style.visibility = 'hidden';
         imageEl.setAttribute('aria-hidden', 'true');
         this.setAttribute('aria-label', this.dataItem.ariaLabel);
         this.tabIndex = 0;
         this.addEventListener('keypress', e => {
           if (e.keyCode == 13)
             this.parentNode.selectedItem = this.dataItem;
+        });
+        this.addEventListener('mousedown', e => {
+          e.preventDefault();
         });
       }
 
@@ -484,25 +487,35 @@ cr.define('wallpapers', function() {
         newHeight = GRID_SIZE_CSS;
         newWidth = GRID_SIZE_CSS;
       } else {
+        var ROUND_CORNER_RADIUS_PX = 4;
+        var getClipPathString = (top, left, round) => {
+          return 'inset(' + top + 'px ' + left + 'px round ' + round + 'px)';
+        };
         var aspectRatio = image.offsetWidth / image.offsetHeight;
         if (aspectRatio > 1) {
           newHeight = GRID_SIZE_CSS;
           newWidth = GRID_SIZE_CSS * aspectRatio;
           // The center portion is visible, and the overflow area on the left
           // and right will be hidden.
-          image.style.left = (GRID_SIZE_CSS - newWidth) / 2 + 'px';
+          var leftDistance = (newWidth - GRID_SIZE_CSS) / 2;
+          image.style.left = -leftDistance + 'px';
+          image.style.clipPath =
+              getClipPathString(0, leftDistance, ROUND_CORNER_RADIUS_PX);
         } else {
           newWidth = GRID_SIZE_CSS;
           newHeight = GRID_SIZE_CSS / aspectRatio;
           // The center portion is visible, and the overflow area on the top and
           // buttom will be hidden.
-          image.style.top = (GRID_SIZE_CSS - newHeight) / 2 + 'px';
+          var topDistance = (newHeight - GRID_SIZE_CSS) / 2;
+          image.style.top = -topDistance + 'px';
+          image.style.clipPath =
+              getClipPathString(topDistance, 0, ROUND_CORNER_RADIUS_PX);
         }
       }
 
       image.style.height = newHeight + 'px';
       image.style.width = newWidth + 'px';
-      image.hidden = false;
+      image.style.visibility = 'visible';
     },
 
     /**
@@ -705,10 +718,9 @@ cr.define('wallpapers', function() {
       if (!this.dailyRefreshItem.querySelector('.daily-refresh-banner')) {
         var dailyRefreshBanner = document.querySelector('.daily-refresh-banner')
                                      .cloneNode(true /*deep=*/);
-        wallpaperManager.decorateDailyRefreshSlider(
-            this.collectionId,
-            dailyRefreshBanner.querySelector('.daily-refresh-slider'));
         this.dailyRefreshItem.appendChild(dailyRefreshBanner);
+        wallpaperManager.decorateDailyRefreshItem(
+            this.collectionId, this.dailyRefreshItem);
       }
 
       slideShowImage.style.opacity =
@@ -728,17 +740,12 @@ cr.define('wallpapers', function() {
       var images = this.dailyRefreshImages;
       if (images.length <= index)
         return;
-      images[index].style.opacity = 1;
-
-      if (images.length > 1) {
-        var previousIndex = (index - 1) % images.length;
-        if (previousIndex < 0)
-          previousIndex += images.length;
-        images[previousIndex].style.opacity = 0;
-        var nextIndex = (index + 1) % images.length;
-        this.dailyRefreshTimer_ =
-            window.setTimeout(this.showNextImage_.bind(this, nextIndex), 3000);
+      for (var i = 0; i < images.length; ++i) {
+        images[i].style.opacity = i === index ? 1 : 0;
       }
+      var nextIndex = (index + 1) % images.length;
+      this.dailyRefreshTimer_ =
+          window.setTimeout(this.showNextImage_.bind(this, nextIndex), 3000);
     },
 
     /**

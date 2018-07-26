@@ -18,6 +18,7 @@
 #include "ios/chrome/browser/application_context.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
+#import "ios/chrome/browser/experimental_flags.h"
 #import "ios/chrome/browser/signin/authentication_service.h"
 #include "ios/chrome/browser/signin/authentication_service_factory.h"
 #include "ios/chrome/browser/signin/profile_oauth2_token_service_factory.h"
@@ -25,6 +26,7 @@
 #include "ios/chrome/browser/sync/sync_setup_service.h"
 #include "ios/chrome/browser/sync/sync_setup_service_factory.h"
 #import "ios/chrome/browser/ui/collection_view/cells/MDCCollectionViewCell+Chrome.h"
+#import "ios/chrome/browser/ui/collection_view/cells/collection_view_cell_constants.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_footer_item.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_item.h"
 #import "ios/chrome/browser/ui/collection_view/collection_view_model.h"
@@ -237,7 +239,9 @@ const CGFloat kSpinnerButtonPadding = 18;
     [self unregisterTextField:passphrase_];
   }
   passphrase_ = [[UITextField alloc] init];
-  [passphrase_ setFont:[MDCTypography body1Font]];
+  if (!experimental_flags::IsSettingsUIRebootEnabled()) {
+    [passphrase_ setFont:[MDCTypography body1Font]];
+  }
   [passphrase_ setSecureTextEntry:YES];
   [passphrase_ setBackgroundColor:[UIColor clearColor]];
   [passphrase_ setAutoresizingMask:UIViewAutoresizingFlexibleWidth];
@@ -262,6 +266,7 @@ const CGFloat kSpinnerButtonPadding = 18;
 - (CollectionViewItem*)footerItem {
   CollectionViewFooterItem* footerItem =
       [[CollectionViewFooterItem alloc] initWithType:ItemTypeFooter];
+  footerItem.cellStyle = CollectionViewCellStyle::kUIKit;
   footerItem.text = self.footerMessage;
   footerItem.linkURL = google_util::AppendGoogleLocaleParam(
       GURL(kSyncGoogleDashboardURL),
@@ -321,10 +326,16 @@ const CGFloat kSpinnerButtonPadding = 18;
   CollectionViewItem* item =
       [self.collectionViewModel itemAtIndexPath:indexPath];
   if (item.type == ItemTypeMessage) {
-    CardMultilineCell* messageCell =
-        base::mac::ObjCCastStrict<CardMultilineCell>(cell);
-    messageCell.textLabel.font =
-        [[MDCTypography fontLoader] mediumFontOfSize:14];
+    // Changing the font weight may reflow the text onto a different number of
+    // lines, but the collection view doesn't know that it needs to layout the
+    // cell again. Sidestep this bug by leaving the font at a normal weight
+    // under UIRefresh.
+    if (!experimental_flags::IsSettingsUIRebootEnabled()) {
+      CardMultilineCell* messageCell =
+          base::mac::ObjCCastStrict<CardMultilineCell>(cell);
+      messageCell.textLabel.font =
+          [[MDCTypography fontLoader] mediumFontOfSize:14];
+    }
   }
   return cell;
 }

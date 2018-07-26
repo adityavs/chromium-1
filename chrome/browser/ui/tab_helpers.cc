@@ -42,6 +42,7 @@
 #include "chrome/browser/predictors/loading_predictor_tab_helper.h"
 #include "chrome/browser/prerender/prerender_tab_helper.h"
 #include "chrome/browser/previews/previews_infobar_tab_helper.h"
+#include "chrome/browser/previews/resource_loading_hints/resource_loading_hints_web_contents_observer.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/tab_helper.h"
 #include "chrome/browser/safe_browsing/trigger_creator.h"
@@ -61,6 +62,7 @@
 #include "chrome/browser/ui/find_bar/find_tab_helper.h"
 #include "chrome/browser/ui/javascript_dialogs/javascript_dialog_tab_helper.h"
 #include "chrome/browser/ui/navigation_correction_tab_observer.h"
+#include "chrome/browser/ui/omnibox/idn_navigation_observer.h"
 #include "chrome/browser/ui/passwords/manage_passwords_ui_controller.h"
 #include "chrome/browser/ui/pdf/chrome_pdf_web_contents_helper_client.h"
 #include "chrome/browser/ui/prefs/prefs_tab_helper.h"
@@ -92,9 +94,9 @@
 
 #if defined(OS_ANDROID)
 #include "chrome/browser/android/chrome_feature_list.h"
-#include "chrome/browser/android/data_usage/data_use_tab_helper.h"
 #include "chrome/browser/android/oom_intervention/oom_intervention_tab_helper.h"
 #include "chrome/browser/android/search_permissions/search_geolocation_disclosure_tab_helper.h"
+#include "chrome/browser/android/tasks/task_tab_helper.h"
 #include "chrome/browser/android/webapps/single_tab_mode_tab_helper.h"
 #include "chrome/browser/banners/app_banner_manager_android.h"
 #include "chrome/browser/ui/android/context_menu_helper.h"
@@ -240,6 +242,7 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
   prerender::PrerenderTabHelper::CreateForWebContents(web_contents);
   PreviewsInfoBarTabHelper::CreateForWebContents(web_contents);
   RecentlyAudibleHelper::CreateForWebContents(web_contents);
+  ResourceLoadingHintsWebContentsObserver::CreateForWebContents(web_contents);
   safe_browsing::TriggerCreator::MaybeCreateTriggersForWebContents(
       profile, web_contents);
   SearchEngineTabHelper::CreateForWebContents(web_contents);
@@ -267,7 +270,6 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
 #if defined(OS_ANDROID)
   banners::AppBannerManagerAndroid::CreateForWebContents(web_contents);
   ContextMenuHelper::CreateForWebContents(web_contents);
-  DataUseTabHelper::CreateForWebContents(web_contents);
   JavaScriptDialogTabHelper::CreateForWebContents(web_contents);
   if (OomInterventionTabHelper::IsEnabled()) {
     OomInterventionTabHelper::CreateForWebContents(web_contents);
@@ -275,6 +277,7 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
 
   SearchGeolocationDisclosureTabHelper::CreateForWebContents(web_contents);
   SingleTabModeTabHelper::CreateForWebContents(web_contents);
+  tasks::TaskTabHelper::CreateForWebContents(web_contents);
   ViewAndroidHelper::CreateForWebContents(web_contents);
 #else
   BookmarkTabHelper::CreateForWebContents(web_contents);
@@ -284,6 +287,9 @@ void TabHelpers::AttachTabHelpers(WebContents* web_contents) {
   extensions::WebNavigationTabObserver::CreateForWebContents(web_contents);
   FramebustBlockTabHelper::CreateForWebContents(web_contents);
   HungPluginTabHelper::CreateForWebContents(web_contents);
+  if (base::FeatureList::IsEnabled(features::kIdnNavigationSuggestions)) {
+    IdnNavigationObserver::CreateForWebContents(web_contents);
+  }
   JavaScriptDialogTabHelper::CreateForWebContents(web_contents);
   ManagePasswordsUIController::CreateForWebContents(web_contents);
   pdf::PDFWebContentsHelper::CreateForWebContentsWithClient(

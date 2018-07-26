@@ -19,7 +19,7 @@
 #include "content/public/common/main_function_params.h"
 #include "content/public/common/page_state.h"
 #include "content/public/test/mock_render_thread.h"
-#include "mojo/edk/embedder/scoped_ipc_support.h"
+#include "mojo/core/embedder/scoped_ipc_support.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -47,7 +47,7 @@ namespace content {
 class ContentBrowserClient;
 class ContentClient;
 class ContentRendererClient;
-class FakeCompositorDependencies;
+class CompositorDependencies;
 class MockRenderProcess;
 class PageState;
 class RendererMainPlatformDelegate;
@@ -190,6 +190,10 @@ class RenderViewTest : public testing::Test {
   // Allows a subclass to customize the initial size of the RenderView.
   virtual std::unique_ptr<VisualProperties> InitialVisualProperties();
 
+  // Override this to change the CompositorDependencies for the test.
+  virtual std::unique_ptr<CompositorDependencies>
+  CreateCompositorDependencies();
+
   // testing::Test
   void SetUp() override;
 
@@ -197,7 +201,7 @@ class RenderViewTest : public testing::Test {
 
   base::test::ScopedTaskEnvironment scoped_task_environment_;
 
-  std::unique_ptr<FakeCompositorDependencies> compositor_deps_;
+  std::unique_ptr<CompositorDependencies> compositor_deps_;
   std::unique_ptr<MockRenderProcess> mock_process_;
   // We use a naked pointer because we don't want to expose RenderViewImpl in
   // the embedder's namespace.
@@ -216,7 +220,7 @@ class RenderViewTest : public testing::Test {
 
   // For Mojo.
   std::unique_ptr<base::TestIOThread> test_io_thread_;
-  std::unique_ptr<mojo::edk::ScopedIPCSupport> ipc_support_;
+  std::unique_ptr<mojo::core::ScopedIPCSupport> ipc_support_;
   service_manager::BinderRegistry binder_registry_;
 
 #if defined(OS_MACOSX)

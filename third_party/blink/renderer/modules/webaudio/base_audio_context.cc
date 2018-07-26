@@ -69,6 +69,7 @@
 #include "third_party/blink/renderer/modules/webaudio/script_processor_node.h"
 #include "third_party/blink/renderer/modules/webaudio/stereo_panner_node.h"
 #include "third_party/blink/renderer/modules/webaudio/wave_shaper_node.h"
+#include "third_party/blink/renderer/platform/uuid.h"
 #include "third_party/blink/renderer/platform/audio/iir_filter.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
@@ -90,10 +91,10 @@ BaseAudioContext::BaseAudioContext(Document* document,
                                    enum ContextType context_type)
     : PausableObject(document),
       destination_node_(nullptr),
+      uuid_(CreateCanonicalUUIDString()),
       is_cleared_(false),
       is_resolving_resume_promises_(false),
       has_posted_cleanup_task_(false),
-      connection_count_(0),
       deferred_task_handler_(DeferredTaskHandler::Create()),
       context_state_(kSuspended),
       periodic_wave_sine_(nullptr),
@@ -119,6 +120,14 @@ void BaseAudioContext::Initialize() {
 
   if (destination_node_) {
     destination_node_->Handler().Initialize();
+    // TODO(crbug.com/863951).  The audio thread needs some things from the
+    // destination handler like the currentTime.  But the audio thread
+    // shouldn't access the |destination_node_| since it's an Oilpan object.
+    // Thus, get the destination handler, a non-oilpan object, so we can get
+    // the items directly from the handler instead of through the destination
+    // node.
+    destination_handler_ = &destination_node_->GetAudioDestinationHandler();
+
     // The AudioParams in the listener need access to the destination node, so
     // only create the listener if the destination node exists.
     listener_ = AudioListener::Create(*this);
@@ -159,6 +168,7 @@ void BaseAudioContext::Uninitialize() {
 }
 
 void BaseAudioContext::ContextDestroyed(ExecutionContext*) {
+  destination()->GetAudioDestinationHandler().ContextDestroyed();
   Uninitialize();
 }
 

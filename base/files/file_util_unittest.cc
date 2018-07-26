@@ -3179,7 +3179,7 @@ TEST_F(FileUtilTest, ReadFileToStringWithNamedPipe) {
 }
 #endif  // defined(OS_WIN)
 
-#if defined(OS_POSIX) && !defined(OS_MACOSX) && !defined(OS_FUCHSIA)
+#if defined(OS_POSIX) && !defined(OS_MACOSX)
 TEST_F(FileUtilTest, ReadFileToStringWithProcFileSystem) {
   FilePath file_path("/proc/cpuinfo");
   std::string data = "temp";
@@ -3189,23 +3189,15 @@ TEST_F(FileUtilTest, ReadFileToStringWithProcFileSystem) {
 
   data = "temp";
   EXPECT_FALSE(ReadFileToStringWithMaxSize(file_path, &data, 2));
-#if defined(OS_ANDROID)
-  EXPECT_EQ("Pr", data);
-#else
-  EXPECT_EQ("pr", data);
-#endif
+  EXPECT_TRUE(EqualsCaseInsensitiveASCII("pr", data));
 
   data = "temp";
   EXPECT_FALSE(ReadFileToStringWithMaxSize(file_path, &data, 4));
-#if defined(OS_ANDROID)
-  EXPECT_EQ("Proc", data);
-#else
-  EXPECT_EQ("proc", data);
-#endif
+  EXPECT_TRUE(EqualsCaseInsensitiveASCII("proc", data));
 
   EXPECT_FALSE(ReadFileToStringWithMaxSize(file_path, nullptr, 4));
 }
-#endif  // defined(OS_POSIX) && !defined(OS_MACOSX) && !defined(OS_FUCHSIA)
+#endif  // defined(OS_POSIX) && !defined(OS_MACOSX)
 
 TEST_F(FileUtilTest, ReadFileToStringWithLargeFile) {
   std::string data(kLargeFileSize, 'c');

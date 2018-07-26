@@ -136,7 +136,10 @@ void CardUnmaskPromptViews::GotVerificationResult(
     DialogModelChanged();
   }
 
-  Layout();
+  // Since we may have affected the layout of the button row, we retrigger a
+  // layout of the whole dialog (contents and button row).
+  InvalidateLayout();
+  parent()->Layout();
 }
 
 void CardUnmaskPromptViews::LinkClicked(views::Link* source, int event_flags) {
@@ -201,24 +204,17 @@ views::View* CardUnmaskPromptViews::CreateFootnoteView() {
   if (!controller_->CanStoreLocally())
     return nullptr;
 
-  // Local storage checkbox and (?) tooltip.
-  storage_row_ = new views::View();
-  ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
-  auto* storage_row_layout =
-      storage_row_->SetLayoutManager(std::make_unique<views::BoxLayout>(
-          views::BoxLayout::kHorizontal,
-          provider->GetInsetsMetric(views::INSETS_DIALOG_SUBSECTION)));
-
   storage_checkbox_ = new views::Checkbox(l10n_util::GetStringUTF16(
       IDS_AUTOFILL_CARD_UNMASK_PROMPT_STORAGE_CHECKBOX));
+  storage_checkbox_->SetBorder(
+      views::CreateEmptyBorder(ChromeLayoutProvider::Get()->GetInsetsMetric(
+          views::INSETS_DIALOG_SUBSECTION)));
   storage_checkbox_->SetChecked(controller_->GetStoreLocallyStartState());
   storage_checkbox_->SetEnabledTextColors(views::style::GetColor(
       *storage_checkbox_, ChromeTextContext::CONTEXT_BODY_TEXT_SMALL,
       STYLE_SECONDARY));
-  storage_row_->AddChildView(storage_checkbox_);
-  storage_row_layout->SetFlexForView(storage_checkbox_, 1);
 
-  return storage_row_;
+  return storage_checkbox_;
 }
 
 gfx::Size CardUnmaskPromptViews::CalculatePreferredSize() const {
@@ -249,8 +245,12 @@ void CardUnmaskPromptViews::DeleteDelegate() {
 
 int CardUnmaskPromptViews::GetDialogButtons() const {
   // In permanent error state, only the "close" button is shown.
-  if (controller_->GetVerificationResult() == AutofillClient::PERMANENT_FAILURE)
+  AutofillClient::PaymentsRpcResult result =
+      controller_->GetVerificationResult();
+  if (result == AutofillClient::PERMANENT_FAILURE ||
+      result == AutofillClient::NETWORK_ERROR) {
     return ui::DIALOG_BUTTON_CANCEL;
+  }
 
   return ui::DIALOG_BUTTON_OK | ui::DIALOG_BUTTON_CANCEL;
 }

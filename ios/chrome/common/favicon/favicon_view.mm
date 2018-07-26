@@ -40,8 +40,7 @@ const CGFloat kDefaultCornerRadius = 3;
 
     _faviconFallbackLabel = [[UILabel alloc] initWithFrame:self.bounds];
     _faviconFallbackLabel.textAlignment = NSTextAlignmentCenter;
-    _faviconFallbackLabel.font =
-        [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    _faviconFallbackLabel.font = [UIFont boldSystemFontOfSize:12.0f];
     _faviconFallbackLabel.isAccessibilityElement = NO;
     _faviconFallbackLabel.clipsToBounds = YES;
     _faviconFallbackLabel.layer.cornerRadius = kDefaultCornerRadius;

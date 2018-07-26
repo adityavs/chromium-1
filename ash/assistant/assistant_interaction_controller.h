@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "ash/assistant/assistant_controller_observer.h"
 #include "ash/assistant/model/assistant_interaction_model.h"
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
 #include "ash/assistant/model/assistant_ui_model_observer.h"
@@ -22,10 +23,10 @@ namespace ash {
 
 class AssistantController;
 class AssistantInteractionModelObserver;
-class AssistantUiController;
 
 class AssistantInteractionController
-    : public chromeos::assistant::mojom::AssistantEventSubscriber,
+    : public chromeos::assistant::mojom::AssistantInteractionSubscriber,
+      public AssistantControllerObserver,
       public AssistantInteractionModelObserver,
       public AssistantUiModelObserver,
       public HighlighterController::Observer,
@@ -44,10 +45,6 @@ class AssistantInteractionController
   // Provides a pointer to the |assistant| owned by AssistantController.
   void SetAssistant(chromeos::assistant::mojom::Assistant* assistant);
 
-  // Provides a pointer to the |assistant_ui_controller| owned by
-  // AssistantController.
-  void SetAssistantUiController(AssistantUiController* assistant_ui_controller);
-
   // Returns a reference to the underlying model.
   const AssistantInteractionModel* model() const {
     return &assistant_interaction_model_;
@@ -57,12 +54,16 @@ class AssistantInteractionController
   void AddModelObserver(AssistantInteractionModelObserver* observer);
   void RemoveModelObserver(AssistantInteractionModelObserver* observer);
 
-  // Invoked on suggestion chip pressed event.
-  void OnSuggestionChipPressed(int id);
+  // AssistantControllerObserver:
+  void OnAssistantControllerConstructed() override;
+  void OnAssistantControllerDestroying() override;
+  void OnDeepLinkReceived(
+      assistant::util::DeepLinkType type,
+      const std::map<std::string, std::string>& params) override;
 
   // AssistantInteractionModelObserver:
+  void OnInteractionStateChanged(InteractionState interaction_state) override;
   void OnInputModalityChanged(InputModality input_modality) override;
-  void OnCommittedQueryChanged(const AssistantQuery& committed_query) override;
 
   // AssistantUiModelObserver:
   void OnUiVisibilityChanged(bool visible, AssistantSource source) override;
@@ -70,8 +71,8 @@ class AssistantInteractionController
   // HighlighterController::Observer:
   void OnHighlighterEnabledChanged(HighlighterEnabledState state) override;
 
-  // chromeos::assistant::mojom::AssistantEventSubscriber:
-  void OnInteractionStarted() override;
+  // chromeos::assistant::mojom::AssistantInteractionSubscriber:
+  void OnInteractionStarted(bool is_voice_interaction) override;
   void OnInteractionFinished(
       AssistantInteractionResolution resolution) override;
   void OnHtmlResponse(const std::string& response) override;
@@ -91,6 +92,9 @@ class AssistantInteractionController
   void OnDialogPlateButtonPressed(DialogPlateButtonId id) override;
   void OnDialogPlateContentsCommitted(const std::string& text) override;
 
+  // Invoked on suggestion chip pressed event.
+  void OnSuggestionChipPressed(int id);
+
  private:
   void StartTextInteraction(const std::string text);
   void StartVoiceInteraction();
@@ -103,11 +107,8 @@ class AssistantInteractionController
   // Owned by AssistantController.
   chromeos::assistant::mojom::Assistant* assistant_ = nullptr;
 
-  // Owned by AssisantController.
-  AssistantUiController* assistant_ui_controller_ = nullptr;
-
-  mojo::Binding<chromeos::assistant::mojom::AssistantEventSubscriber>
-      assistant_event_subscriber_binding_;
+  mojo::Binding<chromeos::assistant::mojom::AssistantInteractionSubscriber>
+      assistant_interaction_subscriber_binding_;
 
   AssistantInteractionModel assistant_interaction_model_;
 

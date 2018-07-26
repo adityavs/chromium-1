@@ -50,7 +50,6 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   // Sets |generation_element_| to the focused password field and shows a
   // generation popup at this field.
   void UserTriggeredGeneratePassword() override;
-  void UserSelectedManualGenerationOption() override;
 
   // Enables the form classifier.
   void AllowToRunFormClassifier() override;
@@ -69,7 +68,17 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   void OnFieldAutofilled(const blink::WebInputElement& password_element);
 
   // The length that a password can be before the UI is hidden.
-  static const size_t kMaximumOfferSize = 5;
+  size_t maximum_offer_size() const { return maximum_offer_size_; }
+
+#if defined(UNIT_TEST)
+  void set_maximum_offer_size_for_testing(size_t maximum_offer_size) {
+    maximum_offer_size_ = maximum_offer_size;
+  }
+
+  // This method requests the autofill::mojom::PasswordManagerClient which binds
+  // requests the binding if it wasn't bound yet.
+  void RequestPasswordManagerClientForTesting() { GetPasswordManagerClient(); }
+#endif
 
  protected:
   // Returns true if the document for |render_frame()| is one that we should
@@ -100,7 +109,7 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   void DidFinishLoad() override;
   void OnDestruct() override;
 
-  const mojom::PasswordManagerDriverPtr& GetPasswordManagerDriver();
+  const mojom::PasswordManagerDriverAssociatedPtr& GetPasswordManagerDriver();
 
   const mojom::PasswordManagerClientAssociatedPtr& GetPasswordManagerClient();
 
@@ -122,9 +131,6 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   // If manual generation was already requested, automatic generation will
   // not be offered.
   void MaybeOfferAutomaticGeneration();
-
-  // Shows a generation popup.
-  void ShowGenerationPopup(bool is_manual_generation);
 
   // Signals the browser that it should offer or rescind automatic password
   // generation depending whether the user has just focused a form field
@@ -227,6 +233,9 @@ class PasswordGenerationAgent : public content::RenderFrameObserver,
   mojom::PasswordManagerClientAssociatedPtr password_manager_client_;
 
   mojo::Binding<mojom::PasswordGenerationAgent> binding_;
+
+  // The length that a password can be before the UI is hidden.
+  size_t maximum_offer_size_;
 
   DISALLOW_COPY_AND_ASSIGN(PasswordGenerationAgent);
 };

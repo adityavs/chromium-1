@@ -106,8 +106,10 @@ public class ChromePreferenceManager {
 
     private static final String HOME_PAGE_BUTTON_FORCE_ENABLED_KEY =
             "home_page_button_force_enabled";
+    private static final String HOMEPAGE_TILE_ENABLED_KEY = "homepage_tile_enabled";
 
     private static final String NTP_BUTTON_ENABLED_KEY = "ntp_button_enabled";
+    private static final String NTP_BUTTON_VARIANT_KEY = "ntp_button_variant";
 
     private static final String BOTTOM_TOOLBAR_ENABLED_KEY = "bottom_toolbar_enabled";
 
@@ -137,6 +139,9 @@ public class ChromePreferenceManager {
             "verified_digital_asset_links";
     private static final String TRUSTED_WEB_ACTIVITY_LAST_DISCLOSURE_TIME =
             "trusted_web_activity_last_disclosure_time:";
+
+    private static final String SHOULD_REGISTER_VR_ASSETS_COMPONENT_ON_STARTUP =
+            "should_register_vr_assets_component_on_startup";
 
     private static class LazyHolder {
         static final ChromePreferenceManager INSTANCE = new ChromePreferenceManager();
@@ -395,6 +400,23 @@ public class ChromePreferenceManager {
     }
 
     /**
+     * Set the new tab page button variant.
+     * @param variant The new tab page button variant.
+     */
+    public void setNewTabPageButtonVariant(String variant) {
+        writeString(NTP_BUTTON_VARIANT_KEY, variant);
+    }
+
+    /**
+     * Get the variant of the new tab page button.
+     * @return The stored variant of the new tab page button or the empty string if nothing is
+     *         stored.
+     */
+    public String getNewTabPageButtonVariant() {
+        return mSharedPreferences.getString(NTP_BUTTON_VARIANT_KEY, "");
+    }
+
+    /**
      * Get whether or not the new tab page button is enabled.
      * @return True if the new tab page button is enabled.
      */
@@ -466,6 +488,22 @@ public class ChromePreferenceManager {
     }
 
     /**
+     * Set whether or not the homepage tile will be shown.
+     * @param isEnabled If homepage tile is enabled.
+     */
+    public void setHomepageTileEnabled(boolean isEnabled) {
+        writeBoolean(HOMEPAGE_TILE_ENABLED_KEY, isEnabled);
+    }
+
+    /**
+     * Get whether or not the homepage tile is enabled.
+     * @return True if the homepage tile is enabled.
+     */
+    public boolean isHomepageTileEnabled() {
+        return mSharedPreferences.getBoolean(HOMEPAGE_TILE_ENABLED_KEY, false);
+    }
+
+    /**
      * Clean up unused Chrome Home preferences.
      */
     public void clearObsoleteChromeHomePrefs() {
@@ -530,6 +568,14 @@ public class ChromePreferenceManager {
      */
     public void setVerifiedDigitalAssetLinks(Set<String> links) {
         mSharedPreferences.edit().putStringSet(VERIFIED_DIGITAL_ASSET_LINKS, links).apply();
+    }
+
+    public boolean getShouldRegisterVrAssetsComponentOnStartup() {
+        return mSharedPreferences.getBoolean(SHOULD_REGISTER_VR_ASSETS_COMPONENT_ON_STARTUP, false);
+    }
+
+    public void setShouldRegisterVrAssetsComponentOnStartup(boolean shouldRegister) {
+        writeBoolean(SHOULD_REGISTER_VR_ASSETS_COMPONENT_ON_STARTUP, shouldRegister);
     }
 
     /**
@@ -633,6 +679,18 @@ public class ChromePreferenceManager {
     private void writeBoolean(String key, boolean value) {
         SharedPreferences.Editor ed = mSharedPreferences.edit();
         ed.putBoolean(key, value);
+        ed.apply();
+    }
+
+    /**
+     * Writes the given string to the named shared preference.
+     *
+     * @param key The name of the preference to modify.
+     * @param value The new value for the preference.
+     */
+    private void writeString(String key, String value) {
+        SharedPreferences.Editor ed = mSharedPreferences.edit();
+        ed.putString(key, value);
         ed.apply();
     }
 

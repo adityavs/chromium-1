@@ -16,6 +16,9 @@
 
 namespace chromeos {
 class EasyUnlockServiceRegular;
+namespace multidevice_setup {
+class MultiDeviceSetupImpl;
+}  // namespace multidevice_setup
 namespace secure_channel {
 class SecureChannelClientImpl;
 }  // namespace secure_channel
@@ -60,10 +63,6 @@ class RemoteDeviceRef {
   const std::string& persistent_symmetric_key() const {
     return remote_device_->persistent_symmetric_key;
   }
-  bool unlock_key() const { return remote_device_->unlock_key; }
-  bool supports_mobile_hotspot() const {
-    return remote_device_->supports_mobile_hotspot;
-  }
   int64_t last_update_time_millis() const {
     return remote_device_->last_update_time_millis;
   }
@@ -85,10 +84,11 @@ class RemoteDeviceRef {
   bool operator<(const RemoteDeviceRef& other) const;
 
  private:
+  friend class chromeos::multidevice_setup::MultiDeviceSetupImpl;
+  friend class chromeos::secure_channel::SecureChannelClientImpl;
   friend class RemoteDeviceCache;
   friend class RemoteDeviceRefBuilder;
   friend class RemoteDeviceRefTest;
-  friend class chromeos::secure_channel::SecureChannelClientImpl;
   friend bool IsSameDevice(const cryptauth::RemoteDevice& remote_device,
                            cryptauth::RemoteDeviceRef remote_device_ref);
   friend RemoteDevice* GetMutableRemoteDevice(

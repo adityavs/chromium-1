@@ -38,6 +38,7 @@ class HttpAuthPreferences;
 class HttpServerProperties;
 class HttpTransactionFactory;
 class HttpUserAgentSettings;
+class LoggingNetworkChangeObserver;
 class NetworkDelegate;
 class ProxyConfigService;
 class ProxyResolutionService;
@@ -108,7 +109,7 @@ class IOSIOThread : public web::WebThreadDelegate {
     // pins.
     std::unique_ptr<net::TransportSecurityState> transport_security_state;
     std::unique_ptr<net::CTVerifier> cert_transparency_verifier;
-    scoped_refptr<net::SSLConfigService> ssl_config_service;
+    std::unique_ptr<net::SSLConfigService> ssl_config_service;
     std::unique_ptr<net::HttpAuthPreferences> http_auth_preferences;
     std::unique_ptr<net::HttpAuthHandlerFactory> http_auth_handler_factory;
     std::unique_ptr<net::HttpServerProperties> http_server_properties;
@@ -201,8 +202,7 @@ class IOSIOThread : public web::WebThreadDelegate {
   net::HttpNetworkSession::Params params_;
 
   // Observer that logs network changes to the ChromeNetLog.
-  class LoggingNetworkChangeObserver;
-  std::unique_ptr<LoggingNetworkChangeObserver> network_change_observer_;
+  std::unique_ptr<net::LoggingNetworkChangeObserver> network_change_observer_;
 
   // These member variables are initialized by a task posted to the IO thread,
   // which gets posted by calling certain member functions of IOSIOThread.

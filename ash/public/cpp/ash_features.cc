@@ -17,7 +17,7 @@ const base::Feature kDragAppsInTabletMode{"DragAppsInTabletMode",
                                           base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kDragTabsInTabletMode{"DragTabsInTabletMode",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+                                          base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kKeyboardShortcutViewer{"KeyboardShortcutViewer",
                                             base::FEATURE_ENABLED_BY_DEFAULT};
@@ -28,16 +28,16 @@ const base::Feature kKeyboardShortcutViewerApp{
 const base::Feature kLockScreenNotifications{"LockScreenNotifications",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kNewOverviewAnimations{"NewOverviewAnimations",
-                                           base::FEATURE_ENABLED_BY_DEFAULT};
-
 const base::Feature kNewWallpaperPicker{"NewWallpaperPicker",
                                         base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kNightLight{"NightLight", base::FEATURE_ENABLED_BY_DEFAULT};
 
+const base::Feature kNotificationScrollBar{"NotificationScrollBar",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
 const base::Feature kOverviewSwipeToClose{"OverviewSwipeToClose",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+                                          base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kSystemTrayUnified{"SystemTrayUnified",
                                        base::FEATURE_ENABLED_BY_DEFAULT};
@@ -74,6 +74,10 @@ bool IsNewWallpaperPickerEnabled() {
 
 bool IsNightLightEnabled() {
   return base::FeatureList::IsEnabled(kNightLight);
+}
+
+bool IsNotificationScrollBarEnabled() {
+  return base::FeatureList::IsEnabled(kNotificationScrollBar);
 }
 
 bool IsSystemTrayUnifiedEnabled() {

@@ -57,8 +57,12 @@ DeleteRegistrationTask::~DeleteRegistrationTask() = default;
 
 void DeleteRegistrationTask::Start() {
   base::RepeatingClosure barrier_closure = base::BarrierClosure(
-      2u, base::BindOnce(&DeleteRegistrationTask::FinishTask,
-                         weak_factory_.GetWeakPtr()));
+      2u, base::BindOnce(
+              [](base::WeakPtr<DeleteRegistrationTask> task) {
+                if (task)
+                  task->FinishWithError(task->error_);
+              },
+              weak_factory_.GetWeakPtr()));
 
 #if DCHECK_IS_ON()
   // Get the registration |developer_id| to check it was deactivated.
@@ -67,7 +71,7 @@ void DeleteRegistrationTask::Start() {
       base::BindOnce(&DeleteRegistrationTask::DidGetRegistration,
                      weak_factory_.GetWeakPtr(), barrier_closure));
 #else
-  DidGetRegistration(barrier_closure, {}, blink::SERVICE_WORKER_OK);
+  DidGetRegistration(barrier_closure, {}, blink::ServiceWorkerStatusCode::kOk);
 #endif  // DCHECK_IS_ON()
 
   cache_manager()->DeleteCache(
@@ -94,7 +98,7 @@ void DeleteRegistrationTask::DidGetRegistration(
     } else {
       // Service worker database has been corrupted. Abandon all fetches.
       error_ = blink::mojom::BackgroundFetchError::STORAGE_ERROR;
-      data_manager()->abandon_fetches_callback().Run();
+      AbandonFetches(service_worker_registration_id_);
       std::move(done_closure).Run();
     }
   } else {
@@ -103,7 +107,7 @@ void DeleteRegistrationTask::DidGetRegistration(
 #endif  // DCHECK_IS_ON()
 
   std::vector<std::string> deletion_key_prefixes{
-      RegistrationKey(unique_id_), TitleKey(unique_id_),
+      RegistrationKey(unique_id_), UIOptionsKey(unique_id_),
       PendingRequestKeyPrefix(unique_id_), ActiveRequestKeyPrefix(unique_id_),
       CompletedRequestKeyPrefix(unique_id_)};
 
@@ -137,8 +141,9 @@ void DeleteRegistrationTask::DidDeleteCache(
   std::move(done_closure).Run();
 }
 
-void DeleteRegistrationTask::FinishTask() {
-  std::move(callback_).Run(error_);
+void DeleteRegistrationTask::FinishWithError(
+    blink::mojom::BackgroundFetchError error) {
+  std::move(callback_).Run(error);
   Finished();  // Destroys |this|.
 }
 

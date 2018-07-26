@@ -18,6 +18,7 @@
 #include "ui/ozone/public/swap_completion_callback.h"
 
 namespace gfx {
+class GpuFence;
 class Rect;
 }  // namespace gfx
 
@@ -45,19 +46,6 @@ struct HardwareDisplayPlaneList {
     uint32_t crtc_id;
     uint32_t framebuffer;
     CrtcController* crtc;
-
-    struct Plane {
-      Plane(int plane,
-            int framebuffer,
-            const gfx::Rect& bounds,
-            const gfx::Rect& src_rect);
-      ~Plane();
-      int plane;
-      int framebuffer;
-      gfx::Rect bounds;
-      gfx::Rect src_rect;
-    };
-    std::vector<Plane> planes;
   };
   // In the case of non-atomic operation, this info will be used for
   // pageflipping.
@@ -101,8 +89,13 @@ class HardwareDisplayPlaneManager {
   //
   // If |page_flip_request| is null, this tests the plane configuration without
   // submitting it.
+  // The fence returned in |out_fence| will signal when the currently scanned
+  // out buffers are replaced, and not when the buffers are scheduled with
+  // |page_flip_request|. Note that the returned fence may be a nullptr
+  // if the system doesn't support out fences.
   virtual bool Commit(HardwareDisplayPlaneList* plane_list,
-                      scoped_refptr<PageFlipRequest> page_flip_request) = 0;
+                      scoped_refptr<PageFlipRequest> page_flip_request,
+                      std::unique_ptr<gfx::GpuFence>* out_fence) = 0;
 
   // Disable all the overlay planes previously submitted and now stored in
   // plane_list->old_plane_list.
@@ -147,9 +140,12 @@ class HardwareDisplayPlaneManager {
     DrmDevice::Property gamma_lut_size;
     DrmDevice::Property degamma_lut;
     DrmDevice::Property degamma_lut_size;
+    DrmDevice::Property out_fence_ptr;
   };
 
   bool InitializeCrtcProperties(DrmDevice* drm);
+
+  virtual bool InitializePlanes(DrmDevice* drm) = 0;
 
   virtual bool SetPlaneData(HardwareDisplayPlaneList* plane_list,
                             HardwareDisplayPlane* hw_plane,
@@ -188,6 +184,8 @@ class HardwareDisplayPlaneManager {
   // Object containing the connection to the graphics device and wraps the API
   // calls to control it. Not owned.
   DrmDevice* drm_;
+
+  bool has_universal_planes_ = false;
 
   std::vector<std::unique_ptr<HardwareDisplayPlane>> planes_;
   std::vector<CrtcProperties> crtc_properties_;

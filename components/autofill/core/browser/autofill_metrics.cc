@@ -676,6 +676,16 @@ void AutofillMetrics::LogUploadAcceptedCardOriginMetric(
 }
 
 // static
+void AutofillMetrics::LogSaveCardCardholderNamePrefilled(bool prefilled) {
+  UMA_HISTOGRAM_BOOLEAN("Autofill.SaveCardCardholderNamePrefilled", prefilled);
+}
+
+// static
+void AutofillMetrics::LogSaveCardCardholderNameWasEdited(bool edited) {
+  UMA_HISTOGRAM_BOOLEAN("Autofill.SaveCardCardholderNameWasEdited", edited);
+}
+
+// static
 void AutofillMetrics::LogCardUploadDecisionMetrics(
     int upload_decision_metrics) {
   DCHECK(upload_decision_metrics);
@@ -716,16 +726,23 @@ void AutofillMetrics::LogSaveCardPromptMetric(
     SaveCardPromptMetric metric,
     bool is_uploading,
     bool is_reshow,
+    bool is_requesting_cardholder_name,
     int previous_save_credit_card_prompt_user_decision,
     security_state::SecurityLevel security_level) {
   DCHECK_LT(metric, NUM_SAVE_CARD_PROMPT_METRICS);
   std::string destination = is_uploading ? ".Upload" : ".Local";
   std::string show = is_reshow ? ".Reshows" : ".FirstShow";
+  std::string metric_with_destination_and_show =
+      "Autofill.SaveCreditCardPrompt" + destination + show;
+  base::UmaHistogramEnumeration(metric_with_destination_and_show, metric,
+                                NUM_SAVE_CARD_PROMPT_METRICS);
+  if (is_requesting_cardholder_name) {
+    base::UmaHistogramEnumeration(
+        metric_with_destination_and_show + ".RequestingCardholderName", metric,
+        NUM_SAVE_CARD_PROMPT_METRICS);
+  }
   base::UmaHistogramEnumeration(
-      "Autofill.SaveCreditCardPrompt" + destination + show, metric,
-      NUM_SAVE_CARD_PROMPT_METRICS);
-  base::UmaHistogramEnumeration(
-      "Autofill.SaveCreditCardPrompt" + destination + show +
+      metric_with_destination_and_show +
           PreviousSaveCreditCardPromptUserDecisionToString(
               previous_save_credit_card_prompt_user_decision),
       metric, NUM_SAVE_CARD_PROMPT_METRICS);
@@ -772,6 +789,30 @@ void AutofillMetrics::LogScanCreditCardCompleted(
   base::UmaHistogramLongTimes("Autofill.ScanCreditCard.Duration_" + suffix,
                               duration);
   UMA_HISTOGRAM_BOOLEAN("Autofill.ScanCreditCard.Completed", completed);
+}
+
+// static
+void AutofillMetrics::LogLocalCardMigrationBubbleOfferMetric(
+    LocalCardMigrationBubbleOfferMetric metric,
+    bool is_reshow) {
+  DCHECK_LT(metric, NUM_LOCAL_CARD_MIGRATION_BUBBLE_OFFER_METRICS);
+  std::string histogram_name = "Autofill.LocalCardMigrationBubbleOffer.";
+  histogram_name += is_reshow ? "Reshows" : "FirstShow";
+  base::UmaHistogramEnumeration(histogram_name, metric,
+                                NUM_LOCAL_CARD_MIGRATION_BUBBLE_OFFER_METRICS);
+}
+
+// static
+void AutofillMetrics::LogLocalCardMigrationBubbleUserInteractionMetric(
+    LocalCardMigrationBubbleUserInteractionMetric metric,
+    bool is_reshow) {
+  DCHECK_LT(metric, NUM_LOCAL_CARD_MIGRATION_BUBBLE_USER_INTERACTION_METRICS);
+  std::string histogram_name =
+      "Autofill.LocalCardMigrationBubbleUserInteraction.";
+  histogram_name += is_reshow ? "Reshows" : "FirstShow";
+  base::UmaHistogramEnumeration(
+      histogram_name, metric,
+      NUM_LOCAL_CARD_MIGRATION_BUBBLE_USER_INTERACTION_METRICS);
 }
 
 // static
@@ -1881,6 +1922,27 @@ void AutofillMetrics::FormInteractionsUkmLogger::
       .SetHtmlFieldType(static_cast<int>(field.html_type()))
       .SetHtmlFieldMode(static_cast<int>(field.html_mode()))
       .SetIsSkipped(is_skipped)
+      .Record(ukm_recorder_);
+}
+
+void AutofillMetrics::FormInteractionsUkmLogger::
+    LogRepeatedServerTypePredictionRationalized(
+        const FormSignature form_signature,
+        const AutofillField& field,
+        ServerFieldType old_type) {
+  if (!CanLog())
+    return;
+
+  ukm::builders::Autofill_RepeatedServerTypePredictionRationalized(source_id_)
+      .SetFormSignature(HashFormSignature(form_signature))
+      .SetFieldSignature(HashFieldSignature(field.GetFieldSignature()))
+      .SetFieldTypeGroup(static_cast<int>(field.Type().group()))
+      .SetFieldNewOverallType(static_cast<int>(field.Type().GetStorableType()))
+      .SetHeuristicType(static_cast<int>(field.heuristic_type()))
+      .SetHtmlFieldType(static_cast<int>(field.html_type()))
+      .SetHtmlFieldMode(static_cast<int>(field.html_mode()))
+      .SetServerType(static_cast<int>(field.server_type()))
+      .SetFieldOldOverallType(static_cast<int>(old_type))
       .Record(ukm_recorder_);
 }
 

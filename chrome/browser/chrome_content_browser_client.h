@@ -123,6 +123,7 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   void GetAdditionalViewSourceSchemes(
       std::vector<std::string>* additional_schemes) override;
   bool LogWebUIUrl(const GURL& web_ui_url) const override;
+  bool IsWebUIAllowedToMakeNetworkRequests(const url::Origin& origin) override;
   bool IsHandledURL(const GURL& url) override;
   bool CanCommitURL(content::RenderProcessHost* process_host,
                     const GURL& url) override;
@@ -166,6 +167,9 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   std::string GetAcceptLangs(content::BrowserContext* context) override;
   const gfx::ImageSkia* GetDefaultFavicon() override;
   bool IsDataSaverEnabled(content::BrowserContext* context) override;
+  void UpdateRendererPreferencesForWorker(
+      content::BrowserContext* browser_context,
+      content::RendererPreferences* out_prefs) override;
   void NavigationRequestStarted(
       int frame_tree_node_id,
       const GURL& url,
@@ -232,9 +236,8 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   net::URLRequestContext* OverrideRequestContextForURL(
       const GURL& url,
       content::ResourceContext* context) override;
-  void GetGeolocationRequestContext(
-      base::OnceCallback<void(scoped_refptr<net::URLRequestContextGetter>)>
-          callback) override;
+  scoped_refptr<network::SharedURLLoaderFactory>
+  GetSystemSharedURLLoaderFactory() override;
   std::string GetGeolocationApiKey() override;
 
 #if defined(OS_ANDROID)
@@ -287,6 +290,7 @@ class ChromeContentBrowserClient : public content::ContentBrowserClient {
   base::FilePath GetDefaultDownloadDirectory() override;
   std::string GetDefaultDownloadName() override;
   base::FilePath GetShaderDiskCacheDirectory() override;
+  base::FilePath GetGrShaderDiskCacheDirectory() override;
   void DidCreatePpapiPlugin(content::BrowserPpapiHost* browser_host) override;
   content::BrowserPpapiHost* GetExternalBrowserPpapiHost(
       int plugin_process_id) override;

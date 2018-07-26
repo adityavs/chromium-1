@@ -8,6 +8,7 @@
 #include <string>
 
 #include "base/json/json_writer.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/stl_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_split.h"
@@ -19,6 +20,7 @@
 #include "chrome/browser/chromeos/arc/arc_session_manager.h"
 #include "chrome/browser/chromeos/arc/arc_util.h"
 #include "chrome/browser/chromeos/arc/boot_phase_monitor/arc_boot_phase_monitor_bridge.h"
+#include "chrome/browser/chromeos/arc/notification/arc_supervision_transition_notification.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/ui/app_list/arc/arc_app_list_prefs.h"
 #include "chrome/browser/ui/ash/launcher/arc_app_shelf_id.h"
@@ -32,6 +34,7 @@
 #include "components/arc/arc_util.h"
 #include "components/arc/common/intent_helper.mojom.h"
 #include "components/arc/intent_helper/arc_intent_helper_bridge.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "ui/aura/window.h"
 #include "ui/display/display.h"
@@ -81,10 +84,11 @@ constexpr char kLaunchFlags[] = "launchFlags";
 
 constexpr char kAndroidClockAppId[] = "ddmmnabaeomoacfpfjgghfpocfolhjlg";
 constexpr char kAndroidFilesAppId[] = "gmiohhmfhgfclpeacmdfancbipocempm";
+constexpr char kAndroidCameraAppId[] = "goamfaniemdfcajgcmmflhchgkmbngka";
 
 constexpr char const* kAppIdsHiddenInLauncher[] = {
     kAndroidClockAppId, kSettingsAppId, kAndroidFilesAppId,
-};
+    kAndroidCameraAppId};
 
 // Returns true if |event_flags| came from a mouse or touch event.
 bool IsMouseOrTouchEventFromFlags(int event_flags) {
@@ -114,6 +118,11 @@ bool Launch(content::BrowserContext* context,
 
   if (!app_info->launchable) {
     VLOG(2) << "Cannot launch non-launchable app: " << app_id << ".";
+    return false;
+  }
+
+  if (app_info->suspended) {
+    VLOG(2) << "Cannot launch suspended app: " << app_id << ".";
     return false;
   }
 
@@ -190,7 +199,8 @@ bool ShouldShowInLauncher(const std::string& app_id) {
 bool LaunchAndroidSettingsApp(content::BrowserContext* context,
                               int event_flags,
                               int64_t display_id) {
-  return LaunchApp(context, kSettingsAppId, event_flags, display_id);
+  return LaunchApp(context, kSettingsAppId, event_flags,
+                   UserInteractionType::APP_STARTED_FROM_SETTINGS, display_id);
 }
 
 bool LaunchPlayStoreWithUrl(const std::string& url) {
@@ -207,24 +217,31 @@ bool LaunchPlayStoreWithUrl(const std::string& url) {
 
 bool LaunchApp(content::BrowserContext* context,
                const std::string& app_id,
-               int event_flags) {
-  return LaunchApp(context, app_id, event_flags, display::kInvalidDisplayId);
+               int event_flags,
+               arc::UserInteractionType user_action) {
+  return LaunchApp(context, app_id, event_flags, user_action,
+                   display::kInvalidDisplayId);
 }
 
 bool LaunchApp(content::BrowserContext* context,
                const std::string& app_id,
                int event_flags,
+               arc::UserInteractionType user_action,
                int64_t display_id) {
   return LaunchAppWithIntent(context, app_id, base::nullopt /* launch_intent */,
-                             event_flags, display_id);
+                             event_flags, user_action, display_id);
 }
 
 bool LaunchAppWithIntent(content::BrowserContext* context,
                          const std::string& app_id,
                          const base::Optional<std::string>& launch_intent,
                          int event_flags,
+                         arc::UserInteractionType user_action,
                          int64_t display_id) {
   DCHECK(!launch_intent.has_value() || !launch_intent->empty());
+  if (user_action != UserInteractionType::NOT_USER_INITIATED)
+    UMA_HISTOGRAM_ENUMERATION("Arc.UserInteraction", user_action,
+                              UserInteractionType::SIZE);
 
   Profile* const profile = Profile::FromBrowserContext(context);
 
@@ -232,7 +249,20 @@ bool LaunchAppWithIntent(content::BrowserContext* context,
   // as a placeholder to show the guide notification for proper configuration.
   // Handle such a case here and shows the desired notification.
   if (IsArcBlockedDueToIncompatibleFileSystem(profile)) {
+    VLOG(1) << "Attempt to launch " << app_id
+            << " while ARC++ is blocked due to incompatible file system.";
     arc::ShowArcMigrationGuideNotification(profile);
+    return false;
+  }
+
+  // In case supervision transition is in progress ARC++ is not available.
+  const ArcSupervisionTransition supervision_transition =
+      GetSupervisionTransition(profile);
+  if (supervision_transition != ArcSupervisionTransition::NO_TRANSITION) {
+    VLOG(1) << "Attempt to launch " << app_id
+            << " while supervision transition " << supervision_transition
+            << " is in progress.";
+    arc::ShowSupervisionTransitionNotification(profile);
     return false;
   }
 
@@ -294,8 +324,8 @@ bool LaunchAppWithIntent(content::BrowserContext* context,
     prefs->SetLastLaunchTime(app_id);
     return true;
   }
-  arc::ArcBootPhaseMonitorBridge::RecordFirstAppLaunchDelayUMA(context);
 
+  arc::ArcBootPhaseMonitorBridge::RecordFirstAppLaunchDelayUMA(context);
   return Launch(context, app_id, launch_intent, event_flags,
                 GetValidDisplayId(display_id));
 }
@@ -335,8 +365,9 @@ bool LaunchSettingsAppActivity(content::BrowserContext* context,
                                int64_t display_id) {
   const std::string launch_intent = GetLaunchIntent(
       kSettingsAppPackage, activity, std::vector<std::string>());
-  return LaunchAppWithIntent(context, kSettingsAppId, launch_intent,
-                             event_flags, display_id);
+  return LaunchAppWithIntent(
+      context, kSettingsAppId, launch_intent, event_flags,
+      UserInteractionType::APP_STARTED_FROM_SETTINGS, display_id);
 }
 
 void SetTaskActive(int task_id) {
@@ -563,7 +594,8 @@ void GetLocaleAndPreferredLanguages(const Profile* profile,
                                     std::string* out_locale,
                                     std::string* out_preferred_languages) {
   const PrefService::Preference* locale_pref =
-      profile->GetPrefs()->FindPreference(::prefs::kApplicationLocale);
+      profile->GetPrefs()->FindPreference(
+          ::language::prefs::kApplicationLocale);
   DCHECK(locale_pref);
   const bool value_exists = locale_pref->GetValue()->GetAsString(out_locale);
   DCHECK(value_exists);

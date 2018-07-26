@@ -14,67 +14,100 @@ constexpr int kDefaultBackGestureHorizontalThreshold = 80;
 }  // namespace
 
 CastGestureDispatcher::CastGestureDispatcher(
-    CastContentWindow::Delegate* delegate)
-    : horizontal_threshold_(
+    CastContentWindow::Delegate* delegate,
+    bool enable_top_drag_gesture)
+    : enable_top_drag_gesture_(enable_top_drag_gesture),
+      back_horizontal_threshold_(
           GetSwitchValueInt(switches::kBackGestureHorizontalThreshold,
                             kDefaultBackGestureHorizontalThreshold)),
-      delegate_(delegate),
-      dispatched_back_(false) {
+      delegate_(delegate) {
   DCHECK(delegate_);
 }
+
+CastGestureDispatcher::CastGestureDispatcher(
+    CastContentWindow::Delegate* delegate)
+    : CastGestureDispatcher(
+          delegate,
+          GetSwitchValueBoolean(switches::kEnableTopDragGesture, false)) {}
+
 bool CastGestureDispatcher::CanHandleSwipe(CastSideSwipeOrigin swipe_origin) {
-  return swipe_origin == CastSideSwipeOrigin::LEFT &&
-         delegate_->CanHandleGesture(GestureType::GO_BACK);
+  return delegate_->CanHandleGesture(GestureForSwipeOrigin(swipe_origin));
+}
+
+GestureType CastGestureDispatcher::GestureForSwipeOrigin(
+    CastSideSwipeOrigin swipe_origin) {
+  switch (swipe_origin) {
+    case CastSideSwipeOrigin::LEFT:
+      return GestureType::GO_BACK;
+    case CastSideSwipeOrigin::TOP:
+      return enable_top_drag_gesture_ ? GestureType::TOP_DRAG
+                                      : GestureType::NO_GESTURE;
+    default:
+      return GestureType::NO_GESTURE;
+  }
 }
 
 void CastGestureDispatcher::HandleSideSwipeBegin(
     CastSideSwipeOrigin swipe_origin,
     const gfx::Point& touch_location) {
-  if (swipe_origin == CastSideSwipeOrigin::LEFT) {
-    dispatched_back_ = false;
-    VLOG(1) << "swipe gesture begin";
-    current_swipe_time_ = base::ElapsedTimer();
+  if (!CanHandleSwipe(swipe_origin)) {
+    return;
+  }
+
+  current_swipe_time_ = base::ElapsedTimer();
+
+  GestureType gesture_type = GestureForSwipeOrigin(swipe_origin);
+  if (gesture_type == GestureType::GO_BACK) {
+    VLOG(1) << "back swipe gesture begin";
   }
 }
 
 void CastGestureDispatcher::HandleSideSwipeContinue(
     CastSideSwipeOrigin swipe_origin,
     const gfx::Point& touch_location) {
-  if (swipe_origin != CastSideSwipeOrigin::LEFT) {
+  if (!CanHandleSwipe(swipe_origin)) {
     return;
   }
 
-  if (!delegate_->CanHandleGesture(GestureType::GO_BACK)) {
-    return;
-  }
+  GestureType gesture_type = GestureForSwipeOrigin(swipe_origin);
 
-  delegate_->GestureProgress(GestureType::GO_BACK, touch_location);
+  delegate_->GestureProgress(gesture_type, touch_location);
   VLOG(1) << "swipe gesture continue, elapsed time: "
           << current_swipe_time_.Elapsed().InMilliseconds() << "ms";
-
-  if (!dispatched_back_ && touch_location.x() >= horizontal_threshold_) {
-    dispatched_back_ = true;
-    delegate_->ConsumeGesture(GestureType::GO_BACK);
-    VLOG(1) << "swipe gesture complete, elapsed time: "
-            << current_swipe_time_.Elapsed().InMilliseconds() << "ms";
-  }
 }
 
 void CastGestureDispatcher::HandleSideSwipeEnd(
     CastSideSwipeOrigin swipe_origin,
     const gfx::Point& touch_location) {
-  if (swipe_origin != CastSideSwipeOrigin::LEFT) {
+  if (!CanHandleSwipe(swipe_origin)) {
     return;
   }
+
+  GestureType gesture_type = GestureForSwipeOrigin(swipe_origin);
   VLOG(1) << "swipe end, elapsed time: "
           << current_swipe_time_.Elapsed().InMilliseconds() << "ms";
-  if (!delegate_->CanHandleGesture(GestureType::GO_BACK)) {
-    return;
-  }
-  if (!dispatched_back_ && touch_location.x() < horizontal_threshold_) {
+
+  // If it's a back gesture, we have special handling to check for the
+  // horizontal threshold. If the finger has lifted before the horizontal
+  // gesture, cancel the back gesture and do not consume it.
+  if (gesture_type == GestureType::GO_BACK &&
+      touch_location.x() < back_horizontal_threshold_) {
     VLOG(1) << "swipe gesture cancelled";
     delegate_->CancelGesture(GestureType::GO_BACK, touch_location);
+    return;
   }
+
+  delegate_->ConsumeGesture(gesture_type);
+  VLOG(1) << "gesture complete, elapsed time: "
+          << current_swipe_time_.Elapsed().InMilliseconds() << "ms";
+}
+
+void CastGestureDispatcher::HandleTapDownGesture(
+    const gfx::Point& touch_location) {
+  if (!delegate_->CanHandleGesture(GestureType::TAP_DOWN)) {
+    return;
+  }
+  delegate_->ConsumeGesture(GestureType::TAP_DOWN);
 }
 
 void CastGestureDispatcher::HandleTapGesture(const gfx::Point& touch_location) {

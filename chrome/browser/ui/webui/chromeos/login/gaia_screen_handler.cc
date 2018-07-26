@@ -40,6 +40,7 @@
 #include "chrome/browser/lifetime/browser_shutdown.h"
 #include "chrome/browser/net/system_network_context_manager.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/ash/login_screen_client.h"
 #include "chrome/browser/ui/webui/chromeos/login/active_directory_password_change_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/enrollment_screen_handler.h"
 #include "chrome/browser/ui/webui/chromeos/login/signin_screen_handler.h"
@@ -51,11 +52,11 @@
 #include "chrome/grit/generated_resources.h"
 #include "chrome/installer/util/google_update_settings.h"
 #include "chromeos/chromeos_switches.h"
+#include "chromeos/dbus/util/version_loader.h"
 #include "chromeos/login/auth/authpolicy_login_helper.h"
 #include "chromeos/login/auth/user_context.h"
 #include "chromeos/settings/cros_settings_names.h"
 #include "chromeos/system/devicetype.h"
-#include "chromeos/system/version_loader.h"
 #include "components/login/localized_values_builder.h"
 #include "components/policy/proto/chrome_device_policy.pb.h"
 #include "components/prefs/pref_service.h"
@@ -110,11 +111,11 @@ policy::DeviceMode GetDeviceMode() {
 }
 
 GaiaScreenMode GetGaiaScreenMode(const std::string& email, bool use_offline) {
-  if (GetDeviceMode() == policy::DEVICE_MODE_ENTERPRISE_AD)
-    return GAIA_SCREEN_MODE_AD;
-
   if (use_offline)
     return GAIA_SCREEN_MODE_OFFLINE;
+
+  if (GetDeviceMode() == policy::DEVICE_MODE_ENTERPRISE_AD)
+    return GAIA_SCREEN_MODE_AD;
 
   int authentication_behavior = 0;
   CrosSettings::Get()->GetInteger(kLoginAuthenticationBehavior,
@@ -413,10 +414,15 @@ void GaiaScreenHandler::LoadGaiaWithPartitionAndVersionAndConsent(
   const AccountId& owner_account_id =
       user_manager::UserManager::Get()->GetOwnerAccountId();
   params.SetBoolean("hasDeviceOwner", owner_account_id.is_valid());
-  if (owner_account_id.is_valid() &&
-      user_manager::UserManager::Get()->FindUser(owner_account_id)->GetType() ==
-          user_manager::UserType::USER_TYPE_CHILD) {
-    params.SetString("obfuscatedOwnerId", owner_account_id.GetGaiaId());
+  if (owner_account_id.is_valid()) {
+    // Some Autotest policy tests appear to wipe the user list in Local State
+    // but preserve a policy file referencing an owner: https://crbug.com/850139
+    const user_manager::User* owner_user =
+        user_manager::UserManager::Get()->FindUser(owner_account_id);
+    if (owner_user &&
+        owner_user->GetType() == user_manager::UserType::USER_TYPE_CHILD) {
+      params.SetString("obfuscatedOwnerId", owner_account_id.GetGaiaId());
+    }
   }
 
   params.SetString("chromeType", GetChromeType());
@@ -571,9 +577,12 @@ void GaiaScreenHandler::RegisterMessages() {
   AddRawCallback("showAddUser", &GaiaScreenHandler::HandleShowAddUser);
   AddCallback("getIsSamlUserPasswordless",
               &GaiaScreenHandler::HandleGetIsSamlUserPasswordless);
-  AddCallback("updateGaiaDialogSize",
-              &GaiaScreenHandler::HandleUpdateGaiaDialogSize);
-  AddCallback("hideGaiaDialog", &GaiaScreenHandler::HandleHideGaiaDialog);
+  AddCallback("updateOobeDialogSize",
+              &GaiaScreenHandler::HandleUpdateOobeDialogSize);
+  AddCallback("hideOobeDialog", &GaiaScreenHandler::HandleHideOobeDialog);
+  AddCallback("updateSigninUIState",
+              &GaiaScreenHandler::HandleUpdateSigninUIState);
+  AddCallback("showGuestButton", &GaiaScreenHandler::HandleShowGuestButton);
 
   // Allow UMA metrics collection from JS.
   web_ui()->AddMessageHandler(std::make_unique<MetricsHandler>());
@@ -809,14 +818,14 @@ void GaiaScreenHandler::HandleGaiaUIReady() {
     LoginDisplayHost::default_host()->OnGaiaScreenReady();
 }
 
-void GaiaScreenHandler::HandleUpdateGaiaDialogSize(int width, int height) {
+void GaiaScreenHandler::HandleUpdateOobeDialogSize(int width, int height) {
   if (LoginDisplayHost::default_host())
-    LoginDisplayHost::default_host()->UpdateGaiaDialogSize(width, height);
+    LoginDisplayHost::default_host()->UpdateOobeDialogSize(width, height);
 }
 
-void GaiaScreenHandler::HandleHideGaiaDialog() {
+void GaiaScreenHandler::HandleHideOobeDialog() {
   if (LoginDisplayHost::default_host())
-    LoginDisplayHost::default_host()->HideGaiaDialog();
+    LoginDisplayHost::default_host()->HideOobeDialog();
 }
 
 void GaiaScreenHandler::HandleShowAddUser(const base::ListValue* args) {
@@ -845,6 +854,26 @@ void GaiaScreenHandler::HandleGetIsSamlUserPasswordless(
   // DeviceSamlLoginAuthenticationType policy if that's a new user.
   ResolveJavascriptCallback(base::Value(callback_id),
                             base::Value(false) /* isSamlUserPasswordless */);
+}
+
+void GaiaScreenHandler::HandleUpdateSigninUIState(int state) {
+  if (!ash::features::IsViewsLoginEnabled() ||
+      !LoginScreenClient::HasInstance()) {
+    return;
+  }
+
+  auto dialog_state = static_cast<ash::mojom::OobeDialogState>(state);
+  DCHECK(ash::mojom::IsKnownEnumValue(dialog_state));
+  LoginScreenClient::Get()->login_screen()->NotifyOobeDialogState(dialog_state);
+}
+
+void GaiaScreenHandler::HandleShowGuestButton(bool show) {
+  if (!ash::features::IsViewsLoginEnabled() ||
+      !LoginScreenClient::HasInstance()) {
+    return;
+  }
+
+  LoginScreenClient::Get()->login_screen()->SetAllowLoginAsGuest(show);
 }
 
 void GaiaScreenHandler::OnShowAddUser() {

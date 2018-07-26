@@ -29,6 +29,8 @@
  */
 
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
+
+#include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
 #include "third_party/blink/renderer/core/dom/dom_exception.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
@@ -257,7 +259,7 @@ ScriptPromise ScriptPromise::Then(v8::Local<v8::Function> on_fulfilled,
       return ScriptPromise();
   }
 
-  return ScriptPromise(script_state_.get(), result_promise);
+  return ScriptPromise(script_state_, result_promise);
 }
 
 ScriptPromise ScriptPromise::CastUndefined(ScriptState* script_state) {

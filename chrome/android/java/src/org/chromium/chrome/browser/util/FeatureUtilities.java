@@ -14,9 +14,12 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.UserManager;
 import android.speech.RecognizerIntent;
+import android.text.TextUtils;
 
 import org.chromium.base.CommandLine;
+import org.chromium.base.ContextUtils;
 import org.chromium.base.StrictModeContext;
+import org.chromium.base.SysUtils;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.VisibleForTesting;
 import org.chromium.base.annotations.CalledByNative;
@@ -28,7 +31,9 @@ import org.chromium.chrome.browser.locale.LocaleManager;
 import org.chromium.chrome.browser.partnercustomizations.PartnerBrowserCustomizations;
 import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
 import org.chromium.chrome.browser.tabmodel.DocumentModeAssassin;
+import org.chromium.chrome.browser.toolbar.ToolbarLayout;
 import org.chromium.components.signin.AccountManagerFacade;
+import org.chromium.components.variations.VariationsAssociatedData;
 import org.chromium.ui.base.DeviceFormFactor;
 
 import java.util.List;
@@ -39,6 +44,7 @@ import java.util.List;
  */
 public class FeatureUtilities {
     private static final String TAG = "FeatureUtilities";
+    private static final Integer CONTEXTUAL_SUGGESTIONS_TOOLBAR_MIN_DP = 320;
 
     private static Boolean sHasGoogleAccountAuthenticator;
     private static Boolean sHasRecognitionIntentHandler;
@@ -47,8 +53,12 @@ public class FeatureUtilities {
     private static Boolean sIsSoleEnabled;
     private static Boolean sIsChromeModernDesignEnabled;
     private static Boolean sIsHomePageButtonForceEnabled;
+    private static Boolean sIsHomepageTileEnabled;
     private static Boolean sIsNewTabPageButtonEnabled;
     private static Boolean sIsBottomToolbarEnabled;
+
+    private static final String NTP_BUTTON_TRIAL_NAME = "NewTabPage";
+    private static final String NTP_BUTTON_VARIANT_PARAM_NAME = "variation";
 
     /**
      * Determines whether or not the {@link RecognizerIntent#ACTION_WEB_SEARCH} {@link Intent}
@@ -155,7 +165,8 @@ public class FeatureUtilities {
         FirstRunUtils.cacheFirstRunPrefs();
         cacheChromeModernDesignEnabled();
         cacheHomePageButtonForceEnabled();
-        cacheNewTabPageButtonEnabled();
+        cacheHomepageTileEnabled();
+        cacheNewTabPageButtonEnabledAndMaybeVariant();
         cacheBottomToolbarEnabled();
 
         // Propagate DONT_PREFETCH_LIBRARIES feature value to LibraryLoader. This can't
@@ -223,9 +234,47 @@ public class FeatureUtilities {
      * Cache whether or not the new tab page button is enabled so on next startup, the value can
      * be made available immediately.
      */
-    public static void cacheNewTabPageButtonEnabled() {
-        ChromePreferenceManager.getInstance().setNewTabPageButtonEnabled(
-                ChromeFeatureList.isEnabled(ChromeFeatureList.NTP_BUTTON));
+    public static void cacheHomepageTileEnabled() {
+        ChromePreferenceManager.getInstance().setHomepageTileEnabled(
+                ChromeFeatureList.isEnabled(ChromeFeatureList.HOMEPAGE_TILE));
+    }
+
+    /**
+     * @return Whether or not the new tab page button is enabled.
+     */
+    public static boolean isHomepageTileEnabled() {
+        if (sIsHomepageTileEnabled == null) {
+            ChromePreferenceManager prefManager = ChromePreferenceManager.getInstance();
+
+            try (StrictModeContext unused = StrictModeContext.allowDiskReads()) {
+                sIsHomepageTileEnabled = prefManager.isHomepageTileEnabled();
+            }
+        }
+        return sIsHomepageTileEnabled;
+    }
+
+    /**
+     * Cache whether or not the new tab page button is enabled and, if it is, the button's variant
+     * as well so that on next startup, both values can be made available immediately.
+     */
+    public static void cacheNewTabPageButtonEnabledAndMaybeVariant() {
+        boolean isNTPButtonEnabled = ChromeFeatureList.isEnabled(ChromeFeatureList.NTP_BUTTON);
+        ChromePreferenceManager.getInstance().setNewTabPageButtonEnabled(isNTPButtonEnabled);
+        if (isNTPButtonEnabled) {
+            String iconVariant = getNTPButtonVariant();
+            if (TextUtils.isEmpty(iconVariant)) iconVariant = ToolbarLayout.NTP_BUTTON_HOME_VARIANT;
+            ChromePreferenceManager.getInstance().setNewTabPageButtonVariant(iconVariant);
+        }
+    }
+
+    /**
+     * Gets the new tab page button variant from variations associated data.
+     * Native must be initialized before this method is called.
+     * @return The new tab page button variant.
+     */
+    public static String getNTPButtonVariant() {
+        return VariationsAssociatedData.getVariationParamValue(
+                NTP_BUTTON_TRIAL_NAME, NTP_BUTTON_VARIANT_PARAM_NAME);
     }
 
     /**
@@ -248,7 +297,7 @@ public class FeatureUtilities {
      */
     public static void cacheBottomToolbarEnabled() {
         ChromePreferenceManager.getInstance().setBottomToolbarEnabled(
-                ChromeFeatureList.isEnabled(ChromeFeatureList.CHROME_DUPLEX));
+                ChromeFeatureList.isEnabled(ChromeFeatureList.CHROME_DUET));
     }
 
     /**
@@ -259,7 +308,9 @@ public class FeatureUtilities {
             ChromePreferenceManager prefManager = ChromePreferenceManager.getInstance();
 
             try (StrictModeContext unused = StrictModeContext.allowDiskReads()) {
-                sIsBottomToolbarEnabled = prefManager.isBottomToolbarEnabled();
+                sIsBottomToolbarEnabled = prefManager.isBottomToolbarEnabled()
+                        && !DeviceFormFactor.isNonMultiDisplayContextOnTablet(
+                                   ContextUtils.getApplicationContext());
             }
         }
         return sIsBottomToolbarEnabled;
@@ -347,16 +398,29 @@ public class FeatureUtilities {
     }
 
     /**
-     * @param isTablet Whether the containing Activity is being displayed on a tablet-sized screen.
+     * @param activityContext The context for the containing activity.
      * @return Whether contextual suggestions are enabled.
      */
-    public static boolean areContextualSuggestionsEnabled(boolean isTablet) {
-        return !isTablet && !LocaleManager.getInstance().needToCheckForSearchEnginePromo()
+    public static boolean areContextualSuggestionsEnabled(Context activityContext) {
+        int smallestScreenWidth =
+                activityContext.getResources().getConfiguration().smallestScreenWidthDp;
+        return !DeviceFormFactor.isNonMultiDisplayContextOnTablet(activityContext)
+                && !LocaleManager.getInstance().needToCheckForSearchEnginePromo()
                 && isChromeModernDesignEnabled()
                 && (ChromeFeatureList.isEnabled(
                             ChromeFeatureList.CONTEXTUAL_SUGGESTIONS_BOTTOM_SHEET)
-                           || ChromeFeatureList.isEnabled(
-                                      ChromeFeatureList.CONTEXTUAL_SUGGESTIONS_BUTTON));
+                    || (smallestScreenWidth >= CONTEXTUAL_SUGGESTIONS_TOOLBAR_MIN_DP
+                        && ChromeFeatureList.isEnabled(
+                                ChromeFeatureList.CONTEXTUAL_SUGGESTIONS_BUTTON)));
+    }
+
+    /**
+     * @return Whether this device is running Android Go. This is assumed when we're running Android
+     * O or later and we're on a low-end device.
+     */
+    public static boolean isAndroidGo() {
+        return SysUtils.isLowEndDevice()
+                && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O;
     }
 
     private static native void nativeSetCustomTabVisible(boolean visible);

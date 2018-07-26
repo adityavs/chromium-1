@@ -23,7 +23,6 @@ import android.util.AttributeSet;
 import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.View.OnClickListener;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -39,6 +38,7 @@ import org.chromium.chrome.browser.ntp.NewTabPage;
 import org.chromium.chrome.browser.omaha.UpdateMenuItemHelper;
 import org.chromium.chrome.browser.omnibox.LocationBar;
 import org.chromium.chrome.browser.omnibox.UrlBarData;
+import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -50,7 +50,6 @@ import org.chromium.chrome.browser.widget.TintedImageButton;
 import org.chromium.chrome.browser.widget.ToolbarProgressBar;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet;
 import org.chromium.components.security_state.ConnectionSecurityLevel;
-import org.chromium.components.variations.VariationsAssociatedData;
 import org.chromium.ui.UiUtils;
 
 /**
@@ -59,11 +58,9 @@ import org.chromium.ui.UiUtils;
  * through {@link Toolbar} rather than using this class directly.
  */
 public abstract class ToolbarLayout extends FrameLayout implements Toolbar {
-    private static final String NTP_BUTTON_TRIAL_NAME = "NewTabPage";
-    private static final String NTP_BUTTON_VARIATION_PARAM_NAME = "variation";
-    public static final String NTP_BUTTON_NEWS_FEED_VARIATION = "news_feed";
-    public static final String NTP_BUTTON_HOME_VARIATION = "home";
-    public static final String NTP_BUTTON_CHROME_VARIATION = "chrome";
+    public static final String NTP_BUTTON_NEWS_FEED_VARIANT = "news_feed";
+    public static final String NTP_BUTTON_HOME_VARIANT = "home";
+    public static final String NTP_BUTTON_CHROME_VARIANT = "chrome";
 
     private Invalidator mInvalidator;
 
@@ -150,6 +147,17 @@ public abstract class ToolbarLayout extends FrameLayout implements Toolbar {
                 getContext(), getProgressBarHeight(), getProgressBarTopMargin(), false);
     }
 
+    /**
+     * Disable the menu button. This removes the view from the hierarchy and nulls the related
+     * instance vars.
+     */
+    protected void disableMenuButton() {
+        UiUtils.removeViewFromParent(mMenuButtonWrapper);
+        mMenuButtonWrapper = null;
+        mMenuButton = null;
+        mMenuBadge = null;
+    }
+
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
@@ -157,12 +165,6 @@ public abstract class ToolbarLayout extends FrameLayout implements Toolbar {
         mMenuButton = (TintedImageButton) findViewById(R.id.menu_button);
         mMenuBadge = (ImageView) findViewById(R.id.menu_badge);
         mMenuButtonWrapper = findViewById(R.id.menu_button_wrapper);
-        if (FeatureUtilities.isBottomToolbarEnabled()) {
-            if (mMenuButtonWrapper != null) UiUtils.removeViewFromParent(mMenuButtonWrapper);
-            mMenuButtonWrapper = null;
-            mMenuButton = null;
-            mMenuBadge = null;
-        }
 
         // Initialize the provider to an empty version to avoid null checking everywhere.
         mToolbarDataProvider = new ToolbarDataProvider() {
@@ -986,27 +988,39 @@ public abstract class ToolbarLayout extends FrameLayout implements Toolbar {
     public void setTabModelSelector(TabModelSelector selector) {}
 
     /**
-     * Gets the variation of the NTP button based on finch config.
-     * @return The NTP button variation.
+     * Sets the icon drawable for the ntp button if the ntp button feature is enabled.
+     * Note: This method is called twice in ToolbarLayout's children - once in
+     * #onNativeLibraryReady() & once in #onFinishInflate() (see https://crbug.com/862887).
+     * As a result, for users who have a shared preference enabling the NTP button but don't yet
+     * have a shared preference for the icon variant, the old home button icon will appear until
+     * #onNativeLibraryReady(). After a cold start, the icon variant will be cached and the old home
+     * button icon will not appear.
+     * @param ntpButton The button that needs to be changed.
      */
-    public static String getNTPButtonVariation() {
-        return VariationsAssociatedData.getVariationParamValue(
-                NTP_BUTTON_TRIAL_NAME, NTP_BUTTON_VARIATION_PARAM_NAME);
-    }
-
     protected void changeIconToNTPIcon(TintedImageButton ntpButton) {
-        String variation = getNTPButtonVariation();
-        if (TextUtils.isEmpty(variation)) return;
+        if (!FeatureUtilities.isNewTabPageButtonEnabled() || ntpButton == null) return;
+
+        // Check for a cached icon variant in shared preferences.
+        String iconVariant = ChromePreferenceManager.getInstance().getNewTabPageButtonVariant();
+
+        // If there is no cached icon variant and the native library is ready, try to retrieve the
+        // icon variant from variations associated data.
+        if (TextUtils.isEmpty(iconVariant) && isNativeLibraryReady()) {
+            iconVariant = FeatureUtilities.getNTPButtonVariant();
+        }
+
+        // Return if no icon variant is found.
+        if (TextUtils.isEmpty(iconVariant)) return;
 
         int iconResId = 0;
-        switch (variation) {
-            case NTP_BUTTON_HOME_VARIATION:
+        switch (iconVariant) {
+            case NTP_BUTTON_HOME_VARIANT:
                 iconResId = R.drawable.ic_home;
                 break;
-            case NTP_BUTTON_NEWS_FEED_VARIATION:
+            case NTP_BUTTON_NEWS_FEED_VARIANT:
                 iconResId = R.drawable.ic_library_news_feed;
                 break;
-            case NTP_BUTTON_CHROME_VARIATION:
+            case NTP_BUTTON_CHROME_VARIANT:
                 iconResId = R.drawable.ic_chrome;
                 break;
             default:

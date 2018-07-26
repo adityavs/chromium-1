@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_WORKER_NON_MAIN_THREAD_TASK_QUEUE_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_WORKER_NON_MAIN_THREAD_TASK_QUEUE_H_
 
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
+#include "base/task/sequence_manager/task_queue_impl.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace blink {
 namespace scheduler {
@@ -15,16 +16,16 @@ class NonMainThreadSchedulerImpl;
 class PLATFORM_EXPORT NonMainThreadTaskQueue
     : public base::sequence_manager::TaskQueue {
  public:
+  // TODO(kraynov): Consider options to remove TaskQueueImpl reference here.
   NonMainThreadTaskQueue(
       std::unique_ptr<base::sequence_manager::internal::TaskQueueImpl> impl,
       const Spec& spec,
       NonMainThreadSchedulerImpl* non_main_thread_scheduler);
   ~NonMainThreadTaskQueue() override;
 
-  void OnTaskCompleted(const base::sequence_manager::TaskQueue::Task& task,
-                       base::TimeTicks start,
-                       base::TimeTicks end,
-                       base::Optional<base::TimeDelta> thread_time);
+  void OnTaskCompleted(
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
  private:
   // Not owned.

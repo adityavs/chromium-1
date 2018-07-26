@@ -82,9 +82,9 @@ class TestSyncService : public browser_sync::ProfileSyncServiceMock {
   ~TestSyncService() override {}
 
   // FakeSyncService:
+  int GetDisableReasons() const override { return DISABLE_REASON_NONE; }
+  State GetState() const override { return State::ACTIVE; }
   bool IsFirstSetupComplete() const override { return true; }
-  bool IsSyncAllowed() const override { return true; }
-  bool IsSyncActive() const override { return true; }
   syncer::ModelTypeSet GetActiveDataTypes() const override {
     switch (synced_types_) {
       case SyncedTypes::ALL:
@@ -95,7 +95,6 @@ class TestSyncService : public browser_sync::ProfileSyncServiceMock {
     NOTREACHED();
     return syncer::ModelTypeSet();
   }
-  bool CanSyncStart() const override { return true; }
   syncer::ModelTypeSet GetPreferredDataTypes() const override {
     return GetActiveDataTypes();
   }
@@ -107,6 +106,8 @@ class TestSyncService : public browser_sync::ProfileSyncServiceMock {
 
  private:
   SyncedTypes synced_types_;
+
+  DISALLOW_COPY_AND_ASSIGN(TestSyncService);
 };
 
 std::unique_ptr<KeyedService> TestingSyncFactoryFunction(
@@ -540,47 +541,6 @@ TEST_F(ManagePasswordsBubbleModelTest, SignInPromoDismiss) {
   EXPECT_FALSE(prefs()->GetBoolean(
       password_manager::prefs::kWasSignInPasswordPromoClicked));
 }
-
-namespace {
-
-struct TitleTestCase {
-  TestSyncService::SyncedTypes synced_types;
-  const char* expected_title;
-};
-
-}  // namespace
-
-class ManagePasswordsBubbleModelTitleTest
-    : public ManagePasswordsBubbleModelTest,
-      public ::testing::WithParamInterface<TitleTestCase> {};
-
-TEST_P(ManagePasswordsBubbleModelTitleTest, BrandedTitleOnSaving) {
-  TitleTestCase test_case = GetParam();
-  TestSyncService* sync_service = static_cast<TestSyncService*>(
-      ProfileSyncServiceFactory::GetInstance()->SetTestingFactoryAndUse(
-          profile(), &TestingSyncFactoryFunction));
-  sync_service->set_synced_types(test_case.synced_types);
-
-  PretendPasswordWaiting();
-  EXPECT_THAT(base::UTF16ToUTF8(model()->title()),
-              testing::HasSubstr(test_case.expected_title));
-}
-
-namespace {
-
-// Below, "Chrom" is the common prefix of Chromium and Google Chrome. Ideally,
-// we would use the localised strings, but ResourceBundle does not get
-// initialised for this unittest.
-constexpr TitleTestCase kTitleTestCases[] = {
-    {TestSyncService::SyncedTypes::ALL, "Google Smart Lock"},
-    {TestSyncService::SyncedTypes::NONE, "Chrom"},
-};
-
-}  // namespace
-
-INSTANTIATE_TEST_CASE_P(Default,
-                        ManagePasswordsBubbleModelTitleTest,
-                        ::testing::ValuesIn(kTitleTestCases));
 
 class ManagePasswordsBubbleModelManageLinkTest
     : public ManagePasswordsBubbleModelTest,

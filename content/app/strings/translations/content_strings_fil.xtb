@@ -12,6 +12,7 @@
 <translation id="1206693055195146388">slider</translation>
 <translation id="1211441953136645838">endnote</translation>
 <translation id="1281252709823657822">dialog</translation>
+<translation id="1289247557029249093">Lumabas sa picture-in-picture mode</translation>
 <translation id="1335095011850992622">mga credit</translation>
 <translation id="1342835525016946179">article</translation>
 <translation id="1359897965706325498">banner</translation>
@@ -51,6 +52,7 @@
 <translation id="2653659639078652383">Isumite</translation>
 <translation id="2657045182931379222">object ng graphics</translation>
 <translation id="2674318244760992338">footer</translation>
+<translation id="2706474812903655270">Nagpe-play ang video na ito sa picture-in-picture mode</translation>
 <translation id="2709516037105925701">AutoFill</translation>
 <translation id="2723001399770238859">audio</translation>
 <translation id="2746543609216772311">Dapat <ph name="MINIMUM_DATE_OR_TIME" /> o mas bago ang value.</translation>
@@ -114,7 +116,6 @@
 <translation id="5117590920725113268">Ipakita ang susunod na buwan</translation>
 <translation id="512758898067543763">header ng row</translation>
 <translation id="5143125788380636750">epilogue</translation>
-<translation id="5153163864850940242">Nagpe-play ang video na ito sa Picture-in-Picture</translation>
 <translation id="5164977714490026579">Dapat mas mataas kaysa sa o katumbas ng <ph name="MINIMUM" /> ang halaga.</translation>
 <translation id="520299402983819650"><ph name="QUANTITY" /> (na) PB</translation>
 <translation id="5307600278924710095">Mangyaring maglagay ng isang bahagi na sinusundan ng '<ph name="ATSIGN" />.' Hindi kumpleto ang '<ph name="INVALIDADDRESS" />.'</translation>
@@ -146,7 +147,6 @@
 <translation id="6164829606128959761">metro</translation>
 <translation id="6166809985690652833">afterword</translation>
 <translation id="6213469881011901533">glosaryo</translation>
-<translation id="6310801910862476708">Lumabas sa Picture-in-Picture</translation>
 <translation id="6398862346408813489">Ipakita ang panel ng pagpipilian ng buwan</translation>
 <translation id="6404546809543547843">scrubber ng oras ng audio</translation>
 <translation id="6453774872122745852">mga pagkilala</translation>
@@ -191,6 +191,7 @@
 <translation id="7720026100085573005">natitirang oras</translation>
 <translation id="7740016676195725605">ihinto ang pagpapakita ng mga nakasarang caption</translation>
 <translation id="7740050170769002709">HTML na nilalaman</translation>
+<translation id="7750228210027921155">Picture in picture</translation>
 <translation id="7789962463072032349">i-pause</translation>
 <translation id="7802800022689234070">disclosure triangle</translation>
 <translation id="7888071071722539607">Mangyaring magsama ng '<ph name="ATSIGN" />' sa email address. Kulang ng '<ph name="ATSIGN" />' ang '<ph name="INVALIDADDRESS" />.'</translation>
@@ -220,7 +221,6 @@
 <translation id="860475260694818407">talaan ng nilalaman</translation>
 <translation id="8613126697340063924">kontrolin ang malayuang pag-playback</translation>
 <translation id="862370744433916922">subtitle</translation>
-<translation id="8741316211671074806">Picture-in-Picture</translation>
 <translation id="8750798805984357768">Mangyaring pumili ng isa sa mga opsyong ito.</translation>
 <translation id="8785498733064193001">simulan ang pag-playback</translation>
 <translation id="8808573423886751634">kabanata</translation>
@@ -238,6 +238,7 @@
 <translation id="9132465097189459683">Iba pa...</translation>
 <translation id="9138385573473225930">alerto</translation>
 <translation id="9155987714137265666"><ph name="WEEK" />, na magsisimula sa <ph name="WEEK_START_DATE" /></translation>
+<translation id="916607977885256133">Picture in Picture</translation>
 <translation id="9168329111483466115">footnote</translation>
 <translation id="954003015749068518">pumasok sa picture-in-picture</translation>
 <translation id="966787709310836684">menu</translation>

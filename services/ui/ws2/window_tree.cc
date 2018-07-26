@@ -24,6 +24,8 @@
 #include "services/ui/ws2/window_delegate_impl.h"
 #include "services/ui/ws2/window_service.h"
 #include "services/ui/ws2/window_service_delegate.h"
+#include "services/ui/ws2/window_service_observer.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/transient_window_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/mus/os_exchange_data_provider_mus.h"
@@ -41,40 +43,48 @@
 #include "ui/display/screen.h"
 #include "ui/gfx/image/image_skia.h"
 #include "ui/wm/core/capture_controller.h"
+#include "ui/wm/core/window_modality_controller.h"
+#include "ui/wm/core/window_util.h"
 
 namespace ui {
 namespace ws2 {
 namespace {
 
-// Max number of KeyEvents we let a client queue before pruning. In general only
-// bad (or buggy) clients would hit this cap.
-constexpr size_t kMaxQueuedEvents = 20;
-
-// Event id used for events that a response from a client is not required.
-constexpr uint32_t kDefaultEventId = 1;
+// Max number of event we let a client queue before pruning. In general only
+// bad (or buggy) clients should hit this cap.
+#if defined(NDEBUG)
+constexpr size_t kMaxQueuedEvents = 100;
+#else
+constexpr size_t kMaxQueuedEvents = 1000;
+#endif
 
 uint32_t GenerateEventAckId() {
   // We do not want to create a sequential id for each event, because that can
   // leak some information to the client. So instead, manufacture the id
   // randomly.
-  uint32_t id = 0x1000000 | (rand() & 0xffffff);
-  return id == kDefaultEventId ? kDefaultEventId + 1 : id;
+  return 0x1000000 | (rand() & 0xffffff);
 }
 
 }  // namespace
 
-// This is used to track KeyEvents sent to the client. If a KeyEvent is not
-// handled by the client, it's processed locally for accelerators.
-struct WindowTree::InFlightKeyEvent {
+// Used to track events sent to the client.
+struct WindowTree::InFlightEvent {
+  // Unique identifier for the event. It is expected that the client respond
+  // with this id.
   uint32_t id;
+
+  // Only used for KeyEvents sent to the client. If a KeyEvent is not handled
+  // by the client, it's processed locally for accelerators.
   std::unique_ptr<Event> event;
 };
 
 WindowTree::WindowTree(WindowService* window_service,
                        ClientSpecificId client_id,
-                       mojom::WindowTreeClient* client)
+                       mojom::WindowTreeClient* client,
+                       const std::string& client_name)
     : window_service_(window_service),
       client_id_(client_id),
+      client_name_(client_name),
       window_tree_client_(client),
       property_change_tracker_(std::make_unique<ClientChangeTracker>()) {
   wm::CaptureController::Get()->AddObserver(this);
@@ -134,16 +144,19 @@ void WindowTree::InitFromFactory() {
 }
 
 void WindowTree::SendEventToClient(aura::Window* window, const Event& event) {
-  uint32_t event_id = kDefaultEventId;
+  const uint32_t event_id = GenerateEventAckId();
+  std::unique_ptr<InFlightEvent> in_flight_event =
+      std::make_unique<InFlightEvent>();
+  in_flight_event->id = event_id;
   if (event.type() == ui::ET_KEY_PRESSED ||
       event.type() == ui::ET_KEY_RELEASED) {
-    std::unique_ptr<InFlightKeyEvent> in_flight_key_event =
-        std::make_unique<InFlightKeyEvent>();
-    event_id = in_flight_key_event->id = GenerateEventAckId();
-    in_flight_key_event->event = Event::Clone(event);
-    in_flight_key_events_.push(std::move(in_flight_key_event));
-    if (in_flight_key_events_.size() == kMaxQueuedEvents)
-      in_flight_key_events_.pop();
+    in_flight_event->event = Event::Clone(event);
+  }
+  in_flight_events_.push(std::move(in_flight_event));
+  if (in_flight_events_.size() == kMaxQueuedEvents) {
+    DVLOG(1) << "client not responding to events in a timely manner, "
+             << "dropping event";
+    in_flight_events_.pop();
   }
   // Events should only come to windows connected to displays.
   DCHECK(window->GetHost());
@@ -152,8 +165,12 @@ void WindowTree::SendEventToClient(aura::Window* window, const Event& event) {
       pointer_watcher_ && pointer_watcher_->DoesEventMatch(event);
   if (pointer_watcher_)
     pointer_watcher_->ClearPendingEvent();
+
+  for (WindowServiceObserver& observer : window_service_->observers())
+    observer.OnWillSendEventToClient(client_id_, event_id);
+
   window_tree_client_->OnWindowInputEvent(
-      event_id, TransportIdForWindow(window), display_id, 0u, gfx::PointF(),
+      event_id, TransportIdForWindow(window), display_id,
       PointerWatcher::CreateEventForClient(event), matches_pointer_watcher);
 }
 
@@ -181,6 +198,22 @@ void WindowTree::OnEmbeddingDestroyed(Embedding* embedding) {
   window_tree_client_->OnWindowDeleted(
       TransportIdForWindow(embedding->window()));
   DeleteClientRoot(iter->get(), DeleteClientRootReason::kDeleted);
+}
+
+bool WindowTree::HasAtLeastOneRootWithCompositorFrameSink() {
+  for (auto& client_root : client_roots_) {
+    if (ServerWindow::GetMayBeNull(client_root->window())
+            ->attached_compositor_frame_sink()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+ClientWindowId WindowTree::ClientWindowIdForWindow(aura::Window* window) {
+  auto iter = window_to_client_window_id_map_.find(window);
+  return iter == window_to_client_window_id_map_.end() ? ClientWindowId()
+                                                       : iter->second;
 }
 
 ClientRoot* WindowTree::CreateClientRoot(aura::Window* window,
@@ -585,18 +618,23 @@ bool WindowTree::NewWindowImpl(
 bool WindowTree::DeleteWindowImpl(const ClientWindowId& window_id) {
   aura::Window* window = GetWindowByClientId(window_id);
   DVLOG(3) << "deleting window client=" << client_id_
-           << " client window_id= " << window_id.ToString();
-  if (!window)
+           << " client window_id=" << window_id.ToString();
+  if (!window) {
+    DVLOG(1) << "DeleteWindow failed (no window)";
     return false;
+  }
 
+  const bool is_client_created_window = IsClientCreatedWindow(window);
   auto iter = FindClientRootWithRoot(window);
   if (iter != client_roots_.end()) {
     DeleteClientRoot(iter->get(), DeleteClientRootReason::kUnembed);
-    return true;
-  }
-
-  if (!IsClientCreatedWindow(window))
+    if (!is_client_created_window)
+      return true;
+    // If client created, fall through to delete window.
+  } else if (!is_client_created_window) {
+    DVLOG(1) << "DeleteWindow failed (client did not create window)";
     return false;
+  }
 
   const bool delete_if_owned = true;
   RemoveWindowFromKnownWindows(window, delete_if_owned);
@@ -686,7 +724,7 @@ bool WindowTree::AddWindowImpl(const ClientWindowId& parent_id,
   aura::Window* child = GetWindowByClientId(child_id);
   DVLOG(3) << "add window client=" << client_id_
            << " client parent window_id=" << parent_id.ToString()
-           << " client child window_id= " << child_id.ToString();
+           << " client child window_id=" << child_id.ToString();
   if (!parent) {
     DVLOG(1) << "AddWindow failed (no parent)";
     return false;
@@ -717,7 +755,7 @@ bool WindowTree::RemoveWindowFromParentImpl(
     const ClientWindowId& client_window_id) {
   aura::Window* window = GetWindowByClientId(client_window_id);
   DVLOG(3) << "removing window from parent client=" << client_id_
-           << " client window_id= " << client_window_id;
+           << " client window_id=" << client_window_id;
   if (!window) {
     DVLOG(1) << "RemoveWindowFromParent failed (invalid window id="
              << client_window_id.ToString() << ")";
@@ -737,11 +775,117 @@ bool WindowTree::RemoveWindowFromParentImpl(
   return false;
 }
 
+bool WindowTree::AddTransientWindowImpl(const ClientWindowId& parent_id,
+                                        const ClientWindowId& transient_id) {
+  DVLOG(3) << "adding transient window client=" << client_id_
+           << " parent_id=" << parent_id << " transient_id=" << transient_id;
+  aura::Window* parent = GetWindowByClientId(parent_id);
+  aura::Window* transient = GetWindowByClientId(transient_id);
+  if (!parent || !transient) {
+    DVLOG(1) << "AddTransientWindow failed (invalid window parent_id="
+             << parent_id << " transient_id=" << transient_id << ")";
+    return false;
+  }
+
+  if (parent->Contains(transient)) {
+    DVLOG(1) << "AddTransientWindow failed (parent contains transient"
+             << " parent_id=" << parent_id << " transient_id=" << transient_id
+             << ")";
+    return false;
+  }
+
+  if (!IsClientCreatedWindow(parent) || !IsClientCreatedWindow(transient)) {
+    DVLOG(1) << "SetModalType failed (access policy disallowed parent_id="
+             << parent_id << " transient_id=" << transient_id << ")";
+    return false;
+  }
+
+  ::wm::AddTransientChild(parent, transient);
+  return true;
+}
+
+bool WindowTree::RemoveTransientWindowFromParentImpl(
+    const ClientWindowId& transient_id) {
+  DVLOG(3) << "removing transient window from parent client=" << client_id_
+           << " transient_id=" << transient_id;
+  aura::Window* transient = GetWindowByClientId(transient_id);
+  aura::Window* parent = ::wm::GetTransientParent(transient);
+  if (!parent || !transient) {
+    DVLOG(1) << "AddTransientWindow failed (invalid window or no transient"
+             << " parent transient_id=" << transient_id << ")";
+    return false;
+  }
+
+  if (!IsClientCreatedWindow(parent) || !IsClientCreatedWindow(transient)) {
+    DVLOG(1) << "SetModalType failed (access policy disallowed transient_id="
+             << transient_id << ")";
+    return false;
+  }
+
+  ::wm::RemoveTransientChild(parent, transient);
+  return true;
+}
+
+bool WindowTree::SetModalTypeImpl(const ClientWindowId& client_window_id,
+                                  ui::ModalType type) {
+  DVLOG(3) << "setting window modal type client=" << client_id_
+           << " client_window_id=" << client_window_id << " type=" << type;
+  aura::Window* window = GetWindowByClientId(client_window_id);
+  if (!window) {
+    DVLOG(1) << "SetModalType failed (invalid window id="
+             << client_window_id.ToString() << ")";
+    return false;
+  }
+
+  if (!IsClientRootWindow(window) && type == MODAL_TYPE_SYSTEM) {
+    DVLOG(1) << "SetModalType failed (not allowed for embedded clients)";
+    return false;
+  }
+
+  if (type == MODAL_TYPE_SYSTEM &&
+      window->type() != aura::client::WINDOW_TYPE_NORMAL &&
+      window->type() != aura::client::WINDOW_TYPE_POPUP) {
+    DVLOG(1) << "Window type cannot be made system modal: " << window->type();
+    return false;
+  }
+
+  if (!IsClientCreatedWindow(window)) {
+    DVLOG(1) << "SetModalType failed (access policy disallowed id="
+             << client_window_id.ToString() << ")";
+    return false;
+  }
+
+  window_service_->delegate()->SetModalType(window, type);
+  return true;
+}
+
+bool WindowTree::SetChildModalParentImpl(const ClientWindowId& child_id,
+                                         const ClientWindowId& parent_id) {
+  DVLOG(3) << "setting child window modal parent client=" << client_id_
+           << " child_id=" << child_id << " parent_id=" << parent_id;
+  aura::Window* child = GetWindowByClientId(child_id);
+  aura::Window* parent = GetWindowByClientId(parent_id);
+  // A value of null for |parent_id| resets the modal parent.
+  if (!child) {
+    DVLOG(1) << "SetChildModalParent failed (invalid id)";
+    return false;
+  }
+
+  if (!IsClientCreatedWindow(child) ||
+      (parent && !IsClientCreatedWindow(parent))) {
+    DVLOG(1) << "SetChildModalParent failed (access denied)";
+    return false;
+  }
+
+  wm::SetModalParent(child, parent);
+  return true;
+}
+
 bool WindowTree::SetWindowVisibilityImpl(const ClientWindowId& window_id,
                                          bool visible) {
   aura::Window* window = GetWindowByClientId(window_id);
   DVLOG(3) << "SetWindowVisibility client=" << client_id_
-           << " client window_id= " << window_id.ToString();
+           << " client window_id=" << window_id.ToString();
   if (!window) {
     DVLOG(1) << "SetWindowVisibility failed (no window)";
     return false;
@@ -766,7 +910,7 @@ bool WindowTree::SetWindowPropertyImpl(
     const base::Optional<std::vector<uint8_t>>& value) {
   aura::Window* window = GetWindowByClientId(window_id);
   DVLOG(3) << "SetWindowProperty client=" << client_id_
-           << " client window_id= " << window_id.ToString();
+           << " client window_id=" << window_id.ToString();
   if (!window) {
     DVLOG(1) << "SetWindowProperty failed (no window)";
     return false;
@@ -825,7 +969,7 @@ bool WindowTree::SetWindowOpacityImpl(const ClientWindowId& window_id,
                                       float opacity) {
   aura::Window* window = GetWindowByClientId(window_id);
   DVLOG(3) << "SetWindowOpacity client=" << client_id_
-           << " client window_id= " << window_id.ToString();
+           << " client window_id=" << window_id.ToString();
   if (IsClientCreatedWindow(window) ||
       (IsClientRootWindow(window) && can_change_root_window_visibility_)) {
     if (window->layer()->opacity() == opacity)
@@ -947,18 +1091,13 @@ bool WindowTree::SetCursorImpl(const ClientWindowId& window_id,
     return false;
   }
   if (!IsClientCreatedWindow(window) && !IsClientRootWindow(window)) {
-    DVLOG(1) << "SerCursor failed (access denied)";
+    DVLOG(1) << "SetCursor failed (access denied)";
     return false;
   }
 
   auto* server_window = ServerWindow::GetMayBeNull(window);
 
-  // Convert from CursorData to Cursor. TODO(estade): remove this conversion.
-  // See class level comment on CursorData. Also support kCustom, i.e. image
-  // cursors.
-  ui::Cursor old_cursor_type(cursor.cursor_type());
-  if (cursor.cursor_type() == ui::CursorType::kCustom)
-    NOTIMPLEMENTED_LOG_ONCE();
+  ui::Cursor old_cursor_type = cursor.ToNativeCursor();
 
   // Ask our delegate to set the cursor. This will save the cursor for toplevels
   // and also update the active cursor if appropriate (i.e. if |window| is the
@@ -992,7 +1131,7 @@ bool WindowTree::StackAboveImpl(const ClientWindowId& above_window_id,
 }
 
 bool WindowTree::StackAtTopImpl(const ClientWindowId& window_id) {
-  DVLOG(3) << "StackAtTop window_id= " << window_id;
+  DVLOG(3) << "StackAtTop window_id=" << window_id;
 
   aura::Window* window = GetWindowByClientId(window_id);
   if (!window || !IsTopLevel(window)) {
@@ -1297,24 +1436,32 @@ void WindowTree::RemoveWindowFromParent(uint32_t change_id, Id window_id) {
 void WindowTree::AddTransientWindow(uint32_t change_id,
                                     Id window_id,
                                     Id transient_window_id) {
-  NOTIMPLEMENTED_LOG_ONCE();
+  window_tree_client_->OnChangeCompleted(
+      change_id,
+      AddTransientWindowImpl(MakeClientWindowId(window_id),
+                             MakeClientWindowId(transient_window_id)));
 }
 
 void WindowTree::RemoveTransientWindowFromParent(uint32_t change_id,
                                                  Id transient_window_id) {
-  NOTIMPLEMENTED_LOG_ONCE();
+  window_tree_client_->OnChangeCompleted(
+      change_id, RemoveTransientWindowFromParentImpl(
+                     MakeClientWindowId(transient_window_id)));
 }
 
 void WindowTree::SetModalType(uint32_t change_id,
                               Id window_id,
                               ui::ModalType type) {
-  NOTIMPLEMENTED_LOG_ONCE();
+  window_tree_client_->OnChangeCompleted(
+      change_id, SetModalTypeImpl(MakeClientWindowId(window_id), type));
 }
 
 void WindowTree::SetChildModalParent(uint32_t change_id,
                                      Id window_id,
                                      Id parent_window_id) {
-  NOTIMPLEMENTED_LOG_ONCE();
+  window_tree_client_->OnChangeCompleted(
+      change_id, SetChildModalParentImpl(MakeClientWindowId(window_id),
+                                         MakeClientWindowId(parent_window_id)));
 }
 
 void WindowTree::ReorderWindow(uint32_t change_id,
@@ -1497,17 +1644,20 @@ void WindowTree::SetEventTargetingPolicy(
 
 void WindowTree::OnWindowInputEventAck(uint32_t event_id,
                                        mojom::EventResult result) {
-  if (!in_flight_key_events_.empty() &&
-      in_flight_key_events_.front()->id == event_id) {
-    std::unique_ptr<InFlightKeyEvent> in_flight_event =
-        std::move(in_flight_key_events_.front());
-    in_flight_key_events_.pop();
-    if (result == mojom::EventResult::UNHANDLED) {
-      window_service_->delegate()->OnUnhandledKeyEvent(
-          *(in_flight_event->event->AsKeyEvent()));
-    }
-  } else if (event_id != kDefaultEventId) {
-    DVLOG(1) << "OnWindowInputEventAck supplied unexpected id " << event_id;
+  if (in_flight_events_.empty() || in_flight_events_.front()->id != event_id) {
+    DVLOG(1) << "client acked unknown event";
+    return;
+  }
+
+  for (WindowServiceObserver& observer : window_service_->observers())
+    observer.OnClientAckedEvent(client_id_, event_id);
+
+  std::unique_ptr<InFlightEvent> in_flight_event =
+      std::move(in_flight_events_.front());
+  in_flight_events_.pop();
+  if (in_flight_event->event && result == mojom::EventResult::UNHANDLED) {
+    window_service_->delegate()->OnUnhandledKeyEvent(
+        *(in_flight_event->event->AsKeyEvent()));
   }
 }
 
@@ -1527,11 +1677,6 @@ void WindowTree::StackAtTop(uint32_t change_id, Id window_id) {
 }
 
 void WindowTree::PerformWmAction(Id window_id, const std::string& action) {
-  NOTIMPLEMENTED_LOG_ONCE();
-}
-
-void WindowTree::GetWindowManagerClient(
-    ::ui::mojom::WindowManagerClientAssociatedRequest internal) {
   NOTIMPLEMENTED_LOG_ONCE();
 }
 

@@ -74,6 +74,9 @@ class AwAutofillClient : public autofill::AutofillClient,
       UnmaskCardReason reason,
       base::WeakPtr<autofill::CardUnmaskDelegate> delegate) override;
   void OnUnmaskVerificationResult(PaymentsRpcResult result) override;
+  void ShowLocalCardMigrationPrompt(base::OnceClosure closure) override;
+  void ConfirmSaveAutofillProfile(const autofill::AutofillProfile& profile,
+                                  base::OnceClosure callback) override;
   void ConfirmSaveCreditCardLocally(const autofill::CreditCard& card,
                                     const base::Closure& callback) override;
   void ConfirmSaveCreditCardToCloud(
@@ -91,6 +94,7 @@ class AwAutofillClient : public autofill::AutofillClient,
       const gfx::RectF& element_bounds,
       base::i18n::TextDirection text_direction,
       const std::vector<autofill::Suggestion>& suggestions,
+      bool /*unused_autoselect_first_suggestion*/,
       base::WeakPtr<autofill::AutofillPopupDelegate> delegate) override;
   void UpdateAutofillPopupDataListValues(
       const std::vector<base::string16>& values,

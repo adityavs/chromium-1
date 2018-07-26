@@ -23,6 +23,7 @@
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/text.h"
+#include "third_party/blink/renderer/core/editing/editing_behavior.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
@@ -389,7 +390,7 @@ FloatPoint ConvertToRootFrame(LocalFrameView* view, FloatPoint pt) {
 
 // Adjusts 'point' to the nearest point inside rect, and leaves it unchanged if
 // already inside.
-void AdjustPointToRect(FloatPoint& point, const FloatRect& rect) {
+void AdjustPointToRect(FloatPoint& point, const IntRect& rect) {
   if (point.X() < rect.X())
     point.SetX(rect.X());
   else if (point.X() > rect.MaxX())
@@ -435,7 +436,7 @@ bool SnapTo(const SubtargetGeometry& geom,
   FloatPoint p4 = ConvertToRootFrame(view, quad.P4());
   quad = FloatQuad(p1, p2, p3, p4);
 
-  if (quad.ContainsPoint(touch_point)) {
+  if (quad.ContainsPoint(FloatPoint(touch_point))) {
     adjusted_point = touch_point;
     return true;
   }
@@ -446,7 +447,7 @@ bool SnapTo(const SubtargetGeometry& geom,
   AdjustPointToRect(center, touch_area);
   adjusted_point = RoundedIntPoint(center);
 
-  return quad.ContainsPoint(adjusted_point);
+  return quad.ContainsPoint(FloatPoint(adjusted_point));
 }
 
 // A generic function for finding the target node with the lowest distance

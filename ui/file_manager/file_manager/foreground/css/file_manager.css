@@ -454,12 +454,6 @@ body:not(.check-select) #selection-menu-button {
   display: none;
 }
 
-.cloud-import-combo-button {
-  height: 32px;
-  margin: 8px;
-  position: relative;
-}
-
 .cloud-import-combo-button > .buttons {
   display: flex;
 }
@@ -1893,6 +1887,15 @@ body[drive='error'] #unmounted-panel > .error,
   width: auto;
 }
 
+#install-linux-package-dialog {
+  min-width: 300px;
+  width: 40%;
+}
+
+#install-linux-package-dialog .cr-dialog-text {
+  min-height: 30px;
+}
+
 .drive-welcome-wrapper {
   /* drive_welcome.css will override it once loaded. */
   display: none;
@@ -2226,15 +2229,6 @@ li#progress-center-close-view.error.single button.dismiss,
 #progress-center-close-view.quiet button.cancel,
 #progress-center li:not(.cancelable) button.cancel {
   visibility: hidden;
-}
-
-#cloud-import-banner {
-  background: rgb(33, 150, 243);
-  color: white;
-  display: flex;
-  flex: 0 0 14px;
-  font-size: 14px;
-  padding: 20px 15px;
 }
 
 .text-measure {

@@ -48,6 +48,12 @@ const char kEnterprisePasswordEntryVerdictHistogram[] =
     "PasswordProtection.Verdict.NonGaiaEnterprisePasswordEntry";
 const char kGSuiteSyncPasswordEntryVerdictHistogram[] =
     "PasswordProtection.Verdict.GSuiteSyncPasswordEntry";
+const char kReferrerChainSizeOfSafeVerdictHistogram[] =
+    "PasswordProtection.ReferrerChainSize.Safe";
+const char kReferrerChainSizeOfPhishingVerdictHistogram[] =
+    "PasswordProtection.ReferrerChainSize.Phishing";
+const char kReferrerChainSizeOfLowRepVerdictHistogram[] =
+    "PasswordProtection.ReferrerChainSize.LowReputation";
 
 PasswordProtectionRequest::PasswordProtectionRequest(
     WebContents* web_contents,
@@ -137,7 +143,8 @@ void PasswordProtectionRequest::CheckCachedVerdicts() {
   std::unique_ptr<LoginReputationClientResponse> cached_response =
       std::make_unique<LoginReputationClientResponse>();
   auto verdict = password_protection_service_->GetCachedVerdict(
-      main_frame_url_, trigger_type_, cached_response.get());
+      main_frame_url_, trigger_type_, reused_password_type_,
+      cached_response.get());
   if (verdict != LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED)
     Finish(PasswordProtectionService::RESPONSE_ALREADY_CACHED,
            std::move(cached_response));
@@ -402,6 +409,11 @@ void PasswordProtectionRequest::Finish(
       default:
         NOTREACHED();
     }
+    int referrer_chain_size =
+        request_proto_->frames_size() > 0
+            ? request_proto_->frames(0).referrer_chain_size()
+            : 0;
+    LogReferrerChainSize(response->verdict_type(), referrer_chain_size);
   }
 
   password_protection_service_->RequestFinished(
@@ -430,6 +442,28 @@ void PasswordProtectionRequest::HandleDeferredNavigations() {
       throttle->ResumeNavigation();
   }
   throttles_.clear();
+}
+
+void PasswordProtectionRequest::LogReferrerChainSize(
+    LoginReputationClientResponse::VerdictType verdict_type,
+    int referrer_chain_size) {
+  switch (verdict_type) {
+    case LoginReputationClientResponse::SAFE:
+      UMA_HISTOGRAM_COUNTS_100(kReferrerChainSizeOfSafeVerdictHistogram,
+                               referrer_chain_size);
+      return;
+    case LoginReputationClientResponse::LOW_REPUTATION:
+      UMA_HISTOGRAM_COUNTS_100(kReferrerChainSizeOfLowRepVerdictHistogram,
+                               referrer_chain_size);
+      return;
+    case LoginReputationClientResponse::PHISHING:
+      UMA_HISTOGRAM_COUNTS_100(kReferrerChainSizeOfPhishingVerdictHistogram,
+                               referrer_chain_size);
+      return;
+    case LoginReputationClientResponse::VERDICT_TYPE_UNSPECIFIED:
+      break;
+  }
+  NOTREACHED();
 }
 
 }  // namespace safe_browsing

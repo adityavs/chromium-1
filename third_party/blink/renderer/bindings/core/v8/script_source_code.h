@@ -36,6 +36,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
+#include "third_party/blink/renderer/platform/wtf/text/movable_string.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
@@ -52,6 +53,13 @@ class CORE_EXPORT ScriptSourceCode final {
   ScriptSourceCode(
       const String& source,
       ScriptSourceLocationType = ScriptSourceLocationType::kUnknown,
+      SingleCachedMetadataHandler* = nullptr,
+      const KURL& = KURL(),
+      const TextPosition& = TextPosition::MinimumPosition());
+
+  ScriptSourceCode(
+      const MovableString& source,
+      ScriptSourceLocationType = ScriptSourceLocationType::kUnknown,
       SingleCachedMetadataHandler* cache_handler = nullptr,
       const KURL& = KURL(),
       const TextPosition& start_position = TextPosition::MinimumPosition());
@@ -60,12 +68,14 @@ class CORE_EXPORT ScriptSourceCode final {
   //
   // We lose the encoding information from ScriptResource.
   // Not sure if that matters.
-  ScriptSourceCode(ScriptStreamer*, ScriptResource*);
+  ScriptSourceCode(ScriptStreamer*,
+                   ScriptResource*,
+                   ScriptStreamer::NotStreamingReason);
 
   ~ScriptSourceCode();
   void Trace(blink::Visitor*);
 
-  const String& Source() const { return source_; }
+  const MovableString& Source() const { return source_; }
   SingleCachedMetadataHandler* CacheHandler() const { return cache_handler_; }
   const KURL& Url() const { return url_; }
   const TextPosition& StartPosition() const { return start_position_; }
@@ -75,11 +85,15 @@ class CORE_EXPORT ScriptSourceCode final {
   const String& SourceMapUrl() const { return source_map_url_; }
 
   ScriptStreamer* Streamer() const { return streamer_; }
+  ScriptStreamer::NotStreamingReason NotStreamingReason() const {
+    return not_streaming_reason_;
+  }
 
  private:
-  const String source_;
+  const MovableString source_;
   Member<SingleCachedMetadataHandler> cache_handler_;
   Member<ScriptStreamer> streamer_;
+  ScriptStreamer::NotStreamingReason not_streaming_reason_;
 
   // The URL of the source code, which is primarily intended for DevTools
   // javascript debugger.

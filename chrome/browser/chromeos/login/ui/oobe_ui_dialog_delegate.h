@@ -11,8 +11,12 @@
 #include "base/memory/weak_ptr.h"
 #include "base/scoped_observer.h"
 #include "base/strings/string16.h"
+#include "chrome/browser/chromeos/login/screens/error_screen.h"
 #include "chrome/browser/ui/ash/tablet_mode_client_observer.h"
+#include "chrome/browser/ui/chrome_web_modal_dialog_manager_delegate.h"
+#include "components/web_modal/web_contents_modal_dialog_host.h"
 #include "ui/display/display_observer.h"
+#include "ui/keyboard/keyboard_controller_observer.h"
 #include "ui/web_dialogs/web_dialog_delegate.h"
 
 class TabletModeClient;
@@ -48,15 +52,16 @@ class OobeUI;
 //   clientView---->Widget's view hierarchy
 class OobeUIDialogDelegate : public display::DisplayObserver,
                              public TabletModeClientObserver,
-                             public ui::WebDialogDelegate {
+                             public ui::WebDialogDelegate,
+                             public ChromeWebModalDialogManagerDelegate,
+                             public web_modal::WebContentsModalDialogHost,
+                             public keyboard::KeyboardControllerObserver {
  public:
   explicit OobeUIDialogDelegate(base::WeakPtr<LoginDisplayHostMojo> controller);
   ~OobeUIDialogDelegate() override;
 
   // Show the dialog widget.
-  // |closable_by_esc|: Whether the widget will be hidden after press escape
-  // key.
-  void Show(bool closable_by_esc);
+  void Show();
 
   // Show the dialog widget stretched to full screen.
   void ShowFullScreen();
@@ -64,17 +69,25 @@ class OobeUIDialogDelegate : public display::DisplayObserver,
   // Close the widget, and it will delete this object.
   void Close();
 
-  // Hide the dialog widget.
+  // Hide the dialog widget, but do not shut it down.
   void Hide();
-
-  // Initialize the dialog widget.
-  void Init();
 
   content::WebContents* GetWebContents();
 
   void UpdateSizeAndPosition(int width, int height);
   OobeUI* GetOobeUI() const;
   gfx::NativeWindow GetNativeWindow() const;
+
+  // ChromeWebModalDialogManagerDelegate:
+  web_modal::WebContentsModalDialogHost* GetWebContentsModalDialogHost()
+      override;
+
+  // web_modal::WebContentsModalDialogHost:
+  gfx::NativeView GetHostView() const override;
+  gfx::Point GetDialogPosition(const gfx::Size& size) override;
+  gfx::Size GetMaximumDialogSize() override;
+  void AddObserver(web_modal::ModalDialogHostObserver* observer) override;
+  void RemoveObserver(web_modal::ModalDialogHostObserver* observer) override;
 
  private:
   // display::DisplayObserver:
@@ -101,6 +114,9 @@ class OobeUIDialogDelegate : public display::DisplayObserver,
   std::vector<ui::Accelerator> GetAccelerators() override;
   bool AcceleratorPressed(const ui::Accelerator& accelerator) override;
 
+  // keyboard::KeyboardControllerObserver:
+  void OnKeyboardVisibilityStateChanged(bool is_visible) override;
+
   base::WeakPtr<LoginDisplayHostMojo> controller_;
 
   // This is owned by the underlying native widget.
@@ -108,11 +124,13 @@ class OobeUIDialogDelegate : public display::DisplayObserver,
   views::Widget* dialog_widget_ = nullptr;
   views::WebDialogView* dialog_view_ = nullptr;
   gfx::Size size_;
-  bool closable_by_esc_ = true;
+  bool showing_fullscreen_ = false;
 
   ScopedObserver<display::Screen, display::DisplayObserver> display_observer_;
   ScopedObserver<TabletModeClient, TabletModeClientObserver>
       tablet_mode_observer_;
+  ScopedObserver<keyboard::KeyboardController, KeyboardControllerObserver>
+      keyboard_observer_;
 
   std::map<ui::Accelerator, std::string> accel_map_;
 

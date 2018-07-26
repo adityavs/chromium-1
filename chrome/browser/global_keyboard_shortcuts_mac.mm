@@ -123,9 +123,9 @@ const std::vector<KeyboardShortcutData>& GetShortcutsNotPresentInMainMenu() {
     {true,  true,  false, false, kVK_ANSI_RightBracket, IDC_SELECT_NEXT_TAB},
     {true,  true,  false, false, kVK_ANSI_LeftBracket,  IDC_SELECT_PREVIOUS_TAB},
     {false, false, true,  false, kVK_PageDown,          IDC_SELECT_NEXT_TAB},
-    {false, false, true,  false, kVK_Tab,               IDC_SELECT_NEXT_TAB},
     {false, false, true,  false, kVK_PageUp,            IDC_SELECT_PREVIOUS_TAB},
-    {false, true,  true,  false, kVK_Tab,               IDC_SELECT_PREVIOUS_TAB},
+    {true,  false, false, true,  kVK_RightArrow,        IDC_SELECT_NEXT_TAB},
+    {true,  false, false, true,  kVK_LeftArrow,         IDC_SELECT_PREVIOUS_TAB},
 
     // Cmd-0..8 select the nth tab, with cmd-9 being "last tab".
     {true, false, false, false, kVK_ANSI_1,             IDC_SELECT_TAB_0},
@@ -226,17 +226,18 @@ bool GetDefaultMacAcceleratorForCommandId(int command_id,
   // See if it corresponds to one of the non-menu shortcuts.
   for (const auto& shortcut : GetShortcutsNotPresentInMainMenu()) {
     if (shortcut.chrome_command == command_id) {
-      NSUInteger cocoa_modifiers = 0;
+      int modifiers = 0;
       if (shortcut.command_key)
-        cocoa_modifiers |= NSEventModifierFlagCommand;
+        modifiers |= ui::EF_COMMAND_DOWN;
       if (shortcut.shift_key)
-        cocoa_modifiers |= NSEventModifierFlagShift;
+        modifiers |= ui::EF_SHIFT_DOWN;
       if (shortcut.cntrl_key)
-        cocoa_modifiers |= NSEventModifierFlagControl;
+        modifiers |= ui::EF_CONTROL_DOWN;
       if (shortcut.opt_key)
-        cocoa_modifiers |= NSEventModifierFlagOption;
-      *accelerator = AcceleratorsCocoa::AcceleratorFromKeyCode(
-          ui::KeyboardCodeFromKeyCode(shortcut.vkey_code), cocoa_modifiers);
+        modifiers |= ui::EF_ALT_DOWN;
+
+      *accelerator = ui::Accelerator(
+          ui::KeyboardCodeFromKeyCode(shortcut.vkey_code), modifiers);
       return true;
     }
   }

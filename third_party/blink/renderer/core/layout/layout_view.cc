@@ -76,11 +76,11 @@ class HitTestLatencyRecorder {
     if (allows_child_frame_content_) {
       DEFINE_STATIC_LOCAL(CustomCountHistogram, recursive_latency_histogram,
                           ("Event.Latency.HitTestRecursive", 0, 10000000, 100));
-      recursive_latency_histogram.Count(duration.InMicroseconds());
+      recursive_latency_histogram.CountMicroseconds(duration);
     } else {
       DEFINE_STATIC_LOCAL(CustomCountHistogram, latency_histogram,
                           ("Event.Latency.HitTest", 0, 10000000, 100));
-      latency_histogram.Count(duration.InMicroseconds());
+      latency_histogram.CountMicroseconds(duration);
     }
   }
 
@@ -115,7 +115,8 @@ LayoutView::LayoutView(Document* document)
 
 LayoutView::~LayoutView() = default;
 
-bool LayoutView::HitTest(HitTestResult& result) {
+bool LayoutView::HitTest(const HitTestLocation& location,
+                         HitTestResult& result) {
   // We have to recursively update layout/style here because otherwise, when the
   // hit test recurses into a child document, it could trigger a layout on the
   // parent document, which can destroy PaintLayer that are higher up in the
@@ -124,29 +125,42 @@ bool LayoutView::HitTest(HitTestResult& result) {
   // Note that if an iframe has its render pipeline throttled, it will not
   // update layout here, and it will also not propagate the hit test into the
   // iframe's inner document.
-  if (!GetFrameView()->UpdateLifecycleToPrePaintClean())
+  if (!GetFrameView()->UpdateAllLifecyclePhasesExceptPaint())
     return false;
   HitTestLatencyRecorder hit_test_latency_recorder(
       result.GetHitTestRequest().AllowsChildFrameContent());
-  return HitTestNoLifecycleUpdate(result);
+  return HitTestNoLifecycleUpdate(location, result);
 }
 
-bool LayoutView::HitTestNoLifecycleUpdate(HitTestResult& result) {
+bool LayoutView::HitTestNoLifecycleUpdate(const HitTestLocation& location,
+                                          HitTestResult& result) {
   TRACE_EVENT_BEGIN0("blink,devtools.timeline", "HitTest");
   hit_test_count_++;
 
-  DCHECK(!result.GetHitTestLocation().IsRectBasedTest() ||
-         result.GetHitTestRequest().ListBased());
+  DCHECK(!location.IsRectBasedTest() || result.GetHitTestRequest().ListBased());
 
   uint64_t dom_tree_version = GetDocument().DomTreeVersion();
   HitTestResult cache_result = result;
   bool hit_layer = false;
-  if (hit_test_cache_->LookupCachedResult(cache_result, dom_tree_version)) {
+  if (hit_test_cache_->LookupCachedResult(location, cache_result,
+                                          dom_tree_version)) {
     hit_test_cache_hits_++;
     hit_layer = true;
     result = cache_result;
   } else {
-    hit_layer = Layer()->HitTest(result);
+    LocalFrameView* frame_view = GetFrameView();
+    LayoutRect hit_test_area;
+    if (frame_view) {
+      // Start with a rect sized to the frame, to ensure we include the
+      // scrollbars.
+      hit_test_area = LayoutRect(LayoutPoint(), LayoutSize(frame_view->Size()));
+      if (result.GetHitTestRequest().IgnoreClipping()) {
+        hit_test_area.Unite(
+            frame_view->DocumentToFrame(LayoutRect(DocumentRect())));
+      }
+    }
+
+    hit_layer = Layer()->HitTest(location, result, hit_test_area);
 
     // If hitTestResult include scrollbar, innerNode should be the parent of the
     // scrollbar.
@@ -173,13 +187,12 @@ bool LayoutView::HitTestNoLifecycleUpdate(HitTestResult& result) {
     }
 
     if (hit_layer)
-      hit_test_cache_->AddCachedResult(result, dom_tree_version);
+      hit_test_cache_->AddCachedResult(location, result, dom_tree_version);
   }
 
-  TRACE_EVENT_END1(
-      "blink,devtools.timeline", "HitTest", "endData",
-      InspectorHitTestEvent::EndData(result.GetHitTestRequest(),
-                                     result.GetHitTestLocation(), result));
+  TRACE_EVENT_END1("blink,devtools.timeline", "HitTest", "endData",
+                   InspectorHitTestEvent::EndData(result.GetHitTestRequest(),
+                                                  location, result));
   return hit_layer;
 }
 
@@ -247,6 +260,22 @@ void LayoutView::SetShouldDoFullPaintInvalidationOnResizeIfNeeded(
                                Style()->BackgroundLayers())))
       SetShouldDoFullPaintInvalidation(PaintInvalidationReason::kBackground);
   }
+}
+
+bool LayoutView::ShouldPlaceBlockDirectionScrollbarOnLogicalLeft() const {
+  LocalFrame& frame = GetFrameView()->GetFrame();
+  // See crbug.com/249860
+  if (frame.IsMainFrame())
+    return false;
+  // <body> inherits 'direction' from <html>, so checking style on the body is
+  // sufficient.
+  if (Element* body = GetDocument().body()) {
+    if (LayoutObject* body_layout_object = body->GetLayoutObject()) {
+      return body_layout_object->Style()
+          ->ShouldPlaceBlockDirectionScrollbarOnLogicalLeft();
+    }
+  }
+  return false;
 }
 
 void LayoutView::UpdateBlockLayout(bool relayout_children) {
@@ -430,9 +459,8 @@ void LayoutView::ComputeSelfHitTestRects(Vector<LayoutRect>& rects,
       LayoutRect(LayoutPoint::Zero(), LayoutSize(GetFrameView()->Size())));
 }
 
-void LayoutView::Paint(const PaintInfo& paint_info,
-                       const LayoutPoint& paint_offset) const {
-  ViewPainter(*this).Paint(paint_info, paint_offset);
+void LayoutView::Paint(const PaintInfo& paint_info) const {
+  ViewPainter(*this).Paint(paint_info);
 }
 
 void LayoutView::PaintBoxDecorationBackground(const PaintInfo& paint_info,

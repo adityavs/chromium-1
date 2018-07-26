@@ -102,6 +102,9 @@ class ASH_EXPORT LockContentsView
 
   enum class AcceleratorAction {
     kShowFeedback,
+    kFocusNextUser,
+    kFocusPreviousUser,
+    kShowResetScreen,
   };
 
   // Number of login attempts before a login dialog is shown. For example, if
@@ -116,6 +119,9 @@ class ASH_EXPORT LockContentsView
       LoginDataDispatcher* data_dispatcher,
       std::unique_ptr<LoginDetachableBaseModel> detachable_base_model);
   ~LockContentsView() override;
+
+  void FocusNextUser();
+  void FocusPreviousUser();
 
   // views::View:
   void Layout() override;
@@ -186,10 +192,12 @@ class ASH_EXPORT LockContentsView
   // chromeos::PowerManagerClient::Observer:
   void SuspendImminent(power_manager::SuspendImminent::Reason reason) override;
 
+  void ShowAuthErrorMessageForDebug(int unlock_attempt);
+
  private:
   class UserState {
    public:
-    explicit UserState(AccountId account_id);
+    explicit UserState(const mojom::LoginUserInfoPtr& user_info);
     UserState(UserState&&);
     ~UserState();
 
@@ -297,7 +305,7 @@ class ASH_EXPORT LockContentsView
   keyboard::KeyboardController* GetKeyboardController() const;
 
   // Called when the public account is tapped.
-  void OnPublicAccountTapped();
+  void OnPublicAccountTapped(bool is_primary);
 
   // Helper method to allocate a LoginBigUserView instance.
   LoginBigUserView* AllocateLoginBigUserView(

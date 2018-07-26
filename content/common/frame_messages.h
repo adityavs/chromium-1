@@ -257,7 +257,6 @@ IPC_STRUCT_TRAITS_BEGIN(content::FrameVisualProperties)
   IPC_STRUCT_TRAITS_MEMBER(local_frame_size)
   IPC_STRUCT_TRAITS_MEMBER(capture_sequence_number)
   IPC_STRUCT_TRAITS_MEMBER(zoom_level)
-  IPC_STRUCT_TRAITS_MEMBER(uses_temporary_zoom)
 IPC_STRUCT_TRAITS_END()
 
 IPC_STRUCT_TRAITS_BEGIN(cc::RenderFrameMetadata)
@@ -579,6 +578,7 @@ IPC_STRUCT_BEGIN(FrameHostMsg_DownloadUrl_Params)
   IPC_STRUCT_MEMBER(content::Referrer, referrer)
   IPC_STRUCT_MEMBER(url::Origin, initiator_origin)
   IPC_STRUCT_MEMBER(base::string16, suggested_name)
+  IPC_STRUCT_MEMBER(bool, follow_cross_origin_redirects)
   IPC_STRUCT_MEMBER(mojo::MessagePipeHandle, blob_url_token)
 IPC_STRUCT_END()
 
@@ -807,7 +807,7 @@ IPC_STRUCT_TRAITS_END()
 IPC_MESSAGE_ROUTED1(FrameMsg_IntrinsicSizingInfoOfChildChanged,
                     blink::WebIntrinsicSizingInfo)
 
-IPC_MESSAGE_ROUTED1(FrameMsg_SetChildFrameSurface,
+IPC_MESSAGE_ROUTED1(FrameMsg_FirstSurfaceActivation,
                     viz::SurfaceInfo /* surface_info */)
 
 // Notifies the embedding frame that the process rendering the child frame's

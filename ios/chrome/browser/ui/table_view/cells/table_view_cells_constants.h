@@ -32,6 +32,9 @@ extern const CGFloat kTableViewHighlightedCellColorAlpha;
 extern const CGFloat kUseDefaultFontSize;
 
 // Spacing between text label and cell contentView.
-extern const CGFloat kTableViewLabelVerticalSpacing;
+extern const CGFloat kTableViewLabelVerticalTopSpacing;
+
+// Hex Value for light gray label text color.
+extern const CGFloat kTableViewTextLabelColorLightGrey;
 
 #endif  // IOS_CHROME_BROWSER_UI_TABLE_VIEW_CELLS_TABLE_VIEW_CELLS_CONSTANTS_H_

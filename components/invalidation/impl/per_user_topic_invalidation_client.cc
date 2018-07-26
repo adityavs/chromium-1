@@ -5,40 +5,54 @@
 #include "components/invalidation/impl/per_user_topic_invalidation_client.h"
 
 #include "base/bind.h"
-#include "google/cacheinvalidation/deps/callback.h"
-#include "google/cacheinvalidation/impl/log-macro.h"
-#include "google/cacheinvalidation/include/invalidation-listener.h"
+#include "components/invalidation/impl/invalidation_listener.h"
+#include "components/invalidation/impl/logger.h"
+#include "components/invalidation/impl/network_channel.h"
 
-namespace invalidation {
+namespace syncer {
+
+std::unique_ptr<InvalidationClient> CreatePerUserTopicInvalidationClient(
+    NetworkChannel* network,
+    Logger* logger,
+    InvalidationListener* listener) {
+  return std::make_unique<PerUserTopicInvalidationClient>(network, logger,
+                                                          listener);
+}
 
 PerUserTopicInvalidationClient::PerUserTopicInvalidationClient(
-    SystemResources* resources,
+    NetworkChannel* network,
+    Logger* logger,
     InvalidationListener* listener)
-    : resources_(resources), listener_(listener) {
-  RegisterWithNetwork(resources_);
-  TLOG(logger(), INFO, "Created client");
+    : network_(network),
+      logger_(logger),
+      listener_(listener),
+      weak_factory_(this) {
+  RegisterWithNetwork();
+  TLOG(logger_, INFO, "Created client");
 }
 
 PerUserTopicInvalidationClient::~PerUserTopicInvalidationClient() {}
 
-void PerUserTopicInvalidationClient::RegisterWithNetwork(
-    SystemResources* resources) {
+void PerUserTopicInvalidationClient::RegisterWithNetwork() {
   // Install ourselves as a receiver for server messages.
-  resources->network()->SetMessageReceiver(NewPermanentCallback(
-      this, &PerUserTopicInvalidationClient::MessageReceiver));
+  network_->SetMessageReceiver(
+      base::BindRepeating(&PerUserTopicInvalidationClient::MessageReceiver,
+                          weak_factory_.GetWeakPtr()));
+  network_->SetTokenReceiver(
+      base::BindRepeating(&PerUserTopicInvalidationClient::TokenReceiver,
+                          weak_factory_.GetWeakPtr()));
 }
 
 void PerUserTopicInvalidationClient::Start() {
   if (ticl_protocol_started_) {
-    TLOG(logger(), SEVERE, "Ignoring start call since already started");
+    TLOG(logger_, SEVERE, "Ignoring start call since already started");
     return;
   }
-
   FinishStartingTiclAndInformListener();
 }
 
 void PerUserTopicInvalidationClient::Stop() {
-  TLOG(logger(), INFO, "Ticl being stopped");
+  TLOG(logger_, INFO, "Ticl being stopped");
   ticl_protocol_started_ = false;
 }
 
@@ -46,12 +60,19 @@ void PerUserTopicInvalidationClient::FinishStartingTiclAndInformListener() {
   DCHECK(!ticl_protocol_started_);
   ticl_protocol_started_ = true;
   GetListener()->Ready(this);
-  GetListener()->ReissueRegistrations(this, "", 0);
-  TLOG(logger(), INFO, "Ticl started");
+  TLOG(logger_, INFO, "Ticl started");
 }
 
-void PerUserTopicInvalidationClient::MessageReceiver(string message) {
-  // TODO(melandory): Here message should be passed to the protocol handler.
+void PerUserTopicInvalidationClient::MessageReceiver(
+    const std::string& message) {
+  // TODO(melandory): Here message should be passed to the protocol handler,
+  // converted to the invalidation and passed to the listener afterwards.
+}
+
+void PerUserTopicInvalidationClient::TokenReceiver(const std::string& token) {
+  GetListener()->InformTokenRecieved(this, token);
+  if (!ticl_protocol_started_)
+    FinishStartingTiclAndInformListener();
 }
 
 }  // namespace invalidation

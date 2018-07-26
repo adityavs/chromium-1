@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Localisation used, but default_locale wasn't specified in the manifest.</translation>
 <translation id="2576842806987913196">There is already a CRX file present with this name.</translation>
 <translation id="2753617847762399167">Illegal path (absolute or relative with '..'): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">This extension failed to modify a network request because the modification conflicted with another extension.</translation>
 <translation id="2785530881066938471">Could not load file '<ph name="RELATIVE_PATH" />' for content script. It isn't UTF-8 encoded.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (extension ID "<ph name="EXTENSION_ID" />") is blocked by the administrator. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Could not install package: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Unknown product <ph name="PRODUCT_ID" /> from <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">Manifest file is invalid</translation>
 <translation id="7217838517480956708">The administrator of this machine requires <ph name="EXTENSION_NAME" /> to be installed. It cannot be removed or modified.</translation>
+<translation id="7939686037314084444">The extension failed to load properly. It might not be able to intercept network requests.</translation>
 <translation id="7972881773422714442">Options: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">User-facing</translation>
 <translation id="8047248493720652249">This extension failed to name the download "<ph name="ATTEMPTED_FILENAME" />" because another extension (<ph name="EXTENSION_NAME" />) determined a different filename "<ph name="ACTUAL_FILENAME" />".</translation>

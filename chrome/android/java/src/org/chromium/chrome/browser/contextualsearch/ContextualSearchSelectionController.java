@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.contextualsearch;
 
+import android.support.annotation.IntDef;
 import android.support.annotation.Nullable;
 import android.text.TextUtils;
 
@@ -12,12 +13,13 @@ import org.chromium.base.VisibleForTesting;
 import org.chromium.chrome.browser.ChromeActivity;
 import org.chromium.chrome.browser.compositor.bottombar.OverlayPanel;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.content_public.browser.ContentViewCore;
 import org.chromium.content_public.browser.GestureStateListener;
 import org.chromium.content_public.browser.SelectionPopupController;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.touch_selection.SelectionEventType;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,10 +30,12 @@ public class ContextualSearchSelectionController {
     /**
      * The type of selection made by the user.
      */
-    public enum SelectionType {
-        UNDETERMINED,
-        TAP,
-        LONG_PRESS
+    @IntDef({SelectionType.UNDETERMINED, SelectionType.TAP, SelectionType.LONG_PRESS})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface SelectionType {
+        int UNDETERMINED = 0;
+        int TAP = 1;
+        int LONG_PRESS = 2;
     }
 
     private static final String TAG = "ContextualSearch";
@@ -58,7 +62,7 @@ public class ContextualSearchSelectionController {
     private final Pattern mContainsWordPattern;
 
     private String mSelectedText;
-    private SelectionType mSelectionType;
+    private @SelectionType int mSelectionType;
     private boolean mWasTapGestureDetected;
     // Reflects whether the last tap was valid and whether we still have a tap-based selection.
     private ContextualSearchTapState mLastTapState;
@@ -180,7 +184,8 @@ public class ContextualSearchSelectionController {
     /**
      * @return the type of the selection.
      */
-    SelectionType getSelectionType() {
+    @SelectionType
+    int getSelectionType() {
         return mSelectionType;
     }
 
@@ -298,7 +303,7 @@ public class ContextualSearchSelectionController {
      * @param selection The text that was selected.
      * @param type The type of selection made by the user.
      */
-    private void handleSelection(String selection, SelectionType type) {
+    private void handleSelection(String selection, @SelectionType int type) {
         mShouldHandleSelectionModification = true;
         boolean isValidSelection = validateSelectionSuppression(selection);
         mHandler.handleSelection(selection, isValidSelection, type, mX, mY);
@@ -431,8 +436,7 @@ public class ContextualSearchSelectionController {
     }
 
     /**
-     * @return The Base Page's {@link WebContents}, or {@code null} if there is no current tab or
-     *         the current tab has no {@link ContentViewCore}.
+     * @return The Base Page's {@link WebContents}, or {@code null} if there is no current tab.
      */
     @Nullable
     WebContents getBaseWebContents() {

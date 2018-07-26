@@ -8,21 +8,20 @@
 #include "net/third_party/quic/core/crypto/null_encrypter.h"
 #include "net/third_party/quic/core/crypto/quic_decrypter.h"
 #include "net/third_party/quic/core/crypto/quic_encrypter.h"
-#include "net/third_party/quic/core/quic_spdy_client_session_base.h"
+#include "net/third_party/quic/core/http/quic_spdy_client_session_base.h"
 #include "net/third_party/quic/platform/api/quic_ptr_util.h"
 #include "net/third_party/quic/test_tools/mock_decrypter.h"
 #include "net/third_party/quic/test_tools/mock_encrypter.h"
 #include "net/third_party/quic/test_tools/quic_config_peer.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
-using std::string;
 
 namespace quic {
 
 MockCryptoClientStream::MockCryptoClientStream(
     const QuicServerId& server_id,
     QuicSpdyClientSessionBase* session,
-    ProofVerifyContext* verify_context,
+    std::unique_ptr<ProofVerifyContext> verify_context,
     const QuicConfig& config,
     QuicCryptoClientConfig* crypto_config,
     HandshakeMode handshake_mode,
@@ -30,7 +29,7 @@ MockCryptoClientStream::MockCryptoClientStream(
     bool use_mock_crypter)
     : QuicCryptoClientStream(server_id,
                              session,
-                             verify_context,
+                             std::move(verify_context),
                              crypto_config,
                              session),
       QuicCryptoHandshaker(this, session),
@@ -205,7 +204,7 @@ void MockCryptoClientStream::SetConfigNegotiated() {
 
   CryptoHandshakeMessage msg;
   config.ToHandshakeMessage(&msg);
-  string error_details;
+  QuicString error_details;
   const QuicErrorCode error =
       session()->config()->ProcessPeerHello(msg, CLIENT, &error_details);
   ASSERT_EQ(QUIC_NO_ERROR, error);

@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "extensions/common/extension_id.h"
 #include "url/gurl.h"
 
 namespace base {
@@ -43,6 +44,8 @@ class Warning {
     // another extension with higher precedence determined a different filename.
     kDownloadFilenameConflict,
     kReloadTooFrequent,
+    // The declarative net request ruleset for the extension failed to load.
+    kRulesetFailedToLoad,
     kMaxWarningType
   };
 
@@ -53,8 +56,6 @@ class Warning {
 
   // Factory methods for various warning types.
   static Warning CreateNetworkDelayWarning(
-      const std::string& extension_id);
-  static Warning CreateNetworkConflictWarning(
       const std::string& extension_id);
   static Warning CreateRedirectConflictWarning(
       const std::string& extension_id,
@@ -81,6 +82,8 @@ class Warning {
       const base::FilePath& winning_filename);
   static Warning CreateReloadTooFrequentWarning(
       const std::string& extension_id);
+  static Warning CreateRulesetFailedToLoadWarning(
+      const ExtensionId& extension_id);
 
   // Returns the specific warning type.
   WarningType warning_type() const { return type_; }

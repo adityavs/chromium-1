@@ -113,7 +113,7 @@ TEST_F(VirtualKeyboardControllerTest,
        ForceToShowKeyboardWithKeysetWhenAccessibilityKeyboardIsEnabled) {
   // TODO(mash): Turning on accessibility keyboard does not create a valid
   // KeyboardController under MASH. See https://crbug.com/646565.
-  if (Shell::GetAshConfig() == Config::MASH)
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
     return;
 
   AccessibilityController* accessibility_controller =
@@ -138,7 +138,8 @@ TEST_F(VirtualKeyboardControllerTest,
 
   // Simulate the keyboard hiding.
   if (GetKeyboardController()->HasObserver(GetVirtualKeyboardController())) {
-    GetVirtualKeyboardController()->OnKeyboardHidden();
+    GetVirtualKeyboardController()->OnKeyboardHidden(
+        false /* is_temporary_hide */);
   }
   base::RunLoop().RunUntilIdle();
 
@@ -158,7 +159,7 @@ TEST_F(VirtualKeyboardControllerTest,
        ForceToShowKeyboardWithKeysetWhenAccessibilityKeyboardIsDisabled) {
   // TODO(mash): Turning on accessibility keyboard does not create a valid
   // KeyboardController under MASH. See https://crbug.com/646565.
-  if (Shell::GetAshConfig() == Config::MASH)
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
     return;
 
   AccessibilityController* accessibility_controller =
@@ -182,7 +183,8 @@ TEST_F(VirtualKeyboardControllerTest,
 
   // Simulate the keyboard hiding.
   if (GetKeyboardController()->HasObserver(GetVirtualKeyboardController())) {
-    GetVirtualKeyboardController()->OnKeyboardHidden();
+    GetVirtualKeyboardController()->OnKeyboardHidden(
+        false /* is_temporary_hide */);
   }
   base::RunLoop().RunUntilIdle();
 
@@ -192,6 +194,47 @@ TEST_F(VirtualKeyboardControllerTest,
   // Keyset should be reset to none.
   Shell::Get()->ime_controller()->FlushMojoForTesting();
   EXPECT_EQ(chromeos::input_method::mojom::ImeKeyset::kNone,
+            client.last_keyset_);
+}
+
+TEST_F(VirtualKeyboardControllerTest,
+       ForceToShowKeyboardWithKeysetTemporaryHide) {
+  // TODO(mash): Turning on accessibility keyboard does not create a valid
+  // KeyboardController under MASH. See https://crbug.com/646565.
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
+    return;
+
+  AccessibilityController* accessibility_controller =
+      Shell::Get()->accessibility_controller();
+  accessibility_controller->SetVirtualKeyboardEnabled(false);
+  ASSERT_FALSE(accessibility_controller->IsVirtualKeyboardEnabled());
+
+  // Set up a mock ImeControllerClient to test keyset changes.
+  TestImeControllerClient client;
+  Shell::Get()->ime_controller()->SetClient(client.CreateInterfacePtr());
+
+  // Should show the keyboard by turning on the accesibility keyboard.
+  GetVirtualKeyboardController()->ForceShowKeyboardWithKeyset(
+      chromeos::input_method::mojom::ImeKeyset::kEmoji);
+  Shell::Get()->ime_controller()->FlushMojoForTesting();
+  EXPECT_TRUE(accessibility_controller->IsVirtualKeyboardEnabled());
+
+  // Keyset should be emoji.
+  EXPECT_EQ(chromeos::input_method::mojom::ImeKeyset::kEmoji,
+            client.last_keyset_);
+
+  // Simulate the keyboard hiding temporarily.
+  if (GetKeyboardController()->HasObserver(GetVirtualKeyboardController())) {
+    GetVirtualKeyboardController()->OnKeyboardHidden(
+        true /* is_temporary_hide */);
+  }
+  base::RunLoop().RunUntilIdle();
+
+  // The keyboard should still be enabled.
+  EXPECT_TRUE(accessibility_controller->IsVirtualKeyboardEnabled());
+
+  // Keyset should still be emoji.
+  EXPECT_EQ(chromeos::input_method::mojom::ImeKeyset::kEmoji,
             client.last_keyset_);
 }
 
@@ -416,7 +459,8 @@ TEST_F(VirtualKeyboardControllerAlwaysEnabledTest, DoesNotSuppressKeyboard) {
 }
 
 // Test for http://crbug.com/297858. |MoveKeyboardToTouchableDisplay| should
-// move keyboard to primary display if no display has touch capability.
+// move keyboard to primary display if no display has touch capability and
+// no window is focused.
 TEST_F(VirtualKeyboardControllerAlwaysEnabledTest,
        MovesKeyboardToPrimaryDisplayWhenNoDisplayHasTouch) {
   UpdateDisplay("500x500,500x500");
@@ -429,6 +473,24 @@ TEST_F(VirtualKeyboardControllerAlwaysEnabledTest,
   GetVirtualKeyboardController()->MoveKeyboardToTouchableDisplay();
 
   EXPECT_EQ(GetPrimaryRootWindow(), GetKeyboardController()->GetRootWindow());
+}
+
+// Test for http://crbug.com/297858. |MoveKeyboardToTouchableDisplay| should
+// move keyboard to focused display if no display has touch capability.
+TEST_F(VirtualKeyboardControllerAlwaysEnabledTest,
+       MovesKeyboardToFocusedDisplayWhenNoDisplayHasTouch) {
+  UpdateDisplay("500x500,500x500");
+
+  EXPECT_NE(display::Display::TouchSupport::AVAILABLE,
+            GetPrimaryDisplay().touch_support());
+  EXPECT_NE(display::Display::TouchSupport::AVAILABLE,
+            GetSecondaryDisplay().touch_support());
+
+  CreateFocusedTestWindowInRootWindow(GetSecondaryRootWindow());
+
+  GetVirtualKeyboardController()->MoveKeyboardToTouchableDisplay();
+
+  EXPECT_EQ(GetSecondaryRootWindow(), GetKeyboardController()->GetRootWindow());
 }
 
 // Test for http://crbug.com/303429. |MoveKeyboardToTouchableDisplay| should

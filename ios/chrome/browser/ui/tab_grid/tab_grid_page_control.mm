@@ -20,7 +20,7 @@
 
 // Structure of this control:
 //
-// The page control is similar to a UISegmentedCoffee in appearance, but not in
+// The page control is similar to a UISegmentedControl in appearance, but not in
 // function. This control doesn't have segments that highlight; instead there
 // is a white "slider" that moves across the view onto whichever segment is
 // active. Each segment has an image and (optionally) a label. When the slider
@@ -97,9 +97,9 @@ const NSTimeInterval kSliderMoveDuration = 0.2;
 // Color for the slider
 const int kSliderColor = 0xF8F9FA;
 // Color for the background view.
-const int kBackgroundColor = 0x5F6368;
+const int kBackgroundColor = 0xFFFFFF;
 // Alpha for the background view.
-const CGFloat kBackgroundAlpha = 1.0;
+const CGFloat kBackgroundAlpha = 0.3;
 // Color for the regular tab count label and icons.
 const CGFloat kSelectedColor = 0x3C4043;
 
@@ -302,13 +302,11 @@ UIImage* ImageForSegment(NSString* segment, BOOL selected) {
   CGPoint position = [touch locationInView:self];
   CGFloat deltaX = position.x - self.dragStart.x;
   // Convert to position change.
-  CGFloat postionChange = deltaX / self.sliderRange;
+  CGFloat positionChange = deltaX / self.sliderRange;
 
-  self.sliderPosition = self.dragStartPosition + postionChange;
+  self.sliderPosition = self.dragStartPosition + positionChange;
   [self sendActionsForControlEvents:UIControlEventValueChanged];
-
-  // If the touch is now outside of the control, stop tracking it.
-  return self.touchInside;
+  return YES;
 }
 
 - (void)endTrackingWithTouch:(UITouch*)touch withEvent:(UIEvent*)event {

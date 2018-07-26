@@ -187,6 +187,11 @@ class CORE_EXPORT VisualViewport final
   void SetScrollOffset(const ScrollOffset&,
                        ScrollType,
                        ScrollBehavior = kScrollBehaviorInstant) override;
+  bool IsThrottled() const override {
+    // VisualViewport is always in the main frame, so the frame does not get
+    // throttled.
+    return false;
+  }
   bool IsActive() const override { return false; }
   int ScrollSize(ScrollbarOrientation) const override;
   bool IsScrollCornerVisible() const override { return false; }
@@ -245,6 +250,7 @@ class CORE_EXPORT VisualViewport final
   bool ShouldDisableDesktopWorkarounds() const;
 
   ScrollbarTheme& GetPageScrollbarTheme() const override;
+  bool VisualViewportSuppliesScrollbars() const override;
 
   TransformPaintPropertyNode* GetPageScaleNode() const;
   TransformPaintPropertyNode* GetScrollTranslationNode() const;
@@ -263,7 +269,6 @@ class CORE_EXPORT VisualViewport final
 
   bool DidSetScaleOrLocation(float scale, const FloatPoint& location);
 
-  bool VisualViewportSuppliesScrollbars() const;
 
   void UpdateStyleAndLayoutIgnorePendingStylesheets() const;
 
@@ -281,7 +286,11 @@ class CORE_EXPORT VisualViewport final
                      GraphicsContext&,
                      GraphicsLayerPaintingPhase,
                      const IntRect&) const override;
+  void SetOverlayScrollbarsHidden(bool) override;
   String DebugName(const GraphicsLayer*) const override;
+
+  const ScrollableArea* GetScrollableAreaForTesting(
+      const GraphicsLayer*) const override;
 
   void SetupScrollbar(ScrollbarOrientation);
 

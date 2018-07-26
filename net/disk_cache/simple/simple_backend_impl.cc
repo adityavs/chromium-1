@@ -9,7 +9,7 @@
 #include <functional>
 #include <limits>
 
-#if defined(OS_POSIX) && !defined(OS_FUCHSIA)
+#if defined(OS_POSIX)
 #include <sys/resource.h>
 #endif
 
@@ -78,7 +78,7 @@ void MaybeHistogramFdLimit() {
   int soft_fd_limit = 0;
   int hard_fd_limit = 0;
 
-#if defined(OS_POSIX) && !defined(OS_FUCHSIA)
+#if defined(OS_POSIX)
   struct rlimit nofile;
   if (!getrlimit(RLIMIT_NOFILE, &nofile)) {
     soft_fd_limit = nofile.rlim_cur;
@@ -240,7 +240,8 @@ SimpleBackendImpl::SimpleBackendImpl(
           {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
            base::TaskShutdownBehavior::BLOCK_SHUTDOWN})),
       orig_max_size_(max_bytes),
-      entry_operations_mode_(cache_type == net::DISK_CACHE
+      entry_operations_mode_((cache_type == net::DISK_CACHE ||
+                              cache_type == net::GENERATED_CODE_CACHE)
                                  ? SimpleEntryImpl::OPTIMISTIC_OPERATIONS
                                  : SimpleEntryImpl::NON_OPTIMISTIC_OPERATIONS),
       net_log_(net_log) {

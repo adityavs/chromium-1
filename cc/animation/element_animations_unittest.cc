@@ -294,7 +294,7 @@ TEST_F(ElementAnimationsTest,
                             CubicBezierTimingFunction::EaseType::EASE_IN_OUT)));
   const int animation2_id = 2;
   std::unique_ptr<KeyframeModel> keyframe_model(KeyframeModel::Create(
-      std::move(curve), animation2_id, 0, TargetProperty::SCROLL_OFFSET));
+      std::move(curve), animation2_id, 1, TargetProperty::SCROLL_OFFSET));
   animation_->AddKeyframeModel(std::move(keyframe_model));
   PushProperties();
   EXPECT_VECTOR2DF_EQ(provider_initial_value,
@@ -615,7 +615,7 @@ TEST_F(ElementAnimationsTest, SyncPause) {
 
   // Pause the animation at the middle of the second range so the offset
   // delays animation until the middle of the third range.
-  animation_->PauseKeyframeEffect(1.5);
+  animation_->PauseKeyframeModel(keyframe_model_id, 1.5);
   EXPECT_EQ(KeyframeModel::PAUSED, animation_->keyframe_effect()
                                        ->GetKeyframeModelById(keyframe_model_id)
                                        ->run_state());
@@ -1103,8 +1103,7 @@ TEST_F(ElementAnimationsTest, ScrollOffsetRemovalClearsScrollDelta) {
 
   auto events = CreateEventsForTesting();
 
-  // Removing keyframe models with target SCROLL_OFFSET leads to
-  // scroll_offset_animation_was_interrupted being set to true.
+  // First test the 1-argument version of RemoveKeyframeModel.
   gfx::ScrollOffset target_value(300.f, 200.f);
   std::unique_ptr<ScrollOffsetAnimationCurve> curve(
       ScrollOffsetAnimationCurve::Create(
@@ -1123,7 +1122,7 @@ TEST_F(ElementAnimationsTest, ScrollOffsetRemovalClearsScrollDelta) {
   EXPECT_FALSE(animation_impl_->keyframe_effect()
                    ->scroll_offset_animation_was_interrupted());
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_TRUE(
       animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
 
@@ -1137,7 +1136,36 @@ TEST_F(ElementAnimationsTest, ScrollOffsetRemovalClearsScrollDelta) {
   EXPECT_FALSE(animation_impl_->keyframe_effect()
                    ->scroll_offset_animation_was_interrupted());
 
-  // Check that removing non-scroll-offset keyframe models does not cause
+  // Now, test the 2-argument version of RemoveKeyframeModel.
+  curve = ScrollOffsetAnimationCurve::Create(
+      target_value, CubicBezierTimingFunction::CreatePreset(
+                        CubicBezierTimingFunction::EaseType::EASE_IN_OUT));
+  keyframe_model = KeyframeModel::Create(std::move(curve), keyframe_model_id, 0,
+                                         TargetProperty::SCROLL_OFFSET);
+  keyframe_model->set_needs_synchronized_start_time(true);
+  animation_->AddKeyframeModel(std::move(keyframe_model));
+  PushProperties();
+  animation_impl_->ActivateKeyframeEffects();
+  EXPECT_FALSE(
+      animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
+  EXPECT_FALSE(animation_impl_->keyframe_effect()
+                   ->scroll_offset_animation_was_interrupted());
+
+  animation_->RemoveKeyframeModel(keyframe_model_id);
+  EXPECT_TRUE(
+      animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
+
+  PushProperties();
+  EXPECT_TRUE(animation_impl_->keyframe_effect()
+                  ->scroll_offset_animation_was_interrupted());
+  EXPECT_FALSE(
+      animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
+
+  animation_impl_->ActivateKeyframeEffects();
+  EXPECT_FALSE(animation_impl_->keyframe_effect()
+                   ->scroll_offset_animation_was_interrupted());
+
+  // Check that removing non-scroll-offset animations does not cause
   // scroll_offset_animation_was_interrupted() to get set.
   keyframe_model_id =
       AddAnimatedTransformToAnimation(animation_.get(), 1.0, 1, 2);
@@ -1148,7 +1176,7 @@ TEST_F(ElementAnimationsTest, ScrollOffsetRemovalClearsScrollDelta) {
   EXPECT_FALSE(animation_impl_->keyframe_effect()
                    ->scroll_offset_animation_was_interrupted());
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_FALSE(
       animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
 
@@ -1171,7 +1199,7 @@ TEST_F(ElementAnimationsTest, ScrollOffsetRemovalClearsScrollDelta) {
   EXPECT_FALSE(animation_impl_->keyframe_effect()
                    ->scroll_offset_animation_was_interrupted());
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_FALSE(
       animation_->keyframe_effect()->scroll_offset_animation_was_interrupted());
 
@@ -2274,7 +2302,7 @@ TEST_F(ElementAnimationsTest, AnimationStartScale) {
   curve2->AddKeyframe(TransformKeyframe::Create(
       base::TimeDelta::FromSecondsD(1.0), operations3, nullptr));
 
-  animation_impl_->RemoveKeyframeModels();
+  animation_impl_->RemoveKeyframeModel(1);
   keyframe_model =
       KeyframeModel::Create(std::move(curve2), 2, 2, TargetProperty::TRANSFORM);
 
@@ -2799,7 +2827,8 @@ TEST_F(ElementAnimationsTest, ObserverNotifiedWhenTransformAnimationChanges) {
   animation_->keyframe_effect()->NotifyKeyframeModelStarted(events->events_[0]);
   events->events_.clear();
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
+  animation_->RemoveKeyframeModel(animation2_id);
   EXPECT_FALSE(client_.GetHasPotentialTransformAnimation(
       element_id_, ElementListType::ACTIVE));
   EXPECT_FALSE(client_.GetTransformIsCurrentlyAnimating(
@@ -3014,7 +3043,7 @@ TEST_F(ElementAnimationsTest, ObserverNotifiedWhenOpacityAnimationChanges) {
   animation_->keyframe_effect()->NotifyKeyframeModelStarted(events->events_[0]);
   events->events_.clear();
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_FALSE(client_.GetHasPotentialOpacityAnimation(
       element_id_, ElementListType::ACTIVE));
   EXPECT_FALSE(client_.GetOpacityIsCurrentlyAnimating(element_id_,
@@ -3228,7 +3257,7 @@ TEST_F(ElementAnimationsTest, ObserverNotifiedWhenFilterAnimationChanges) {
   animation_->keyframe_effect()->NotifyKeyframeModelStarted(events->events_[0]);
   events->events_.clear();
 
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(keyframe_model_id);
   EXPECT_FALSE(client_.GetHasPotentialFilterAnimation(element_id_,
                                                       ElementListType::ACTIVE));
   EXPECT_FALSE(client_.GetFilterIsCurrentlyAnimating(element_id_,
@@ -3385,7 +3414,8 @@ TEST_F(ElementAnimationsTest, PushedDeletedAnimationWaitsForActivation) {
                   ->affects_active_elements());
 
   // Delete the animation on the main-thread animations.
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(
+      animation_->GetKeyframeModel(TargetProperty::OPACITY)->id());
   PushProperties();
 
   // The animation should no longer affect pending elements.
@@ -3444,7 +3474,8 @@ TEST_F(ElementAnimationsTest, StartAnimationsAffectingDifferentObservers) {
 
   // Remove the first animation from the main-thread animations, and add a
   // new animation affecting the same property.
-  animation_->RemoveKeyframeModels();
+  animation_->RemoveKeyframeModel(
+      animation_->GetKeyframeModel(TargetProperty::OPACITY)->id());
   const int second_keyframe_model_id =
       AddOpacityTransitionToAnimation(animation_.get(), 1, 1.f, 0.5f, true);
   PushProperties();
@@ -3697,7 +3728,7 @@ TEST_F(ElementAnimationsTest, RemoveAndReAddAnimationToTicking) {
   // animations. Remove the animation using RemoveFromTicking().
   animation_->AddKeyframeModel(CreateKeyframeModel(
       std::unique_ptr<AnimationCurve>(new FakeFloatTransition(1.0, 1.f, 0.5f)),
-      2, TargetProperty::OPACITY));
+      1, TargetProperty::OPACITY));
   ASSERT_EQ(1u, host_->ticking_animations_for_testing().size());
   animation_->keyframe_effect()->RemoveFromTicking();
   ASSERT_EQ(0u, host_->ticking_animations_for_testing().size());
@@ -3728,6 +3759,40 @@ TEST_F(ElementAnimationsTest, TickingKeyframeModelsCount) {
   EXPECT_EQ(2u, host_->CompositedAnimationsCount());
   animation_->keyframe_effect()->RemoveFromTicking();
   EXPECT_EQ(0u, host_->CompositedAnimationsCount());
+}
+
+// This test verifies that finished keyframe models don't get copied over to
+// impl thread.
+TEST_F(ElementAnimationsTest, FinishedKeyframeModelsNotCopiedToImpl) {
+  CreateTestLayer(false, false);
+  AttachTimelineAnimationLayer();
+  CreateImplTimelineAndAnimation();
+
+  animation_->AddKeyframeModel(KeyframeModel::Create(
+      std::unique_ptr<AnimationCurve>(new FakeTransformTransition(1.0)), 1, 1,
+      TargetProperty::TRANSFORM));
+  animation_->AddKeyframeModel(KeyframeModel::Create(
+      std::unique_ptr<AnimationCurve>(new FakeFloatTransition(2.0, 0.f, 1.f)),
+      2, 2, TargetProperty::OPACITY));
+
+  // Finish the first keyframe model.
+  animation_->Tick(kInitialTickTime);
+  animation_->UpdateState(true, nullptr);
+  animation_->Tick(kInitialTickTime + TimeDelta::FromMilliseconds(1000));
+  animation_->UpdateState(true, nullptr);
+
+  EXPECT_EQ(
+      KeyframeModel::FINISHED,
+      animation_->keyframe_effect()->GetKeyframeModelById(1)->run_state());
+  EXPECT_EQ(
+      KeyframeModel::RUNNING,
+      animation_->keyframe_effect()->GetKeyframeModelById(2)->run_state());
+
+  PushProperties();
+
+  // Finished keyframe model doesn't get copied to impl thread.
+  EXPECT_FALSE(animation_impl_->keyframe_effect()->GetKeyframeModelById(1));
+  EXPECT_TRUE(animation_impl_->keyframe_effect()->GetKeyframeModelById(2));
 }
 
 }  // namespace

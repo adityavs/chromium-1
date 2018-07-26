@@ -77,8 +77,7 @@ const int DisplayConfigurator::kSetDisplayPowerOnlyIfSingleInternalDisplay =
 
 bool DisplayConfigurator::TestApi::TriggerConfigureTimeout() {
   if (configurator_->configure_timer_.IsRunning()) {
-    configurator_->configure_timer_.user_task().Run();
-    configurator_->configure_timer_.Stop();
+    configurator_->configure_timer_.FireNow();
     return true;
   } else {
     return false;
@@ -592,6 +591,10 @@ void DisplayConfigurator::SetInitialDisplayPower(
   // DisplayConfigurator::OnConfigured has been called so update the current
   // and pending states.
   UpdatePowerState(power_state);
+}
+
+void DisplayConfigurator::InitializeDisplayPowerState() {
+  SetInitialDisplayPower(chromeos::DISPLAY_POWER_ALL_ON);
 }
 
 void DisplayConfigurator::Init(

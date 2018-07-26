@@ -23,29 +23,10 @@ const base::Feature kAutofillHome = {"AutofillHome",
 const base::Feature kHtmlBasedUsernameDetector = {
     "HtmlBaseUsernameDetector", base::FEATURE_ENABLED_BY_DEFAULT};
 
-// Enable additional elements in the form popup UI, which will allow the user to
-// view all saved passwords.
-const base::Feature kManualFallbacksGeneration = {
-    "ManualFallbacksGeneration", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Enable additional elements in the form popup UI, which will allow the user to
-// trigger generation or view all saved passwords.
-const base::Feature kManualFallbacksFilling = {
-    "ManualFallbacksFilling", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Enable a standalone popup UI, which will allow the user to view all saved
-// passwords.
-const base::Feature kManualFallbacksFillingStandalone = {
-    "ManualFallbacksFillingStandalone", base::FEATURE_DISABLED_BY_DEFAULT};
-
 // Enable a context menu item in the password field that allows the user
 // to manually enforce saving of their password.
 const base::Feature kPasswordForceSaving = {
     "PasswordForceSaving", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Enable the user to trigger password generation manually.
-const base::Feature kManualPasswordGeneration = {
-    "manual-password-generation", base::FEATURE_ENABLED_BY_DEFAULT};
 
 // Controls the ability to generate passwords that fit sites' requirements.
 const base::Feature kPasswordGenerationRequirements = {
@@ -90,10 +71,16 @@ const base::Feature kPasswordsKeyboardAccessory = {
 // selection, rather than autofilling on page load, with highlighting of fields.
 const base::Feature kFillOnAccountSelect = {"fill-on-account-select",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
-// Enables new password form parsing mechanism, details in
-// go/new-cpm-design-refactoring.
+
+// Enables new password form parsing mechanism for filling passwords, details in
+// https://goo.gl/QodPH1
 const base::Feature kNewPasswordFormParsing = {
     "new-password-form-parsing", base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enables new password form parsing mechanism for saving passwords, details in
+// https://goo.gl/QodPH1
+const base::Feature kNewPasswordFormParsingForSaving = {
+    "new-password-form-parsing-for-saving", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Field trial identifier for password generation requirements.
 const char* kGenerationRequirementsFieldTrial =

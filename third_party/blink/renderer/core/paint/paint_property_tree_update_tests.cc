@@ -1175,4 +1175,80 @@ TEST_P(PaintPropertyTreeBuilderTest, OmitOverflowClipOnCaretChange) {
   EXPECT_FALSE(PaintPropertiesForElement("target")->OverflowClip());
 }
 
+TEST_P(PaintPropertyTreeUpdateTest,
+       FragmentClipUpdateOnMulticolContainerWidthChange) {
+  SetBodyInnerHTML(R"HTML(
+    <style>body {margin: 0}</style>
+    <div id="container" style="width: 100px">
+      <div id="multicol" style="columns: 2; column-gap: 0; line-height: 500px">
+        <div><br></div>
+        <div><br></div>
+      </div>
+    </div>
+  )HTML");
+
+  auto* flow_thread = GetLayoutObjectByElementId("multicol")->SlowFirstChild();
+  ASSERT_EQ(2u, NumFragments(flow_thread));
+  EXPECT_EQ(50, FragmentAt(flow_thread, 0)
+                    .PaintProperties()
+                    ->FragmentClip()
+                    ->ClipRect()
+                    .Rect()
+                    .MaxX());
+  EXPECT_EQ(50, FragmentAt(flow_thread, 1)
+                    .PaintProperties()
+                    ->FragmentClip()
+                    ->ClipRect()
+                    .Rect()
+                    .X());
+
+  GetDocument()
+      .getElementById("container")
+      ->setAttribute(HTMLNames::styleAttr, "width: 500px");
+  GetDocument().View()->UpdateAllLifecyclePhases();
+  ASSERT_EQ(2u, NumFragments(flow_thread));
+  EXPECT_EQ(250, FragmentAt(flow_thread, 0)
+                     .PaintProperties()
+                     ->FragmentClip()
+                     ->ClipRect()
+                     .Rect()
+                     .MaxX());
+  EXPECT_EQ(250, FragmentAt(flow_thread, 1)
+                     .PaintProperties()
+                     ->FragmentClip()
+                     ->ClipRect()
+                     .Rect()
+                     .X());
+}
+
+TEST_P(PaintPropertyTreeUpdateTest,
+       PropertyTreesRebuiltAfterSVGBlendModeChange) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      #blended {
+        mix-blend-mode: darken;
+        fill: red;
+      }
+    </style>
+    <svg width="100" height="100">
+      <rect id="blended" x="0" y="0" width="100" height="100"></rect>
+    </svg>
+  )HTML");
+
+  auto* blended_element = GetDocument().getElementById("blended");
+  ASSERT_TRUE(blended_element);
+  const auto* props =
+      blended_element->GetLayoutObject()->FirstFragment().PaintProperties();
+  ASSERT_TRUE(props->Effect());
+  EXPECT_EQ(props->Effect()->BlendMode(), SkBlendMode::kDarken);
+
+  blended_element->setAttribute(HTMLNames::styleAttr,
+                                "mix-blend-mode: lighten;");
+  GetDocument().View()->UpdateAllLifecyclePhases();
+
+  props = blended_element->GetLayoutObject()->FirstFragment().PaintProperties();
+  ASSERT_TRUE(props->Effect());
+  EXPECT_EQ(props->Effect()->BlendMode(), SkBlendMode::kLighten);
+}
+
 }  // namespace blink

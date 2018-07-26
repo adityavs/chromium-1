@@ -9,7 +9,7 @@ package optimization_guide.proto;
 
 enum OptimizationType {
   TYPE_UNSPECIFIED = 0;
-  // This optimization blocks Javascript on the page.
+  // This optimization blocks JavaScript on the page.
   NOSCRIPT = 1;
   // This optimization applies a set of ResourceLoadingHint(s) to load the
   // page.
@@ -61,6 +61,20 @@ message Optimization {
   // Only the first ResourceLoadingHint record that matches a target resource
   // URL will be applied to that resource.
   repeated ResourceLoadingHint resource_loading_hints = 3;
+  // The experiment name that activates the optimization.
+  //
+  // If a non-empty name is provided, the optimization will be disabled unless
+  // a previews experiment of that same name is running. An empty name is not
+  // experimental.
+  //
+  // Previews experiments are enabled and configured by passing an
+  // experiment_name parameter to the OptimizationHintsExperiments feature.
+  // For example, if experiment_name is my_exp, it could be enabled with the
+  // following command-line flags:
+  //   --enable-features=OptimizationHintsExperiments<MyFieldTrial
+  //   --force-fieldtrial-params="MyFieldTrial.Enabled:experiment_name/my_exp"
+  //   --force-fieldtrials=MyFieldTrial/Enabled/
+  optional string experiment_name = 4;
 }
 
 // The possible effective connection type values.

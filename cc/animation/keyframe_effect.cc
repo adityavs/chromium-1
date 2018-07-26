@@ -221,10 +221,48 @@ void KeyframeEffect::UpdateTickingState(UpdateTickingType type) {
 }
 
 void KeyframeEffect::Pause(base::TimeDelta pause_offset) {
+  for (auto& keyframe_model : keyframe_models_)
+    keyframe_model->Pause(pause_offset);
+
+  if (has_bound_element_animations()) {
+    animation_->SetNeedsCommit();
+    SetNeedsPushProperties();
+  }
+}
+
+void KeyframeEffect::AddKeyframeModel(
+    std::unique_ptr<KeyframeModel> keyframe_model) {
+  DCHECK(keyframe_model->target_property_id() !=
+             TargetProperty::SCROLL_OFFSET ||
+         (animation_->animation_host()->SupportsScrollAnimations()));
+  DCHECK(!keyframe_model->is_impl_only() ||
+         keyframe_model->target_property_id() == TargetProperty::SCROLL_OFFSET);
+  // This is to make sure that keyframe models in the same group, i.e., start
+  // together, don't animate the same property.
+  DCHECK(std::none_of(
+      keyframe_models_.begin(), keyframe_models_.end(),
+      [&](const auto& existing_keyframe_model) {
+        return keyframe_model->target_property_id() ==
+                   existing_keyframe_model->target_property_id() &&
+               keyframe_model->group() == existing_keyframe_model->group();
+      }));
+
+  keyframe_models_.push_back(std::move(keyframe_model));
+
+  if (has_bound_element_animations()) {
+    KeyframeModelAdded();
+    SetNeedsPushProperties();
+  }
+}
+
+void KeyframeEffect::PauseKeyframeModel(int keyframe_model_id,
+                                        double time_offset) {
+  const base::TimeDelta pause_offset =
+      base::TimeDelta::FromSecondsD(time_offset);
   for (auto& keyframe_model : keyframe_models_) {
-    base::TimeTicks pause_time = keyframe_model->time_offset() +
-                                 keyframe_model->start_time() + pause_offset;
-    keyframe_model->SetRunState(KeyframeModel::PAUSED, pause_time);
+    if (keyframe_model->id() == keyframe_model_id) {
+      keyframe_model->Pause(pause_offset);
+    }
   }
 
   if (has_bound_element_animations()) {
@@ -233,8 +271,41 @@ void KeyframeEffect::Pause(base::TimeDelta pause_offset) {
   }
 }
 
-void KeyframeEffect::Abort() {
-  for (auto& keyframe_model : keyframe_models_) {
+void KeyframeEffect::RemoveKeyframeModel(int keyframe_model_id) {
+  bool keyframe_model_removed = false;
+
+  // Since we want to use the KeyframeModels that we're going to remove, we
+  // need to use a stable_parition here instead of remove_if. Remove_if leaves
+  // the removed items in an unspecified state.
+  auto keyframe_models_to_remove = std::stable_partition(
+      keyframe_models_.begin(), keyframe_models_.end(),
+      [keyframe_model_id](
+          const std::unique_ptr<KeyframeModel>& keyframe_model) {
+        return keyframe_model->id() != keyframe_model_id;
+      });
+  for (auto it = keyframe_models_to_remove; it != keyframe_models_.end();
+       ++it) {
+    if ((*it)->target_property_id() == TargetProperty::SCROLL_OFFSET) {
+      if (has_bound_element_animations())
+        scroll_offset_animation_was_interrupted_ = true;
+    } else if (!(*it)->is_finished()) {
+      keyframe_model_removed = true;
+    }
+  }
+
+  keyframe_models_.erase(keyframe_models_to_remove, keyframe_models_.end());
+
+  if (has_bound_element_animations()) {
+    UpdateTickingState(UpdateTickingType::NORMAL);
+    if (keyframe_model_removed)
+      element_animations_->UpdateClientAnimationState();
+    animation_->SetNeedsCommit();
+    SetNeedsPushProperties();
+  }
+}
+
+void KeyframeEffect::AbortKeyframeModel(int keyframe_model_id) {
+  if (KeyframeModel* keyframe_model = GetKeyframeModelById(keyframe_model_id)) {
     if (!keyframe_model->is_finished()) {
       keyframe_model->SetRunState(KeyframeModel::ABORTED, last_tick_time_);
       if (has_bound_element_animations())
@@ -272,46 +343,6 @@ void KeyframeEffect::AbortKeyframeModelsWithProperty(
 
   if (has_bound_element_animations()) {
     if (aborted_keyframe_model)
-      element_animations_->UpdateClientAnimationState();
-    animation_->SetNeedsCommit();
-    SetNeedsPushProperties();
-  }
-}
-
-void KeyframeEffect::AddKeyframeModel(
-    std::unique_ptr<KeyframeModel> keyframe_model) {
-  AnimationHost* animation_host = animation_->animation_host();
-  DCHECK(keyframe_model->target_property_id() !=
-             TargetProperty::SCROLL_OFFSET ||
-         (animation_host && animation_host->SupportsScrollAnimations()));
-  DCHECK(!keyframe_model->is_impl_only() ||
-         keyframe_model->target_property_id() == TargetProperty::SCROLL_OFFSET);
-
-  keyframe_models_.push_back(std::move(keyframe_model));
-
-  if (has_bound_element_animations()) {
-    KeyframeModelAdded();
-    SetNeedsPushProperties();
-  }
-}
-
-void KeyframeEffect::RemoveKeyframeModels() {
-  bool keyframe_model_removed = false;
-
-  for (auto it = keyframe_models_.begin(); it != keyframe_models_.end(); ++it) {
-    if ((*it)->target_property_id() == TargetProperty::SCROLL_OFFSET) {
-      if (has_bound_element_animations())
-        scroll_offset_animation_was_interrupted_ = true;
-    } else if (!(*it)->is_finished()) {
-      keyframe_model_removed = true;
-    }
-  }
-
-  keyframe_models_.clear();
-
-  if (has_bound_element_animations()) {
-    UpdateTickingState(UpdateTickingType::NORMAL);
-    if (keyframe_model_removed)
       element_animations_->UpdateClientAnimationState();
     animation_->SetNeedsCommit();
     SetNeedsPushProperties();
@@ -655,6 +686,11 @@ void KeyframeEffect::PushNewKeyframeModelsToImplThread(
   // Any new KeyframeModels owned by the main thread's Animation are
   // cloned and added to the impl thread's Animation.
   for (const auto& keyframe_model : keyframe_models_) {
+    // If the keyframe_model is finished, do not copy it over to impl since the
+    // impl instance, if there was one, was just removed in
+    // |RemoveKeyframeModelsCompletedOnMainThread|.
+    if (keyframe_model->is_finished())
+      continue;
     // If the keyframe_model is already running on the impl thread, there is no
     // need to copy it over.
     if (keyframe_effect_impl->GetKeyframeModelById(keyframe_model->id()))
@@ -759,12 +795,8 @@ void KeyframeEffect::PushPropertiesTo(KeyframeEffect* keyframe_effect_impl) {
   // aborted KeyframeModels and pushing any new animations.
   MarkAbortedKeyframeModelsForDeletion(keyframe_effect_impl);
   PurgeKeyframeModelsMarkedForDeletion(/* impl_only */ false);
-  PushNewKeyframeModelsToImplThread(keyframe_effect_impl);
-
-  // Remove finished impl side KeyframeModels only after pushing,
-  // and only after the KeyframeModels are deleted on the main thread
-  // this insures we will never push a keyframe model twice.
   RemoveKeyframeModelsCompletedOnMainThread(keyframe_effect_impl);
+  PushNewKeyframeModelsToImplThread(keyframe_effect_impl);
 
   // Now that the keyframe model lists are synchronized, push the properties for
   // the individual KeyframeModels.

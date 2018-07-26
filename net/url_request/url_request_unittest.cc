@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+#include <algorithm>
 #include <utility>
 
 // This must be before Windows headers
@@ -811,9 +812,10 @@ class OCSPErrorTestDelegate : public TestDelegate {
 // Inherit PlatformTest since we require the autorelease pool on Mac OS X.
 class URLRequestTest : public PlatformTest, public WithScopedTaskEnvironment {
  public:
-  URLRequestTest() : default_context_(true) {
-    default_context_.set_network_delegate(&default_network_delegate_);
-    default_context_.set_net_log(&net_log_);
+  URLRequestTest()
+      : default_context_(std::make_unique<TestURLRequestContext>(true)) {
+    default_context_->set_network_delegate(&default_network_delegate_);
+    default_context_->set_net_log(&net_log_);
     job_factory_impl_ = new URLRequestJobFactoryImpl();
     job_factory_.reset(job_factory_impl_);
   }
@@ -827,10 +829,12 @@ class URLRequestTest : public PlatformTest, public WithScopedTaskEnvironment {
 
   void SetUp() override {
     SetUpFactory();
-    default_context_.set_job_factory(job_factory_.get());
-    default_context_.Init();
+    default_context_->set_job_factory(job_factory_.get());
+    default_context_->Init();
     PlatformTest::SetUp();
   }
+
+  void TearDown() override { default_context_.reset(); }
 
   virtual void SetUpFactory() {
     job_factory_impl_->SetProtocolHandler(
@@ -846,10 +850,7 @@ class URLRequestTest : public PlatformTest, public WithScopedTaskEnvironment {
     return &default_network_delegate_;
   }
 
-  const TestURLRequestContext& default_context() const {
-    return default_context_;
-  }
-
+  TestURLRequestContext& default_context() const { return *default_context_; }
 
   // Adds the TestJobInterceptor to the default context.
   TestJobInterceptor* AddTestInterceptor() {
@@ -881,7 +882,7 @@ class URLRequestTest : public PlatformTest, public WithScopedTaskEnvironment {
   TestNetworkDelegate default_network_delegate_;  // Must outlive URLRequest.
   URLRequestJobFactoryImpl* job_factory_impl_;
   std::unique_ptr<URLRequestJobFactory> job_factory_;
-  TestURLRequestContext default_context_;
+  std::unique_ptr<TestURLRequestContext> default_context_;
   base::ScopedTempDir temp_dir_;
 };
 
@@ -925,8 +926,8 @@ TEST_F(URLRequestTest, AboutBlankTest) {
   TestDelegate d;
   {
     std::unique_ptr<URLRequest> r(
-        default_context_.CreateRequest(GURL("about:blank"), DEFAULT_PRIORITY,
-                                       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+        default_context().CreateRequest(GURL("about:blank"), DEFAULT_PRIORITY,
+                                        &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -948,7 +949,7 @@ TEST_F(URLRequestTest, DataURLImageTest) {
   TestDelegate d;
   {
     // Use our nice little Chrome logo.
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         GURL("data:image/png;base64,"
              "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAADVklEQVQ4jX2TfUwUB"
              "BjG3w1y+HGcd9dxhXR8T4awOccJGgOSWclHImznLkTlSw0DDQXkrmgYgbUYnlQTqQ"
@@ -998,7 +999,7 @@ TEST_F(URLRequestTest, FileTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -1028,7 +1029,7 @@ TEST_F(URLRequestTest, FileTestCancel) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -1058,7 +1059,7 @@ TEST_F(URLRequestTest, FileTestFullSpecifiedRange) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         temp_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     HttpRequestHeaders headers;
@@ -1099,7 +1100,7 @@ TEST_F(URLRequestTest, FileTestHalfSpecifiedRange) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         temp_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     HttpRequestHeaders headers;
@@ -1132,7 +1133,7 @@ TEST_F(URLRequestTest, FileTestMultipleRanges) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         temp_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     HttpRequestHeaders headers;
@@ -1164,8 +1165,8 @@ TEST_F(URLRequestTest, AllowFileURLs) {
     TestDelegate d;
     CookieBlockingNetworkDelegate network_delegate;
     network_delegate.AddToWhitelist(real_temp_dir);
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1177,8 +1178,8 @@ TEST_F(URLRequestTest, AllowFileURLs) {
   {
     TestDelegate d;
     CookieBlockingNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1189,7 +1190,7 @@ TEST_F(URLRequestTest, AllowFileURLs) {
   }
 }
 
-#if defined(OS_POSIX) && !defined(OS_FUCHSIA)  // Because of symbolic links.
+#if defined(OS_POSIX)  // Because of symbolic links.
 
 TEST_F(URLRequestTest, SymlinksToFiles) {
   ASSERT_TRUE(temp_dir_.CreateUniqueTempDir());
@@ -1232,8 +1233,8 @@ TEST_F(URLRequestTest, SymlinksToFiles) {
   network_delegate.AddToWhitelist(real_good_dir);
   {
     TestDelegate d;
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         good_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1244,8 +1245,8 @@ TEST_F(URLRequestTest, SymlinksToFiles) {
 
   {
     TestDelegate d;
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         bad_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1287,8 +1288,8 @@ TEST_F(URLRequestTest, SymlinksToDirs) {
   network_delegate.AddToWhitelist(good_dir);
   {
     TestDelegate d;
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         good_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1299,8 +1300,8 @@ TEST_F(URLRequestTest, SymlinksToDirs) {
 
   {
     TestDelegate d;
-    default_context_.set_network_delegate(&network_delegate);
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    default_context().set_network_delegate(&network_delegate);
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         bad_file_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     d.RunUntilComplete();
@@ -1311,7 +1312,7 @@ TEST_F(URLRequestTest, SymlinksToDirs) {
   }
 }
 
-#endif  // defined(OS_POSIX) && !defined(OS_FUCHSIA)
+#endif  // defined(OS_POSIX)
 
 TEST_F(URLRequestTest, FileDirCancelTest) {
   // Put in mock resource provider.
@@ -1324,7 +1325,7 @@ TEST_F(URLRequestTest, FileDirCancelTest) {
     file_path = file_path.Append(FILE_PATH_LITERAL("net"));
     file_path = file_path.Append(FILE_PATH_LITERAL("data"));
 
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         FilePathToFileURL(file_path), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -1351,8 +1352,8 @@ TEST_F(URLRequestTest, FileDirOutputSanity) {
 
   TestDelegate d;
   std::unique_ptr<URLRequest> req(
-      default_context_.CreateRequest(FilePathToFileURL(path), DEFAULT_PRIORITY,
-                                     &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+      default_context().CreateRequest(FilePathToFileURL(path), DEFAULT_PRIORITY,
+                                      &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
 
@@ -1386,8 +1387,8 @@ TEST_F(URLRequestTest, FileDirRedirectNoCrash) {
 
   TestDelegate d;
   std::unique_ptr<URLRequest> req(
-      default_context_.CreateRequest(FilePathToFileURL(path), DEFAULT_PRIORITY,
-                                     &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+      default_context().CreateRequest(FilePathToFileURL(path), DEFAULT_PRIORITY,
+                                      &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
 
@@ -1401,7 +1402,7 @@ TEST_F(URLRequestTest, FileDirRedirectNoCrash) {
 // Don't accept the url "file:///" on windows. See http://crbug.com/1474.
 TEST_F(URLRequestTest, FileDirRedirectSingleSlash) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("file:///"), DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -1417,8 +1418,8 @@ TEST_F(URLRequestTest, InvalidUrlTest) {
   TestDelegate d;
   {
     std::unique_ptr<URLRequest> r(
-        default_context_.CreateRequest(GURL("invalid url"), DEFAULT_PRIORITY,
-                                       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+        default_context().CreateRequest(GURL("invalid url"), DEFAULT_PRIORITY,
+                                        &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -1469,7 +1470,7 @@ TEST_F(URLRequestTest, ResolveShortcutTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         FilePathToFileURL(base::FilePath(lnk_path)), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -2436,7 +2437,7 @@ TEST_F(URLRequestTest, MAYBE_NetworkDelegateProxyError) {
 // content is empty.
 TEST_F(URLRequestTest, RequestCompletionForEmptyResponse) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("data:,"), DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -2448,7 +2449,7 @@ TEST_F(URLRequestTest, RequestCompletionForEmptyResponse) {
 // correctly, both before and after start.
 TEST_F(URLRequestTest, SetPriorityBasic) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("http://test_intercept/foo"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   EXPECT_EQ(DEFAULT_PRIORITY, req->priority());
@@ -2467,7 +2468,7 @@ TEST_F(URLRequestTest, SetPriorityBasic) {
 // Start on it.
 TEST_F(URLRequestTest, SetJobPriorityBeforeJobStart) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("http://test_intercept/foo"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   EXPECT_EQ(DEFAULT_PRIORITY, req->priority());
@@ -2488,7 +2489,7 @@ TEST_F(URLRequestTest, SetJobPriorityBeforeJobStart) {
 // job.
 TEST_F(URLRequestTest, SetJobPriority) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("http://test_intercept/foo"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -2510,7 +2511,7 @@ TEST_F(URLRequestTest, SetJobPriority) {
 // is MAXIMUM_PRIORITY.
 TEST_F(URLRequestTest, PriorityIgnoreLimits) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("http://test_intercept/foo"), MAXIMUM_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   EXPECT_EQ(MAXIMUM_PRIORITY, req->priority());
@@ -2593,9 +2594,9 @@ TEST_F(URLRequestTest, DoNotSendCookies) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSend=1"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2607,9 +2608,9 @@ TEST_F(URLRequestTest, DoNotSendCookies) {
   // Verify that the cookie is set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2624,9 +2625,9 @@ TEST_F(URLRequestTest, DoNotSendCookies) {
   // Verify that the cookie isn't sent when LOAD_DO_NOT_SEND_COOKIES is set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->SetLoadFlags(LOAD_DO_NOT_SEND_COOKIES);
@@ -2649,9 +2650,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotUpdate=2"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2665,9 +2666,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies) {
   // Try to set-up another cookie and update the previous cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSave=1&CookieToNotUpdate=1"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->SetLoadFlags(LOAD_DO_NOT_SAVE_COOKIES);
@@ -2684,9 +2685,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies) {
   // Verify the cookies weren't saved or updated.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2710,9 +2711,9 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSend=1"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2725,9 +2726,9 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy) {
   // Verify that the cookie is set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2743,10 +2744,10 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy) {
   // Verify that the cookie isn't sent.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
     network_delegate.set_cookie_options(TestNetworkDelegate::NO_GET_COOKIES);
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2773,9 +2774,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotUpdate=2"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2788,10 +2789,10 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy) {
   // Try to set-up another cookie and update the previous cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
     network_delegate.set_cookie_options(TestNetworkDelegate::NO_SET_COOKIE);
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSave=1&CookieToNotUpdate=1"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2805,9 +2806,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy) {
   // Verify the cookies weren't saved or updated.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2830,9 +2831,9 @@ TEST_F(URLRequestTest, DoNotSaveEmptyCookies) {
   // Set up an empty cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2851,9 +2852,9 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy_Async) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSend=1"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2866,9 +2867,9 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy_Async) {
   // Verify that the cookie is set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2884,10 +2885,10 @@ TEST_F(URLRequestTest, DoNotSendCookies_ViaPolicy_Async) {
   // Verify that the cookie isn't sent.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
     network_delegate.set_cookie_options(TestNetworkDelegate::NO_GET_COOKIES);
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2908,9 +2909,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy_Async) {
   // Set up a cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotUpdate=2"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2923,10 +2924,10 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy_Async) {
   // Try to set-up another cookie and update the previous cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
     network_delegate.set_cookie_options(TestNetworkDelegate::NO_SET_COOKIE);
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/set-cookie?CookieToNotSave=1&CookieToNotUpdate=1"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2940,9 +2941,9 @@ TEST_F(URLRequestTest, DoNotSaveCookies_ViaPolicy_Async) {
   // Verify the cookies weren't saved or updated.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -2963,7 +2964,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   ASSERT_TRUE(test_server.Start());
 
   TestNetworkDelegate network_delegate;
-  default_context_.set_network_delegate(&network_delegate);
+  default_context().set_network_delegate(&network_delegate);
 
   const std::string kHost = "example.test";
   const std::string kSubHost = "subdomain.example.test";
@@ -2972,7 +2973,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // Set up two 'SameSite' cookies on 'example.test'
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost,
                            "/set-cookie?StrictSameSiteCookie=1;SameSite=Strict&"
                            "LaxSameSiteCookie=1;SameSite=Lax"),
@@ -2987,7 +2988,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // Verify that both cookies are sent for same-site requests.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kHost, "/"));
@@ -3006,7 +3007,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // happen for main frame browser-initiated navigations).
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kHost, "/"));
@@ -3023,7 +3024,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // Verify that both cookies are sent for same-registrable-domain requests.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kSubHost, "/"));
@@ -3041,7 +3042,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // Verify that neither cookie is not sent for cross-site requests.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kCrossHost, "/"));
@@ -3061,7 +3062,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // method is "safe".
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kHost, "/"));
@@ -3082,7 +3083,7 @@ TEST_F(URLRequestTest, SameSiteCookies) {
   // method is unsafe (e.g. POST).
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(kHost, "/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_site_for_cookies(test_server.GetURL(kHost, "/"));
@@ -3787,7 +3788,7 @@ TEST_F(URLRequestTest, CancelOnSuspend) {
   TestDelegate d;
   // Request that just hangs.
   GURL url(URLRequestFailedJob::GetMockHttpUrl(ERR_IO_PENDING));
-  std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> r(default_context().CreateRequest(
       url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   r->Start();
 
@@ -3854,9 +3855,9 @@ TEST_F(URLRequestTest, AcceptClockSkewCookieWithWrongDateTimezone) {
   // Set up an expired cookie.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(
             "/set-cookie?StillGood=1;expires=Mon,18-Apr-1977,22:50:13,GMT"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -3866,9 +3867,9 @@ TEST_F(URLRequestTest, AcceptClockSkewCookieWithWrongDateTimezone) {
   // Verify that the cookie is not set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -3879,9 +3880,9 @@ TEST_F(URLRequestTest, AcceptClockSkewCookieWithWrongDateTimezone) {
   // Set up a cookie with clock skew and "UTC" HTTP Date timezone specifier.
   {
     FixedDateNetworkDelegate network_delegate("18-Apr-1977 22:49:13 UTC");
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL(
             "/set-cookie?StillGood=1;expires=Mon,18-Apr-1977,22:50:13,GMT"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -3891,9 +3892,9 @@ TEST_F(URLRequestTest, AcceptClockSkewCookieWithWrongDateTimezone) {
   // Verify that the cookie is set.
   {
     TestNetworkDelegate network_delegate;
-    default_context_.set_network_delegate(&network_delegate);
+    default_context().set_network_delegate(&network_delegate);
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Cookie"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -3914,7 +3915,7 @@ TEST_F(URLRequestTest, DoNotOverrideReferrer) {
   // only the latter shall be respected.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->SetReferrer("http://foo.com/");
@@ -3933,7 +3934,7 @@ TEST_F(URLRequestTest, DoNotOverrideReferrer) {
   // shall be sent in the header.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_server.GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -3967,7 +3968,7 @@ class URLRequestTestHTTP : public URLRequestTest {
                               bool include_data) {
     static const char kData[] = "hello world";
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_method(request_method);
     if (include_data) {
@@ -4013,7 +4014,7 @@ class URLRequestTestHTTP : public URLRequestTest {
                                     const std::string& redirect_method,
                                     const std::string& expected_origin_value) {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_method(request_method);
     req->SetExtraRequestHeaderByName(HttpRequestHeaders::kOrigin,
@@ -4060,7 +4061,7 @@ class URLRequestTestHTTP : public URLRequestTest {
 
     for (int i = 0; i < kIterations; ++i) {
       TestDelegate d;
-      std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+      std::unique_ptr<URLRequest> r(default_context().CreateRequest(
           test_server_.GetURL("/echo"), DEFAULT_PRIORITY, &d,
           TRAFFIC_ANNOTATION_FOR_TESTS));
       r->set_method(method.c_str());
@@ -4083,7 +4084,7 @@ class URLRequestTestHTTP : public URLRequestTest {
 
   bool DoManyCookiesRequest(int num_cookies) {
     TestDelegate d;
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_server_.GetURL("/set-many-cookies?" +
                             base::IntToString(num_cookies)),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -4138,6 +4139,7 @@ class TestSSLConfigService : public SSLConfigService {
         token_binding_enabled_(token_binding_enabled),
         min_version_(kDefaultSSLVersionMin),
         max_version_(kDefaultSSLVersionMax) {}
+  ~TestSSLConfigService() override = default;
 
   void set_max_version(uint16_t version) { max_version_ = version; }
   void set_min_version(uint16_t version) { min_version_ = version; }
@@ -4155,9 +4157,6 @@ class TestSSLConfigService : public SSLConfigService {
     }
   }
 
- protected:
-  ~TestSSLConfigService() override = default;
-
  private:
   const bool online_rev_checking_;
   const bool rev_checking_required_local_anchors_;
@@ -4173,15 +4172,17 @@ class TokenBindingURLRequestTest : public URLRequestTestHTTP {
   TokenBindingURLRequestTest() = default;
 
   void SetUp() override {
-    default_context_.set_ssl_config_service(
-        new TestSSLConfigService(false, false, true));
-    channel_id_service_.reset(
-        new ChannelIDService(new DefaultChannelIDStore(NULL)));
-    default_context_.set_channel_id_service(channel_id_service_.get());
+    ssl_config_service_ =
+        std::make_unique<TestSSLConfigService>(false, false, true);
+    default_context().set_ssl_config_service(ssl_config_service_.get());
+    channel_id_service_ =
+        std::make_unique<ChannelIDService>(new DefaultChannelIDStore(NULL));
+    default_context().set_channel_id_service(channel_id_service_.get());
     URLRequestTestHTTP::SetUp();
   }
 
  protected:
+  std::unique_ptr<TestSSLConfigService> ssl_config_service_;
   std::unique_ptr<ChannelIDService> channel_id_service_;
 };
 
@@ -4195,7 +4196,7 @@ TEST_F(TokenBindingURLRequestTest, TokenBindingTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         https_test_server.GetURL("tokbind-ekm"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -4240,7 +4241,7 @@ TEST_F(TokenBindingURLRequestTest, ForwardTokenBinding) {
   {
     GURL redirect_url =
         https_test_server.GetURL("forward-tokbind?/tokbind-ekm");
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -4293,7 +4294,7 @@ TEST_F(TokenBindingURLRequestTest, DontForwardHeaderFromHttp) {
   {
     GURL redirect_url = http_server.GetURL(
         "forward-tokbind?" + https_test_server.GetURL("tokbind-ekm").spec());
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -4345,7 +4346,7 @@ TEST_F(TokenBindingURLRequestTest, ForwardWithoutTokenBinding) {
   {
     GURL redirect_url = token_binding_test_server.GetURL(
         "forward-tokbind?" + https_test_server.GetURL("tokbind-ekm").spec());
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -5086,7 +5087,7 @@ TEST_F(URLRequestTestHTTP, NetworkDelegateOverrideHeadersWithAuth) {
 
   {
     GURL url(http_test_server()->GetURL("/auth-basic"));
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
 
@@ -5100,7 +5101,7 @@ TEST_F(URLRequestTestHTTP, NetworkDelegateOverrideHeadersWithAuth) {
 
   {
     GURL url(http_test_server()->GetURL("/defaultresponse"));
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
 
@@ -5313,7 +5314,7 @@ TEST_F(URLRequestTestHTTP, GetTest_NoCache) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -5381,7 +5382,7 @@ TEST_F(URLRequestTestHTTP, GetTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -5406,7 +5407,7 @@ TEST_F(URLRequestTestHTTP, GetTest_GetFullRequestHeaders) {
   TestDelegate d;
   {
     GURL test_url(http_test_server()->GetURL("/defaultresponse"));
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     HttpRequestHeaders headers;
@@ -5435,7 +5436,7 @@ TEST_F(URLRequestTestHTTP, GetTestLoadTiming) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -5536,7 +5537,7 @@ TEST_F(URLRequestTestHTTP, RedirectLoadTiming) {
   GURL original_url =
       http_test_server()->GetURL("/server-redirect?" + destination_url.spec());
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -5577,7 +5578,7 @@ TEST_F(URLRequestTestHTTP, MultipleRedirectTest) {
   GURL original_url = http_test_server()->GetURL("/server-redirect?" +
                                                  middle_redirect_url.spec());
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -6305,7 +6306,7 @@ TEST_F(URLRequestTestHTTP, RedirectWithAdditionalHeadersTest) {
   GURL original_url =
       http_test_server()->GetURL("/server-redirect?" + destination_url.spec());
   RedirectWithAdditionalHeadersDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -6342,7 +6343,7 @@ TEST_F(URLRequestTestHTTP, RedirectWithHeaderRemovalTest) {
   GURL original_url =
       http_test_server()->GetURL("/server-redirect?" + destination_url.spec());
   RedirectWithHeaderRemovalDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetExtraRequestHeaderByName(kExtraHeaderToRemove, "dummy", false);
   req->Start();
@@ -6359,7 +6360,7 @@ TEST_F(URLRequestTestHTTP, RedirectWithHeaderRemovalTest) {
 TEST_F(URLRequestTestHTTP, CancelAfterStart) {
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         GURL("http://www.google.com/"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -6383,7 +6384,7 @@ TEST_F(URLRequestTestHTTP, CancelInResponseStarted) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -6406,7 +6407,7 @@ TEST_F(URLRequestTestHTTP, CancelOnDataReceived) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -6430,7 +6431,7 @@ TEST_F(URLRequestTestHTTP, CancelDuringEofRead) {
   TestDelegate d;
   {
     // This returns an empty response (With headers).
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -6453,7 +6454,7 @@ TEST_F(URLRequestTestHTTP, CancelByDestroyingAfterStart) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -6481,7 +6482,7 @@ TEST_F(URLRequestTestHTTP, CancelWhileReadingFromCache) {
   // populate cache
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/cachetime"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -6492,7 +6493,7 @@ TEST_F(URLRequestTestHTTP, CancelWhileReadingFromCache) {
   // cancel read from cache (see bug 990242)
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/cachetime"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -6521,7 +6522,7 @@ TEST_F(URLRequestTestHTTP, PostEmptyTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->set_method("POST");
@@ -6544,7 +6545,7 @@ TEST_F(URLRequestTestHTTP, PostFileTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->set_method("POST");
@@ -6593,7 +6594,7 @@ TEST_F(URLRequestTestHTTP, PostUnreadableFileTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->set_method("POST");
@@ -6656,7 +6657,7 @@ TEST_F(URLRequestTestHTTP, TestPostChunkedDataBeforeStart) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     std::unique_ptr<ChunkedUploadDataStream> upload_data_stream(
@@ -6680,7 +6681,7 @@ TEST_F(URLRequestTestHTTP, TestPostChunkedDataJustAfterStart) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     std::unique_ptr<ChunkedUploadDataStream> upload_data_stream(
@@ -6703,7 +6704,7 @@ TEST_F(URLRequestTestHTTP, TestPostChunkedDataAfterStart) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/echo"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     std::unique_ptr<ChunkedUploadDataStream> upload_data_stream(
@@ -6727,7 +6728,7 @@ TEST_F(URLRequestTestHTTP, ResponseHeadersTest) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/with-headers.html"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -6766,14 +6767,14 @@ TEST_F(URLRequestTestHTTP, ProcessSTS) {
 
   std::string test_server_hostname = https_test_server.GetURL("/").host();
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hsts-headers.html"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
   d.RunUntilComplete();
 
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   TransportSecurityState::PKPState pkp_state;
   EXPECT_TRUE(
@@ -6802,13 +6803,13 @@ TEST_F(URLRequestTestHTTP, STSNotProcessedOnIP) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hsts-headers.html"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
   d.RunUntilComplete();
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   EXPECT_FALSE(
       security_state->GetDynamicSTSState(test_server_hostname, &sts_state));
@@ -6816,9 +6817,6 @@ TEST_F(URLRequestTestHTTP, STSNotProcessedOnIP) {
 
 namespace {
 const char kExpectCTStaticHostname[] = "expect-ct.preloaded.test";
-const char kExpectStapleStaticHostname[] = "expect-staple.preloaded.test";
-const char kExpectStapleReportURI[] =
-    "http://report-uri.preloaded.test/expect-staple";
 const char kHPKPReportUri[] = "https://hpkp-report.test";
 }  // namespace
 
@@ -6836,13 +6834,13 @@ TEST_F(URLRequestTestHTTP, ProcessPKP) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hpkp-headers.html"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
   d.RunUntilComplete();
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   TransportSecurityState::PKPState pkp_state;
   EXPECT_FALSE(
@@ -7053,14 +7051,14 @@ TEST_F(URLRequestTestHTTP, PKPNotProcessedOnIP) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hpkp-headers.html"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
   d.RunUntilComplete();
 
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::PKPState pkp_state;
   EXPECT_FALSE(
       security_state->GetDynamicPKPState(test_server_hostname, &pkp_state));
@@ -7136,7 +7134,7 @@ TEST_F(URLRequestTestHTTP, ProcessSTSOnce) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hsts-multiple-headers.html"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
@@ -7144,7 +7142,7 @@ TEST_F(URLRequestTestHTTP, ProcessSTSOnce) {
 
   // We should have set parameters from the first header, not the second.
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   EXPECT_TRUE(
       security_state->GetDynamicSTSState(test_server_hostname, &sts_state));
@@ -7165,7 +7163,7 @@ TEST_F(URLRequestTestHTTP, ProcessSTSAndPKP) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hsts-and-hpkp-headers.html"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
@@ -7173,7 +7171,7 @@ TEST_F(URLRequestTestHTTP, ProcessSTSAndPKP) {
 
   // We should have set parameters from the first header, not the second.
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   TransportSecurityState::PKPState pkp_state;
   EXPECT_TRUE(
@@ -7209,14 +7207,14 @@ TEST_F(URLRequestTestHTTP, ProcessSTSAndPKP2) {
   std::string test_server_hostname = https_test_server.GetURL("/").host();
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       https_test_server.GetURL("/hsts-and-hpkp-headers2.html"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   request->Start();
   d.RunUntilComplete();
 
   TransportSecurityState* security_state =
-      default_context_.transport_security_state();
+      default_context().transport_security_state();
   TransportSecurityState::STSState sts_state;
   TransportSecurityState::PKPState pkp_state;
   EXPECT_TRUE(
@@ -7484,6 +7482,7 @@ class TestReportingService : public ReportingService {
   ~TestReportingService() override = default;
 
   void QueueReport(const GURL& url,
+                   const std::string& user_agent,
                    const std::string& group,
                    const std::string& type,
                    std::unique_ptr<const base::Value> body,
@@ -7634,7 +7633,17 @@ class TestNetworkErrorLoggingService : public NetworkErrorLoggingService {
     Header() = default;
     ~Header() = default;
 
+    // Returns whether the |received_ip_address| field matches any of the
+    // addresses in |address_list|.
+    bool MatchesAddressList(const AddressList& address_list) const {
+      return std::any_of(address_list.begin(), address_list.end(),
+                         [this](const IPEndPoint& endpoint) {
+                           return endpoint.address() == received_ip_address;
+                         });
+    }
+
     url::Origin origin;
+    IPAddress received_ip_address;
     std::string value;
   };
 
@@ -7645,15 +7654,18 @@ class TestNetworkErrorLoggingService : public NetworkErrorLoggingService {
 
   ~TestNetworkErrorLoggingService() override = default;
 
-  void OnHeader(const url::Origin& origin, const std::string& value) override {
+  void OnHeader(const url::Origin& origin,
+                const IPAddress& received_ip_address,
+                const std::string& value) override {
     Header header;
     header.origin = origin;
+    header.received_ip_address = received_ip_address;
     header.value = value;
     headers_.push_back(header);
   }
 
-  void OnRequest(const RequestDetails& details) override {
-    errors_.push_back(details);
+  void OnRequest(RequestDetails details) override {
+    errors_.push_back(std::move(details));
   }
 
   void RemoveBrowsingData(const base::RepeatingCallback<bool(const GURL&)>&
@@ -7682,6 +7694,11 @@ std::unique_ptr<test_server::HttpResponse> SendEmptyResponse(
     const test_server::HttpRequest& request) {
   return std::make_unique<test_server::RawHttpResponse>("", "");
 }
+
+// Distinct User-Agent header values that we use to ensure that URLRequest
+// passes along user agents into NEL reports correctly.
+constexpr char kHeaderUserAgent[] = "MozillaFromHeader/1.0";
+constexpr char kSettingsUserAgent[] = "MozillaFromSettings/1.0";
 
 }  // namespace
 
@@ -7746,6 +7763,9 @@ TEST_F(URLRequestTestHTTP, ProcessNelHeaderHttps) {
 
   ASSERT_EQ(1u, nel_service.headers().size());
   EXPECT_EQ(url::Origin::Create(request_url), nel_service.headers()[0].origin);
+  AddressList address_list;
+  EXPECT_TRUE(https_test_server.GetAddressList(&address_list));
+  EXPECT_TRUE(nel_service.headers()[0].MatchesAddressList(address_list));
   EXPECT_EQ("foo", nel_service.headers()[0].value);
 }
 
@@ -7876,13 +7896,109 @@ TEST_F(URLRequestTestHTTP, ForwardErrorToNelHttps_Real) {
   EXPECT_EQ(ERR_EMPTY_RESPONSE, nel_service.errors()[0].type);
 }
 
+TEST_F(URLRequestTestHTTP, NelReportUserAgentWithHeaderWithSettings) {
+  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
+  ASSERT_TRUE(https_test_server.Start());
+  GURL request_url = https_test_server.base_url();
+
+  StaticHttpUserAgentSettings settings("en", kSettingsUserAgent);
+  TestNetworkDelegate network_delegate;
+  TestNetworkErrorLoggingService nel_service;
+  TestURLRequestContext context(true);
+  context.set_network_delegate(&network_delegate);
+  context.set_network_error_logging_service(&nel_service);
+  context.set_http_user_agent_settings(&settings);
+  context.Init();
+
+  TestDelegate d;
+  std::unique_ptr<URLRequest> request(context.CreateRequest(
+      request_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+  request->SetExtraRequestHeaderByName("User-Agent", kHeaderUserAgent, true);
+  request->Start();
+  d.RunUntilComplete();
+
+  ASSERT_EQ(1u, nel_service.errors().size());
+  EXPECT_EQ(kHeaderUserAgent, nel_service.errors()[0].user_agent);
+}
+
+TEST_F(URLRequestTestHTTP, NelReportUserAgentWithHeaderWithoutSettings) {
+  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
+  ASSERT_TRUE(https_test_server.Start());
+  GURL request_url = https_test_server.base_url();
+
+  TestNetworkDelegate network_delegate;
+  TestNetworkErrorLoggingService nel_service;
+  TestURLRequestContext context(true);
+  context.set_network_delegate(&network_delegate);
+  context.set_network_error_logging_service(&nel_service);
+  context.set_create_default_http_user_agent_settings(false);
+  context.Init();
+
+  TestDelegate d;
+  std::unique_ptr<URLRequest> request(context.CreateRequest(
+      request_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+  request->SetExtraRequestHeaderByName("User-Agent", kHeaderUserAgent, true);
+  request->Start();
+  d.RunUntilComplete();
+
+  ASSERT_EQ(1u, nel_service.errors().size());
+  EXPECT_EQ(kHeaderUserAgent, nel_service.errors()[0].user_agent);
+}
+
+TEST_F(URLRequestTestHTTP, NelReportUserAgentWithoutHeaderWithSettings) {
+  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
+  ASSERT_TRUE(https_test_server.Start());
+  GURL request_url = https_test_server.base_url();
+
+  StaticHttpUserAgentSettings settings("en", kSettingsUserAgent);
+  TestNetworkDelegate network_delegate;
+  TestNetworkErrorLoggingService nel_service;
+  TestURLRequestContext context(true);
+  context.set_network_delegate(&network_delegate);
+  context.set_network_error_logging_service(&nel_service);
+  context.set_http_user_agent_settings(&settings);
+  context.Init();
+
+  TestDelegate d;
+  std::unique_ptr<URLRequest> request(context.CreateRequest(
+      request_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+  request->Start();
+  d.RunUntilComplete();
+
+  ASSERT_EQ(1u, nel_service.errors().size());
+  EXPECT_EQ(kSettingsUserAgent, nel_service.errors()[0].user_agent);
+}
+
+TEST_F(URLRequestTestHTTP, NelReportUserAgentWithoutHeaderWithoutSettings) {
+  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
+  ASSERT_TRUE(https_test_server.Start());
+  GURL request_url = https_test_server.base_url();
+
+  TestNetworkDelegate network_delegate;
+  TestNetworkErrorLoggingService nel_service;
+  TestURLRequestContext context(true);
+  context.set_network_delegate(&network_delegate);
+  context.set_network_error_logging_service(&nel_service);
+  context.set_create_default_http_user_agent_settings(false);
+  context.Init();
+
+  TestDelegate d;
+  std::unique_ptr<URLRequest> request(context.CreateRequest(
+      request_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
+  request->Start();
+  d.RunUntilComplete();
+
+  ASSERT_EQ(1u, nel_service.errors().size());
+  EXPECT_EQ("", nel_service.errors()[0].user_agent);
+}
+
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 
 TEST_F(URLRequestTestHTTP, ContentTypeNormalizationTest) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/content-type-normalization.html"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -7924,7 +8040,7 @@ TEST_F(URLRequestTestHTTP, RestrictFileRedirects) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/redirect-to-file.html"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -7941,7 +8057,7 @@ TEST_F(URLRequestTestHTTP, RestrictDataRedirects) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/redirect-to-data.html"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -7960,7 +8076,7 @@ TEST_F(URLRequestTestHTTP, RedirectToInvalidURL) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/redirect-to-invalid-url.html"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -7981,7 +8097,7 @@ TEST_F(URLRequestTestHTTP, CacheRedirect) {
 
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
     d.RunUntilComplete();
@@ -7992,7 +8108,7 @@ TEST_F(URLRequestTestHTTP, CacheRedirect) {
 
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         redirect_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
     d.RunUntilRedirect();
@@ -8024,7 +8140,7 @@ TEST_F(URLRequestTestHTTP, NoCacheOnNetworkDelegateRedirect) {
         redirect_to_url);
 
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         initial_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
     d.RunUntilComplete();
@@ -8035,7 +8151,7 @@ TEST_F(URLRequestTestHTTP, NoCacheOnNetworkDelegateRedirect) {
 
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         initial_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
     d.RunUntilComplete();
@@ -8058,7 +8174,7 @@ TEST_F(URLRequestTestHTTP, UnsafeRedirectToWhitelistedUnsafeURL) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/whatever"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -8085,7 +8201,7 @@ TEST_F(URLRequestTestHTTP, UnsafeRedirectToDifferentUnsafeURL) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/whatever"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -8113,7 +8229,7 @@ TEST_F(URLRequestTestHTTP, UnsafeRedirectWithDifferentReferenceFragment) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -8142,7 +8258,7 @@ TEST_F(URLRequestTestHTTP, RedirectWithReferenceFragmentAndUnrelatedUnsafeUrl) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -8170,7 +8286,7 @@ TEST_F(URLRequestTestHTTP, RedirectWithReferenceFragment) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -8193,7 +8309,7 @@ TEST_F(URLRequestTestHTTP, RedirectJobWithReferenceFragment) {
   GURL redirect_url(http_test_server()->GetURL("/echo"));
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> r(default_context().CreateRequest(
       original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
   std::unique_ptr<URLRequestRedirectJob> job(new URLRequestRedirectJob(
@@ -8214,7 +8330,7 @@ TEST_F(URLRequestTestHTTP, UnsupportedReferrerScheme) {
 
   const std::string referrer("foobar://totally.legit.referrer");
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetReferrer(referrer);
@@ -8228,7 +8344,7 @@ TEST_F(URLRequestTestHTTP, NoUserPassInReferrer) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetReferrer("http://user:pass@foo.com/");
@@ -8242,7 +8358,7 @@ TEST_F(URLRequestTestHTTP, NoFragmentInReferrer) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetReferrer("http://foo.com/test#fragment");
@@ -8256,7 +8372,7 @@ TEST_F(URLRequestTestHTTP, EmptyReferrerAfterValidReferrer) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Referer"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetReferrer("http://foo.com/test#fragment");
@@ -8273,7 +8389,7 @@ TEST_F(URLRequestTestHTTP, CancelRedirect) {
   TestDelegate d;
   {
     d.set_cancel_in_received_redirect(true);
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         http_test_server()->GetURL("/redirect-test.html"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -8292,7 +8408,7 @@ TEST_F(URLRequestTestHTTP, DeferredRedirect) {
   TestDelegate d;
   {
     GURL test_url(http_test_server()->GetURL("/redirect-test.html"));
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     req->Start();
@@ -8327,7 +8443,7 @@ TEST_F(URLRequestTestHTTP, DeferredRedirect_GetFullRequestHeaders) {
   TestDelegate d;
   {
     GURL test_url(http_test_server()->GetURL("/redirect-test.html"));
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     EXPECT_FALSE(d.have_full_request_headers());
@@ -8364,7 +8480,7 @@ TEST_F(URLRequestTestHTTP, DeferredRedirect_ModifiedRequestHeaders) {
   TestDelegate d;
   {
     GURL test_url(http_test_server()->GetURL("/redirect-test.html"));
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     // Set initial headers for the request.
@@ -8415,7 +8531,7 @@ TEST_F(URLRequestTestHTTP, CancelDeferredRedirect) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         http_test_server()->GetURL("/redirect-test.html"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     req->Start();
@@ -8439,7 +8555,7 @@ TEST_F(URLRequestTestHTTP, VaryHeader) {
   // Populate the cache.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         http_test_server()->GetURL("/echoheadercache?foo"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     HttpRequestHeaders headers;
@@ -8456,7 +8572,7 @@ TEST_F(URLRequestTestHTTP, VaryHeader) {
   // Expect a cache hit.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         http_test_server()->GetURL("/echoheadercache?foo"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     HttpRequestHeaders headers;
@@ -8475,7 +8591,7 @@ TEST_F(URLRequestTestHTTP, VaryHeader) {
   // Expect a cache miss.
   {
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         http_test_server()->GetURL("/echoheadercache?foo"), DEFAULT_PRIORITY,
         &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     HttpRequestHeaders headers;
@@ -8500,7 +8616,7 @@ TEST_F(URLRequestTestHTTP, BasicAuth) {
     TestDelegate d;
     d.set_credentials(AuthCredentials(kUser, kSecret));
 
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/auth-basic"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -8517,7 +8633,7 @@ TEST_F(URLRequestTestHTTP, BasicAuth) {
     TestDelegate d;
     d.set_credentials(AuthCredentials(kUser, kSecret));
 
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/auth-basic"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->SetLoadFlags(LOAD_VALIDATE_CACHE);
@@ -8603,7 +8719,7 @@ TEST_F(URLRequestTestHTTP, BasicAuthLoadTiming) {
     TestDelegate d;
     d.set_credentials(AuthCredentials(kUser, kSecret));
 
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/auth-basic"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -8636,7 +8752,7 @@ TEST_F(URLRequestTestHTTP, BasicAuthLoadTiming) {
     TestDelegate d;
     d.set_credentials(AuthCredentials(kUser, kSecret));
 
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         http_test_server()->GetURL("/auth-basic"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->SetLoadFlags(LOAD_VALIDATE_CACHE);
@@ -8667,7 +8783,7 @@ TEST_F(URLRequestTestHTTP, Post302RedirectGet) {
   const char kData[] = "hello world";
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/redirect-to-echoall"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->set_method("POST");
@@ -8828,7 +8944,7 @@ TEST_F(URLRequestTestHTTP, NoRedirectOn308WithoutLocationHeader) {
   TestDelegate d;
   const GURL url = http_test_server()->GetURL("/308-without-location-header");
 
-  std::unique_ptr<URLRequest> request(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> request(default_context().CreateRequest(
       url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
   request->Start();
@@ -8848,7 +8964,7 @@ TEST_F(URLRequestTestHTTP, Redirect302PreserveReferenceFragment) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         original_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
     r->Start();
@@ -8869,7 +8985,7 @@ TEST_F(URLRequestTestHTTP, RedirectPreserveFirstPartyURL) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->set_site_for_cookies(first_party_url);
 
@@ -8891,7 +9007,7 @@ TEST_F(URLRequestTestHTTP, RedirectUpdateFirstPartyURL) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->set_site_for_cookies(original_first_party_url);
     r->set_first_party_url_policy(
@@ -8912,7 +9028,7 @@ TEST_F(URLRequestTestHTTP, InterceptPost302RedirectGet) {
   const char kData[] = "hello world";
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->set_method("POST");
@@ -8939,7 +9055,7 @@ TEST_F(URLRequestTestHTTP, InterceptPost307RedirectPost) {
   const char kData[] = "hello world";
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->set_method("POST");
@@ -9011,7 +9127,7 @@ TEST_F(URLRequestTestHTTP, OverrideAcceptLanguage) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Accept-Language"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   HttpRequestHeaders headers;
@@ -9027,7 +9143,7 @@ TEST_F(URLRequestTestHTTP, DefaultAcceptEncoding) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Accept-Encoding"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   HttpRequestHeaders headers;
@@ -9043,7 +9159,7 @@ TEST_F(URLRequestTestHTTP, OverrideAcceptEncoding) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Accept-Encoding"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   HttpRequestHeaders headers;
@@ -9060,7 +9176,7 @@ TEST_F(URLRequestTestHTTP, SetAcceptCharset) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?Accept-Charset"),
       DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   HttpRequestHeaders headers;
@@ -9076,12 +9192,12 @@ TEST_F(URLRequestTestHTTP, DefaultUserAgent) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?User-Agent"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
-  EXPECT_EQ(default_context_.http_user_agent_settings()->GetUserAgent(),
+  EXPECT_EQ(default_context().http_user_agent_settings()->GetUserAgent(),
             d.data_received());
 }
 
@@ -9097,7 +9213,7 @@ TEST_F(URLRequestTestHTTP, MAYBE_OverrideUserAgent) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/echoheader?User-Agent"), DEFAULT_PRIORITY,
       &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   HttpRequestHeaders headers;
@@ -9147,7 +9263,7 @@ TEST_F(URLRequestTestHTTP, SetSubsequentJobPriority) {
   ASSERT_TRUE(http_test_server()->Start());
 
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/defaultresponse"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   EXPECT_EQ(DEFAULT_PRIORITY, req->priority());
@@ -9178,7 +9294,7 @@ TEST_F(URLRequestTestHTTP, SetSubsequentJobPriority) {
 TEST_F(URLRequestTestHTTP, NetworkSuspendTest) {
   // Create a new HttpNetworkLayer that thinks it's suspended.
   std::unique_ptr<HttpNetworkLayer> network_layer(new HttpNetworkLayer(
-      default_context_.http_transaction_factory()->GetSession()));
+      default_context().http_transaction_factory()->GetSession()));
   network_layer->OnSuspend();
 
   HttpCache http_cache(std::move(network_layer),
@@ -9237,7 +9353,7 @@ class FailingHttpTransactionFactory : public HttpTransactionFactory {
 // behaviors.
 TEST_F(URLRequestTestHTTP, NetworkCancelAfterCreateTransactionFailsTest) {
   FailingHttpTransactionFactory http_transaction_factory(
-      default_context_.http_transaction_factory()->GetSession());
+      default_context().http_transaction_factory()->GetSession());
   TestURLRequestContext context(true);
   context.set_http_transaction_factory(&http_transaction_factory);
   context.set_network_delegate(default_network_delegate());
@@ -9270,7 +9386,7 @@ TEST_F(URLRequestTestHTTP, NetworkAccessedSetOnNetworkRequest) {
 
   TestDelegate d;
   GURL test_url(http_test_server()->GetURL("/"));
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
   req->Start();
@@ -9284,7 +9400,7 @@ TEST_F(URLRequestTestHTTP, NetworkAccessedClearOnCachedResponse) {
 
   // Populate the cache.
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/cachetime"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
@@ -9294,9 +9410,9 @@ TEST_F(URLRequestTestHTTP, NetworkAccessedClearOnCachedResponse) {
   EXPECT_TRUE(req->response_info().network_accessed);
   EXPECT_FALSE(req->response_info().was_cached);
 
-  req = default_context_.CreateRequest(http_test_server()->GetURL("/cachetime"),
-                                       DEFAULT_PRIORITY, &d,
-                                       TRAFFIC_ANNOTATION_FOR_TESTS);
+  req = default_context().CreateRequest(
+      http_test_server()->GetURL("/cachetime"), DEFAULT_PRIORITY, &d,
+      TRAFFIC_ANNOTATION_FOR_TESTS);
   req->Start();
   d.RunUntilComplete();
 
@@ -9310,7 +9426,7 @@ TEST_F(URLRequestTestHTTP, NetworkAccessedClearOnLoadOnlyFromCache) {
 
   TestDelegate d;
   GURL test_url(http_test_server()->GetURL("/"));
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       test_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->SetLoadFlags(LOAD_ONLY_FROM_CACHE | LOAD_SKIP_CACHE_VALIDATION);
 
@@ -9327,7 +9443,7 @@ TEST_F(URLRequestTestHTTP, ThrottledPriority) {
 
   TestDelegate d;
   GURL test_url(http_test_server()->GetURL("/"));
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       test_url, THROTTLED, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   req->Start();
   d.RunUntilComplete();
@@ -9548,7 +9664,7 @@ class URLRequestTestReferrerPolicy : public URLRequestTest {
         origin_server_->GetURL("/server-redirect?" + destination_url.spec());
 
     TestDelegate d;
-    std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> req(default_context().CreateRequest(
         origin_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     req->set_referrer_policy(policy);
     req->SetReferrer(referrer.spec());
@@ -10686,7 +10802,7 @@ TEST_F(HTTPSRequestTest, SSLSessionCacheShardTest) {
 class HTTPSFallbackTest : public TestWithScopedTaskEnvironment {
  public:
   HTTPSFallbackTest() : context_(true) {
-    ssl_config_service_ = new TestSSLConfigService(
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
         false /* online revocation checking */,
         false /* require rev. checking for local anchors */,
         false /* token binding enabled */);
@@ -10730,10 +10846,10 @@ class HTTPSFallbackTest : public TestWithScopedTaskEnvironment {
   }
 
  private:
+  std::unique_ptr<TestSSLConfigService> ssl_config_service_;
   TestDelegate delegate_;
   TestURLRequestContext context_;
   std::unique_ptr<URLRequest> request_;
-  scoped_refptr<TestSSLConfigService> ssl_config_service_;
 };
 
 // Tests the TLS 1.0 fallback doesn't happen.
@@ -10965,14 +11081,15 @@ class HTTPSOCSPTest : public HTTPSRequestTest {
   // connetions to testserver. This can be overridden in test subclasses for
   // different behaviour.
   virtual void SetupContext() {
-    context_.set_ssl_config_service(
-        new TestSSLConfigService(true /* online revocation checking */,
-                                 false /* require rev. checking for local
-                                          anchors */,
-                                 false /* token binding enabled */));
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
+        true /* online revocation checking */,
+        false /* require rev. checking for local anchors */,
+        false /* token binding enabled */);
+    context_.set_ssl_config_service(ssl_config_service_.get());
   }
 
   std::unique_ptr<ScopedTestRoot> test_root_;
+  std::unique_ptr<TestSSLConfigService> ssl_config_service_;
   TestURLRequestContext context_;
   std::unique_ptr<ScopedTestEVPolicy> ev_test_policy_;
 };
@@ -11273,230 +11390,6 @@ TEST_F(HTTPSOCSPTest, MAYBE_RevokedStapled) {
   EXPECT_TRUE(cert_status & CERT_STATUS_REV_CHECKING_ENABLED);
 }
 
-TEST_F(HTTPSOCSPTest, ExpectStapleReportSentOnMissing) {
-  SetTransportSecurityStateSourceForTesting(&test_default::kHSTSSource);
-
-  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
-  https_test_server.SetSSLConfig(
-      net::EmbeddedTestServer::CERT_COMMON_NAME_IS_DOMAIN);
-  https_test_server.ServeFilesFromSourceDirectory(
-      base::FilePath(kTestFilePath));
-  ASSERT_TRUE(https_test_server.Start());
-
-  // Set up a MockCertVerifier to accept the certificate that the server sends,
-  // but not provide any OCSP information.
-  scoped_refptr<X509Certificate> cert = https_test_server.GetCertificate();
-  ASSERT_TRUE(cert);
-  MockCertVerifier cert_verifier;
-  CertVerifyResult verify_result;
-  verify_result.verified_cert = cert;
-  verify_result.is_issued_by_known_root = true;
-  verify_result.ocsp_result.response_status = OCSPVerifyResult::MISSING;
-  cert_verifier.AddResultForCert(cert.get(), verify_result, OK);
-
-  // Catch the Expect-Staple report.
-  TransportSecurityState transport_security_state;
-  MockCertificateReportSender mock_report_sender;
-  transport_security_state.SetReportSender(&mock_report_sender);
-
-  // Use a MockHostResolver (which by default maps all hosts to 127.0.0.1) so
-  // that the request can be sent to a site on the Expect-Staple preload list.
-  MockHostResolver host_resolver;
-  TestNetworkDelegate network_delegate;
-  TestURLRequestContext context(true);
-  context.set_host_resolver(&host_resolver);
-  context.set_transport_security_state(&transport_security_state);
-  context.set_network_delegate(&network_delegate);
-  context.set_cert_verifier(&cert_verifier);
-  context.Init();
-
-  // Now send a request to trigger the violation.
-  TestDelegate d;
-  GURL url = https_test_server.GetURL("/");
-  GURL::Replacements replace_host;
-  replace_host.SetHostStr(kExpectStapleStaticHostname);
-  url = url.ReplaceComponents(replace_host);
-  std::unique_ptr<URLRequest> violating_request(context.CreateRequest(
-      url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
-  violating_request->Start();
-  d.RunUntilComplete();
-
-  // Confirm a report was sent.
-  EXPECT_FALSE(mock_report_sender.latest_report().empty());
-  EXPECT_EQ(GURL(kExpectStapleReportURI),
-            mock_report_sender.latest_report_uri());
-}
-
-// Tests that Expect-Staple reports are not sent for connections on which there
-// is a certificate error.
-TEST_F(HTTPSOCSPTest, ExpectStapleReportNotSentOnMissingWithCertError) {
-  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
-  https_test_server.SetSSLConfig(
-      net::EmbeddedTestServer::CERT_COMMON_NAME_IS_DOMAIN);
-  https_test_server.ServeFilesFromSourceDirectory(
-      base::FilePath(kTestFilePath));
-  ASSERT_TRUE(https_test_server.Start());
-
-  // Set up a MockCertVerifier to report an error for the certificate
-  // and indicate that there was no stapled OCSP response.
-  scoped_refptr<X509Certificate> cert = https_test_server.GetCertificate();
-  ASSERT_TRUE(cert);
-  MockCertVerifier cert_verifier;
-  CertVerifyResult verify_result;
-  verify_result.cert_status = CERT_STATUS_DATE_INVALID;
-  verify_result.verified_cert = cert;
-  verify_result.is_issued_by_known_root = true;
-  verify_result.ocsp_result.response_status = OCSPVerifyResult::MISSING;
-  cert_verifier.AddResultForCert(cert.get(), verify_result,
-                                 ERR_CERT_DATE_INVALID);
-
-  // Set up a mock report sender so that the test can check that an
-  // Expect-Staple report is not sent.
-  TransportSecurityState transport_security_state;
-  MockCertificateReportSender mock_report_sender;
-  transport_security_state.SetReportSender(&mock_report_sender);
-
-  TestNetworkDelegate network_delegate;
-  TestURLRequestContext context(true);
-
-  // Force |kExpectStapleStaticHostname| to resolve to |https_test_server|.
-  MockHostResolver host_resolver;
-  context.set_host_resolver(&host_resolver);
-
-  context.set_transport_security_state(&transport_security_state);
-  context.set_network_delegate(&network_delegate);
-  context.set_cert_verifier(&cert_verifier);
-  context.Init();
-
-  // Make a connection to |kExpectStapleStaticHostname|. Because the
-  // |verify_result| used with the |cert_verifier| will indicate a certificate
-  // error, an Expect-Staple report should not be sent.
-  TestDelegate d;
-  GURL url = https_test_server.GetURL("/");
-  GURL::Replacements replace_host;
-  replace_host.SetHostStr(kExpectStapleStaticHostname);
-  url = url.ReplaceComponents(replace_host);
-  std::unique_ptr<URLRequest> violating_request(context.CreateRequest(
-      url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
-  violating_request->Start();
-  d.RunUntilComplete();
-
-  // Confirm a report was not sent.
-  EXPECT_TRUE(mock_report_sender.latest_report().empty());
-  EXPECT_EQ(GURL(), mock_report_sender.latest_report_uri());
-}
-
-TEST_F(HTTPSOCSPTest, ExpectStapleReportNotSentOnValid) {
-  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
-  https_test_server.SetSSLConfig(
-      net::EmbeddedTestServer::CERT_COMMON_NAME_IS_DOMAIN);
-  https_test_server.ServeFilesFromSourceDirectory(
-      base::FilePath(kTestFilePath));
-  ASSERT_TRUE(https_test_server.Start());
-
-  // Set up a MockCertVerifier to accept the certificate that the server sends,
-  // and provide GOOD revocation status.
-  scoped_refptr<X509Certificate> cert = https_test_server.GetCertificate();
-  ASSERT_TRUE(cert);
-  MockCertVerifier cert_verifier;
-  CertVerifyResult verify_result;
-  verify_result.verified_cert = cert;
-  verify_result.is_issued_by_known_root = true;
-  verify_result.ocsp_result.response_status = OCSPVerifyResult::PROVIDED;
-  verify_result.ocsp_result.revocation_status = OCSPRevocationStatus::GOOD;
-  cert_verifier.AddResultForCert(cert.get(), verify_result, OK);
-
-  // Catch the Expect-Staple report.
-  TransportSecurityState transport_security_state;
-  MockCertificateReportSender mock_report_sender;
-  transport_security_state.SetReportSender(&mock_report_sender);
-
-  // Use a MockHostResolver (which by default maps all hosts to 127.0.0.1) so
-  // that the request can be sent to a site on the Expect-Staple preload list.
-  MockHostResolver host_resolver;
-  TestNetworkDelegate network_delegate;
-  TestURLRequestContext context(true);
-  context.set_host_resolver(&host_resolver);
-  context.set_transport_security_state(&transport_security_state);
-  context.set_network_delegate(&network_delegate);
-  context.set_cert_verifier(&cert_verifier);
-  context.Init();
-
-  // This request should not not trigger an Expect-Staple violation.
-  TestDelegate d;
-  GURL url = https_test_server.GetURL("/");
-  GURL::Replacements replace_host;
-  replace_host.SetHostStr(kExpectStapleStaticHostname);
-  url = url.ReplaceComponents(replace_host);
-  std::unique_ptr<URLRequest> ok_request(context.CreateRequest(
-      url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
-  ok_request->Start();
-  d.RunUntilComplete();
-
-  // Check that no report was sent.
-  EXPECT_TRUE(mock_report_sender.latest_report().empty());
-  EXPECT_EQ(GURL(), mock_report_sender.latest_report_uri());
-}
-
-// Tests that an Expect-Staple report is not sent when OCSP details are not
-// checked on the connection.
-TEST_F(HTTPSOCSPTest, ExpectStapleReportNotSentOnNotChecked) {
-  EmbeddedTestServer https_test_server(net::EmbeddedTestServer::TYPE_HTTPS);
-  https_test_server.SetSSLConfig(
-      net::EmbeddedTestServer::CERT_COMMON_NAME_IS_DOMAIN);
-  https_test_server.ServeFilesFromSourceDirectory(
-      base::FilePath(kTestFilePath));
-  ASSERT_TRUE(https_test_server.Start());
-
-  // Set up a MockCertVerifier to accept the certificate that the server sends,
-  // and set |ocsp_result| to indicate that OCSP stapling details were not
-  // checked on the connection.
-  scoped_refptr<X509Certificate> cert = https_test_server.GetCertificate();
-  ASSERT_TRUE(cert);
-  MockCertVerifier cert_verifier;
-  CertVerifyResult verify_result;
-  verify_result.verified_cert = cert;
-  verify_result.is_issued_by_known_root = true;
-  verify_result.ocsp_result.response_status = OCSPVerifyResult::NOT_CHECKED;
-  cert_verifier.AddResultForCert(cert.get(), verify_result, OK);
-
-  // Set up a mock report sender so that the test can check that an
-  // Expect-Staple report is not sent.
-  TransportSecurityState transport_security_state;
-  MockCertificateReportSender mock_report_sender;
-  transport_security_state.SetReportSender(&mock_report_sender);
-
-  TestNetworkDelegate network_delegate;
-  TestURLRequestContext context(true);
-
-  // Force |kExpectStapleStaticHostname| to resolve to |https_test_server|.
-  MockHostResolver host_resolver;
-  context.set_host_resolver(&host_resolver);
-
-  context.set_transport_security_state(&transport_security_state);
-  context.set_network_delegate(&network_delegate);
-  context.set_cert_verifier(&cert_verifier);
-  context.Init();
-
-  // Make a connection to |kExpectStapleStaticHostname|. Because the
-  // |verify_result| used with the |cert_verifier| will indicate that OCSP
-  // stapling details were not checked on the connection, an Expect-Staple
-  // report should not be sent.
-  TestDelegate d;
-  GURL url = https_test_server.GetURL("/");
-  GURL::Replacements replace_host;
-  replace_host.SetHostStr(kExpectStapleStaticHostname);
-  url = url.ReplaceComponents(replace_host);
-  std::unique_ptr<URLRequest> ok_request(context.CreateRequest(
-      url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
-  ok_request->Start();
-  d.RunUntilComplete();
-
-  // Check that no report was sent.
-  EXPECT_TRUE(mock_report_sender.latest_report().empty());
-  EXPECT_EQ(GURL(), mock_report_sender.latest_report_uri());
-}
-
 static const struct OCSPVerifyTestData {
   std::vector<SpawnedTestServer::SSLOptions::OCSPSingleResponse> ocsp_responses;
   SpawnedTestServer::SSLOptions::OCSPProduced ocsp_produced;
@@ -11792,10 +11685,11 @@ INSTANTIATE_TEST_CASE_P(OCSPVerify,
 class HTTPSAIATest : public HTTPSOCSPTest {
  public:
   void SetupContext() override {
-    context_.set_ssl_config_service(new TestSSLConfigService(
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
         false /* online revocation checking */,
         false /* require rev. checking for local anchors */,
-        false /* token binding enabled */));
+        false /* token binding enabled */);
+    context_.set_ssl_config_service(ssl_config_service_.get());
   }
 };
 
@@ -11836,10 +11730,11 @@ TEST_F(HTTPSAIATest, AIAFetching) {
 class HTTPSHardFailTest : public HTTPSOCSPTest {
  protected:
   void SetupContext() override {
-    context_.set_ssl_config_service(new TestSSLConfigService(
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
         false /* online revocation checking */,
         true /* require rev. checking for local anchors */,
-        false /* token binding enabled */));
+        false /* token binding enabled */);
+    context_.set_ssl_config_service(ssl_config_service_.get());
   }
 };
 
@@ -11880,11 +11775,11 @@ TEST_F(HTTPSHardFailTest, FailsOnOCSPInvalid) {
 class HTTPSEVCRLSetTest : public HTTPSOCSPTest {
  protected:
   void SetupContext() override {
-    context_.set_ssl_config_service(
-        new TestSSLConfigService(false /* online revocation checking */,
-                                 false /* require rev. checking for local
-                                          anchors */,
-                                 false /* token binding enabled */));
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
+        false /* online revocation checking */,
+        false /* require rev. checking for local anchors */,
+        false /* token binding enabled */);
+    context_.set_ssl_config_service(ssl_config_service_.get());
   }
 };
 
@@ -12055,11 +11950,11 @@ TEST_F(HTTPSEVCRLSetTest, FreshCRLSetNotCovered) {
 class HTTPSCRLSetTest : public HTTPSOCSPTest {
  protected:
   void SetupContext() override {
-    context_.set_ssl_config_service(
-        new TestSSLConfigService(false /* online revocation checking */,
-                                 false /* require rev. checking for local
-                                          anchors */,
-                                 false /* token binding enabled */));
+    ssl_config_service_ = std::make_unique<TestSSLConfigService>(
+        false /* online revocation checking */,
+        false /* require rev. checking for local anchors */,
+        false /* token binding enabled */);
+    context_.set_ssl_config_service(ssl_config_service_.get());
   }
 
   void SetUp() override {
@@ -12195,7 +12090,7 @@ class URLRequestTestFTP : public URLRequestTest {
                          base::FilePath(kTestFilePath)) {
     // Can't use |default_context_|'s HostResolver to set up the
     // FTPTransactionFactory because it hasn't been created yet.
-    default_context_.set_host_resolver(&host_resolver_);
+    default_context().set_host_resolver(&host_resolver_);
   }
 
   // URLRequestTest interface:
@@ -12216,9 +12111,6 @@ class URLRequestTestFTP : public URLRequestTest {
   }
 
  protected:
-  // Note that this is destroyed before the FtpProtocolHandler that references
-  // it, which is owned by the parent class. Since no requests are made during
-  // teardown, this works, though it's not great.
   MockHostResolver host_resolver_;
 
   SpawnedTestServer ftp_test_server_;
@@ -12230,7 +12122,7 @@ TEST_F(URLRequestTestFTP, UnsafePort) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
     EXPECT_TRUE(r->is_pending());
@@ -12247,7 +12139,7 @@ TEST_F(URLRequestTestFTP, FTPDirectoryListing) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURL("/"), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -12271,7 +12163,7 @@ TEST_F(URLRequestTestFTP, FTPGetTestAnonymous) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURL(kFtpTestFile), DEFAULT_PRIORITY, &d,
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -12295,7 +12187,7 @@ TEST_F(URLRequestTestFTP, FTPGetTest) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "chrome",
                                                    "chrome"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12324,7 +12216,7 @@ TEST_F(URLRequestTestFTP, FTPCheckWrongPassword) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "chrome",
                                                    "wrong_password"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12348,7 +12240,7 @@ TEST_F(URLRequestTestFTP, FTPCheckWrongPasswordRestart) {
   // the initial login with wrong credentials will fail.
   d.set_credentials(AuthCredentials(kChrome, kChrome));
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "chrome",
                                                    "wrong_password"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12369,7 +12261,7 @@ TEST_F(URLRequestTestFTP, FTPCheckWrongUser) {
 
   TestDelegate d;
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "wrong_user",
                                                    "chrome"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12393,7 +12285,7 @@ TEST_F(URLRequestTestFTP, FTPCheckWrongUserRestart) {
   // the initial login with wrong credentials will fail.
   d.set_credentials(AuthCredentials(kChrome, kChrome));
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "wrong_user",
                                                    "chrome"),
         DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12415,7 +12307,7 @@ TEST_F(URLRequestTestFTP, FTPCacheURLCredentials) {
   std::unique_ptr<TestDelegate> d(new TestDelegate);
   {
     // Pass correct login identity in the URL.
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "chrome",
                                                    "chrome"),
         DEFAULT_PRIORITY, d.get(), TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12433,7 +12325,7 @@ TEST_F(URLRequestTestFTP, FTPCacheURLCredentials) {
   d.reset(new TestDelegate);
   {
     // This request should use cached identity from previous request.
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURL(kFtpTestFile), DEFAULT_PRIORITY, d.get(),
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -12456,7 +12348,7 @@ TEST_F(URLRequestTestFTP, FTPCacheLoginBoxCredentials) {
   // the initial login with wrong credentials will fail.
   d->set_credentials(AuthCredentials(kChrome, kChrome));
   {
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURLWithUserAndPassword(kFtpTestFile, "chrome",
                                                    "wrong_password"),
         DEFAULT_PRIORITY, d.get(), TRAFFIC_ANNOTATION_FOR_TESTS));
@@ -12477,7 +12369,7 @@ TEST_F(URLRequestTestFTP, FTPCacheLoginBoxCredentials) {
   {
     // Don't pass wrong credentials in the URL, they would override valid cached
     // ones.
-    std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+    std::unique_ptr<URLRequest> r(default_context().CreateRequest(
         ftp_test_server_.GetURL(kFtpTestFile), DEFAULT_PRIORITY, d.get(),
         TRAFFIC_ANNOTATION_FOR_TESTS));
     r->Start();
@@ -12509,7 +12401,7 @@ TEST_F(URLRequestTestFTP, RawBodyBytes) {
 
 TEST_F(URLRequestTest, NetworkAccessedClearOnDataRequest) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("data:,"), DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
 
   EXPECT_FALSE(req->response_info().network_accessed);
@@ -12546,7 +12438,7 @@ TEST_F(URLRequestTest, NetworkAccessedSetOnHostResolutionFailure) {
 // See http://crbug.com/508900
 TEST_F(URLRequestTest, URLRequestRedirectJobCancelRequest) {
   TestDelegate d;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       GURL("http://not-a-real-domain/"), DEFAULT_PRIORITY, &d,
       TRAFFIC_ANNOTATION_FOR_TESTS));
 
@@ -12625,7 +12517,7 @@ TEST_F(URLRequestTestHTTP, HeadersCallbacksWithRedirect) {
   HttpRequestHeaders extra_headers;
   extra_headers.SetHeader("X-Foo", "bar");
   GURL url(http_test_server()->GetURL("/redirect-test.html"));
-  std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> r(default_context().CreateRequest(
       url, DEFAULT_PRIORITY, &delegate, TRAFFIC_ANNOTATION_FOR_TESTS));
   r->SetExtraRequestHeaders(extra_headers);
   r->SetRequestHeadersCallback(base::Bind(&HttpRawRequestHeaders::Assign,
@@ -12666,7 +12558,7 @@ TEST_F(URLRequestTestHTTP, HeadersCallbacksWithRedirect) {
 TEST_F(URLRequestTest, HeadersCallbacksConnectFailed) {
   TestDelegate request_delegate;
 
-  std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> r(default_context().CreateRequest(
       GURL("http://127.0.0.1:9/"), DEFAULT_PRIORITY, &request_delegate,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   r->SetRequestHeadersCallback(base::Bind([](net::HttpRawRequestHeaders) {
@@ -12752,7 +12644,7 @@ TEST_F(URLRequestTestHTTP, HeadersCallbacksAuthRetry) {
 TEST_F(URLRequestTest, HeadersCallbacksNonHTTP) {
   GURL data_url("data:text/html,<html><body>Hello!</body></html>");
   TestDelegate d;
-  std::unique_ptr<URLRequest> r(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> r(default_context().CreateRequest(
       data_url, DEFAULT_PRIORITY, &d, TRAFFIC_ANNOTATION_FOR_TESTS));
   r->SetRequestHeadersCallback(base::Bind([](net::HttpRawRequestHeaders) {
     FAIL() << "Callback should not be called for non-HTTP schemes";
@@ -12874,7 +12766,7 @@ TEST_F(URLRequestTestHTTP, TestTagging) {
 
   // Untagged traffic should be tagged with tag UNTAGGED_TAG.
   TestDelegate delegate;
-  std::unique_ptr<URLRequest> req(default_context_.CreateRequest(
+  std::unique_ptr<URLRequest> req(default_context().CreateRequest(
       http_test_server()->GetURL("/"), DEFAULT_PRIORITY, &delegate,
       TRAFFIC_ANNOTATION_FOR_TESTS));
   EXPECT_EQ(SocketTag(), req->socket_tag());
@@ -12888,9 +12780,9 @@ TEST_F(URLRequestTestHTTP, TestTagging) {
   old_traffic = GetTaggedBytes(tag_val1);
 
   // Test specific tag value.
-  req = default_context_.CreateRequest(http_test_server()->GetURL("/"),
-                                       DEFAULT_PRIORITY, &delegate,
-                                       TRAFFIC_ANNOTATION_FOR_TESTS);
+  req = default_context().CreateRequest(http_test_server()->GetURL("/"),
+                                        DEFAULT_PRIORITY, &delegate,
+                                        TRAFFIC_ANNOTATION_FOR_TESTS);
   req->set_socket_tag(tag1);
   EXPECT_EQ(tag1, req->socket_tag());
   req->Start();

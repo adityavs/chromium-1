@@ -12,6 +12,7 @@
 #include "components/autofill/core/browser/test_form_data_importer.h"
 #include "components/autofill/core/browser/test_form_structure.h"
 #include "components/autofill/core/browser/test_personal_data_manager.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace autofill {
@@ -21,10 +22,10 @@ TestAutofillManager::TestAutofillManager(AutofillDriver* driver,
                                          TestPersonalDataManager* personal_data)
     : AutofillManager(driver, client, personal_data),
       personal_data_(personal_data),
-      context_getter_(driver->GetURLRequestContext()),
+      url_loader_factory_(driver->GetURLLoaderFactory()),
       client_(client) {
   set_payments_client(new payments::PaymentsClient(
-      context_getter_, client->GetPrefs(), client->GetIdentityManager(),
+      url_loader_factory_, client->GetPrefs(), client->GetIdentityManager(),
       /*unmask_delegate=*/this,
       /*save_delegate=*/nullptr));
 }
@@ -34,7 +35,8 @@ TestAutofillManager::TestAutofillManager(
     AutofillClient* client,
     TestPersonalDataManager* personal_data,
     std::unique_ptr<CreditCardSaveManager> credit_card_save_manager,
-    payments::TestPaymentsClient* payments_client)
+    payments::TestPaymentsClient* payments_client,
+    std::unique_ptr<LocalCardMigrationManager> local_card_migration_manager)
     : AutofillManager(driver, client, personal_data),
       personal_data_(personal_data),
       test_form_data_importer_(
@@ -42,7 +44,8 @@ TestAutofillManager::TestAutofillManager(
                                    payments_client,
                                    std::move(credit_card_save_manager),
                                    personal_data,
-                                   "en-US")),
+                                   "en-US",
+                                   std::move(local_card_migration_manager))),
       client_(client) {
   set_payments_client(payments_client);
   set_form_data_importer(test_form_data_importer_);
@@ -54,7 +57,11 @@ bool TestAutofillManager::IsAutofillEnabled() const {
   return autofill_enabled_;
 }
 
-bool TestAutofillManager::IsCreditCardAutofillEnabled() {
+bool TestAutofillManager::IsProfileAutofillEnabled() const {
+  return profile_enabled_;
+}
+
+bool TestAutofillManager::IsCreditCardAutofillEnabled() const {
   return credit_card_enabled_;
 }
 
@@ -157,6 +164,13 @@ const std::string TestAutofillManager::GetSubmittedFormSignature() {
 
 void TestAutofillManager::SetAutofillEnabled(bool autofill_enabled) {
   autofill_enabled_ = autofill_enabled;
+}
+
+void TestAutofillManager::SetProfileEnabled(bool profile_enabled) {
+  profile_enabled_ = profile_enabled;
+  if (!profile_enabled_)
+    // Profile data is refreshed when this pref is changed.
+    personal_data_->ClearProfiles();
 }
 
 void TestAutofillManager::SetCreditCardEnabled(bool credit_card_enabled) {

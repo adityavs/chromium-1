@@ -38,6 +38,7 @@
 #import "ios/chrome/browser/ui/authentication/signed_in_accounts_view_controller.h"
 #include "ios/chrome/browser/ui/background_generator.h"
 #import "ios/chrome/browser/ui/browser_view_controller.h"
+#import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/browser_commands.h"
 #import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/main/browser_view_information.h"
@@ -154,7 +155,7 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
 
 - (void)applicationDidEnterBackground:(UIApplication*)application
                          memoryHelper:(MemoryWarningHelper*)memoryHelper
-                  tabSwitcherIsActive:(BOOL)tabSwitcherIsActive {
+              incognitoContentVisible:(BOOL)incognitoContentVisible {
   if ([self isInSafeMode]) {
     // Force a crash when backgrounding and in safe mode, so users don't get
     // stuck in safe mode.
@@ -192,13 +193,9 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
   // If the current BVC is incognito, or if we are in the tab switcher and there
   // are incognito tabs visible, place a full screen view containing the
   // switcher background to hide any incognito content.
-  if (([[_browserLauncher browserViewInformation] currentBrowserState] &&
-       [[_browserLauncher browserViewInformation] currentBrowserState]
-           ->IsOffTheRecord()) ||
-      (tabSwitcherIsActive &&
-       ![[[_browserLauncher browserViewInformation] otrTabModel] isEmpty])) {
-    // Cover the largest area potentially shown in the app switcher, in case the
-    // screenshot is reused in a different orientation or size class.
+  if (incognitoContentVisible) {
+    // Cover the largest area potentially shown in the app switcher, in case
+    // the screenshot is reused in a different orientation or size class.
     CGRect screenBounds = [[UIScreen mainScreen] bounds];
     CGFloat maxDimension =
         std::max(CGRectGetWidth(screenBounds), CGRectGetHeight(screenBounds));
@@ -364,7 +361,7 @@ initWithBrowserLauncher:(id<BrowserLauncher>)browserLauncher
       BOOL incognito =
           bvc == [[_browserLauncher browserViewInformation] otrBVC];
       [bvc.dispatcher
-          openNewTab:[OpenNewTabCommand commandWithIncognito:incognito]];
+          openURL:[OpenNewTabCommand commandWithIncognito:incognito]];
     }
   } else {
     [[[_browserLauncher browserViewInformation] currentBVC]

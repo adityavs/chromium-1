@@ -89,6 +89,19 @@ void WebViewAutofillClientIOS::OnUnmaskVerificationResult(
   [bridge_ didReceiveUnmaskVerificationResult:result];
 }
 
+void WebViewAutofillClientIOS::ShowLocalCardMigrationPrompt(
+    base::OnceClosure closure) {
+  NOTREACHED();
+}
+
+void WebViewAutofillClientIOS::ConfirmSaveAutofillProfile(
+    const AutofillProfile& profile,
+    base::OnceClosure callback) {
+  // Since there is no confirmation needed to save an Autofill Profile,
+  // running |callback| will proceed with saving |profile|.
+  std::move(callback).Run();
+}
+
 void WebViewAutofillClientIOS::ConfirmSaveCreditCardLocally(
     const CreditCard& card,
     const base::RepeatingClosure& callback) {
@@ -121,6 +134,7 @@ void WebViewAutofillClientIOS::ShowAutofillPopup(
     const gfx::RectF& element_bounds,
     base::i18n::TextDirection text_direction,
     const std::vector<Suggestion>& suggestions,
+    bool /*unused_autoselect_first_suggestion*/,
     base::WeakPtr<AutofillPopupDelegate> delegate) {
   [bridge_ showAutofillPopup:suggestions popupDelegate:delegate];
 }

@@ -78,6 +78,7 @@
 #include "chrome/browser/profiles/profile_metrics.h"
 #include "chrome/browser/profiles/profiles_state.h"
 #include "chrome/browser/repost_form_warning_controller.h"
+#include "chrome/browser/resource_coordinator/tab_load_tracker.h"
 #include "chrome/browser/resource_coordinator/tab_manager_web_contents_data.h"
 #include "chrome/browser/search/search.h"
 #include "chrome/browser/sessions/session_restore.h"
@@ -1617,8 +1618,14 @@ bool Browser::ShouldFocusLocationBarByDefault(WebContents* source) {
   if (source != tab_strip_model_->GetActiveWebContents())
     return false;
 
+  // This should be based on the pending entry if there is one, so that
+  // back/forward navigations to the NTP are handled.  The visible entry can't
+  // be used here, since back/forward navigations are not treated as  visible
+  // entries to avoid URL spoofs.
   const content::NavigationEntry* entry =
-      source->GetController().GetActiveEntry();
+      source->GetController().GetPendingEntry()
+          ? source->GetController().GetPendingEntry()
+          : source->GetController().GetLastCommittedEntry();
   if (entry) {
     const GURL& url = entry->GetURL();
     const GURL& virtual_url = entry->GetVirtualURL();
@@ -1997,6 +2004,11 @@ std::unique_ptr<content::WebContents> Browser::SwapTabContents(
       new_view->TakeFallbackContentFrom(old_view);
   }
 
+  // TODO(crbug.com/836409): TabLoadTracker should not rely on being notified
+  // directly about tab contents swaps.
+  resource_coordinator::TabLoadTracker::Get()->SwapTabContents(
+      old_contents, new_contents.get());
+
   int index = tab_strip_model_->GetIndexOfWebContents(old_contents);
   DCHECK_NE(TabStripModel::kNoTab, index);
   return tab_strip_model_->ReplaceWebContentsAt(index, std::move(new_contents));
@@ -2180,12 +2192,10 @@ void Browser::OnTranslateEnabledChanged(content::WebContents* source) {
 
 void Browser::OnDevToolsAvailabilityChanged() {
   using DTPH = policy::DeveloperToolsPolicyHandler;
-  // TODO(pfeldman): If |new_value| maps to
-  // |DTPH::Availability::kDisallowedForForceInstalledExtensions|, we may either
-  // close all windows as a safety measure, or close those that are known to
-  // correspond to such extensions (https://crbug.com/838146).
-  if (DTPH::GetDevToolsAvailability(profile_->GetPrefs()) ==
-      DTPH::Availability::kDisallowed) {
+  // We close all windows as a safety measure, even for
+  // kDisallowedForForceInstalledExtensions.
+  if (DTPH::GetDevToolsAvailability(profile_->GetPrefs()) !=
+      DTPH::Availability::kAllowed) {
     content::DevToolsAgentHost::DetachAllClients();
   }
 }
@@ -2210,7 +2220,6 @@ void Browser::ScheduleUIUpdate(WebContents* source,
       // Only update the URL for the current tab. Note that we do not update
       // the navigation commands since those would have already been updated
       // synchronously by NavigationStateChanged.
-      window_->RevertToolbarUrl();
       UpdateToolbar(false);
     } else {
       // Clear the saved tab state for the tab that navigated, so that we don't

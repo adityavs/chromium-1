@@ -20,6 +20,7 @@
 #include "chrome/browser/resource_coordinator/local_site_characteristics_data_store_factory.h"
 #include "chrome/browser/resource_coordinator/site_characteristics_data_reader.h"
 #include "chrome/browser/resource_coordinator/tab_load_tracker.h"
+#include "chrome/browser/resource_coordinator/tab_load_tracker_test_support.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
 #include "chrome/browser/resource_coordinator/time.h"
 #include "chrome/browser/ui/browser.h"
@@ -58,6 +59,23 @@ base::TimeDelta GetLongestObservationWindow() {
                    params.title_update_observation_window,
                    params.audio_usage_observation_window,
                    params.notifications_usage_observation_window});
+}
+
+// Returns the longest grace period.
+base::TimeDelta GetLongestGracePeriod() {
+  const SiteCharacteristicsDatabaseParams& params =
+      GetStaticSiteCharacteristicsDatabaseParams();
+  return std::max({params.title_or_favicon_change_grace_period,
+                   params.audio_usage_grace_period});
+}
+
+// Returns the SiteCharacteristicsProto that backs |reader|.
+const SiteCharacteristicsProto* GetSiteCharacteristicsProtoFromReader(
+    SiteCharacteristicsDataReader* reader) {
+  const internal::LocalSiteCharacteristicsDataImpl* impl =
+      static_cast<LocalSiteCharacteristicsDataReader*>(reader)
+          ->impl_for_testing();
+  return &impl->site_characteristics_for_testing();
 }
 
 }  // namespace
@@ -120,10 +138,9 @@ class LocalSiteCharacteristicsDatabaseTest : public InProcessBrowserTest {
     std::unique_ptr<SiteCharacteristicsDataReader> reader =
         data_store->GetReaderForOrigin(origin);
 
-    internal::LocalSiteCharacteristicsDataImpl* impl =
+    const internal::LocalSiteCharacteristicsDataImpl* impl =
         static_cast<LocalSiteCharacteristicsDataReader*>(reader.get())
-            ->impl_for_testing()
-            .get();
+            ->impl_for_testing();
     while (!impl->site_characteristics_for_testing().IsInitialized())
       base::RunLoop().RunUntilIdle();
     return reader;
@@ -200,6 +217,8 @@ class LocalSiteCharacteristicsDatabaseTest : public InProcessBrowserTest {
     // Background the tab and reload it so the audio will stop playing if it's
     // still playing.
     GetActiveWebContents()->WasHidden();
+    test_clock_.Advance(
+        GetStaticSiteCharacteristicsDatabaseParams().audio_usage_grace_period);
   }
 
   // Ensure that the current tab is allowed to display non-persistent
@@ -211,6 +230,11 @@ class LocalSiteCharacteristicsDatabaseTest : public InProcessBrowserTest {
         CONTENT_SETTING_ALLOW);
 
     ExecuteScriptInMainFrame("RequestNotificationsPermission();");
+  }
+
+  void ExpireTitleOrFaviconGracePeriod() {
+    test_clock_.Advance(GetStaticSiteCharacteristicsDatabaseParams()
+                            .title_or_favicon_change_grace_period);
   }
 
   base::SimpleTestTickClock& test_clock() { return test_clock_; }
@@ -255,6 +279,7 @@ void LocalSiteCharacteristicsDatabaseTest::TestFeatureUsageDetectionImpl(
       browser(), test_url, WindowOpenDisposition::CURRENT_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
   GetActiveWebContents()->WasHidden();
+  WaitForTransitionToLoaded(GetActiveWebContents());
 
   // If needed, wait for all feature observation windows to expire.
   if (wait_for_observation_window_to_expire) {
@@ -299,6 +324,11 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest, NoFeatureUsed) {
   ui_test_utils::NavigateToURLWithDisposition(
       browser(), test_url, WindowOpenDisposition::NEW_BACKGROUND_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+
+  content::WebContents* contents =
+      browser()->tab_strip_model()->GetWebContentsAt(1);
+  EXPECT_EQ(test_url, contents->GetLastCommittedURL());
+  WaitForTransitionToLoaded(contents);
 
   auto reader =
       GetReaderForOrigin(browser()->profile(), url::Origin::Create(test_url));
@@ -395,7 +425,10 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
       &SiteCharacteristicsDataReader::UpdatesTitleInBackground,
       base::BindRepeating(
           &LocalSiteCharacteristicsDatabaseTest::ChangeTitleOfActiveWebContents,
-          base::Unretained(this)));
+          base::Unretained(this)),
+      base::BindRepeating(&LocalSiteCharacteristicsDatabaseTest::
+                              ExpireTitleOrFaviconGracePeriod,
+                          base::Unretained(this)));
 }
 
 // Test that the favicon update feature usage in background gets detected
@@ -406,6 +439,9 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
       &SiteCharacteristicsDataReader::UpdatesFaviconInBackground,
       base::BindRepeating(&LocalSiteCharacteristicsDatabaseTest::
                               ChangeFaviconOfActiveWebContents,
+                          base::Unretained(this)),
+      base::BindRepeating(&LocalSiteCharacteristicsDatabaseTest::
+                              ExpireTitleOrFaviconGracePeriod,
                           base::Unretained(this)));
 }
 
@@ -426,16 +462,17 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
         i == 0 ? WindowOpenDisposition::CURRENT_TAB
                : WindowOpenDisposition::NEW_FOREGROUND_TAB,
         ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+    content::WebContents* contents =
+        browser()->tab_strip_model()->GetWebContentsAt(i);
+    WaitForTransitionToLoaded(contents);
     EXPECT_EQ(TabLoadTracker::LoadingState::LOADED,
-              TabLoadTracker::Get()->GetLoadingState(
-                  browser()->tab_strip_model()->GetWebContentsAt(i)));
-    browser()->tab_strip_model()->GetWebContentsAt(i)->WasHidden();
+              TabLoadTracker::Get()->GetLoadingState(contents));
+    contents->WasHidden();
   }
 
-  internal::LocalSiteCharacteristicsDataImpl* impl =
+  const internal::LocalSiteCharacteristicsDataImpl* impl =
       static_cast<LocalSiteCharacteristicsDataReader*>(test_reader.get())
-          ->impl_for_testing()
-          .get();
+          ->impl_for_testing();
   EXPECT_TRUE(impl);
   EXPECT_EQ(3U, impl->loaded_tabs_count_for_testing());
   EXPECT_EQ(3U, impl->loaded_tabs_in_background_count_for_testing());
@@ -478,7 +515,10 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
   ui_test_utils::NavigateToURLWithDisposition(
       browser(), test_url, WindowOpenDisposition::CURRENT_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+  WaitForTransitionToLoaded(GetActiveWebContents());
   GetActiveWebContents()->WasHidden();
+
+  test_clock().Advance(GetLongestGracePeriod());
 
   // Cause the "title update in background" feature to be used.
   ChangeTitleOfActiveWebContents();
@@ -516,7 +556,10 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest, PRE_ClearHistory) {
   ui_test_utils::NavigateToURLWithDisposition(
       browser(), test_url, WindowOpenDisposition::CURRENT_TAB,
       ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+  WaitForTransitionToLoaded(GetActiveWebContents());
   GetActiveWebContents()->WasHidden();
+
+  test_clock().Advance(GetLongestGracePeriod());
 
   // Cause the "title update in background" feature to be used.
   ChangeTitleOfActiveWebContents();
@@ -546,6 +589,61 @@ IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest, ClearHistory) {
   // The history has been cleared, we shouldn't know if this feature is used.
   EXPECT_EQ(SiteFeatureUsage::kSiteFeatureUsageUnknown,
             reader->UpdatesTitleInBackground());
+}
+
+// Ensure that the observation time gets tracked across sessions.
+IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
+                       PRE_DatabaseObservationTimeTrackedAcrossSessions) {
+  GURL test_url(test_server().GetURL("foo.com", kTestPage));
+
+  auto reader =
+      GetReaderForOrigin(browser()->profile(), url::Origin::Create(test_url));
+  const SiteCharacteristicsProto* site_characteristics =
+      GetSiteCharacteristicsProtoFromReader(reader.get());
+
+  EXPECT_EQ(0, site_characteristics->updates_title_in_background()
+                   .observation_duration());
+
+  // Navigate to the test url and background it.
+  ui_test_utils::NavigateToURLWithDisposition(
+      browser(), test_url, WindowOpenDisposition::CURRENT_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+  WaitForTransitionToLoaded(GetActiveWebContents());
+  GetActiveWebContents()->WasHidden();
+
+  test_clock().Advance(base::TimeDelta::FromSeconds(10));
+  EXPECT_GE(10, site_characteristics->updates_title_in_background()
+                    .observation_duration());
+}
+
+IN_PROC_BROWSER_TEST_F(LocalSiteCharacteristicsDatabaseTest,
+                       DatabaseObservationTimeTrackedAcrossSessions) {
+  GURL test_url(test_server().GetURL("foo.com", kTestPage));
+
+  auto reader =
+      GetReaderForOrigin(browser()->profile(), url::Origin::Create(test_url));
+  const SiteCharacteristicsProto* site_characteristics =
+      GetSiteCharacteristicsProtoFromReader(reader.get());
+
+  auto observation_duration =
+      site_characteristics->updates_title_in_background()
+          .observation_duration();
+  // The observation duration shouldn't be null as this has been augmented in
+  // the 'PRE' part of this test.
+  EXPECT_NE(0, observation_duration);
+
+  // Advance the clock and reset this reader. This should increase the
+  // observation duration that we have for this origin in the database.
+  test_clock().Advance(base::TimeDelta::FromSeconds(10));
+  reader.reset();
+
+  reader =
+      GetReaderForOrigin(browser()->profile(), url::Origin::Create(test_url));
+  site_characteristics = GetSiteCharacteristicsProtoFromReader(reader.get());
+
+  EXPECT_GE(observation_duration,
+            site_characteristics->updates_title_in_background()
+                .observation_duration());
 }
 
 }  // namespace resource_coordinator

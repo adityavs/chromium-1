@@ -4,6 +4,9 @@
 
 #include "chrome/browser/media/router/media_router_metrics.h"
 
+#include <string>
+
+#include "base/bind.h"
 #include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/test/metrics/histogram_tester.h"
@@ -19,6 +22,23 @@ using base::Bucket;
 using testing::ElementsAre;
 
 namespace media_router {
+
+namespace {
+
+// Tests that calling |recording_cb| with a TimeDelta records it in
+// |histogram_name|.
+void TestRecordTimeDeltaMetric(
+    base::RepeatingCallback<void(const base::TimeDelta&)> recording_cb,
+    const std::string& histogram_name) {
+  base::HistogramTester tester;
+  const base::TimeDelta delta = base::TimeDelta::FromMilliseconds(10);
+
+  tester.ExpectTotalCount(histogram_name, 0);
+  recording_cb.Run(delta);
+  tester.ExpectUniqueSample(histogram_name, delta.InMilliseconds(), 1);
+}
+
+}  // namespace
 
 using DialParsingError = SafeDialDeviceDescriptionParser::ParsingError;
 
@@ -41,25 +61,21 @@ TEST(MediaRouterMetricsTest, RecordMediaRouterDialogOrigin) {
 }
 
 TEST(MediaRouterMetricsTest, RecordMediaRouterDialogPaint) {
-  base::HistogramTester tester;
-  const base::TimeDelta delta = base::TimeDelta::FromMilliseconds(10);
-
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiDialogPaint, 0);
-  MediaRouterMetrics::RecordMediaRouterDialogPaint(delta);
-  tester.ExpectUniqueSample(MediaRouterMetrics::kHistogramUiDialogPaint,
-                            delta.InMilliseconds(), 1);
+  TestRecordTimeDeltaMetric(
+      base::BindRepeating(&MediaRouterMetrics::RecordMediaRouterDialogPaint),
+      MediaRouterMetrics::kHistogramUiDialogPaint);
 }
 
 TEST(MediaRouterMetricsTest, RecordMediaRouterDialogLoaded) {
-  base::HistogramTester tester;
-  const base::TimeDelta delta = base::TimeDelta::FromMilliseconds(10);
+  TestRecordTimeDeltaMetric(
+      base::BindRepeating(&MediaRouterMetrics::RecordMediaRouterDialogLoaded),
+      MediaRouterMetrics::kHistogramUiDialogLoadedWithData);
+}
 
-  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiDialogLoadedWithData,
-                          0);
-  MediaRouterMetrics::RecordMediaRouterDialogLoaded(delta);
-  tester.ExpectUniqueSample(
-      MediaRouterMetrics::kHistogramUiDialogLoadedWithData,
-      delta.InMilliseconds(), 1);
+TEST(MediaRouterMetricsTest, RecordCloseDialogLatency) {
+  TestRecordTimeDeltaMetric(
+      base::BindRepeating(&MediaRouterMetrics::RecordCloseDialogLatency),
+      MediaRouterMetrics::kHistogramCloseLatency);
 }
 
 TEST(MediaRouterMetricsTest, RecordMediaRouterInitialUserAction) {
@@ -187,6 +203,53 @@ TEST(MediaRouterMetricsTest, RecordMediaSinkType) {
                   Bucket(static_cast<int>(SinkIconType::HANGOUT), 1),
                   Bucket(static_cast<int>(SinkIconType::WIRED_DISPLAY), 1),
                   Bucket(static_cast<int>(SinkIconType::GENERIC), 1)));
+}
+
+TEST(MediaRouterMetricsTest, RecordDeviceCount) {
+  base::HistogramTester tester;
+  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiDeviceCount, 0);
+
+  MediaRouterMetrics::RecordDeviceCount(30);
+  MediaRouterMetrics::RecordDeviceCount(0);
+
+  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramUiDeviceCount, 2);
+  EXPECT_THAT(tester.GetAllSamples(MediaRouterMetrics::kHistogramUiDeviceCount),
+              ElementsAre(Bucket(0, 1), Bucket(30, 1)));
+}
+
+TEST(MediaRouterMetricsTest, RecordStartRouteDeviceIndex) {
+  base::HistogramTester tester;
+  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStartLocalPosition, 0);
+
+  MediaRouterMetrics::RecordStartRouteDeviceIndex(30);
+  MediaRouterMetrics::RecordStartRouteDeviceIndex(0);
+
+  tester.ExpectTotalCount(MediaRouterMetrics::kHistogramStartLocalPosition, 2);
+  EXPECT_THAT(
+      tester.GetAllSamples(MediaRouterMetrics::kHistogramStartLocalPosition),
+      ElementsAre(Bucket(0, 1), Bucket(30, 1)));
+}
+
+TEST(MediaRouterMetricsTest, RecordStartLocalSessionLatency) {
+  TestRecordTimeDeltaMetric(
+      base::BindRepeating(&MediaRouterMetrics::RecordStartLocalSessionLatency),
+      MediaRouterMetrics::kHistogramStartLocalLatency);
+}
+
+TEST(MediaRouterMetricsTest, RecordStartLocalSessionSuccessful) {
+  base::HistogramTester tester;
+  tester.ExpectTotalCount(
+      MediaRouterMetrics::kHistogramStartLocalSessionSuccessful, 0);
+
+  MediaRouterMetrics::RecordStartLocalSessionSuccessful(true);
+  MediaRouterMetrics::RecordStartLocalSessionSuccessful(false);
+  MediaRouterMetrics::RecordStartLocalSessionSuccessful(true);
+
+  tester.ExpectTotalCount(
+      MediaRouterMetrics::kHistogramStartLocalSessionSuccessful, 3);
+  EXPECT_THAT(tester.GetAllSamples(
+                  MediaRouterMetrics::kHistogramStartLocalSessionSuccessful),
+              ElementsAre(Bucket(false, 1), Bucket(true, 2)));
 }
 
 }  // namespace media_router

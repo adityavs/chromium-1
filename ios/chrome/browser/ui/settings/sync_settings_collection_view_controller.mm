@@ -8,14 +8,17 @@
 
 #include "base/auto_reset.h"
 #include "base/mac/foundation_util.h"
+#include "components/autofill/core/common/autofill_pref_names.h"
 #include "components/browser_sync/profile_sync_service.h"
 #include "components/google/core/browser/google_util.h"
+#include "components/prefs/pref_service.h"
 #include "components/signin/core/browser/account_tracker_service.h"
 #include "components/signin/core/browser/profile_oauth2_token_service.h"
 #import "components/signin/ios/browser/oauth2_token_service_observer_bridge.h"
 #include "components/strings/grit/components_strings.h"
 #include "components/sync/base/model_type.h"
 #include "ios/chrome/browser/application_context.h"
+#include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/chrome_url_constants.h"
 #include "ios/chrome/browser/experimental_flags.h"
 #include "ios/chrome/browser/signin/account_tracker_service_factory.h"
@@ -33,7 +36,7 @@
 #import "ios/chrome/browser/ui/collection_view/collection_view_model.h"
 #import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/open_url_command.h"
+#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/commands/show_signin_command.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_detail_item.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_text_item.h"
@@ -82,6 +85,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   ItemTypeAccount,
   ItemTypeSyncEverything,
   ItemTypeSyncableDataType,
+  ItemTypeAutofillWalletImport,
   ItemTypeEncryption,
   ItemTypeManageSyncedData,
   ItemTypeHeader,
@@ -129,6 +133,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 // |IsDataTypePreferred| for that type returns true.
 - (CollectionViewItem*)switchItemForDataType:
     (SyncSetupService::SyncableDatatype)dataType;
+// Returns a switch item for the Autofill wallet import setting.
+- (CollectionViewItem*)switchItemForAutofillWalletImport;
 // Returns an item for Encryption.
 - (CollectionViewItem*)encryptionCellItem;
 // Returns an item to open a link to manage the synced data.
@@ -147,6 +153,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)changeSyncEverythingStatusToOn:(UISwitch*)sender;
 // Action method for the data type switches.
 - (void)changeDataTypeSyncStatusToOn:(UISwitch*)sender;
+// Action method for the Autofill wallet import switch.
+- (void)autofillWalletImportChanged:(UISwitch*)sender;
 // Action method for the encryption cell.
 - (void)showEncryption;
 
@@ -155,6 +163,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)updateCollectionView;
 // Ensures the Sync error cell is shown when there is an error.
 - (void)updateSyncError;
+// Updates the Autofill wallet import cell (i.e. whether it is enabled and on).
+- (void)updateAutofillWalletImportCell;
 // Ensures the encryption cell displays an error if needed.
 - (void)updateEncryptionCell;
 // Updates the account item so it can reflect the latest state of the identity.
@@ -184,6 +194,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (NSInteger)tagForIndexPath:(NSIndexPath*)indexPath;
 // Returns the indexPath for a data type switch based on its tag.
 - (NSIndexPath*)indexPathForTag:(NSInteger)shiftedTag;
+
+// Whether the Autofill wallet import item should be enabled.
+@property(nonatomic, readonly, getter=isAutofillWalletImportItemEnabled)
+    BOOL autofillWalletImportItemEnabled;
+
+// Whether the Autofill wallet import item should be on.
+@property(nonatomic, assign, getter=isAutofillWalletImportOn)
+    BOOL autofillWalletImportOn;
 
 @end
 
@@ -317,6 +335,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
     [model addItem:[self switchItemForDataType:dataType]
         toSectionWithIdentifier:SectionIdentifierSyncServices];
   }
+  // Autofill wallet import switch.
+  [model addItem:[self switchItemForAutofillWalletImport]
+      toSectionWithIdentifier:SectionIdentifierSyncServices];
 
   // Encryption section.  Enabled if sync is on.
   [model addSectionWithIdentifier:SectionIdentifierEncryptionAndFooter];
@@ -342,6 +363,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
   DCHECK([self shouldDisplaySyncError]);
   CollectionViewAccountItem* syncErrorItem =
       [[CollectionViewAccountItem alloc] initWithType:ItemTypeSyncError];
+  syncErrorItem.cellStyle = CollectionViewCellStyle::kUIKit;
   syncErrorItem.text = l10n_util::GetNSString(IDS_IOS_SYNC_ERROR_TITLE);
   syncErrorItem.image = [UIImage imageNamed:@"settings_error"];
   syncErrorItem.detailText = GetSyncErrorMessageForBrowserState(_browserState);
@@ -351,6 +373,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)accountItem:(ChromeIdentity*)identity {
   CollectionViewAccountItem* identityAccountItem =
       [[CollectionViewAccountItem alloc] initWithType:ItemTypeAccount];
+  identityAccountItem.cellStyle = CollectionViewCellStyle::kUIKit;
   [self updateAccountItem:identityAccountItem withIdentity:identity];
 
   identityAccountItem.enabled = _syncSetupService->IsSyncEnabled();
@@ -387,6 +410,17 @@ typedef NS_ENUM(NSInteger, ItemType) {
   syncDataTypeItem.on = isOn;
   syncDataTypeItem.enabled = [self shouldSyncableItemsBeEnabled];
   return syncDataTypeItem;
+}
+
+- (CollectionViewItem*)switchItemForAutofillWalletImport {
+  SyncSwitchItem* autofillWalletImportItem =
+      [self switchItemWithType:ItemTypeAutofillWalletImport
+                         title:l10n_util::GetNSString(
+                                   IDS_IOS_AUTOFILL_USE_WALLET_DATA)
+                      subTitle:nil];
+  autofillWalletImportItem.on = [self isAutofillWalletImportOn];
+  autofillWalletImportItem.enabled = [self isAutofillWalletImportItemEnabled];
+  return autofillWalletImportItem;
 }
 
 - (CollectionViewItem*)encryptionCellItem {
@@ -464,6 +498,14 @@ typedef NS_ENUM(NSInteger, ItemType) {
       switchCell.switchView.tag = [self tagForIndexPath:indexPath];
       break;
     }
+    case ItemTypeAutofillWalletImport: {
+      SyncSwitchCell* switchCell =
+          base::mac::ObjCCastStrict<SyncSwitchCell>(cell);
+      [switchCell.switchView addTarget:self
+                                action:@selector(autofillWalletImportChanged:)
+                      forControlEvents:UIControlEventValueChanged];
+      break;
+    }
     default:
       break;
   }
@@ -499,8 +541,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
       GURL learnMoreUrl = google_util::AppendGoogleLocaleParam(
           GURL(kSyncGoogleDashboardURL),
           GetApplicationContext()->GetApplicationLocale());
-      OpenUrlCommand* command =
-          [[OpenUrlCommand alloc] initWithURLFromChrome:learnMoreUrl];
+      OpenNewTabCommand* command =
+          [OpenNewTabCommand commandWithURLFromChrome:learnMoreUrl];
       [self.dispatcher closeSettingsUIAndOpenURL:command];
       break;
     }
@@ -519,6 +561,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
     case ItemTypeAccount:
       return MDCCellDefaultTwoLineHeight;
     case ItemTypeSyncSwitch:
+    case ItemTypeAutofillWalletImport:
       return [MDCCollectionViewCell
           cr_preferredHeightForWidth:CGRectGetWidth(collectionView.bounds)
                              forItem:item];
@@ -695,6 +738,19 @@ typedef NS_ENUM(NSInteger, ItemType) {
 
   base::AutoReset<BOOL> autoReset(&_ignoreSyncStateChanges, YES);
   _syncSetupService->SetDataTypeEnabled(modelType, isOn);
+
+  // Set value of Autofill wallet import accordingly if Autofill Sync changed.
+  if (dataType == SyncSetupService::kSyncAutofill) {
+    [self setAutofillWalletImportOn:isOn];
+    [self updateCollectionView];
+  }
+}
+
+- (void)autofillWalletImportChanged:(UISwitch*)sender {
+  if (![self isAutofillWalletImportItemEnabled])
+    return;
+
+  [self setAutofillWalletImportOn:sender.isOn];
 }
 
 - (void)showEncryption {
@@ -771,14 +827,10 @@ typedef NS_ENUM(NSInteger, ItemType) {
   syncEverythingItem.enabled = [self shouldSyncEverythingItemBeEnabled];
   [self reconfigureCellsForItems:@[ syncEverythingItem ]];
 
-  NSInteger section = [self.collectionViewModel
-      sectionForSectionIdentifier:SectionIdentifierSyncServices];
-  NSInteger itemsCount =
-      [self.collectionViewModel numberOfItemsInSection:section];
-  // Syncable data types cells are offset by the Sync Everything cell.
+  // Syncable data types cells
   NSMutableArray* switchsToReconfigure = [[NSMutableArray alloc] init];
-  for (NSInteger item = 1; item < itemsCount; ++item) {
-    NSUInteger index = item - 1;
+  for (NSUInteger index = 0;
+       index < SyncSetupService::kNumberOfSyncableDatatypes; ++index) {
     NSIndexPath* indexPath = [self.collectionViewModel
         indexPathForItemType:ItemTypeSyncableDataType
            sectionIdentifier:SectionIdentifierSyncServices
@@ -793,6 +845,9 @@ typedef NS_ENUM(NSInteger, ItemType) {
     [switchsToReconfigure addObject:syncSwitchItem];
   }
   [self reconfigureCellsForItems:switchsToReconfigure];
+
+  // Update Autofill wallet import cell.
+  [self updateAutofillWalletImportCell];
 
   // Update Encryption cell.
   [self updateEncryptionCell];
@@ -824,6 +879,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
         removeSectionWithIdentifier:SectionIdentifierSyncError];
     [self.collectionView deleteSections:[NSIndexSet indexSetWithIndex:section]];
   }
+}
+
+- (void)updateAutofillWalletImportCell {
+  // Force turn on Autofill wallet import if syncing everthing.
+  BOOL isSyncingEverything = _syncSetupService->IsSyncingAllDataTypes();
+  if (isSyncingEverything) {
+    [self setAutofillWalletImportOn:isSyncingEverything];
+  }
+
+  NSIndexPath* indexPath = [self.collectionViewModel
+      indexPathForItemType:ItemTypeAutofillWalletImport
+         sectionIdentifier:SectionIdentifierSyncServices];
+  SyncSwitchItem* syncSwitchItem = base::mac::ObjCCastStrict<SyncSwitchItem>(
+      [self.collectionViewModel itemAtIndexPath:indexPath]);
+  syncSwitchItem.on = [self isAutofillWalletImportOn];
+  syncSwitchItem.enabled = [self isAutofillWalletImportItemEnabled];
+  [self reconfigureCellsForItems:@[ syncSwitchItem ]];
 }
 
 - (void)updateEncryptionCell {
@@ -918,6 +990,23 @@ typedef NS_ENUM(NSInteger, ItemType) {
   return (!_syncSetupService->IsSyncingAllDataTypes() &&
           _syncSetupService->IsSyncEnabled() &&
           ![self shouldDisableSettingsOnSyncError]);
+}
+
+- (BOOL)isAutofillWalletImportItemEnabled {
+  syncer::ModelType autofillModelType =
+      _syncSetupService->GetModelType(SyncSetupService::kSyncAutofill);
+  BOOL isAutofillOn = _syncSetupService->IsDataTypePreferred(autofillModelType);
+  return isAutofillOn && [self shouldSyncableItemsBeEnabled];
+}
+
+- (BOOL)isAutofillWalletImportOn {
+  return _browserState->GetPrefs()->GetBoolean(
+      autofill::prefs::kAutofillWalletImportEnabled);
+}
+
+- (void)setAutofillWalletImportOn:(BOOL)on {
+  _browserState->GetPrefs()->SetBoolean(
+      autofill::prefs::kAutofillWalletImportEnabled, on);
 }
 
 - (NSInteger)tagForIndexPath:(NSIndexPath*)indexPath {

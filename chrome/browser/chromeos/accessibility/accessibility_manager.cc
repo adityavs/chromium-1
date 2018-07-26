@@ -56,6 +56,7 @@
 #include "chromeos/chromeos_switches.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "chromeos/dbus/power_manager_client.h"
+#include "components/language/core/browser/pref_names.h"
 #include "components/prefs/pref_member.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_accessibility_state.h"
@@ -115,35 +116,36 @@ BrailleController* GetBrailleController() {
 
 }  // namespace
 
-class ChromeVoxPanelWidgetObserver : public views::WidgetObserver {
+class AccessibilityPanelWidgetObserver : public views::WidgetObserver {
  public:
-  ChromeVoxPanelWidgetObserver(views::Widget* widget,
-                               AccessibilityManager* manager)
-      : widget_(widget), manager_(manager) {
+  AccessibilityPanelWidgetObserver(views::Widget* widget,
+                                   base::OnceCallback<void()> on_destroying)
+      : widget_(widget), on_destroying_(std::move(on_destroying)) {
     widget_->AddObserver(this);
   }
 
-  ~ChromeVoxPanelWidgetObserver() override = default;
+  ~AccessibilityPanelWidgetObserver() override = default;
 
   void OnWidgetClosing(views::Widget* widget) override {
     CHECK_EQ(widget_, widget);
     widget->RemoveObserver(this);
-    manager_->OnChromeVoxPanelClosing();
-    // |this| is deleted.
+    std::move(on_destroying_).Run();
+    // |this| should be deleted.
   }
 
   void OnWidgetDestroying(views::Widget* widget) override {
     CHECK_EQ(widget_, widget);
     widget->RemoveObserver(this);
-    manager_->OnChromeVoxPanelDestroying();
-    // |this| is deleted.
+    std::move(on_destroying_).Run();
+    // |this| should be deleted.
   }
 
  private:
   views::Widget* widget_;
-  AccessibilityManager* manager_;
 
-  DISALLOW_COPY_AND_ASSIGN(ChromeVoxPanelWidgetObserver);
+  base::OnceCallback<void()> on_destroying_;
+
+  DISALLOW_COPY_AND_ASSIGN(AccessibilityPanelWidgetObserver);
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -246,17 +248,18 @@ AccessibilityManager::AccessibilityManager()
   chromevox_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kChromeVoxExtensionId,
       resources_path.Append(extension_misc::kChromeVoxExtensionPath),
-      base::Bind(&AccessibilityManager::PostUnloadChromeVox,
-                 weak_ptr_factory_.GetWeakPtr())));
+      base::BindRepeating(&AccessibilityManager::PostUnloadChromeVox,
+                          weak_ptr_factory_.GetWeakPtr())));
   select_to_speak_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kSelectToSpeakExtensionId,
       resources_path.Append(extension_misc::kSelectToSpeakExtensionPath),
-      base::Bind(&AccessibilityManager::PostUnloadSelectToSpeak,
-                 weak_ptr_factory_.GetWeakPtr())));
+      base::BindRepeating(&AccessibilityManager::PostUnloadSelectToSpeak,
+                          weak_ptr_factory_.GetWeakPtr())));
   switch_access_loader_ = base::WrapUnique(new AccessibilityExtensionLoader(
       extension_misc::kSwitchAccessExtensionId,
       resources_path.Append(extension_misc::kSwitchAccessExtensionPath),
-      base::Closure()));
+      base::BindRepeating(&AccessibilityManager::PostUnloadSwitchAccess,
+                          weak_ptr_factory_.GetWeakPtr())));
 
   // Connect to ash's AccessibilityController interface.
   content::ServiceManagerConnection::GetForProcess()
@@ -950,7 +953,7 @@ void AccessibilityManager::SetProfile(Profile* profile) {
     local_state_pref_change_registrar_.reset(new PrefChangeRegistrar);
     local_state_pref_change_registrar_->Init(g_browser_process->local_state());
     local_state_pref_change_registrar_->Add(
-        prefs::kApplicationLocale,
+        language::prefs::kApplicationLocale,
         base::Bind(&AccessibilityManager::OnLocaleChanged,
                    base::Unretained(this)));
 
@@ -1159,10 +1162,8 @@ void AccessibilityManager::OnExtensionUnloaded(
     content::BrowserContext* browser_context,
     const extensions::Extension* extension,
     extensions::UnloadedExtensionReason reason) {
-  if (extension->id() == keyboard_listener_extension_id_) {
+  if (extension->id() == keyboard_listener_extension_id_)
     keyboard_listener_extension_id_ = std::string();
-    keyboard_listener_capture_ = false;
-  }
 }
 
 void AccessibilityManager::OnShutdown(extensions::ExtensionRegistry* registry) {
@@ -1192,8 +1193,10 @@ void AccessibilityManager::PostLoadChromeVox() {
 
   if (!chromevox_panel_) {
     chromevox_panel_ = new ChromeVoxPanel(profile_);
-    chromevox_panel_widget_observer_.reset(
-        new ChromeVoxPanelWidgetObserver(chromevox_panel_->GetWidget(), this));
+    chromevox_panel_widget_observer_.reset(new AccessibilityPanelWidgetObserver(
+        chromevox_panel_->GetWidget(),
+        base::BindOnce(&AccessibilityManager::OnChromeVoxPanelDestroying,
+                       base::Unretained(this))));
   }
 
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
@@ -1209,7 +1212,8 @@ void AccessibilityManager::PostUnloadChromeVox() {
 
   // Clear the accessibility focus ring.
   SetFocusRing(std::vector<gfx::Rect>(),
-               ash::mojom::FocusRingBehavior::PERSIST_FOCUS_RING);
+               ash::mojom::FocusRingBehavior::PERSIST_FOCUS_RING,
+               extension_misc::kChromeVoxExtensionId);
 
   if (chromevox_panel_) {
     chromevox_panel_->Close();
@@ -1229,13 +1233,10 @@ void AccessibilityManager::PostSwitchChromeVoxProfile() {
     chromevox_panel_ = nullptr;
   }
   chromevox_panel_ = new ChromeVoxPanel(profile_);
-  chromevox_panel_widget_observer_.reset(
-      new ChromeVoxPanelWidgetObserver(chromevox_panel_->GetWidget(), this));
-}
-
-void AccessibilityManager::OnChromeVoxPanelClosing() {
-  chromevox_panel_widget_observer_.reset();
-  chromevox_panel_ = nullptr;
+  chromevox_panel_widget_observer_.reset(new AccessibilityPanelWidgetObserver(
+      chromevox_panel_->GetWidget(),
+      base::BindOnce(&AccessibilityManager::OnChromeVoxPanelDestroying,
+                     base::Unretained(this))));
 }
 
 void AccessibilityManager::OnChromeVoxPanelDestroying() {
@@ -1248,11 +1249,19 @@ void AccessibilityManager::PostUnloadSelectToSpeak() {
   // unloads.
 
   // Clear the accessibility focus ring and highlight.
-  HideFocusRing();
+  HideFocusRing(extension_misc::kSelectToSpeakExtensionId);
   HideHighlights();
 
   // Stop speech.
   TtsController::GetInstance()->Stop();
+}
+
+void AccessibilityManager::PostUnloadSwitchAccess() {
+  // Do any teardown work needed immediately after SwitchAccess actually
+  // unloads.
+
+  // Clear the accessibility focus ring.
+  HideFocusRing(extension_misc::kSwitchAccessExtensionId);
 }
 
 void AccessibilityManager::SetKeyboardListenerExtensionId(
@@ -1281,25 +1290,27 @@ bool AccessibilityManager::ToggleDictation() {
   return dictation_->OnToggleDictation();
 }
 
-void AccessibilityManager::SetFocusRingColor(SkColor color) {
-  accessibility_focus_ring_controller_->SetFocusRingColor(color);
+void AccessibilityManager::SetFocusRingColor(SkColor color,
+                                             std::string caller_id) {
+  accessibility_focus_ring_controller_->SetFocusRingColor(color, caller_id);
 }
 
-void AccessibilityManager::ResetFocusRingColor() {
-  accessibility_focus_ring_controller_->ResetFocusRingColor();
+void AccessibilityManager::ResetFocusRingColor(std::string caller_id) {
+  accessibility_focus_ring_controller_->ResetFocusRingColor(caller_id);
 }
 
 void AccessibilityManager::SetFocusRing(
     const std::vector<gfx::Rect>& rects_in_screen,
-    ash::mojom::FocusRingBehavior focus_ring_behavior) {
-  accessibility_focus_ring_controller_->SetFocusRing(rects_in_screen,
-                                                     focus_ring_behavior);
+    ash::mojom::FocusRingBehavior focus_ring_behavior,
+    std::string caller_id) {
+  accessibility_focus_ring_controller_->SetFocusRing(
+      rects_in_screen, focus_ring_behavior, caller_id);
   if (focus_ring_observer_for_test_)
     focus_ring_observer_for_test_.Run();
 }
 
-void AccessibilityManager::HideFocusRing() {
-  accessibility_focus_ring_controller_->HideFocusRing();
+void AccessibilityManager::HideFocusRing(std::string caller_id) {
+  accessibility_focus_ring_controller_->HideFocusRing(caller_id);
   if (focus_ring_observer_for_test_)
     focus_ring_observer_for_test_.Run();
 }

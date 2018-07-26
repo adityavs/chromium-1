@@ -216,6 +216,48 @@ class LayerTreeHostTestFrameOrdering : public LayerTreeHostTest {
 
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestFrameOrdering);
 
+class LayerTreeHostTestRequestedMainFrame : public LayerTreeHostTest {
+ public:
+  void BeginTest() override { PostSetNeedsCommitToMainThread(); }
+
+  void WillBeginMainFrame() override {
+    // Post NextStep() so it happens after the MainFrame completes.
+    MainThreadTaskRunner()->PostTask(
+        FROM_HERE,
+        base::BindOnce(&LayerTreeHostTestRequestedMainFrame::NextStep,
+                       base::Unretained(this)));
+  }
+
+  void NextStep() {
+    // The MainFrame request is cleared once a MainFrame happens.
+    EXPECT_FALSE(layer_tree_host()->RequestedMainFramePending());
+    switch (layer_tree_host()->SourceFrameNumber()) {
+      case 0:
+        ADD_FAILURE()
+            << "Case 0 is the initial commit used to send the test here";
+        FALLTHROUGH;
+      case 1:
+        layer_tree_host()->SetNeedsAnimate();
+        break;
+      case 2:
+        layer_tree_host()->SetNeedsUpdateLayers();
+        break;
+      case 3:
+        layer_tree_host()->SetNeedsCommit();
+        break;
+      case 4:
+        EndTest();
+        return;
+    }
+    // SetNeeds{Animate,UpdateLayers,Commit}() will mean a MainFrame is pending.
+    EXPECT_TRUE(layer_tree_host()->RequestedMainFramePending());
+  }
+
+  void AfterTest() override {}
+};
+
+SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestRequestedMainFrame);
+
 class LayerTreeHostTestSetNeedsUpdateInsideLayout : public LayerTreeHostTest {
  protected:
   void BeginTest() override { PostSetNeedsCommitToMainThread(); }
@@ -2875,7 +2917,7 @@ class LayerTreeHostTestCommit : public LayerTreeHostTest {
   }
 
   void DidActivateTreeOnThread(LayerTreeHostImpl* impl) override {
-    EXPECT_EQ(gfx::Rect(20, 20), impl->DeviceViewport());
+    EXPECT_EQ(gfx::Rect(20, 20), impl->active_tree()->GetDeviceViewport());
     EXPECT_EQ(SK_ColorGRAY, impl->active_tree()->background_color());
     EXPECT_EQ(EventListenerProperties::kPassive,
               impl->active_tree()->event_listener_properties(
@@ -3208,7 +3250,7 @@ class LayerTreeHostTestDeviceScaleFactorScalesViewportAndLayers
     EXPECT_NEAR(impl->active_tree()->device_scale_factor(), 1.5f, 0.00001f);
 
     // Device viewport is scaled.
-    EXPECT_EQ(gfx::Rect(60, 60), impl->DeviceViewport());
+    EXPECT_EQ(gfx::Rect(60, 60), impl->active_tree()->GetDeviceViewport());
 
     FakePictureLayerImpl* root = static_cast<FakePictureLayerImpl*>(
         impl->active_tree()->root_layer_for_testing());
@@ -7716,6 +7758,48 @@ class LayerTreeHostTestLocalSurfaceId : public LayerTreeHostTest {
 };
 SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestLocalSurfaceId);
 
+// Makes sure that LayerTreeHost does not pick up changes to
+// viz::LocalSurfaceIds that only involve the child sequence number.
+class LayerTreeHostTestLocalSurfaceIdSkipChildNum : public LayerTreeHostTest {
+ protected:
+  void InitializeSettings(LayerTreeSettings* settings) override {
+    settings->enable_surface_synchronization = true;
+  }
+
+  void BeginTest() override {
+    expected_local_surface_id_ = allocator_.GetCurrentLocalSurfaceId();
+    EXPECT_TRUE(child_allocator_.UpdateFromParent(expected_local_surface_id_));
+    child_local_surface_id_ = child_allocator_.GenerateId();
+    EXPECT_NE(expected_local_surface_id_, child_local_surface_id_);
+    PostSetLocalSurfaceIdToMainThread(expected_local_surface_id_);
+    PostSetLocalSurfaceIdToMainThread(child_local_surface_id_);
+  }
+
+  DrawResult PrepareToDrawOnThread(LayerTreeHostImpl* host_impl,
+                                   LayerTreeHostImpl::FrameData* frame_data,
+                                   DrawResult draw_result) override {
+    EXPECT_EQ(DRAW_SUCCESS, draw_result);
+    // We should not be picking up the newer |child_local_surface_id_|.
+    EXPECT_EQ(expected_local_surface_id_,
+              host_impl->active_tree()->local_surface_id_from_parent());
+    return draw_result;
+  }
+
+  void DisplayReceivedLocalSurfaceIdOnThread(
+      const viz::LocalSurfaceId& local_surface_id) override {
+    EXPECT_EQ(expected_local_surface_id_, local_surface_id);
+    EndTest();
+  }
+
+  void AfterTest() override {}
+
+  viz::LocalSurfaceId expected_local_surface_id_;
+  viz::LocalSurfaceId child_local_surface_id_;
+  viz::ParentLocalSurfaceIdAllocator allocator_;
+  viz::ChildLocalSurfaceIdAllocator child_allocator_;
+};
+SINGLE_AND_MULTI_THREAD_TEST_F(LayerTreeHostTestLocalSurfaceIdSkipChildNum);
+
 // Makes sure that viz::LocalSurfaceId allocation requests propagate all the way
 // to LayerTreeFrameSink.
 class LayerTreeHostTestRequestNewLocalSurfaceId : public LayerTreeHostTest {
@@ -7852,7 +7936,7 @@ class LayerTreeHostTestSubmitFrameMetadata : public LayerTreeHostTest {
                                    DrawResult draw_result) override {
     EXPECT_EQ(DRAW_SUCCESS, draw_result);
     EXPECT_EQ(0, num_swaps_);
-    drawn_viewport_ = host_impl->DeviceViewport();
+    drawn_viewport_ = host_impl->active_tree()->GetDeviceViewport();
     return draw_result;
   }
 

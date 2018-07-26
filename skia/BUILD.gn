@@ -238,6 +238,13 @@ source_set("skcms") {
     ]
   }
 
+  # LLVM automatically sets the equivalent of GCC's -mfp16-format=ieee on ARM
+  # builds by default, while GCC itself does not. We need it to enable support
+  # for half-precision floating point data types used by SKCMS on ARM.
+  if (is_linux && !is_clang && current_cpu == "arm") {
+    cflags += [ "-mfp16-format=ieee" ]
+  }
+
   public = [
     "//third_party/skia/third_party/skcms/skcms.h",
   ]
@@ -479,8 +486,14 @@ component("skia") {
   if (is_fuchsia) {
     sources += [
       "//third_party/skia/src/ports/SkFontMgr_custom.cpp",
-      "//third_party/skia/src/ports/SkFontMgr_custom_empty.cpp",
       "ext/fontmgr_default_fuchsia.cc",
+      "ext/fontmgr_default_fuchsia.h",
+      "ext/fontmgr_fuchsia.cc",
+      "ext/fontmgr_fuchsia.h",
+    ]
+    deps += [
+      "//third_party/fuchsia-sdk:fonts",
+      "//third_party/icu:icuuc",
     ]
   }
 
@@ -780,7 +793,7 @@ test("skia_unittests") {
     ":skia",
     "//base",
     "//base/test:test_support",
-    "//mojo/edk/test:run_all_unittests",
+    "//mojo/core/test:run_all_unittests",
     "//testing/gtest",
     "//ui/gfx",
     "//ui/gfx/geometry",
@@ -793,6 +806,17 @@ test("skia_unittests") {
       "//cc:test_support",
       "//mojo/public/cpp/bindings",
       "//skia/public/interfaces:test_interfaces",
+    ]
+  }
+
+  if (is_fuchsia) {
+    sources += [ "ext/fontmgr_fuchsia_unittest.cc" ]
+    deps += [
+      "//third_party/fuchsia-sdk:fonts",
+      "//third_party/test_fonts",
+    ]
+    data_deps = [
+      "//third_party/test_fonts",
     ]
   }
 }

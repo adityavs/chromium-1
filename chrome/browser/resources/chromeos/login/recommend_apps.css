@@ -15,13 +15,8 @@
 }
 
 #recommend-apps-skip-button {
-  -webkit-padding-end: 6px;
   color: rgba(0, 0, 0, 0.54);
-}
-
-#recommend-apps-install-button,
-#recommend-apps-retry-button {
-  -webkit-padding-end: 18px;
+  padding-inline-end: 6px;
 }
 
 .recommend-apps-loaded .app-list-loading,
@@ -40,5 +35,6 @@
 }
 
 #app-list-view-container {
-  height: 200px;
+  height: 100%;
+  padding: 0 52px 0 62px;
 }

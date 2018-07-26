@@ -87,7 +87,8 @@ class ProfileImpl : public Profile {
   content::SSLHostStateDelegate* GetSSLHostStateDelegate() override;
   content::BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate()
       override;
-  content::PermissionManager* GetPermissionManager() override;
+  content::PermissionControllerDelegate* GetPermissionControllerDelegate()
+      override;
   content::BackgroundFetchDelegate* GetBackgroundFetchDelegate() override;
   content::BackgroundSyncController* GetBackgroundSyncController() override;
   net::URLRequestContextGetter* CreateRequestContext(
@@ -104,6 +105,8 @@ class ProfileImpl : public Profile {
       bool in_memory) override;
   void RegisterInProcessServices(StaticServiceMap* services) override;
   std::string GetMediaDeviceIDSalt() override;
+  download::InProgressDownloadManager* RetriveInProgressDownloadManager()
+      override;
 
   // Profile implementation:
   scoped_refptr<base::SequencedTaskRunner> GetIOTaskRunner() override;
@@ -130,6 +133,7 @@ class ProfileImpl : public Profile {
   PrefService* GetReadOnlyOffTheRecordPrefs() override;
   net::URLRequestContextGetter* GetRequestContext() override;
   net::URLRequestContextGetter* GetRequestContextForExtensions() override;
+  scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory() override;
   bool IsSameProfile(Profile* profile) override;
   base::Time GetStartTime() const override;
   base::FilePath last_selected_directory() override;

@@ -18,6 +18,7 @@
 #include "services/ui/public/interfaces/window_tree_constants.mojom.h"
 #include "ui/base/cursor/cursor.h"
 #include "ui/base/dragdrop/drag_drop_types.h"
+#include "ui/base/ui_base_types.h"
 
 namespace aura {
 class PropertyConverter;
@@ -32,6 +33,7 @@ namespace ui {
 
 class KeyEvent;
 class OSExchangeData;
+class SystemInputInjector;
 
 namespace ws2 {
 
@@ -99,6 +101,14 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowServiceDelegate {
   virtual void UpdateImeVisibility(aura::Window* window,
                                    bool visible,
                                    ui::mojom::TextInputStatePtr state) {}
+
+  // Called to set the window's modal type; may reparent the window.
+  virtual void SetModalType(aura::Window* window, ui::ModalType type) {}
+
+  // Returns the SystemInputInjector to use when processing events from a
+  // remote client. A return value of null (the default) results in disallowing
+  // injection.
+  virtual SystemInputInjector* GetSystemInputInjector();
 
  protected:
   virtual ~WindowServiceDelegate() = default;

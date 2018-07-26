@@ -165,10 +165,6 @@ class MODULES_EXPORT AXLayoutObject : public AXNodeObject {
   AXObject* RawNextSibling() const override;
   void AddChildren() override;
   bool CanHaveChildren() const override;
-  void UpdateChildrenIfNecessary() override;
-  bool NeedsToUpdateChildren() const override { return children_dirty_; }
-  void SetNeedsToUpdateChildren() override { children_dirty_ = true; }
-  void ClearChildren() override;
 
   // Properties of the object's owning document or page.
   double EstimatedLoadingProgress() const override;
@@ -197,7 +193,6 @@ class MODULES_EXPORT AXLayoutObject : public AXNodeObject {
   void ColumnHeaders(AXObjectVector&) const override;
   void RowHeaders(AXObjectVector&) const override;
   AXObject* CellForColumnAndRow(unsigned column, unsigned row) const override;
-  AXObject* HeaderContainer() override;
 
   // For a table cell.
   unsigned ColumnIndex() const override;

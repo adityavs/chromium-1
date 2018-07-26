@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Lokalisasi digunakan, tetapi default_locale tidak ditentukan dalam manifes.</translation>
 <translation id="2576842806987913196">Sudah ada file CRX dengan nama ini.</translation>
 <translation id="2753617847762399167">jalur ilegal (mutlak atau relatif dengan '..'): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">Ekstensi ini gagal memodifikasi permintaan jaringan karena modifikasi bentrok dengan ekstensi lain.</translation>
 <translation id="2785530881066938471">Tidak dapat memuat file '<ph name="RELATIVE_PATH" />' untuk skrip konten. File ini tidak bersandiaksara UTF-8.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (ID ekstensi "<ph name="EXTENSION_ID" />") diblokir oleh administrator. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Tidak dapat memasang paket: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Produk <ph name="PRODUCT_ID" /> tak dikenal dari <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">File manifes tidak valid</translation>
 <translation id="7217838517480956708">Administrator mesin ini membutuhkan <ph name="EXTENSION_NAME" /> untuk dipasang. Persyaratan ini tidak dapat dihapus atau dimodifikasi.</translation>
+<translation id="7939686037314084444">Ekstensi gagal dimuat dengan benar. Ekstensi mungkin tidak dapat menyadap permintaan jaringan.</translation>
 <translation id="7972881773422714442">Opsi: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Kamera depan</translation>
 <translation id="8047248493720652249">Ekstensi ini gagal memberi nama download "<ph name="ATTEMPTED_FILENAME" />" karena ekstensi lain (<ph name="EXTENSION_NAME" />) menentukan nama file yang berbeda "<ph name="ACTUAL_FILENAME" />".</translation>

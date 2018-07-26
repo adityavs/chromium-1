@@ -210,7 +210,7 @@ class OmniboxViewViews : public OmniboxView,
   gfx::NativeView GetRelativeWindowForPopup() const override;
   int GetWidth() const override;
   bool IsImeShowingPopup() const override;
-  void ShowImeIfNeeded() override;
+  void ShowVirtualKeyboardIfEnabled() override;
   void HideImeIfNeeded() override;
   int GetOmniboxTextLength() const override;
   void SetEmphasis(bool emphasize, const gfx::Range& range) override;
@@ -235,6 +235,7 @@ class OmniboxViewViews : public OmniboxView,
   void DoInsertChar(base::char16 ch) override;
   bool IsTextEditCommandEnabled(ui::TextEditCommand command) const override;
   void ExecuteTextEditCommand(ui::TextEditCommand command) override;
+  bool ShouldShowPlaceholderText() const override;
 
   // chromeos::input_method::InputMethodManager::CandidateWindowObserver:
 #if defined(OS_CHROMEOS)

@@ -15,6 +15,7 @@
 #include "content/public/browser/web_contents.h"
 #include "ui/accessibility/ax_node_data.h"
 #include "ui/base/l10n/l10n_util.h"
+#include "ui/base/material_design/material_design_controller.h"
 #include "ui/views/controls/label.h"
 
 using content::WebContents;
@@ -71,6 +72,17 @@ SkColor LocationIconView::GetTextColor() const {
       location_bar_->GetToolbarModel()->GetSecurityLevel(false));
 }
 
+bool LocationIconView::ShouldShowSeparator() const {
+  return ShouldShowLabel() ||
+         (ui::MaterialDesignController::IsRefreshUi() &&
+          !location_bar_->GetOmniboxView()->IsEditingOrEmpty());
+}
+
+bool LocationIconView::ShouldShowExtraEndSpace() const {
+  return ui::MaterialDesignController::IsRefreshUi() &&
+         location_bar_->GetOmniboxView()->IsEditingOrEmpty();
+}
+
 bool LocationIconView::ShowBubble(const ui::Event& event) {
   auto* contents = location_bar_->GetWebContents();
   if (!contents)
@@ -80,7 +92,8 @@ bool LocationIconView::ShowBubble(const ui::Event& event) {
 
 void LocationIconView::GetAccessibleNodeData(ui::AXNodeData* node_data) {
   if (location_bar_->GetOmniboxView()->IsEditingOrEmpty()) {
-    node_data->role = ax::mojom::Role::kNone;
+    node_data->role = ax::mojom::Role::kImage;
+    node_data->SetName(l10n_util::GetStringUTF8(IDS_ACC_SEARCH_ICON));
     return;
   }
 

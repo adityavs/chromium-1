@@ -8,6 +8,7 @@
 
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
+#include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "content/browser/compositor/image_transport_factory.h"
 #include "content/browser/compositor/surface_utils.h"
@@ -157,10 +158,6 @@ void TestRenderWidgetHostView::SpeakSelection() {
 }
 #endif
 
-gfx::Vector2d TestRenderWidgetHostView::GetOffsetFromRootSurface() {
-  return gfx::Vector2d();
-}
-
 gfx::Rect TestRenderWidgetHostView::GetBoundsInRootWindow() {
   return gfx::Rect();
 }
@@ -193,8 +190,12 @@ bool TestRenderWidgetHostView::LockMouse() {
 void TestRenderWidgetHostView::UnlockMouse() {
 }
 
-viz::FrameSinkId TestRenderWidgetHostView::GetFrameSinkId() {
+const viz::FrameSinkId& TestRenderWidgetHostView::GetFrameSinkId() const {
   return frame_sink_id_;
+}
+
+const viz::LocalSurfaceId& TestRenderWidgetHostView::GetLocalSurfaceId() const {
+  return viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
 }
 
 viz::SurfaceId TestRenderWidgetHostView::GetCurrentSurfaceId() const {
@@ -217,11 +218,13 @@ TestRenderViewHost::TestRenderViewHost(
     SiteInstance* instance,
     std::unique_ptr<RenderWidgetHostImpl> widget,
     RenderViewHostDelegate* delegate,
+    int32_t routing_id,
     int32_t main_frame_routing_id,
     bool swapped_out)
     : RenderViewHostImpl(instance,
                          std::move(widget),
                          delegate,
+                         routing_id,
                          main_frame_routing_id,
                          swapped_out,
                          false /* has_initialized_audio_host */),

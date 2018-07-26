@@ -9,7 +9,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/command_line.h"
 #include "base/mac/foundation_util.h"
 #include "base/mac/scoped_nsobject.h"
 #include "base/strings/sys_string_conversions.h"
@@ -17,7 +16,6 @@
 #include "components/crash/core/common/crash_key.h"
 #import "ui/base/cocoa/constrained_window/constrained_window_animation.h"
 #import "ui/base/cocoa/window_size_constants.h"
-#include "ui/base/ui_base_switches.h"
 #include "ui/display/display.h"
 #include "ui/display/screen.h"
 #include "ui/gfx/font_list.h"
@@ -49,11 +47,6 @@
 
 namespace views {
 namespace {
-
-bool AreModalAnimationsEnabled() {
-  return !base::CommandLine::ForCurrentProcess()->HasSwitch(
-      switches::kDisableModalAnimations);
-}
 
 NSInteger StyleMaskForParams(const Widget::InitParams& params) {
   // If the Widget is modal, it will be displayed as a sheet. This works best if
@@ -402,8 +395,7 @@ void NativeWidgetMac::Close() {
   }
 
   // For other modal types, animate the close.
-  if (bridge_->animate() && AreModalAnimationsEnabled() &&
-      delegate_->IsModal()) {
+  if (bridge_->ShouldRunCustomAnimationFor(Widget::ANIMATE_HIDE)) {
     [ViewsNSWindowCloseAnimator closeWindowWithAnimation:window];
     return;
   }
@@ -563,6 +555,11 @@ void NativeWidgetMac::SetOpacity(float opacity) {
   [GetNativeWindow() setAlphaValue:opacity];
 }
 
+void NativeWidgetMac::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
+  [GetNativeWindow() setContentAspectRatio:NSMakeSize(aspect_ratio.width(),
+                                                      aspect_ratio.height())];
+}
+
 void NativeWidgetMac::FlashFrame(bool flash_frame) {
   NOTIMPLEMENTED();
 }
@@ -629,7 +626,7 @@ void NativeWidgetMac::EndMoveLoop() {
 
 void NativeWidgetMac::SetVisibilityChangedAnimationsEnabled(bool value) {
   if (bridge_)
-    bridge_->set_animate(value);
+    bridge_->SetAnimationEnabled(value);
 }
 
 void NativeWidgetMac::SetVisibilityAnimationDuration(
@@ -639,7 +636,8 @@ void NativeWidgetMac::SetVisibilityAnimationDuration(
 
 void NativeWidgetMac::SetVisibilityAnimationTransition(
     Widget::VisibilityTransition transition) {
-  NOTIMPLEMENTED();
+  if (bridge_)
+    bridge_->set_transitions_to_animate(transition);
 }
 
 bool NativeWidgetMac::IsTranslucentWindowOpacitySupported() const {
@@ -698,12 +696,6 @@ void Widget::CloseAllSecondaryWidgets() {
     if (widget && widget->is_secondary_widget())
       [window close];
   }
-}
-
-bool Widget::ConvertRect(const Widget* source,
-                         const Widget* target,
-                         gfx::Rect* rect) {
-  return false;
 }
 
 const ui::NativeTheme* Widget::GetNativeTheme() const {

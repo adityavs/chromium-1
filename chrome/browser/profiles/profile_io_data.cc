@@ -62,7 +62,7 @@
 #include "components/policy/core/common/cloud/policy_header_service.h"
 #include "components/policy/core/common/cloud/user_cloud_policy_manager.h"
 #include "components/prefs/pref_service.h"
-#include "components/previews/content/previews_io_data.h"
+#include "components/previews/content/previews_decider_impl.h"
 #include "components/signin/core/browser/profile_management_switches.h"
 #include "components/signin/core/browser/signin_pref_names.h"
 #include "components/sync/base/pref_names.h"
@@ -113,7 +113,6 @@
 #if BUILDFLAG(ENABLE_EXTENSIONS)
 #include "extensions/browser/extension_protocols.h"
 #include "extensions/browser/extension_system.h"
-#include "extensions/browser/extension_throttle_manager.h"
 #include "extensions/browser/info_map.h"
 #include "extensions/common/constants.h"
 #endif  // BUILDFLAG(ENABLE_EXTENSIONS)
@@ -191,14 +190,14 @@ class WrappedCertVerifierForProfileIODataTesting : public net::CertVerifier {
   int Verify(const RequestParams& params,
              net::CRLSet* crl_set,
              net::CertVerifyResult* verify_result,
-             const net::CompletionCallback& callback,
+             net::CompletionOnceCallback callback,
              std::unique_ptr<Request>* out_req,
              const net::NetLogWithSource& net_log) override {
     verify_result->Reset();
     if (!g_cert_verifier_for_profile_io_data_testing)
       return net::ERR_FAILED;
     return g_cert_verifier_for_profile_io_data_testing->Verify(
-        params, crl_set, verify_result, callback, out_req, net_log);
+        params, crl_set, verify_result, std::move(callback), out_req, net_log);
   }
 };
 
@@ -515,6 +514,12 @@ void ProfileIOData::InitializeOnUIThread(Profile* profile) {
     sync_has_auth_error_.MoveToThread(io_task_runner);
   }
 
+#if !defined(OS_CHROMEOS)
+  signin_scoped_device_id_.Init(prefs::kGoogleServicesSigninScopedDeviceId,
+                                pref_service);
+  signin_scoped_device_id_.MoveToThread(io_task_runner);
+#endif
+
   network_prediction_options_.Init(prefs::kNetworkPredictionOptions,
                                    pref_service);
 
@@ -614,15 +619,9 @@ ProfileIOData::AppRequestContext::~AppRequestContext() {
   AssertNoURLRequests();
 }
 
-ProfileIOData::ProfileParams::ProfileParams()
-    : io_thread(NULL),
-#if defined(OS_CHROMEOS)
-      system_key_slot_use_type(SystemKeySlotUseType::kNone),
-#endif
-      profile(NULL) {
-}
+ProfileIOData::ProfileParams::ProfileParams() = default;
 
-ProfileIOData::ProfileParams::~ProfileParams() {}
+ProfileIOData::ProfileParams::~ProfileParams() = default;
 
 ProfileIOData::ProfileIOData(Profile::ProfileType profile_type)
     : initialized_(false),
@@ -869,16 +868,6 @@ extensions::InfoMap* ProfileIOData::GetExtensionInfoMap() const {
 #endif
 }
 
-extensions::ExtensionThrottleManager*
-ProfileIOData::GetExtensionThrottleManager() const {
-  DCHECK(initialized_) << "ExtensionSystem not initialized";
-#if BUILDFLAG(ENABLE_EXTENSIONS)
-  return extension_throttle_manager_.get();
-#else
-  return nullptr;
-#endif
-}
-
 content_settings::CookieSettings* ProfileIOData::GetCookieSettings() const {
   // Allow either Init() or SetCookieSettingsForTesting() to initialize.
   DCHECK(initialized_ || cookie_settings_.get());
@@ -898,6 +887,12 @@ bool ProfileIOData::IsSyncEnabled() const {
 bool ProfileIOData::SyncHasAuthError() const {
   return sync_has_auth_error_.GetValue();
 }
+
+#if !defined(OS_CHROMEOS)
+std::string ProfileIOData::GetSigninScopedDeviceId() const {
+  return signin_scoped_device_id_.GetValue();
+}
+#endif
 
 bool ProfileIOData::IsOffTheRecord() const {
   return profile_type() == Profile::INCOGNITO_PROFILE
@@ -962,25 +957,19 @@ void ProfileIOData::set_data_reduction_proxy_io_data(
   data_reduction_proxy_io_data_ = std::move(data_reduction_proxy_io_data);
 }
 
-void ProfileIOData::set_previews_io_data(
-    std::unique_ptr<previews::PreviewsIOData> previews_io_data) const {
-  previews_io_data_ = std::move(previews_io_data);
+void ProfileIOData::set_previews_decider_impl(
+    std::unique_ptr<previews::PreviewsDeciderImpl> previews_decider_impl)
+    const {
+  previews_decider_impl_ = std::move(previews_decider_impl);
 }
 
 ProfileIOData::ResourceContext::ResourceContext(ProfileIOData* io_data)
     : io_data_(io_data),
-      host_resolver_(NULL),
       request_context_(NULL) {
   DCHECK(io_data);
 }
 
 ProfileIOData::ResourceContext::~ResourceContext() {}
-
-net::HostResolver* ProfileIOData::ResourceContext::GetHostResolver()  {
-  DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  DCHECK(io_data_->initialized_);
-  return host_resolver_;
-}
 
 net::URLRequestContext* ProfileIOData::ResourceContext::GetRequestContext()  {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
@@ -1065,11 +1054,6 @@ void ProfileIOData::Init(
 #if BUILDFLAG(ENABLE_EXTENSIONS)
       chrome_network_delegate->set_extension_info_map(
           profile_params_->extension_info_map.get());
-      if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
-              switches::kDisableExtensionsHttpThrottling)) {
-        extension_throttle_manager_.reset(
-            new extensions::ExtensionThrottleManager());
-      }
 #endif
 
       chrome_network_delegate->set_profile(profile_params_->profile);
@@ -1082,8 +1066,6 @@ void ProfileIOData::Init(
           &force_youtube_restrict_);
       chrome_network_delegate->set_allowed_domains_for_apps(
           &allowed_domains_for_apps_);
-      chrome_network_delegate->set_data_use_aggregator(
-          io_thread_globals->data_use_aggregator.get(), IsOffTheRecord());
 
       chrome_network_delegate_unowned = chrome_network_delegate.get();
 
@@ -1171,8 +1153,6 @@ void ProfileIOData::Init(
           !GetMetricsEnabledStateOnIOThread());
     }
 
-    resource_context_->host_resolver_ =
-        io_thread_globals->system_request_context->host_resolver();
     resource_context_->request_context_ = main_request_context_;
   }
 
@@ -1316,6 +1296,9 @@ void ProfileIOData::ShutdownOnUIThread(
   sync_suppress_start_.Destroy();
   sync_first_setup_complete_.Destroy();
   sync_has_auth_error_.Destroy();
+#if !defined(OS_CHROMEOS)
+  signin_scoped_device_id_.Destroy();
+#endif
   force_google_safesearch_.Destroy();
   force_youtube_restrict_.Destroy();
   allowed_domains_for_apps_.Destroy();

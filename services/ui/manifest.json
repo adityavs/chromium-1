@@ -15,7 +15,6 @@
           "ui.mojom.Gpu",
           "ui.mojom.IMEDriver",
           "ui.mojom.InputDeviceServer",
-          "ui.mojom.ScreenProvider",
           "ui.mojom.WindowTreeFactory"
         ],
         "arc_manager" : [
@@ -31,6 +30,7 @@
         ],
         "test": [
           "ui.mojom.EventInjector",
+          "ui.mojom.TestEventInjector",
           "ui.mojom.WindowServerTest"
         ],
         "discardable_memory": [
@@ -56,8 +56,10 @@
         ],
         "privileged": [
           // Injecting events is security-sensitive.
-          "ui.mojom.EventInjector"
+          "ui.mojom.EventInjector",
+          "ui.mojom.RemotingEventInjector"
         ],
+        // TODO(sky): update this to reflect what is really possible.
         "window_manager": [
           "discardable_memory.mojom.DiscardableSharedMemoryManager",
           "display.mojom.DisplayController",
@@ -68,10 +70,8 @@
           "ui.mojom.IMEDriver",
           "ui.mojom.InputDeviceController",
           "ui.mojom.InputDeviceServer",
-          "ui.mojom.ScreenProvider",
           "ui.mojom.TouchDeviceServer",
-          "ui.mojom.UserActivityMonitor",
-          "ui.mojom.WindowManagerWindowTreeFactory"
+          "ui.mojom.UserActivityMonitor"
         ],
         "window_tree_host_factory": [
           "ui.mojom.WindowTreeHostFactory"

@@ -19,9 +19,29 @@ namespace chromeos {
 // started, and whether the demo session offline resources have been loaded.
 class DemoSession {
  public:
+  enum class EnrollmentType {
+    // Demo mode enrollment unset/unknown.
+    kNone,
+
+    // Device was not enrolled into demo mode.
+    kUnenrolled,
+
+    // Device was enrolled into demo mode using online enrollment flow.
+    kOnline,
+
+    // Device was enrolled into demo mode using offline enrollment flow - i.e.
+    // policies are retrieved from the device, rather than from DM server.
+    kOffline,
+  };
+
   // Whether the device is set up to run demo sessions.
   static bool IsDeviceInDemoMode();
-  static void SetDeviceInDemoModeForTesting(bool in_demo_mode);
+
+  // Returns the type of demo mode setup.
+  static EnrollmentType GetEnrollmentType();
+
+  static void SetDemoModeEnrollmentTypeForTesting(
+      EnrollmentType enrollment_type);
 
   // If the device is set up to run in demo mode, marks demo session as started,
   // and requests load of demo session resources.
@@ -48,7 +68,22 @@ class DemoSession {
   // will be set when the offline resources get loaded.
   base::FilePath GetDemoAppsPath() const;
 
+  // Gets the path under offline demo resources mount point that contains
+  // external extensions prefs (JSON containing set of extensions to be loaded
+  // as external extensions into demo sessions - expected to map extension IDs
+  // to the associated CRX path and version).
+  base::FilePath GetExternalExtensionsPrefsPath() const;
+
+  // Converts a relative path to an absolute path under the offline demo
+  // resources mount. Returns an empty string if the offline demo resources are
+  // not loaded.
+  base::FilePath GetOfflineResourceAbsolutePath(
+      const base::FilePath& relative_path) const;
+
+  bool offline_enrolled() const { return offline_enrolled_; }
+
   bool started() const { return started_; }
+
   bool offline_resources_loaded() const { return offline_resources_loaded_; }
 
  private:
@@ -59,6 +94,12 @@ class DemoSession {
   // |mount_path| is the path at which the resources were loaded.
   void OnOfflineResourcesLoaded(base::Optional<base::FilePath> mounted_path);
 
+  // Whether the device was offline-enrolled into demo mode, i.e. enrolled using
+  // pre-built policies. Offline enrolled demo sessions do not have working
+  // robot account associated with them.
+  bool offline_enrolled_ = false;
+
+  // Whether demo session has been started.
   bool started_ = false;
 
   bool offline_resources_load_requested_ = false;

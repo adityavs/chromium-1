@@ -52,6 +52,20 @@ class COMPONENT_EXPORT(NETWORK_CPP) NetworkQualityTracker
   // Returns the current estimate of the effective connection type.
   net::EffectiveConnectionType GetEffectiveConnectionType() const;
 
+  // Returns the current HTTP RTT estimate. The RTT at the HTTP layer measures
+  // the time from when the request was sent (this happens after the connection
+  // is established) to the time when the response headers were received.
+  base::TimeDelta GetHttpRTT() const;
+
+  // Returns the current transport-layer RTT estimate. The RTT at the transport
+  // layer provides an aggregate estimate of the transport RTT as computed by
+  // various underlying TCP and QUIC connections.
+  base::TimeDelta GetTransportRTT() const;
+
+  // Returns the current downstream throughput estimate (in kilobits per
+  // second).
+  int32_t GetDownstreamThroughputKbps() const;
+
   // Registers |observer| to receive notifications of network changes. The
   // thread on which this is called is the thread on which |observer| will be
   // called back with notifications. The |observer| is notified of the current
@@ -71,7 +85,10 @@ class COMPONENT_EXPORT(NETWORK_CPP) NetworkQualityTracker
  protected:
   // NetworkQualityEstimatorManagerClient implementation. Protected for testing.
   void OnNetworkQualityChanged(
-      net::EffectiveConnectionType effective_connection_type) override;
+      net::EffectiveConnectionType effective_connection_type,
+      base::TimeDelta http_rtt,
+      base::TimeDelta transport_rtt,
+      int32_t downlink_bandwidth_kbps) override;
 
  private:
   // Starts listening for network quality change notifications from
@@ -88,6 +105,9 @@ class COMPONENT_EXPORT(NETWORK_CPP) NetworkQualityTracker
       get_network_service_callback_;
 
   net::EffectiveConnectionType effective_connection_type_;
+  base::TimeDelta http_rtt_;
+  base::TimeDelta transport_rtt_;
+  int32_t downlink_bandwidth_kbps_;
 
   base::ObserverList<EffectiveConnectionTypeObserver>
       effective_connection_type_observer_list_;

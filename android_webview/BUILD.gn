@@ -5,6 +5,7 @@
 import("//android_webview/system_webview_apk_tmpl.gni")
 import("//android_webview/webview_repack_locales.gni")
 import("//android_webview/variables.gni")
+import("//build/config/android/chrome_version.gni")
 import("//build/config/android/config.gni")
 import("//build/config/android/rules.gni")
 import("//build/config/locales.gni")
@@ -524,8 +525,6 @@ source_set("common") {
     "browser/aw_resource_context.h",
     "browser/aw_safe_browsing_blocking_page.cc",
     "browser/aw_safe_browsing_blocking_page.h",
-    "browser/aw_safe_browsing_config_helper.cc",
-    "browser/aw_safe_browsing_config_helper.h",
     "browser/aw_safe_browsing_resource_throttle.cc",
     "browser/aw_safe_browsing_resource_throttle.h",
     "browser/aw_safe_browsing_ui_manager.cc",
@@ -659,8 +658,8 @@ source_set("common") {
     "common/aw_resource.h",
     "common/aw_switches.cc",
     "common/aw_switches.h",
-    "common/crash_reporter/aw_microdump_crash_reporter.cc",
-    "common/crash_reporter/aw_microdump_crash_reporter.h",
+    "common/crash_reporter/aw_crash_reporter_client.cc",
+    "common/crash_reporter/aw_crash_reporter_client.h",
     "common/crash_reporter/crash_keys.cc",
     "common/crash_reporter/crash_keys.h",
     "common/devtools_instrumentation.h",
@@ -715,6 +714,7 @@ source_set("common") {
     "//components/crash/content/app",
     "//components/crash/content/browser",
     "//components/download/public/common:public",
+    "//components/embedder_support/android:web_contents_delegate",
     "//components/google/core/browser",
     "//components/heap_profiling",
     "//components/keyed_service/content",
@@ -752,7 +752,6 @@ source_set("common") {
     "//components/visitedlink/browser",
     "//components/visitedlink/renderer",
     "//components/viz/service",
-    "//components/web_contents_delegate_android:web_contents_delegate_android",
     "//components/web_restrictions:browser",
     "//content",
     "//content/public/app:both",
@@ -811,7 +810,6 @@ android_library("android_webview_java") {
     "java/src/org/chromium/android_webview/AwAutofillUMA.java",
     "java/src/org/chromium/android_webview/AwBrowserContext.java",
     "java/src/org/chromium/android_webview/AwBrowserProcess.java",
-    "java/src/org/chromium/android_webview/AwContentVideoViewEmbedder.java",
     "java/src/org/chromium/android_webview/AwContents.java",
     "java/src/org/chromium/android_webview/AwConsoleMessage.java",
     "java/src/org/chromium/android_webview/AwContentsBackgroundThreadClient.java",
@@ -896,6 +894,7 @@ android_library("android_webview_java") {
     "//components/autofill/android:provider_java",
     "//components/background_task_scheduler:background_task_scheduler_java",
     "//components/crash/android:java",
+    "//components/embedder_support/android:web_contents_delegate_java",
     "//components/minidump_uploader:minidump_uploader_java",
     "//components/navigation_interception/android:navigation_interception_java",
     "//components/policy/android:policy_java",
@@ -903,7 +902,6 @@ android_library("android_webview_java") {
     "//components/variations:load_seed_result_enum_java",
     "//components/variations/android:variations_java",
     "//components/version_info/android:version_constants_java",
-    "//components/web_contents_delegate_android:web_contents_delegate_android_java",
     "//components/web_restrictions:client_java",
     "//content/public/android:content_java",
     "//device/gamepad:java",
@@ -1070,6 +1068,7 @@ android_aidl("aw_variations_seed_server_aidl") {
 
 if (public_android_sdk) {
   system_webview_apk_tmpl("system_webview_apk") {
+    version_name = chrome_version_name
     android_manifest = system_webview_android_manifest
     android_manifest_dep = ":system_webview_manifest"
     deps = [

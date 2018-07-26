@@ -9,30 +9,27 @@
 #include <vector>
 
 #include "base/time/time.h"
-#include "chrome/browser/vr/vr_export.h"
+#include "chrome/browser/vr/vr_ui_export.h"
 #include "ui/gfx/geometry/point3_f.h"
 #include "ui/gfx/geometry/point_f.h"
 #include "ui/gfx/geometry/vector3d_f.h"
 #include "ui/gfx/transform.h"
 
-namespace blink {
-class WebGestureEvent;
-}
-
 namespace vr {
 
 class UiScene;
 class UiElement;
+class InputEvent;
 struct ControllerModel;
 struct RenderInfo;
 struct ReticleModel;
 struct EditedText;
 
-using GestureList = std::vector<std::unique_ptr<blink::WebGestureEvent>>;
+using InputEventList = std::vector<std::unique_ptr<InputEvent>>;
 
 // Based on controller input finds the hit UI element and determines the
 // interaction with UI elements and the web contents.
-class VR_EXPORT UiInputManager {
+class VR_UI_EXPORT UiInputManager {
  public:
   enum ButtonState {
     UP,       // The button is released.
@@ -50,12 +47,11 @@ class VR_EXPORT UiInputManager {
 
   explicit UiInputManager(UiScene* scene);
   ~UiInputManager();
-  // TODO(tiborg): Use generic gesture type instead of blink::WebGestureEvent.
   void HandleInput(base::TimeTicks current_time,
                    const RenderInfo& render_info,
                    const ControllerModel& controller_model,
                    ReticleModel* reticle_model,
-                   GestureList* gesture_list);
+                   InputEventList* input_event_list);
 
   void OnPause();
 
@@ -66,7 +62,6 @@ class VR_EXPORT UiInputManager {
   void OnInputCommitted(const EditedText& info);
   void OnKeyboardHidden();
 
-  bool controller_quiescent() const { return controller_quiescent_; }
   bool controller_resting_in_viewport() const {
     return controller_resting_in_viewport_;
   }
@@ -76,15 +71,15 @@ class VR_EXPORT UiInputManager {
   }
 
  private:
-  void SendFlingCancel(GestureList* gesture_list,
+  void SendFlingCancel(InputEventList* input_event_list,
                        const gfx::PointF& target_point);
-  void SendScrollEnd(GestureList* gesture_list,
+  void SendScrollEnd(InputEventList* input_event_list,
                      const gfx::PointF& target_point,
                      ButtonState button_state);
   void SendScrollBegin(UiElement* target,
-                       GestureList* gesture_list,
+                       InputEventList* input_event_list,
                        const gfx::PointF& target_point);
-  void SendScrollUpdate(GestureList* gesture_list,
+  void SendScrollUpdate(InputEventList* input_event_list,
                         const gfx::PointF& target_point);
 
   void SendHoverLeave(UiElement* current_target, base::TimeTicks timestamp);
@@ -107,9 +102,7 @@ class VR_EXPORT UiInputManager {
 
   UiElement* GetTargetElement(const ControllerModel& controller_model,
                               ReticleModel* reticle_model,
-                              const GestureList& gesture_list) const;
-  void UpdateQuiescenceState(base::TimeTicks current_time,
-                             const ControllerModel& controller_model);
+                              const InputEventList& input_event_list) const;
   void UpdateControllerFocusState(base::TimeTicks current_time,
                                   const RenderInfo& render_info,
                                   const ControllerModel& controller_model);
@@ -133,10 +126,6 @@ class VR_EXPORT UiInputManager {
   HitTestStrategy hit_test_strategy_ = HitTestStrategy::PROJECT_TO_WORLD_ORIGIN;
 
   ButtonState previous_button_state_ = ButtonState::UP;
-
-  base::TimeTicks last_significant_controller_update_time_;
-  gfx::Transform last_significant_controller_transform_;
-  bool controller_quiescent_ = false;
 
   base::TimeTicks last_controller_outside_viewport_time_;
   bool controller_resting_in_viewport_ = false;

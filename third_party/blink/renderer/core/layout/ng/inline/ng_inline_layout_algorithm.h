@@ -47,7 +47,8 @@ class CORE_EXPORT NGInlineLayoutAlgorithm final
   scoped_refptr<NGLayoutResult> Layout() override;
 
  private:
-  unsigned PositionLeadingItems(NGExclusionSpace*);
+  unsigned PositionLeadingFloats(NGExclusionSpace*);
+
   void PositionPendingFloats(LayoutUnit content_size, NGExclusionSpace*);
 
   bool IsHorizontalWritingMode() const { return is_horizontal_writing_mode_; }
@@ -72,7 +73,9 @@ class CORE_EXPORT NGInlineLayoutAlgorithm final
   void PlaceLayoutResult(NGInlineItemResult*,
                          NGInlineBoxState*,
                          LayoutUnit inline_offset = LayoutUnit());
-  bool PlaceOutOfFlowObjects(const NGLineInfo&, const NGLineHeightMetrics&);
+  void PlaceOutOfFlowObjects(const NGLineInfo&,
+                             const NGLineHeightMetrics&,
+                             LayoutUnit inline_size);
   void PlaceListMarker(const NGInlineItem&,
                        NGInlineItemResult*,
                        const NGLineInfo&);

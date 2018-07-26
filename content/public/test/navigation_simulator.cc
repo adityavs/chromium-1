@@ -501,6 +501,11 @@ void NavigationSimulator::Commit() {
   RenderFrameHostImpl* previous_rfh =
       render_frame_host_->frame_tree_node()->current_frame_host();
 
+  if (!same_document_) {
+    render_frame_host_->SimulateCommitProcessed(handle_->GetNavigationId(),
+                                                true /* was_successful */);
+  }
+
   FrameHostMsg_DidCommitProvisionalLoad_Params params;
   params.nav_entry_id = handle_->pending_nav_entry_id();
   params.url = navigation_url_;
@@ -512,7 +517,7 @@ void NavigationSimulator::Commit() {
   params.gesture =
       has_user_gesture_ ? NavigationGestureUser : NavigationGestureAuto;
   params.contents_mime_type = contents_mime_type_;
-  params.method = "GET";
+  params.method = handle_->IsPost() ? "POST" : "GET";
   params.http_status_code = 200;
   params.history_list_was_cleared = false;
   params.original_request_url = navigation_url_;
@@ -558,7 +563,8 @@ void NavigationSimulator::AbortCommit() {
 
   CHECK(render_frame_host_) << "NavigationSimulator::AbortCommit can only be "
                                "called for navigations that commit.";
-  render_frame_host_->AbortNavigationCommit();
+  render_frame_host_->SimulateCommitProcessed(handle_->GetNavigationId(),
+                                              false /* was_successful */);
 
   state_ = FINISHED;
   CHECK_EQ(1, num_did_finish_navigation_called_);
@@ -630,6 +636,9 @@ void NavigationSimulator::CommitErrorPage() {
   // after commit.
   RenderFrameHostImpl* previous_rfh =
       render_frame_host_->frame_tree_node()->current_frame_host();
+
+  render_frame_host_->SimulateCommitProcessed(handle_->GetNavigationId(),
+                                              true /* was_successful */);
 
   GURL error_url = GURL(kUnreachableWebDataURL);
   render_frame_host_->OnMessageReceived(FrameHostMsg_DidStartProvisionalLoad(

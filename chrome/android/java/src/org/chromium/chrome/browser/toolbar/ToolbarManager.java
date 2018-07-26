@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.SystemClock;
 import android.support.annotation.DrawableRes;
+import android.support.annotation.IntDef;
 import android.support.annotation.StringRes;
 import android.support.v7.app.ActionBar;
 import android.text.TextUtils;
@@ -21,6 +22,8 @@ import android.view.View.OnClickListener;
 import org.chromium.base.Callback;
 import org.chromium.base.ThreadUtils;
 import org.chromium.base.VisibleForTesting;
+import org.chromium.base.metrics.CachedMetrics.ActionEvent;
+import org.chromium.base.metrics.CachedMetrics.EnumeratedHistogramSample;
 import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
@@ -47,6 +50,7 @@ import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.fullscreen.BrowserStateBrowserControlsVisibilityDelegate;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
+import org.chromium.chrome.browser.metrics.OmniboxStartupMetrics;
 import org.chromium.chrome.browser.net.spdyproxy.DataReductionProxySettings;
 import org.chromium.chrome.browser.ntp.IncognitoNewTabPage;
 import org.chromium.chrome.browser.ntp.NativePageFactory;
@@ -56,6 +60,7 @@ import org.chromium.chrome.browser.omnibox.LocationBar;
 import org.chromium.chrome.browser.omnibox.UrlFocusChangeListener;
 import org.chromium.chrome.browser.partnercustomizations.HomepageManager;
 import org.chromium.chrome.browser.partnercustomizations.HomepageManager.HomepageStateListener;
+import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrl;
 import org.chromium.chrome.browser.search_engines.TemplateUrlService;
@@ -89,6 +94,8 @@ import org.chromium.ui.UiUtils;
 import org.chromium.ui.base.PageTransition;
 import org.chromium.ui.widget.ViewRectProvider;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -111,13 +118,29 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         void updateReloadButtonState(boolean isLoading);
     }
 
+    /** A means of tracking which mechanism is being used to focus the omnibox. */
+    @IntDef({OmniboxFocusReason.OMNIBOX_TAP, OmniboxFocusReason.OMNIBOX_LONG_PRESS,
+            OmniboxFocusReason.FAKE_BOX_TAP, OmniboxFocusReason.FAKE_BOX_LONG_PRESS,
+            OmniboxFocusReason.ACCELERATOR_TAP})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface OmniboxFocusReason {
+        int OMNIBOX_TAP = 0;
+        int OMNIBOX_LONG_PRESS = 1;
+        int FAKE_BOX_TAP = 2;
+        int FAKE_BOX_LONG_PRESS = 3;
+        int ACCELERATOR_TAP = 4;
+        int NUM_ENTRIES = 5;
+    }
+    private static final EnumeratedHistogramSample ENUMERATED_FOCUS_REASON =
+            new EnumeratedHistogramSample(
+                    "Android.OmniboxFocusReason", OmniboxFocusReason.NUM_ENTRIES);
+    private static final ActionEvent ACCELERATOR_BUTTON_TAP_ACTION =
+            new ActionEvent("MobileToolbarOmniboxAcceleratorTap");
+
     /**
      * The number of ms to wait before reporting to UMA omnibox interaction metrics.
      */
     private static final int RECORD_UMA_PERFORMANCE_METRICS_DELAY_MS = 30000;
-
-    private static final int MIN_FOCUS_TIME_FOR_UMA_HISTOGRAM_MS = 1000;
-    private static final int MAX_FOCUS_TIME_FOR_UMA_HISTOGRAM_MS = 30000;
 
     /**
      * The minimum load progress that can be shown when a page is loading.  This is not 0 so that
@@ -182,6 +205,8 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
     private boolean mShouldUpdateToolbarPrimaryColor = true;
     private int mCurrentThemeColor;
 
+    private OmniboxStartupMetrics mOmniboxStartupMetrics;
+
     /**
      * Creates a ToolbarManager object.
      *
@@ -238,6 +263,8 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         mAppMenuPropertiesDelegate = appMenuPropertiesDelegate;
 
         HomepageManager.getInstance().addListener(mHomepageStateListener);
+
+        mOmniboxStartupMetrics = new OmniboxStartupMetrics(activity);
 
         mTabModelSelectorObserver = new EmptyTabModelSelectorObserver() {
             @Override
@@ -598,13 +625,36 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
     }
 
     /**
+     * @param reason A {@link OmniboxFocusReason} that the omnibox was focused.
+     */
+    public static void recordOmniboxFocusReason(@OmniboxFocusReason int reason) {
+        ENUMERATED_FOCUS_REASON.record(reason);
+    }
+
+    /**
      * Enable the bottom toolbar.
      */
     public void enableBottomToolbar() {
         if (FeatureUtilities.isBottomToolbarEnabled()) {
             mBottomToolbarCoordinator = new BottomToolbarCoordinator(
                     mActivity.getFullscreenManager(), mActivity.findViewById(R.id.coordinator));
+            if (mAppMenuButtonHelper != null) mAppMenuButtonHelper.setMenuShowsFromBottom(true);
         }
+    }
+
+    /**
+     * @return Whether the bottom toolbar is currently enabled (an activity may or may not enable
+     *         this feature).
+     */
+    public boolean isBottomToolbarEnabled() {
+        return mBottomToolbarCoordinator != null;
+    }
+
+    /**
+     * @return The coordinator for the bottom toolbar if it exists.
+     */
+    public BottomToolbarCoordinator getBottomToolbarCoordinator() {
+        return mBottomToolbarCoordinator;
     }
 
     /**
@@ -710,14 +760,18 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         }
 
         if (mBottomToolbarCoordinator != null) {
-            final OnClickListener searchAcceleratorListener = v -> setUrlBarFocus(true);
+            final OnClickListener searchAcceleratorListener = v -> {
+                recordOmniboxFocusReason(OmniboxFocusReason.ACCELERATOR_TAP);
+                ACCELERATOR_BUTTON_TAP_ACTION.record();
+                setUrlBarFocus(true);
+            };
             final OnClickListener homeButtonListener = v -> openHomepage();
             mBottomToolbarCoordinator.initializeWithNative(
                     mActivity.getCompositorViewHolder().getResourceManager(),
                     mActivity.getCompositorViewHolder().getLayoutManager(), tabSwitcherClickHandler,
                     searchAcceleratorListener, homeButtonListener, mAppMenuButtonHelper,
                     mTabModelSelector, mOverviewModeBehavior,
-                    mActivity.getContextualSearchManager());
+                    mActivity.getContextualSearchManager(), mActivity.getWindowAndroid());
         }
 
         onNativeLibraryReady();
@@ -783,6 +837,11 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         return mBookmarkBridge;
     }
 
+    /** Return the toolbar model for testing purposes. */
+    public ToolbarModel getToolbarModelForTesting() {
+        return mToolbarModel;
+    }
+
     /**
      * @return The toolbar interface that this manager handles.
      */
@@ -816,6 +875,8 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
      * @return The view containing the pop up menu button.
      */
     public View getMenuButton() {
+        if (mBottomToolbarCoordinator != null) return mBottomToolbarCoordinator.getMenuButton();
+
         return mToolbar.getMenuButton();
     }
 
@@ -877,6 +938,13 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         if (mBottomToolbarCoordinator != null) {
             mBottomToolbarCoordinator.destroy();
             mBottomToolbarCoordinator = null;
+        }
+
+        if (mOmniboxStartupMetrics != null) {
+            // Record the histogram before destroying, if we have the data.
+            mOmniboxStartupMetrics.maybeRecordHistograms();
+            mOmniboxStartupMetrics.destroy();
+            mOmniboxStartupMetrics = null;
         }
 
         mLocationBar.removeUrlFocusChangeListener(this);
@@ -1065,8 +1133,8 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         if (TextUtils.isEmpty(homePageUrl) || FeatureUtilities.isNewTabPageButtonEnabled()) {
             homePageUrl = UrlConstants.NTP_URL;
         }
-        if (TextUtils.equals(ToolbarLayout.getNTPButtonVariation(),
-                    ToolbarLayout.NTP_BUTTON_NEWS_FEED_VARIATION)) {
+        if (TextUtils.equals(ChromePreferenceManager.getInstance().getNewTabPageButtonVariant(),
+                    ToolbarLayout.NTP_BUTTON_NEWS_FEED_VARIANT)) {
             homePageUrl = homePageUrl + UrlConstants.CONTENT_SUGGESTIONS_SUFFIX;
         }
         currentTab.loadUrl(new LoadUrlParams(homePageUrl, PageTransition.HOME_PAGE));
@@ -1096,6 +1164,8 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
     @Override
     public void onUrlFocusChange(boolean hasFocus) {
         mToolbar.onUrlFocusChange(hasFocus);
+
+        if (hasFocus) mOmniboxStartupMetrics.onUrlBarFocused();
 
         if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
@@ -1222,13 +1292,9 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         RecordHistogram.recordTimesHistogram("MobileStartup.ToolbarFirstDrawTime2." + activityName,
                 mToolbar.getFirstDrawTime() - activityCreationTimeMs, TimeUnit.MILLISECONDS);
 
-        long firstFocusTime = mToolbar.getLocationBar().getFirstUrlBarFocusTime();
-        if (firstFocusTime != 0) {
-            RecordHistogram.recordCustomTimesHistogram(
-                    "MobileStartup.ToolbarFirstFocusTime2." + activityName,
-                    firstFocusTime - activityCreationTimeMs, MIN_FOCUS_TIME_FOR_UMA_HISTOGRAM_MS,
-                    MAX_FOCUS_TIME_FOR_UMA_HISTOGRAM_MS, TimeUnit.MILLISECONDS, 50);
-        }
+        // mOmniboxStartupMetrics might be null. ie. ToolbarManager is destroyed. See
+        // https://crbug.com/860449
+        if (mOmniboxStartupMetrics != null) mOmniboxStartupMetrics.maybeRecordHistograms();
     }
 
     /**

@@ -31,16 +31,11 @@ class DEVICE_VR_EXPORT VRDeviceBase : public mojom::XRRuntime {
       mojom::XRRuntime::ListenToDeviceChangesCallback callback) final;
   void SetListeningForActivate(bool is_listening) override;
 
-  void GetFrameData(
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback);
-  void GetFrameData(
-      const gfx::Size& frame_size,
-      display::Display::Rotation display_rotation,
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback);
+  void GetFrameData(mojom::XRFrameDataProvider::GetFrameDataCallback callback);
 
   virtual void RequestHitTest(
       mojom::XRRayPtr ray,
-      mojom::VRMagicWindowProvider::RequestHitTestCallback callback);
+      mojom::XREnviromentIntegrationProvider::RequestHitTestCallback callback);
   unsigned int GetId() const;
 
   bool HasExclusiveSession();
@@ -78,21 +73,17 @@ class DEVICE_VR_EXPORT VRDeviceBase : public mojom::XRRuntime {
   void SetVRDisplayInfo(mojom::VRDisplayInfoPtr display_info);
   void OnActivate(mojom::VRDisplayEventReason reason,
                   base::Callback<void(bool)> on_handled);
+
+  void ReturnNonImmersiveSession(
+      mojom::XRRuntime::RequestSessionCallback callback);
+
+  std::vector<std::unique_ptr<VRDisplayImpl>> magic_window_sessions_;
+
  private:
   // TODO(https://crbug.com/842227): Rename methods to HandleOnXXX
   virtual void OnListeningForActivate(bool listening);
   virtual void OnMagicWindowFrameDataRequest(
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback);
-  virtual void OnMagicWindowFrameDataRequest(
-      const gfx::Size& frame_size,
-      display::Display::Rotation rotation,
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback);
-
-  // XRRuntime
-  void RequestMagicWindowSession(
-      mojom::VRMagicWindowProviderRequest provider_request,
-      mojom::XRSessionControllerRequest controller_request,
-      mojom::XRRuntime::RequestMagicWindowSessionCallback callback) override;
+      mojom::XRFrameDataProvider::GetFrameDataCallback callback);
 
   mojom::XRRuntimeEventListenerPtr listener_;
 
@@ -104,8 +95,6 @@ class DEVICE_VR_EXPORT VRDeviceBase : public mojom::XRRuntime {
   bool magic_window_enabled_ = true;
 
   mojo::Binding<mojom::XRRuntime> runtime_binding_;
-
-  std::vector<std::unique_ptr<VRDisplayImpl>> magic_window_sessions_;
 
   DISALLOW_COPY_AND_ASSIGN(VRDeviceBase);
 };

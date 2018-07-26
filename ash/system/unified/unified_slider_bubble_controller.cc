@@ -4,15 +4,31 @@
 
 #include "ash/system/unified/unified_slider_bubble_controller.h"
 
+#include "ash/root_window_controller.h"
+#include "ash/shell.h"
 #include "ash/system/audio/unified_volume_slider_controller.h"
 #include "ash/system/brightness/unified_brightness_slider_controller.h"
 #include "ash/system/keyboard_brightness/unified_keyboard_brightness_slider_controller.h"
+#include "ash/system/status_area_widget.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/unified/unified_system_tray.h"
 
 using chromeos::CrasAudioHandler;
 
 namespace ash {
+
+namespace {
+
+// Return true if a system tray bubble is shown in any display.
+bool IsAnyMainBubbleShown() {
+  for (RootWindowController* root : Shell::GetAllRootWindowControllers()) {
+    if (root->GetStatusAreaWidget()->unified_system_tray()->IsBubbleShown())
+      return true;
+  }
+  return false;
+}
+
+}  // namespace
 
 UnifiedSliderBubbleController::UnifiedSliderBubbleController(
     UnifiedSystemTray* tray)
@@ -35,8 +51,10 @@ UnifiedSliderBubbleController::~UnifiedSliderBubbleController() {
 void UnifiedSliderBubbleController::CloseBubble() {
   autoclose_.Stop();
   slider_controller_.reset();
-  if (bubble_widget_)
-    bubble_widget_->Close();
+  if (!bubble_widget_)
+    return;
+  bubble_widget_->Close();
+  tray_->SetTrayBubbleHeight(0);
 }
 
 bool UnifiedSliderBubbleController::IsBubbleShown() const {
@@ -81,7 +99,7 @@ void UnifiedSliderBubbleController::OnKeyboardBrightnessChanged(bool by_user) {
 }
 
 void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
-  if (tray_->IsBubbleShown()) {
+  if (IsAnyMainBubbleShown()) {
     tray_->EnsureBubbleExpanded();
     return;
   }
@@ -97,7 +115,9 @@ void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
       slider_type_ = slider_type;
       CreateSliderController();
 
-      bubble_view_->AddChildView(slider_controller_->CreateView());
+      UnifiedSliderView* slider_view =
+          static_cast<UnifiedSliderView*>(slider_controller_->CreateView());
+      bubble_view_->AddChildView(slider_view);
       bubble_view_->Layout();
     }
 
@@ -113,7 +133,8 @@ void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
   CreateSliderController();
 
   views::TrayBubbleView::InitParams init_params;
-  init_params.anchor_alignment = views::TrayBubbleView::ANCHOR_ALIGNMENT_BOTTOM;
+
+  init_params.anchor_alignment = tray_->GetAnchorAlignment();
   init_params.min_width = kTrayMenuWidth;
   init_params.max_width = kTrayMenuWidth;
   init_params.delegate = this;
@@ -122,7 +143,9 @@ void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
       tray_->shelf()->GetSystemTrayAnchor()->GetBubbleAnchor();
 
   bubble_view_ = new views::TrayBubbleView(init_params);
-  bubble_view_->AddChildView(slider_controller_->CreateView());
+  UnifiedSliderView* slider_view =
+      static_cast<UnifiedSliderView*>(slider_controller_->CreateView());
+  bubble_view_->AddChildView(slider_view);
   bubble_view_->SetBorder(
       views::CreateEmptyBorder(kUnifiedTopShortcutSpacing, 0, 0, 0));
   bubble_view_->set_color(kUnifiedMenuBackgroundColor);
@@ -134,7 +157,15 @@ void UnifiedSliderBubbleController::ShowBubble(SliderType slider_type) {
   TrayBackgroundView::InitializeBubbleAnimations(bubble_widget_);
   bubble_view_->InitializeAndShowBubble();
 
+  // Notify value change accessibility event because the popup is triggered by
+  // changing value using an accessor key like VolUp.
+  slider_view->slider()->NotifyAccessibilityEvent(
+      ax::mojom::Event::kValueChanged, true);
+
   StartAutoCloseTimer();
+
+  tray_->SetTrayBubbleHeight(
+      bubble_widget_->GetWindowBoundsInScreen().height());
 }
 
 void UnifiedSliderBubbleController::CreateSliderController() {

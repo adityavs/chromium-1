@@ -95,7 +95,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   String PlainText() const;
 
   // Returns first letter part of |LayoutTextFragment|.
-  virtual LayoutText* GetFirstLetterPart() { return nullptr; }
+  virtual LayoutText* GetFirstLetterPart() const { return nullptr; }
 
   InlineTextBox* CreateInlineTextBox(int start, unsigned short length);
   void DirtyOrDeleteLineBoxesIfNeeded(bool full_layout);
@@ -334,7 +334,7 @@ class CORE_EXPORT LayoutText : public LayoutObject {
   unsigned length() const final { return TextLength(); }
 
   // See the class comment as to why we shouldn't call this function directly.
-  void Paint(const PaintInfo&, const LayoutPoint&) const final { NOTREACHED(); }
+  void Paint(const PaintInfo&) const final { NOTREACHED(); }
   void UpdateLayout() final { NOTREACHED(); }
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation&,

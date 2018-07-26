@@ -25,7 +25,6 @@ import org.chromium.chrome.browser.search_engines.TemplateUrl;
 import org.chromium.chrome.browser.search_engines.TemplateUrlService;
 import org.chromium.chrome.browser.signin.SigninManager;
 import org.chromium.chrome.browser.util.FeatureUtilities;
-import org.chromium.ui.base.DeviceFormFactor;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -97,8 +96,9 @@ public class MainPreferences extends PreferenceFragment
         PreferenceUtils.addPreferencesFromResource(this, R.xml.main_preferences);
         cachePreferences();
 
-        // Remove UnifiedConsent preferences if the feature isn't enabled.
-        if (!ChromeFeatureList.isEnabled(ChromeFeatureList.UNIFIED_CONSENT)) {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.UNIFIED_CONSENT)) {
+            mSignInPreference.setOnStateChangedCallback(this::onSignInPreferenceStateChanged);
+        } else {
             getPreferenceScreen().removePreference(findPreference(PREF_ACCOUNT_SECTION));
             getPreferenceScreen().removePreference(findPreference(PREF_SYNC_AND_SERVICES));
         }
@@ -189,8 +189,7 @@ public class MainPreferences extends PreferenceFragment
             removePreferenceIfPresent(PREF_HOMEPAGE);
         }
 
-        boolean isTablet = DeviceFormFactor.isNonMultiDisplayContextOnTablet(getActivity());
-        if (FeatureUtilities.areContextualSuggestionsEnabled(isTablet)
+        if (FeatureUtilities.areContextualSuggestionsEnabled(getActivity())
                 && EnabledStateMonitor.shouldShowSettings()) {
             Preference contextualSuggesitons = addPreferenceIfAbsent(PREF_CONTEXTUAL_SUGGESTIONS);
             setOnOffSummary(contextualSuggesitons, EnabledStateMonitor.getEnabledState());
@@ -247,6 +246,15 @@ public class MainPreferences extends PreferenceFragment
     @Override
     public void onSignedOut() {
         updatePreferences();
+    }
+
+    private void onSignInPreferenceStateChanged() {
+        // Remove "Account" section header if the personalized sign-in promo is shown.
+        if (mSignInPreference.getState() == SignInPreference.State.PERSONALIZED_PROMO) {
+            removePreferenceIfPresent(PREF_ACCOUNT_SECTION);
+        } else {
+            addPreferenceIfAbsent(PREF_ACCOUNT_SECTION);
+        }
     }
 
     // TemplateUrlService.LoadListener implementation.

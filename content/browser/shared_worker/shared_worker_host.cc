@@ -6,6 +6,7 @@
 
 #include <utility>
 
+#include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/shared_worker_devtools_manager.h"
@@ -21,6 +22,7 @@
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/common/content_client.h"
+#include "services/network/public/cpp/features.h"
 #include "third_party/blink/public/common/message_port/message_port_channel.h"
 #include "third_party/blink/public/platform/web_feature.mojom.h"
 #include "third_party/blink/public/web/worker_content_settings_proxy.mojom.h"
@@ -139,6 +141,11 @@ void SharedWorkerHost::Start(
   devtools_handle_ = std::make_unique<ScopedDevToolsHandle>(
       this, &pause_on_start, &devtools_worker_token);
 
+  RendererPreferences renderer_preferences;
+  GetContentClient()->browser()->UpdateRendererPreferencesForWorker(
+      RenderProcessHost::FromID(process_id_)->GetBrowserContext(),
+      &renderer_preferences);
+
   // Set up content settings interface.
   blink::mojom::WorkerContentSettingsProxyPtr content_settings;
   content_settings_ = std::make_unique<SharedWorkerContentSettingsProxyImpl>(
@@ -154,22 +161,22 @@ void SharedWorkerHost::Start(
       mojom::kNavigation_SharedWorkerSpec, process_id_,
       mojo::MakeRequest(&interface_provider)));
 
-  // NetworkService: Add the network factory to the bundle to pass to the
-  // renderer. The bundle is only provided (along with |script_loader_factory|)
-  // if NetworkService/S13nSW is enabled.
+  // Add the network factory to the bundle to pass to the renderer. The bundle
+  // is only provided (along with |script_loader_factory|) if
+  // NetworkService/S13nSW is enabled.
   DCHECK(!script_loader_factory || factory_bundle);
   if (factory_bundle) {
     network::mojom::URLLoaderFactoryPtrInfo network_factory_info;
-    CreateNetworkFactory(mojo::MakeRequest(&network_factory_info));
+    if (base::FeatureList::IsEnabled(network::features::kNetworkService)) {
+      // NetworkService is on: Use the network service.
+      CreateNetworkFactory(mojo::MakeRequest(&network_factory_info));
+    } else {
+      // NetworkService is off: RenderProcessHost gives us a non-NetworkService
+      // network factory.
+      RenderProcessHost::FromID(process_id_)
+          ->CreateURLLoaderFactory(mojo::MakeRequest(&network_factory_info));
+    }
     DCHECK(!factory_bundle->default_factory_info());
-
-    // This is a NetworkService-backed factory, so it'd be better to send this
-    // only when NetworkService is enabled. But when S13nServiceWorker is
-    // enabled, we need to send the bundle and it crashes if it's sent over Mojo
-    // with no default factory. Furthermore, it is not easy to make a default
-    // URLLoaderFactoryImpl from the browser-side, since we need a
-    // ResourceRequestorInfo. So, just send the bundle and count on the renderer
-    // to clear the default factory upon arrival in that case.
     factory_bundle->default_factory_info() = std::move(network_factory_info);
 
     // TODO(falken): We might need to set the default factory to AppCache
@@ -181,9 +188,9 @@ void SharedWorkerHost::Start(
   factory_ = std::move(factory);
   factory_->CreateSharedWorker(
       std::move(info), pause_on_start, devtools_worker_token,
-      std::move(content_settings), std::move(service_worker_provider_info),
-      std::move(script_loader_factory), std::move(factory_bundle),
-      std::move(host), std::move(worker_request_),
+      renderer_preferences, std::move(content_settings),
+      std::move(service_worker_provider_info), std::move(script_loader_factory),
+      std::move(factory_bundle), std::move(host), std::move(worker_request_),
       std::move(interface_provider));
 
   // Monitor the lifetime of the worker.

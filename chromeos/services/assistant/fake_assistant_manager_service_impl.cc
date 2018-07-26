@@ -52,11 +52,21 @@ void FakeAssistantManagerServiceImpl::StopActiveInteraction() {}
 
 void FakeAssistantManagerServiceImpl::SendTextQuery(const std::string& query) {}
 
-void FakeAssistantManagerServiceImpl::AddAssistantEventSubscriber(
-    mojom::AssistantEventSubscriberPtr subscriber) {}
+void FakeAssistantManagerServiceImpl::AddAssistantInteractionSubscriber(
+    mojom::AssistantInteractionSubscriberPtr subscriber) {}
 
-void FakeAssistantManagerServiceImpl::SetAssistantController(
-    ash::mojom::AssistantController* controller) {}
+void FakeAssistantManagerServiceImpl::AddAssistantNotificationSubscriber(
+    mojom::AssistantNotificationSubscriberPtr subscriber) {}
+
+void FakeAssistantManagerServiceImpl::AddAssistantScreenContextSubscriber(
+    mojom::AssistantScreenContextSubscriberPtr subscriber) {}
+
+void FakeAssistantManagerServiceImpl::RetrieveNotification(
+    mojom::AssistantNotificationPtr notification,
+    int action_index) {}
+
+void FakeAssistantManagerServiceImpl::DismissNotification(
+    mojom::AssistantNotificationPtr notification) {}
 
 }  // namespace assistant
 }  // namespace chromeos

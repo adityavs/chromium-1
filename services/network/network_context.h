@@ -22,6 +22,7 @@
 #include "mojo/public/cpp/bindings/binding.h"
 #include "mojo/public/cpp/bindings/strong_binding_set.h"
 #include "services/network/cookie_manager.h"
+#include "services/network/http_cache_data_counter.h"
 #include "services/network/http_cache_data_remover.h"
 #include "services/network/public/mojom/network_context.mojom.h"
 #include "services/network/public/mojom/proxy_resolving_socket.mojom.h"
@@ -54,9 +55,12 @@ class ExpectCTReporter;
 class NetworkService;
 class ResourceScheduler;
 class ResourceSchedulerClient;
-class URLLoaderFactory;
 class URLRequestContextBuilderMojo;
 class WebSocketFactory;
+
+namespace cors {
+class CORSURLLoaderFactory;
+}  // namespace cors
 
 // A NetworkContext creates and manages access to a URLRequestContext.
 //
@@ -140,6 +144,9 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
                       base::Time end_time,
                       mojom::ClearDataFilterPtr filter,
                       ClearHttpCacheCallback callback) override;
+  void ComputeHttpCacheSize(base::Time start_time,
+                            base::Time end_time,
+                            ComputeHttpCacheSizeCallback callback) override;
   void ClearChannelIds(base::Time start_time,
                        base::Time end_time,
                        mojom::ClearDataFilterPtr filter,
@@ -157,6 +164,7 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   void ClearNetworkErrorLogging(
       mojom::ClearDataFilterPtr filter,
       ClearNetworkErrorLoggingCallback callback) override;
+  void CloseAllConnections(CloseAllConnectionsCallback callback) override;
   void SetNetworkConditions(const base::UnguessableToken& throttling_profile_id,
                             mojom::NetworkConditionsPtr conditions) override;
   void SetAcceptLanguage(const std::string& new_accept_language) override;
@@ -196,13 +204,18 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   void SetFailingHttpTransactionForTesting(
       int32_t rv,
       SetFailingHttpTransactionForTestingCallback callback) override;
+  void PreconnectSockets(uint32_t num_streams,
+                         const GURL& url,
+                         int32_t load_flags,
+                         bool privacy_mode_enabled) override;
+  void ResetURLLoaderFactories() override;
 
   // Disables use of QUIC by the NetworkContext.
   void DisableQuic();
 
-  // Destroys the specified URLLoaderFactory. Called by the URLLoaderFactory
-  // itself when it has no open pipes.
-  void DestroyURLLoaderFactory(URLLoaderFactory* url_loader_factory);
+  // Destroys the specified factory. Called by the factory itself when it has
+  // no open pipes.
+  void DestroyURLLoaderFactory(cors::CORSURLLoaderFactory* url_loader_factory);
 
  private:
   class ContextNetworkDelegate;
@@ -215,6 +228,13 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
   // Invoked when the HTTP cache was cleared. Invokes |callback|.
   void OnHttpCacheCleared(ClearHttpCacheCallback callback,
                           HttpCacheDataRemover* remover);
+
+  // Invoked when the computation for ComputeHttpCacheSize() has been completed,
+  // to report result to user via |callback| and clean things up.
+  void OnHttpCacheSizeComputed(ComputeHttpCacheSizeCallback callback,
+                               HttpCacheDataCounter* counter,
+                               bool is_upper_limit,
+                               int64_t result_or_error);
 
   // On connection errors the NetworkContext destroys itself.
   void OnConnectionError();
@@ -256,10 +276,12 @@ class COMPONENT_EXPORT(NETWORK_SERVICE) NetworkContext
 #endif  // !defined(OS_IOS)
 
   std::vector<std::unique_ptr<HttpCacheDataRemover>> http_cache_data_removers_;
+  std::vector<std::unique_ptr<HttpCacheDataCounter>> http_cache_data_counters_;
 
   // This must be below |url_request_context_| so that the URLRequestContext
   // outlives all the URLLoaderFactories and URLLoaders that depend on it.
-  std::set<std::unique_ptr<URLLoaderFactory>, base::UniquePtrComparator>
+  std::set<std::unique_ptr<cors::CORSURLLoaderFactory>,
+           base::UniquePtrComparator>
       url_loader_factories_;
 
   mojo::StrongBindingSet<mojom::NetLogExporter> net_log_exporter_bindings_;

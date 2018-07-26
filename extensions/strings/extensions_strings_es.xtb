@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Se ha utilizado la localización, pero no se ha especificado default_locale en el archivo de manifiesto.</translation>
 <translation id="2576842806987913196">Ya existe un archivo CRX con este nombre.</translation>
 <translation id="2753617847762399167">Ruta no válida (absoluta o relativa con ".."): <ph name="IMAGE_PATH" /></translation>
-<translation id="27822970480436970">Esta extensión no ha podido modificar una solicitud de red porque existe un conflicto con otra extensión.</translation>
 <translation id="2785530881066938471">No se ha podido cargar el archivo "<ph name="RELATIVE_PATH" />" para el script de contenido. No está codificado con UTF-8.</translation>
 <translation id="2903070246402204397">El administrador ha bloqueado la extensión <ph name="EXTENSION_NAME" /> (ID de extensión "<ph name="EXTENSION_ID" />"). <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">No se ha podido instalar el paquete: "<ph name="ERROR_CODE" />".</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Producto <ph name="PRODUCT_ID" /> de <ph name="VENDOR_NAME" /> desconocido</translation>
 <translation id="7068383018033524534">El archivo de manifiesto no es válido</translation>
 <translation id="7217838517480956708">El administrador de este ordenador necesita que se instale <ph name="EXTENSION_NAME" />. No se puede eliminar ni modificar.</translation>
+<translation id="7939686037314084444">No se ha podido cargar la extensión correctamente. Es posible que no pueda interceptar solicitudes de red.</translation>
 <translation id="7972881773422714442">Opciones: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Delantera</translation>
 <translation id="8047248493720652249">Esta extensión no ha podido asignar un nombre a la descarga "<ph name="ATTEMPTED_FILENAME" />" porque otra extensión (<ph name="EXTENSION_NAME" />) ha determinado un nombre de archivo diferente "<ph name="ACTUAL_FILENAME" />".</translation>

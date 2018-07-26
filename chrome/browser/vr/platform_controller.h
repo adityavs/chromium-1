@@ -7,6 +7,10 @@
 
 #include "base/time/time.h"
 
+namespace gfx {
+class PointF;
+}
+
 namespace vr {
 
 // This class is not platform-specific.  It will be backed by platform-specific
@@ -19,16 +23,10 @@ class PlatformController {
  public:
   enum ButtonType {
     kButtonHome,
+    kButtonTypeFirst = kButtonHome,
     kButtonMenu,
     kButtonSelect,
-  };
-
-  enum SwipeDirection {
-    kSwipeDirectionNone,
-    kSwipeDirectionLeft,
-    kSwipeDirectionRight,
-    kSwipeDirectionUp,
-    kSwipeDirectionDown,
+    kButtonTypeNumber
   };
 
   enum Handedness {
@@ -39,11 +37,16 @@ class PlatformController {
   virtual ~PlatformController() {}
 
   virtual bool IsButtonDown(ButtonType type) const = 0;
+  virtual bool ButtonUpHappened(ButtonType type) const = 0;
+  virtual bool ButtonDownHappened(ButtonType type) const = 0;
+  virtual bool IsTouchingTrackpad() const = 0;
+  virtual gfx::PointF GetPositionInTrackpad() const = 0;
   virtual base::TimeTicks GetLastOrientationTimestamp() const = 0;
   virtual base::TimeTicks GetLastTouchTimestamp() const = 0;
   virtual base::TimeTicks GetLastButtonTimestamp() const = 0;
   virtual Handedness GetHandedness() const = 0;
   virtual bool GetRecentered() const = 0;
+  virtual int GetBatteryLevel() const = 0;
 };
 
 }  // namespace vr

@@ -189,6 +189,28 @@ TEST_F(DocumentMarkerControllerTest, NodeWillBeRemovedBySetInnerHTML) {
   EXPECT_EQ(0u, MarkerController().Markers().size());
 }
 
+// For http://crbug.com/862900
+TEST_F(DocumentMarkerControllerTest, SynchronousMutationNotificationAfterGC) {
+  SetBodyContent("<b><i>foo</i></b>");
+  Persistent<Text> sibling_text = CreateTextNode("bar");
+  {
+    Element* parent =
+        ToElement(GetDocument().body()->firstChild()->firstChild());
+    parent->parentNode()->AppendChild(sibling_text);
+    MarkNodeContents(parent);
+    EXPECT_EQ(1u, MarkerController().Markers().size());
+    parent->parentNode()->RemoveChild(parent);
+  }
+
+  // GC the marked node, so it disappears from WeakMember collections.
+  ThreadState::Current()->CollectAllGarbage();
+  EXPECT_EQ(0u, MarkerController().Markers().size());
+
+  // Trigger SynchronousMutationNotifier::NotifyUpdateCharacterData().
+  // This matches the conditions for the crashes in crbug.com/862960.
+  sibling_text->setData("baz");
+}
+
 TEST_F(DocumentMarkerControllerTest, UpdateRenderedRects) {
   SetBodyContent("<div style='margin: 100px'>foo</div>");
   Element* div = ToElement(GetDocument().body()->firstChild());
@@ -249,8 +271,8 @@ TEST_F(DocumentMarkerControllerTest, RemoveStartOfMarker) {
 
   // Remove markers that overlap "a"
   marker_range = EphemeralRange(Position(text, 0), Position(text, 1));
-  GetDocument().Markers().RemoveMarkersInRange(marker_range,
-                                               DocumentMarker::AllMarkers());
+  GetDocument().Markers().RemoveMarkersInRange(
+      marker_range, DocumentMarker::MarkerTypes::All());
 
   EXPECT_EQ(0u, MarkerController().Markers().size());
 }
@@ -268,8 +290,8 @@ TEST_F(DocumentMarkerControllerTest, RemoveMiddleOfMarker) {
 
   // Remove markers that overlap "b"
   marker_range = EphemeralRange(Position(text, 1), Position(text, 2));
-  GetDocument().Markers().RemoveMarkersInRange(marker_range,
-                                               DocumentMarker::AllMarkers());
+  GetDocument().Markers().RemoveMarkersInRange(
+      marker_range, DocumentMarker::MarkerTypes::All());
 
   EXPECT_EQ(0u, MarkerController().Markers().size());
 }
@@ -287,8 +309,8 @@ TEST_F(DocumentMarkerControllerTest, RemoveEndOfMarker) {
 
   // Remove markers that overlap "c"
   marker_range = EphemeralRange(Position(text, 2), Position(text, 3));
-  GetDocument().Markers().RemoveMarkersInRange(marker_range,
-                                               DocumentMarker::AllMarkers());
+  GetDocument().Markers().RemoveMarkersInRange(
+      marker_range, DocumentMarker::MarkerTypes::All());
 
   EXPECT_EQ(0u, MarkerController().Markers().size());
 }
@@ -361,7 +383,7 @@ TEST_F(DocumentMarkerControllerTest, FirstMarkerIntersectingOffsetRange) {
   // Query for a spellcheck marker intersecting "3456"
   const DocumentMarker* const result =
       MarkerController().FirstMarkerIntersectingOffsetRange(
-          *text, 2, 6, DocumentMarker::MisspellingMarkers());
+          *text, 2, 6, DocumentMarker::MarkerTypes::Misspelling());
 
   EXPECT_EQ(DocumentMarker::kSpelling, result->GetType());
   EXPECT_EQ(0u, result->StartOffset());
@@ -382,7 +404,7 @@ TEST_F(DocumentMarkerControllerTest,
   // Query for a spellcheck marker containing the position between "1" and "2"
   const DocumentMarker* const result =
       MarkerController().FirstMarkerIntersectingOffsetRange(
-          *text, 1, 1, DocumentMarker::MisspellingMarkers());
+          *text, 1, 1, DocumentMarker::MarkerTypes::Misspelling());
 
   EXPECT_EQ(DocumentMarker::kSpelling, result->GetType());
   EXPECT_EQ(0u, result->StartOffset());
@@ -411,7 +433,7 @@ TEST_F(DocumentMarkerControllerTest, MarkersIntersectingRange) {
       MarkerController().MarkersIntersectingRange(
           EphemeralRangeInFlatTree(PositionInFlatTree(text, 2),
                                    PositionInFlatTree(text, 6)),
-          DocumentMarker::MisspellingMarkers());
+          DocumentMarker::MarkerTypes::Misspelling());
 
   EXPECT_EQ(1u, results.size());
   EXPECT_EQ(DocumentMarker::kSpelling, results[0].second->GetType());
@@ -433,7 +455,7 @@ TEST_F(DocumentMarkerControllerTest, MarkersIntersectingCollapsedRange) {
       MarkerController().MarkersIntersectingRange(
           EphemeralRangeInFlatTree(PositionInFlatTree(text, 1),
                                    PositionInFlatTree(text, 1)),
-          DocumentMarker::MisspellingMarkers());
+          DocumentMarker::MarkerTypes::Misspelling());
 
   EXPECT_EQ(1u, results.size());
   EXPECT_EQ(DocumentMarker::kSpelling, results[0].second->GetType());
@@ -472,7 +494,7 @@ TEST_F(DocumentMarkerControllerTest, MarkersIntersectingRangeWithShadowDOM) {
       MarkerController().MarkersIntersectingRange(
           EphemeralRangeInFlatTree(PositionInFlatTree(not_shadow_text, 9),
                                    PositionInFlatTree(shadow1_text, 1)),
-          DocumentMarker::kTextMatch);
+          DocumentMarker::MarkerTypes::TextMatch());
   EXPECT_EQ(1u, results.size());
 }
 

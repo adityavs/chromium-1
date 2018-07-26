@@ -18,27 +18,7 @@
       "backgroundColor": "#FFFFFF",
       "paintInvalidations": [
         {
-          "object": "NGPaintFragment",
-          "rect": [8, 16, 721, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 16, 721, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 36, 670, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 36, 670, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
+          "object": "NGPhysicalBoxFragment LayoutNGBlockFlow div id='contentBox'",
           "rect": [8, 72, 402, 402],
           "reason": "appeared"
         },
@@ -58,7 +38,7 @@
           "reason": "incremental"
         },
         {
-          "object": "NGPaintFragment",
+          "object": "NGPhysicalBoxFragment LayoutNGBlockFlow div id='contentBox'",
           "rect": [8, 72, 102, 402],
           "reason": "disappeared"
         },
@@ -72,19 +52,7 @@
   ],
   "objectPaintInvalidations": [
     {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
+      "object": "NGPhysicalBoxFragment LayoutNGBlockFlow div id='contentBox'",
       "reason": "subtree"
     },
     {

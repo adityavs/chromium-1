@@ -128,7 +128,11 @@ content::WebUIDataSource* CreateMdExtensionsSource(bool in_dev_mode) {
     {"learnMore", IDS_LEARN_MORE},
     {"noSearchResults", IDS_SEARCH_NO_RESULTS},
     {"ok", IDS_OK},
+    {"save", IDS_SAVE},
     {"searchResults", IDS_SEARCH_RESULTS},
+
+    // Multi-use strings defined in md_extensions_strings.grdp.
+    {"remove", IDS_MD_EXTENSIONS_REMOVE},
 
     // Add extension-specific strings.
     {"title", IDS_MANAGE_EXTENSIONS_SETTING_WINDOWS_TITLE},
@@ -158,6 +162,13 @@ content::WebUIDataSource* CreateMdExtensionsSource(bool in_dev_mode) {
     {"openChromeWebStore", IDS_MD_EXTENSIONS_SIDEBAR_OPEN_CHROME_WEB_STORE},
     {"keyboardShortcuts", IDS_MD_EXTENSIONS_SIDEBAR_KEYBOARD_SHORTCUTS},
     {"incognitoInfoWarning", IDS_EXTENSIONS_INCOGNITO_WARNING},
+    {"hostPermissionsEdit", IDS_MD_EXTENSIONS_HOST_PERMISSIONS_EDIT},
+    {"hostPermissionsHeading", IDS_MD_EXTENSIONS_ITEM_HOST_PERMISSIONS_HEADING},
+    {"hostAccessOnClick", IDS_MD_EXTENSIONS_HOST_ACCESS_ON_CLICK},
+    {"hostAccessOnSpecificSites",
+     IDS_MD_EXTENSIONS_HOST_ACCESS_ON_SPECIFIC_SITES},
+    {"hostAccessOnAllSites", IDS_MD_EXTENSIONS_HOST_ACCESS_ON_ALL_SITES},
+    {"hostAllowedHosts", IDS_EXTENSIONS_ITEM_ALLOWED_HOSTS},
     {"itemId", IDS_MD_EXTENSIONS_ITEM_ID},
     {"itemInspectViews", IDS_MD_EXTENSIONS_ITEM_INSPECT_VIEWS},
     // NOTE: This text reads "<n> more". It's possible that it should be using
@@ -188,7 +199,6 @@ content::WebUIDataSource* CreateMdExtensionsSource(bool in_dev_mode) {
     {"itemOptions", IDS_MD_EXTENSIONS_ITEM_OPTIONS},
     {"itemPermissions", IDS_MD_EXTENSIONS_ITEM_PERMISSIONS},
     {"itemPermissionsEmpty", IDS_MD_EXTENSIONS_ITEM_PERMISSIONS_EMPTY},
-    {"itemRemove", IDS_MD_EXTENSIONS_ITEM_REMOVE},
     {"itemRemoveExtension", IDS_MD_EXTENSIONS_ITEM_REMOVE_EXTENSION},
     {"itemSource", IDS_MD_EXTENSIONS_ITEM_SOURCE},
     {"itemSourcePolicy", IDS_MD_EXTENSIONS_ITEM_SOURCE_POLICY},
@@ -211,6 +221,11 @@ content::WebUIDataSource* CreateMdExtensionsSource(bool in_dev_mode) {
     {"loadErrorErrorLabel", IDS_MD_EXTENSIONS_LOAD_ERROR_ERROR_LABEL},
     {"loadErrorRetry", IDS_MD_EXTENSIONS_LOAD_ERROR_RETRY},
     {"noErrorsToShow", IDS_EXTENSIONS_ERROR_NO_ERRORS_CODE_MESSAGE},
+    {"runtimeHostsDialogInputError",
+     IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_INPUT_ERROR},
+    {"runtimeHostsDialogInputLabel",
+     IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_INPUT_LABEL},
+    {"runtimeHostsDialogTitle", IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_TITLE},
     {"packDialogTitle", IDS_MD_EXTENSIONS_PACK_DIALOG_TITLE},
     {"packDialogWarningTitle", IDS_MD_EXTENSIONS_PACK_DIALOG_WARNING_TITLE},
     {"packDialogErrorTitle", IDS_MD_EXTENSIONS_PACK_DIALOG_ERROR_TITLE},

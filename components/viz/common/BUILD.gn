@@ -60,6 +60,8 @@ viz_component("common") {
     "gpu/context_cache_controller.cc",
     "gpu/context_cache_controller.h",
     "gpu/context_lost_observer.h",
+    "gpu/context_lost_reason.cc",
+    "gpu/context_lost_reason.h",
     "gpu/context_provider.cc",
     "gpu/context_provider.h",
     "gpu/raster_context_provider.cc",
@@ -125,6 +127,7 @@ viz_component("common") {
     "surfaces/child_local_surface_id_allocator.h",
     "surfaces/frame_sink_id.cc",
     "surfaces/frame_sink_id.h",
+    "surfaces/frame_sink_id_allocator.cc",
     "surfaces/frame_sink_id_allocator.h",
     "surfaces/local_surface_id.cc",
     "surfaces/local_surface_id.h",
@@ -136,6 +139,8 @@ viz_component("common") {
     "surfaces/surface_id.h",
     "surfaces/surface_info.cc",
     "surfaces/surface_info.h",
+    "surfaces/surface_range.cc",
+    "surfaces/surface_range.h",
     "switches.cc",
     "switches.h",
     "traced_value.cc",
@@ -197,6 +202,7 @@ viz_source_set("unit_tests") {
   testonly = true
   sources = [
     "frame_sinks/begin_frame_args_unittest.cc",
+    "frame_sinks/begin_frame_source_unittest.cc",
     "frame_sinks/copy_output_util_unittest.cc",
     "frame_sinks/delay_based_time_source_unittest.cc",
     "gl_helper_unittest.cc",
@@ -209,6 +215,7 @@ viz_source_set("unit_tests") {
     "surfaces/local_surface_id_unittest.cc",
     "surfaces/parent_local_surface_id_allocator_unittest.cc",
     "surfaces/scoped_surface_id_allocator_unittest.cc",
+    "surfaces/surface_range_unittest.cc",
     "yuv_readback_unittest.cc",
   ]
 

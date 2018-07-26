@@ -19,12 +19,12 @@
 #include "base/metrics/single_sample_metrics.h"
 #include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/task/sequence_manager/task_time_observer.h"
 #include "base/trace_event/trace_log.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
 #include "third_party/blink/renderer/platform/scheduler/child/pollable_thread_safe_flag.h"
 #include "third_party/blink/renderer/platform/scheduler/child/task_queue_with_task_type.h"
 #include "third_party/blink/renderer/platform/scheduler/common/idle_canceled_delayed_task_sweeper.h"
@@ -94,15 +94,28 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
     bool low_priority_background_page;
     bool best_effort_background_page;
 
-    // Task and subframe priority experiment (crbug.com/852380)
+    // Task and subframe priority experiment (crbug.com/852380).
     bool low_priority_subframe;
     bool low_priority_throttleable;
     bool low_priority_subframe_throttleable;
     bool low_priority_hidden_frame;
 
-    // Ads priority experiment (crbug.com/856150)
+    // Ads priority experiment (crbug.com/856150).
     bool low_priority_ad_frame;
     bool best_effort_ad_frame;
+
+    // Origin type priority experiment (crbug.com/856158).
+    bool low_priority_cross_origin;
+
+    // Use resource fetch priority for resource loading tasks
+    // (crbug.com/860545).
+    bool use_resource_fetch_priority;
+
+    // Contains a mapping from net::RequestPriority to TaskQueue::QueuePriority
+    // when use_resource_fetch_priority is enabled.
+    std::array<base::sequence_manager::TaskQueue::QueuePriority,
+               net::RequestPrioritySize::NUM_PRIORITIES>
+        net_to_blink_priority;
 
     // Turn on relevant experiments during the loading phase.
     bool experiment_only_when_loading;
@@ -124,8 +137,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   // with virtual time enabled and paused with base::Time will be overridden to
   // start at |initial_virtual_time|.
   MainThreadSchedulerImpl(
-      std::unique_ptr<base::sequence_manager::SequenceManager>
-          task_queue_manager,
+      std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager,
       base::Optional<base::Time> initial_virtual_time);
 
   ~MainThreadSchedulerImpl() override;
@@ -166,7 +178,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   void Shutdown() override;
   void SetTopLevelBlameContext(
       base::trace_event::BlameContext* blame_context) override;
-  void SetRAILModeObserver(RAILModeObserver* observer) override;
+  void AddRAILModeObserver(WebRAILModeObserver* observer) override;
   void SetRendererProcessType(RendererProcessType type) override;
   WebScopedVirtualTimePauser CreateWebScopedVirtualTimePauser(
       const char* name,
@@ -332,15 +344,15 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
   void OnShutdownTaskQueue(const scoped_refptr<MainThreadTaskQueue>& queue);
 
-  void OnTaskStarted(MainThreadTaskQueue* queue,
-                     const base::sequence_manager::TaskQueue::Task& task,
-                     base::TimeTicks start);
+  void OnTaskStarted(
+      MainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
-  void OnTaskCompleted(MainThreadTaskQueue* queue,
-                       const base::sequence_manager::TaskQueue::Task& task,
-                       base::TimeTicks start,
-                       base::TimeTicks end,
-                       base::Optional<base::TimeDelta> thread_time);
+  void OnTaskCompleted(
+      MainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
   bool IsAudioPlaying() const;
 
@@ -700,19 +712,17 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   // Probabilistically record all task metadata for the current task.
   // If task belongs to a per-frame queue, this task is attributed to
   // a particular Page, otherwise it's attributed to all Pages in the process.
-  void RecordTaskUkm(MainThreadTaskQueue* queue,
-                     const base::sequence_manager::TaskQueue::Task& task,
-                     base::TimeTicks start,
-                     base::TimeTicks end,
-                     base::Optional<base::TimeDelta> thread_time);
+  void RecordTaskUkm(
+      MainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
-  void RecordTaskUkmImpl(MainThreadTaskQueue* queue,
-                         const base::sequence_manager::TaskQueue::Task& task,
-                         base::TimeTicks start,
-                         base::TimeTicks end,
-                         base::Optional<base::TimeDelta> thread_time,
-                         PageSchedulerImpl* page_scheduler,
-                         size_t page_schedulers_to_attribute);
+  void RecordTaskUkmImpl(
+      MainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing,
+      PageSchedulerImpl* page_scheduler,
+      size_t page_schedulers_to_attribute);
 
   void InitWakeUpBudgetPoolIfNeeded();
 
@@ -763,7 +773,6 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   scoped_refptr<TaskQueueWithTaskType> v8_task_runner_;
   scoped_refptr<TaskQueueWithTaskType> compositor_task_runner_;
   scoped_refptr<TaskQueueWithTaskType> control_task_runner_;
-  scoped_refptr<TaskQueueWithTaskType> default_task_runner_;
   scoped_refptr<TaskQueueWithTaskType> input_task_runner_;
   scoped_refptr<TaskQueueWithTaskType> ipc_task_runner_;
 
@@ -837,7 +846,7 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
     base::TimeDelta max_queueing_time;
     base::TimeTicks background_status_changed_at;
     std::set<PageSchedulerImpl*> page_schedulers;  // Not owned.
-    RAILModeObserver* rail_mode_observer;          // Not owned.
+    base::ObserverList<WebRAILModeObserver> rail_mode_observers;  // Not owned.
     WakeUpBudgetPool* wake_up_budget_pool;         // Not owned.
     MainThreadMetricsHelper metrics_helper;
     TraceableState<RendererProcessType, kTracingCategoryNameTopLevel>
@@ -868,6 +877,15 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
     // allowed). NB a value of 0 allows infinite starvation.
     int max_virtual_time_task_starvation_count;
     bool virtual_time_stopped;
+
+    // Holds task queues that are currently running.
+    // The queue for the inmost task is at the top of stack when there are
+    // nested RunLoops.
+    std::stack<scoped_refptr<MainThreadTaskQueue>,
+               std::vector<scoped_refptr<MainThreadTaskQueue>>>
+        running_queues;
+
+    // True if a nested RunLoop is running.
     bool nested_runloop;
 
     std::mt19937_64 random_generator;

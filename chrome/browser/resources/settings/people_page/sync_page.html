@@ -29,7 +29,7 @@
       #create-password-box,
       #reset-sync-message-box {
         /* In order to line up with the encryption radio box text. */
-        -webkit-margin-start: var(--settings-indent-width);
+        margin-inline-start: var(--settings-indent-width);
       }
 
       #create-password-box .list-item {
@@ -41,14 +41,14 @@
       }
 
       #existingPassphrase {
-        /* This particular list frame is not indented. */
-        -webkit-padding-start: var(--settings-box-row-padding);
         border-bottom: var(--settings-separator-line);
+        /* This particular list frame is not indented. */
+        padding-inline-start: var(--settings-box-row-padding);
       }
 
       #submitExistingPassphrase {
         /* The submit button for the existing passphrase is on the same line. */
-        -webkit-margin-start: 16px;
+        margin-inline-start: 16px;
       }
 
       #passphraseRecoverHint {
@@ -80,7 +80,7 @@
     <template is="dom-if" if="[[shouldShowSyncAccountControl_(diceEnabled,
         unifiedConsentEnabled, syncStatus.syncSystemEnabled,
         syncStatus.signinAllowed)]]">
-      <settings-sync-account-control always-show-promo
+      <settings-sync-account-control embedded-in-subpage
           sync-status="[[syncStatus]]"
           promo-label-with-account="$i18n{peopleSignInPrompt}"
           promo-label-with-no-account="$i18n{peopleSignInPrompt}"
@@ -91,16 +91,53 @@
       </settings-sync-account-control>
     </template>
 </if>
+
+    <template is="dom-if" if="[[shouldShowExistingPassphraseBelowAccount_(
+      unifiedConsentEnabled, syncPrefs.passphraseRequired)]]">
+      <div id="existingPassphrase" class="list-frame">
+        <div id="existingPassphraseTitle" class="list-item">
+            <div class="start">
+              <div>$i18n{existingPassphraseTitle}</div>
+              <div class="secondary">
+                [[enterPassphrasePrompt_(syncPrefs.passphraseTypeIsCustom)]]
+                <a href="$i18nRaw{syncErrorHelpUrl}" target="_blank">
+                  $i18n{learnMore}
+                </a>
+              </div>
+            </div>
+        </div>
+        <div id="existingPassphraseContainer" class="list-item">
+          <cr-input id="existingPassphraseInput" type="password"
+              value="{{existingPassphrase_}}"
+              placeholder="$i18n{passphrasePlaceholder}"
+              error-message="$i18n{incorrectPassphraseError}"
+              on-keypress="onSubmitExistingPassphraseTap_">
+            <paper-button id="submitExistingPassphrase" slot="suffix"
+                on-click="onSubmitExistingPassphraseTap_"
+                class="action-button" disabled="[[!existingPassphrase_]]">
+              $i18n{submitPassphraseButton}
+            </paper-button>
+          </cr-input>
+        </div>
+        <div id="passphraseRecoverHint" class="list-item">
+          <span>$i18nRaw{passphraseRecover}</span>
+        </div>
+      </div>
+    </template>
+
      <!-- A change of the unified consent toggle state is automatically handled
           in the C++ code after a change in the pref is observed. -->
-    <settings-toggle-button class="first" pref="{{prefs.unified_consent_given}}"
+    <settings-toggle-button id="unifiedConsentToggle" class="first"
+        pref="{{prefs.unified_consent_given}}"
         label="$i18n{syncUnifiedConsentToggleTitle}"
-        hidden="[[!unifiedConsentEnabled]]">
+        hidden="[[!shouldShowUnifiedConsentToggle_(unifiedConsentEnabled,
+                   syncStatus.disabled, syncStatus.signedIn)]]">
     </settings-toggle-button>
     <div class="settings-box two-line" id="sync-section-toggle"
         actionable$="[[!syncSectionDisabled_]]"
         on-click="toggleExpandButton_"
-        hidden="[[!unifiedConsentEnabled]]">
+        hidden="[[!shouldShowSyncControls_(unifiedConsentEnabled,
+                   syncStatus.disabled)]]">
       <div class="start">
         <div>$i18n{sync}</div>
         <div class="secondary">$i18n{syncDescription}</div>
@@ -122,7 +159,10 @@
       </div>
       <div id="[[pages_.CONFIGURE]]"
           hidden$="[[!isStatus_(pages_.CONFIGURE, pageStatus_)]]">
-        <template is="dom-if" if="[[syncPrefs.passphraseRequired]]">
+        <!-- TODO(http://crbug.com/862983) Remove this section once the Unified
+             Consent feature is launched. -->
+        <template is="dom-if" if="[[shouldShowExistingPassphraseInSyncSection_(
+            unifiedConsentEnabled, syncPrefs.passphraseRequired)]]">
           <div id="existingPassphrase" class="list-frame">
             <div class="list-item">
               <span>
@@ -302,23 +342,48 @@
                 aria-label="$i18n{enablePaymentsIntegrationCheckboxLabel}">
             </cr-toggle>
           </div>
+
+          <template is="dom-if" if="[[unifiedConsentEnabled]]">
+            <div class="layout horizontal list-item"
+                hidden="[[!syncPrefs.userEventsRegistered]]">
+              <div class="start" id="userEventsCheckboxLabel">
+                <div>$i18n{userEventsCheckboxLabel}</div>
+                <div class="secondary">
+                  $i18n{userEventsCheckboxText}
+                </div>
+              </div>
+              <cr-toggle checked="{{syncPrefs.userEventsSynced}}"
+                  on-change="onSingleSyncDataTypeChanged_"
+                  disabled="[[shouldSyncCheckboxBeDisabled_(
+                      syncPrefs.syncAllDataTypes,
+                      syncPrefs.userEventsEnforced)]]"
+                  aria-labelledby="userEventsCheckboxLabel">
+              </cr-toggle>
+            </div>
+          </template>
         </div>
 
         <div id="other-sync-items"
             class$="[[getListFrameClass_(unifiedConsentEnabled)]]">
-          <a class$="two-line inherit-color no-outline
+          <template is="dom-if" if="[[driveSuggestAvailable_]]">
+            <settings-toggle-button
+                class$="[[getListItemClass_(unifiedConsentEnabled)]]"
+                pref="{{prefs.documentsuggest.enabled}}"
+                label="$i18n{driveSuggestPref}"
+                sub-label="$i18n{driveSuggestPrefDesc}">
+            </settings-toggle-button>
+          </template>
+
+          <a class$="inherit-color no-outline
               [[getListItemClass_(unifiedConsentEnabled)]]" tabindex="-1"
               target="_blank" href="$i18n{activityControlsUrl}"
               on-click="onActivityControlsTap_">
             <div class="start">
               $i18n{personalizeGoogleServicesTitle}
-              <div class="secondary" id="activityControlsSecondary">
-                $i18n{personalizeGoogleServicesText}
-              </div>
             </div>
             <paper-icon-button-light actionable class="icon-external">
-              <button aria-label="$i18n{personalizeGoogleServicesTitle}"
-                  aria-describedby="activityControlsSecondary"></button>
+              <button aria-label="$i18n{personalizeGoogleServicesTitle}">
+              </button>
             </paper-icon-button-light>
           </a>
 
@@ -397,6 +462,7 @@
               </div>
             </div>
           </template>
+
         </div>
       </div>
     </iron-collapse>

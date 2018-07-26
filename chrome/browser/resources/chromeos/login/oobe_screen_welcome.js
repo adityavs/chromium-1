@@ -12,35 +12,19 @@ login.createScreen('WelcomeScreen', 'connect', function() {
   var CONTEXT_KEY_TIMEZONE = 'timezone';
 
   return {
-    EXTERNAL_API: ['showError'],
-
-    /**
-     * Dropdown element for networks selection.
-     */
-    dropdown_: null,
+    EXTERNAL_API: [],
 
     /** @override */
     decorate: function() {
       var welcomeScreen = $('oobe-welcome-md');
       welcomeScreen.screen = this;
-      welcomeScreen.enabled = true;
-
-      var languageList = loadTimeData.getValue('languageList');
-      welcomeScreen.languages = languageList;
-
-      var inputMethodsList = loadTimeData.getValue('inputMethodsList');
-      welcomeScreen.keyboards = inputMethodsList;
-
-      var timezoneList = loadTimeData.getValue('timezoneList');
-      welcomeScreen.timezones = timezoneList;
-
-      welcomeScreen.highlightStrength =
-          loadTimeData.getValue('highlightStrength');
 
       this.context.addObserver(
           CONTEXT_KEY_INPUT_METHOD, function(inputMethodId) {
             $('oobe-welcome-md').setSelectedKeyboard(inputMethodId);
           });
+
+      this.updateLocalizedContent();
     },
 
     onLanguageSelected_: function(languageId) {
@@ -69,7 +53,7 @@ login.createScreen('WelcomeScreen', 'connect', function() {
      * @type {string}
      */
     get header() {
-      return loadTimeData.getString('networkScreenTitle');
+      return loadTimeData.getString('welcomeScreenTitle');
     },
 
     /**
@@ -77,19 +61,6 @@ login.createScreen('WelcomeScreen', 'connect', function() {
      */
     get defaultControl() {
       return $('oobe-welcome-md');
-    },
-
-    /**
-     * Shows the network error message.
-     * @param {string} message Message to be shown.
-     */
-    showError: function(message) {
-      var error = document.createElement('div');
-      var messageDiv = document.createElement('div');
-      messageDiv.className = 'error-message-bubble';
-      messageDiv.textContent = message;
-      error.appendChild(messageDiv);
-      error.setAttribute('role', 'alert');
     },
 
     /**

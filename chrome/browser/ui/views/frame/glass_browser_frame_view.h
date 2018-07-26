@@ -17,6 +17,8 @@
 #include "ui/views/window/non_client_view.h"
 
 class BrowserView;
+class HostedAppButtonContainer;
+class HostedAppOriginText;
 
 class GlassBrowserFrameView : public BrowserNonClientFrameView,
                               public views::ButtonListener,
@@ -25,6 +27,8 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   // Alpha to use for features in the titlebar (the window title and caption
   // buttons) when the window is inactive. They are opaque when active.
   static constexpr SkAlpha kInactiveTitlebarFeatureAlpha = 0x65;
+
+  static constexpr char kClassName[] = "GlassBrowserFrameView";
 
   // Constructs a non-client view for an BrowserFrame.
   GlassBrowserFrameView(BrowserFrame* frame, BrowserView* browser_view);
@@ -35,9 +39,11 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   gfx::Rect GetBoundsForTabStrip(views::View* tabstrip) const override;
   int GetTopInset(bool restored) const override;
   int GetThemeBackgroundXInset() const override;
+  bool HasClientEdge() const override;
   void UpdateThrobber(bool running) override;
   gfx::Size GetMinimumSize() const override;
   int GetTabStripLeftInset() const override;
+  bool IsSingleTabModeAvailable() const override;
   void OnTabRemoved(int index) override;
   void OnTabsMaxXChanged() override;
 
@@ -67,8 +73,12 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
 
   SkColor GetTitlebarColor() const;
 
+  HostedAppButtonContainer* GetHostedAppButtonContainerForTesting() const;
+
  protected:
   // views::View:
+  void ChildPreferredSizeChanged(views::View* child) override;
+  const char* GetClassName() const override;
   void OnPaint(gfx::Canvas* canvas) override;
   void Layout() override;
 
@@ -79,6 +89,7 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   // views::NonClientFrameView:
   bool DoesIntersectRect(const views::View* target,
                          const gfx::Rect& rect) const override;
+  void ActivationChanged(bool active) override;
 
   // Returns the thickness of the border around the client area (web content,
   // toolbar, and tabs) that separates it from the frame border. If |restored|
@@ -132,6 +143,8 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   Windows10CaptionButton* CreateCaptionButton(ViewID button_type,
                                               int accessible_name_resource_id);
 
+  SkColor GetTitlebarFeatureColor(bool active) const;
+
   // Paint various sub-components of this view.
   void PaintTitlebar(gfx::Canvas* canvas) const;
   void PaintClientEdge(gfx::Canvas* canvas) const;
@@ -180,6 +193,12 @@ class GlassBrowserFrameView : public BrowserNonClientFrameView,
   // Icon and title. Only used when custom-drawing the titlebar for popups.
   TabIconView* window_icon_;
   views::Label* window_title_;
+
+  // Menu button and page status icons. Only used by hosted app windows.
+  HostedAppButtonContainer* hosted_app_button_container_ = nullptr;
+
+  // Sliding origin text. Only used by hosted app windows.
+  HostedAppOriginText* hosted_app_origin_text_ = nullptr;
 
   // Custom-drawn caption buttons. Only used when custom-drawing the titlebar.
   Windows10CaptionButton* minimize_button_;

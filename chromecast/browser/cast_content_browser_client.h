@@ -137,9 +137,6 @@ class CastContentBrowserClient : public content::ContentBrowserClient {
                            content::WebPreferences* prefs) override;
   void ResourceDispatcherHostCreated() override;
   std::string GetApplicationLocale() override;
-  void GetGeolocationRequestContext(
-      base::OnceCallback<void(scoped_refptr<net::URLRequestContextGetter>)>
-          callback) override;
   content::QuotaPermissionContext* CreateQuotaPermissionContext() override;
   void GetQuotaSettings(
       content::BrowserContext* context,
@@ -200,7 +197,7 @@ class CastContentBrowserClient : public content::ContentBrowserClient {
   }
 
 #if BUILDFLAG(IS_CAST_USING_CMA_BACKEND)
-  std::unique_ptr<::media::CdmFactory> CreateCdmFactory();
+  virtual std::unique_ptr<::media::CdmFactory> CreateCdmFactory();
 #endif  // BUILDFLAG(IS_CAST_USING_CMA_BACKEND)
 
  protected:

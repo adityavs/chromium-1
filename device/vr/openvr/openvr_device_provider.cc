@@ -6,18 +6,11 @@
 
 #include "base/metrics/histogram_macros.h"
 #include "device/gamepad/gamepad_data_fetcher_manager.h"
+#include "device/vr/openvr/openvr_api_wrapper.h"
 #include "device/vr/openvr/openvr_device.h"
 #include "device/vr/openvr/openvr_gamepad_data_fetcher.h"
 #include "device/vr/openvr/test/test_hook.h"
 #include "third_party/openvr/src/headers/openvr.h"
-
-#include "base/command_line.h"
-
-namespace {
-// Use the pattern established in content_switches.h, but don't add a content
-// dependency -- device shouldn't have one.
-constexpr char kTestType[] = "test-type";
-}  // namespace
 
 namespace device {
 
@@ -34,21 +27,13 @@ OpenVRDeviceProvider::OpenVRDeviceProvider() = default;
 OpenVRDeviceProvider::~OpenVRDeviceProvider() {
   device::GamepadDataFetcherManager::GetInstance()->RemoveSourceFactory(
       device::GAMEPAD_SOURCE_OPENVR);
-  // We must shutdown device_ and set it to null before calling VR_Shutdown,
-  // because VR_Shutdown will unload OpenVR's dll, and device_ (or its render
-  // loop) are potentially still using it.
+
   if (device_) {
     device_->Shutdown();
     device_ = nullptr;
   }
 
-  if (test_hook_registration_s) {
-    DCHECK(base::CommandLine::ForCurrentProcess()->HasSwitch(kTestType));
-    test_hook_registration_s->SetTestHook(nullptr);
-  }
-
-  vr::VR_Shutdown();
-  test_hook_registration_s = nullptr;
+  OpenVRWrapper::SetTestHook(nullptr);
 }
 
 void OpenVRDeviceProvider::Initialize(
@@ -66,41 +51,20 @@ void OpenVRDeviceProvider::Initialize(
 }
 
 void OpenVRDeviceProvider::SetTestHook(OpenVRTestHook* test_hook) {
-  DCHECK(base::CommandLine::ForCurrentProcess()->HasSwitch(kTestType));
-  test_hook_s = test_hook;
-  if (test_hook_registration_s) {
-    test_hook_registration_s->SetTestHook(test_hook_s);
-  }
+  OpenVRWrapper::SetTestHook(test_hook);
 }
-
-OpenVRTestHook* OpenVRDeviceProvider::test_hook_s = nullptr;
-TestHookRegistration* OpenVRDeviceProvider::test_hook_registration_s = nullptr;
 
 void OpenVRDeviceProvider::CreateDevice() {
   if (!vr::VR_IsRuntimeInstalled() || !vr::VR_IsHmdPresent())
     return;
 
-  vr::EVRInitError init_error = vr::VRInitError_None;
-  vr::IVRSystem* vr_system =
-      vr::VR_Init(&init_error, vr::EVRApplicationType::VRApplication_Scene);
-
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(kTestType)) {
-    // Allow our mock implementation of OpenVR to be controlled by tests.
-    vr::EVRInitError eError;
-    test_hook_registration_s = reinterpret_cast<TestHookRegistration*>(
-        vr::VR_GetGenericInterface(kChromeOpenVRTestHookAPI, &eError));
-    if (test_hook_registration_s) {
-      test_hook_registration_s->SetTestHook(test_hook_s);
-    }
+  device_ = std::make_unique<OpenVRDevice>();
+  if (device_->IsInitialized()) {
+    GamepadDataFetcherManager::GetInstance()->AddFactory(
+        new OpenVRGamepadDataFetcher::Factory(device_->GetId(), device_.get()));
+  } else {
+    device_ = nullptr;
   }
-
-  if (init_error != vr::VRInitError_None) {
-    LOG(ERROR) << vr::VR_GetVRInitErrorAsEnglishDescription(init_error);
-    return;
-  }
-  device_ = std::make_unique<OpenVRDevice>(vr_system);
-  GamepadDataFetcherManager::GetInstance()->AddFactory(
-      new OpenVRGamepadDataFetcher::Factory(device_->GetId(), vr_system));
 }
 
 bool OpenVRDeviceProvider::Initialized() {

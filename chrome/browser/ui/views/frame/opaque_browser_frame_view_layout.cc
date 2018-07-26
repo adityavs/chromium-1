@@ -8,7 +8,6 @@
 #include "base/containers/adapters.h"
 #include "build/build_config.h"
 #include "chrome/browser/profiles/profiles_state.h"
-#include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/views/profiles/profile_indicator_icon.h"
 #include "chrome/common/chrome_switches.h"
 #include "components/signin/core/browser/profile_management_switches.h"
@@ -127,7 +126,7 @@ gfx::Size OpaqueBrowserFrameViewLayout::GetMinimumSize(
 }
 
 int OpaqueBrowserFrameViewLayout::GetTabStripLeftInset() const {
-  return leading_button_start_ + OpaqueBrowserFrameView::GetAvatarIconPadding();
+  return leading_button_start_ + OpaqueBrowserFrameView::GetTabstripPadding();
 }
 
 gfx::Rect OpaqueBrowserFrameViewLayout::GetWindowBoundsForClientBounds(
@@ -153,11 +152,17 @@ int OpaqueBrowserFrameViewLayout::FrameTopBorderThickness(bool restored) const {
   return thickness;
 }
 
+bool OpaqueBrowserFrameViewLayout::HasClientEdge() const {
+  return !MD::IsRefreshUi();
+}
+
 int OpaqueBrowserFrameViewLayout::NonClientBorderThickness() const {
   const int frame = FrameBorderThickness(false);
   // When we fill the screen, we don't show a client edge.
-  return (IsTitleBarCondensed() || delegate_->IsFullscreen()) ?
-      frame : (frame + views::NonClientFrameView::kClientEdgeThickness);
+  return (!HasClientEdge() || IsTitleBarCondensed() ||
+          delegate_->IsFullscreen())
+             ? frame
+             : (frame + views::NonClientFrameView::kClientEdgeThickness);
 }
 
 int OpaqueBrowserFrameViewLayout::NonClientTopHeight(bool restored) const {
@@ -300,8 +305,7 @@ void OpaqueBrowserFrameViewLayout::LayoutNewStyleAvatar(views::View* host) {
   // the avatar button.
   if (!IsTitleBarCondensed()) {
     trailing_button_start_ -=
-        GetLayoutSize(NEW_TAB_BUTTON, delegate_->IsIncognito()).width() +
-        kCaptionSpacing;
+        delegate_->GetNewTabButtonPreferredSize().width() + kCaptionSpacing;
   }
 
   new_avatar_button_->SetBounds(button_x, button_y, button_width,
@@ -325,9 +329,8 @@ bool OpaqueBrowserFrameViewLayout::ShouldIncognitoIconBeOnRight() const {
 }
 
 int OpaqueBrowserFrameViewLayout::TabStripCaptionSpacing() const {
-  // For Material Refresh, the end of the tabstrip contains empty space to
-  // ensure the window remains draggable, which is sufficient padding to the
-  // other tabstrip contents.
+  // In Refresh, any necessary padding after the tabstrip is contained within
+  // the tabs and/or new tab button.
   if (MD::IsRefreshUi())
     return 0;
 

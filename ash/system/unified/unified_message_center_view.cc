@@ -4,6 +4,7 @@
 
 #include "ash/system/unified/unified_message_center_view.h"
 
+#include "ash/message_center/message_center_scroll_bar.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/tray/tray_constants.h"
 #include "ash/system/unified/sign_out_button.h"
@@ -13,8 +14,8 @@
 #include "ui/message_center/message_center_types.h"
 #include "ui/message_center/views/message_view.h"
 #include "ui/message_center/views/message_view_factory.h"
+#include "ui/message_center/views/notification_control_buttons_view.h"
 #include "ui/views/controls/scroll_view.h"
-#include "ui/views/controls/scrollbar/overlay_scroll_bar.h"
 #include "ui/views/layout/box_layout.h"
 
 using message_center::MessageCenter;
@@ -50,8 +51,7 @@ UnifiedMessageCenterView::UnifiedMessageCenterView(
   // Need to set the transparent background explicitly, since ScrollView has
   // set the default opaque background color.
   scroller_->SetBackgroundColor(SK_ColorTRANSPARENT);
-  scroller_->SetVerticalScrollBar(new views::OverlayScrollBar(false));
-  scroller_->SetHorizontalScrollBar(new views::OverlayScrollBar(true));
+  scroller_->SetVerticalScrollBar(new MessageCenterScrollBar());
   scroller_->set_draw_overflow_indicator(false);
   AddChildView(scroller_);
 
@@ -87,6 +87,14 @@ UnifiedMessageCenterView::UnifiedMessageCenterView(
 
 UnifiedMessageCenterView::~UnifiedMessageCenterView() {
   message_center_->RemoveObserver(this);
+  if (focus_manager_)
+    focus_manager_->RemoveFocusChangeListener(this);
+}
+
+void UnifiedMessageCenterView::Init() {
+  focus_manager_ = GetFocusManager();
+  if (focus_manager_)
+    focus_manager_->AddFocusChangeListener(this);
 }
 
 void UnifiedMessageCenterView::SetMaxHeight(int max_height) {
@@ -172,6 +180,29 @@ void UnifiedMessageCenterView::OnViewPreferredSizeChanged(
 void UnifiedMessageCenterView::ButtonPressed(views::Button* sender,
                                              const ui::Event& event) {
   tray_controller_->HandleClearAllAction();
+}
+
+void UnifiedMessageCenterView::OnWillChangeFocus(views::View* before,
+                                                 views::View* now) {}
+
+void UnifiedMessageCenterView::OnDidChangeFocus(views::View* before,
+                                                views::View* now) {
+  // Update the button visibility when the focus state is changed.
+  size_t count = message_list_view_->GetNotificationCount();
+  for (size_t i = 0; i < count; ++i) {
+    MessageView* view = message_list_view_->GetNotificationAt(i);
+    // ControlButtonsView is not in the same view hierarchy on ARC++
+    // notifications, so check it separately.
+    if (view->Contains(before) || view->Contains(now) ||
+        (view->GetControlButtonsView() &&
+         (view->GetControlButtonsView()->Contains(before) ||
+          view->GetControlButtonsView()->Contains(now)))) {
+      view->UpdateControlButtonsVisibility();
+    }
+
+    // Ensure that a notification is not removed or added during iteration.
+    DCHECK_EQ(count, message_list_view_->GetNotificationCount());
+  }
 }
 
 void UnifiedMessageCenterView::OnAllNotificationsCleared() {

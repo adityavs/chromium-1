@@ -603,9 +603,41 @@ void RenderWidgetHostImpl::ShutdownAndDestroyWidget(bool also_delete) {
   RejectMouseLockOrUnlockIfNecessary();
 
   if (process_->IsInitializedAndNotDead()) {
-    // Tell the renderer object to close.
-    bool rv = Send(new ViewMsg_Close(routing_id_));
-    DCHECK(rv);
+    // This logic below simulates the routing behavior from when RenderWidget
+    // associated with RenderViews shared the same routing IDs.
+    //
+    // In the original code, the sharing of the routing ID yielded a bastardized
+    // version of dynamic dispatch wherein the ultimate static code path that
+    // handled a ViewMsg_Close changed based on if
+    //
+    //   (a) the RenderWidgetImpl was also a RenderViewImpl
+    //   (b) the RenderViewImpl hooked the message in OnMessageReceived
+    //
+    // In the current code, if RenderWidgetImpl IS NOT a RenderViewImpl,
+    // RenderWidgetHost WILL NOT have a |owner_delegate_| and the message can
+    // be dispatched directly. This is the simplest case.
+    //
+    // If RenderWidgetImpl IS is a RenderViewImpl, then on some platforms
+    // (seems like only Mac?) RenderViewImpl overrides ViewMsg::OnClose to do
+    // additional processing before passing it up to RenderWidgetImpl::OnClose.
+    //
+    // When it is not overridden, the message delegated up via
+    // IPC_MESSAGE_UNHANDLED to the RenderWidget's message dispatching.
+    //
+    // Basically, there are 2 overlapping hand-written implementations of
+    // dynamic dispatch occuring: one via IPC_MESSAGE_UNHANDLED, and another
+    // via calling the super-class method.
+    //
+    // TODO(ajwong): Once the routing_id split CL lands, remove one of these
+    // implementaions of hand-written dyanmic dispatch. The world does not
+    // need so many implementations of what's effectively "virtual."
+    if (owner_delegate_) {
+      owner_delegate_->RenderWidgetDidShutdown();
+    } else {
+      // Tell the non-view RendererWidget to close.
+      bool rv = Send(new ViewMsg_Close(routing_id_));
+      DCHECK(rv);
+    }
   }
 
   Destroy(also_delete);
@@ -782,13 +814,10 @@ bool RenderWidgetHostImpl::GetVisualProperties(
         delegate_->IsFullscreenForCurrentTab();
     visual_properties->display_mode = delegate_->GetDisplayMode(this);
     visual_properties->zoom_level = delegate_->GetPendingPageZoomLevel();
-    visual_properties->uses_temporary_zoom =
-        delegate_->UsesTemporaryZoomLevel();
   } else {
     visual_properties->is_fullscreen_granted = false;
     visual_properties->display_mode = blink::kWebDisplayModeBrowser;
     visual_properties->zoom_level = 0;
-    visual_properties->uses_temporary_zoom = false;
   }
 
   visual_properties->auto_resize_enabled = auto_resize_enabled_;
@@ -861,9 +890,7 @@ bool RenderWidgetHostImpl::GetVisualProperties(
 
   const bool zoom_changed =
       !old_visual_properties_ ||
-      old_visual_properties_->zoom_level != visual_properties->zoom_level ||
-      old_visual_properties_->uses_temporary_zoom !=
-          visual_properties->uses_temporary_zoom;
+      old_visual_properties_->zoom_level != visual_properties->zoom_level;
 
   bool dirty =
       zoom_changed || size_changed || parent_local_surface_id_changed ||
@@ -1320,9 +1347,8 @@ void RenderWidgetHostImpl::ForwardGestureEventWithLatencyInfo(
         // the GFS are directly injected to RWHI rather than being generated
         // from wheel events in MouseWheelEventQueue.
         is_in_gesture_scroll_[gesture_event.SourceDevice()] = false;
-      } else if (GetView()->wheel_scroll_latching_enabled()) {
-        // When wheel scroll latching is enabled, no GSE is sent before GFS, so
-        // is_in_gesture_scroll must be true.
+      } else {
+        // No GSE is sent before GFS, so is_in_gesture_scroll must be true.
         // TODO(sahel): This often gets tripped on Debug builds in ChromeOS
         // indicating some kind of gesture event ordering race.
         // https://crbug.com/821237.
@@ -1336,12 +1362,6 @@ void RenderWidgetHostImpl::ForwardGestureEventWithLatencyInfo(
         // and send a wheel event with phaseEnded. MouseWheelEventQueue will
         // process the wheel event to generate and send a GSE which shows the
         // end of a scroll sequence.
-      } else {  // !GetView()->IsInVR() &&
-                // !GetView()->wheel_scroll_latching_enabled()
-
-        // When wheel scroll latching is disabled a GSE is sent before a GFS.
-        // The GSE has already finished the scroll sequence.
-        DCHECK(!is_in_gesture_scroll_[gesture_event.SourceDevice()]);
       }
 
       is_in_touchpad_gesture_fling_ = true;
@@ -2810,14 +2830,22 @@ void RenderWidgetHostImpl::RequestCompositorFrameSink(
       return;
   }
 
+  // Consider any bitmaps registered with the old CompositorFrameSink as gone,
+  // they will be re-registered on the newly requested CompositorFrameSink if
+  // they are meant to be used still. https://crbug.com/862584.
+  for (const auto& id : owned_bitmaps_)
+    shared_bitmap_manager_->ChildDeletedSharedBitmap(id);
+  owned_bitmaps_.clear();
+
   if (compositor_frame_sink_binding_.is_bound())
     compositor_frame_sink_binding_.Close();
   compositor_frame_sink_binding_.Bind(
       std::move(compositor_frame_sink_request),
       BrowserMainLoop::GetInstance()->GetResizeTaskRunner());
-  if (view_)
+  if (view_) {
     view_->DidCreateNewRendererCompositorFrameSink(
         compositor_frame_sink_client.get());
+  }
   renderer_compositor_frame_sink_ = std::move(compositor_frame_sink_client);
 }
 
@@ -2862,9 +2890,6 @@ void RenderWidgetHostImpl::SubmitCompositorFrame(
     viz::CompositorFrame frame,
     base::Optional<viz::HitTestRegionList> hit_test_region_list,
     uint64_t submit_time) {
-  TRACE_EVENT_FLOW_END0(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
-                        "SubmitCompositorFrame", local_surface_id.hash());
-
   // Ensure there are no CopyOutputRequests stowed-away in the CompositorFrame.
   // For security/privacy reasons, renderers are not allowed to make copy
   // requests because they could use this to gain access to content from another
@@ -2875,17 +2900,6 @@ void RenderWidgetHostImpl::SubmitCompositorFrame(
     return;
   }
 
-  bool tracing_enabled;
-  TRACE_EVENT_CATEGORY_GROUP_ENABLED(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
-                                     &tracing_enabled);
-  if (tracing_enabled) {
-    TimeDelta elapsed = clock_->NowTicks().since_origin() -
-                        TimeDelta::FromMicroseconds(submit_time);
-    TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
-                         "SubmitCompositorFrame::TimeElapsed",
-                         TRACE_EVENT_SCOPE_THREAD,
-                         "elapsed time:", elapsed.InMicroseconds());
-  }
   auto new_surface_properties =
       RenderWidgetSurfaceProperties::FromCompositorFrame(frame);
 

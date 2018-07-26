@@ -135,6 +135,13 @@ TEST_F(NetworkQualityTrackerTest, ObserverNotified) {
   effective_connection_type_observer()->WaitForNotification();
   EXPECT_EQ(net::EFFECTIVE_CONNECTION_TYPE_3G,
             effective_connection_type_observer()->effective_connection_type());
+  // Typical RTT and downlink values when effective connection type is 3G. Taken
+  // from net::NetworkQualityEstimatorParams.
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(450),
+            network_quality_tracker()->GetHttpRTT());
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(400),
+            network_quality_tracker()->GetTransportRTT());
+  EXPECT_EQ(400, network_quality_tracker()->GetDownstreamThroughputKbps());
   base::RunLoop().RunUntilIdle();
   EXPECT_EQ(1u, effective_connection_type_observer()->num_notifications());
 }
@@ -153,6 +160,13 @@ TEST_F(NetworkQualityTrackerTest, UnregisteredObserverNotNotified) {
   effective_connection_type_observer()->WaitForNotification();
   EXPECT_EQ(net::EFFECTIVE_CONNECTION_TYPE_3G,
             effective_connection_type_observer()->effective_connection_type());
+  // Typical RTT and downlink values when effective connection type is 3G. Taken
+  // from net::NetworkQualityEstimatorParams.
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(450),
+            network_quality_tracker()->GetHttpRTT());
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(400),
+            network_quality_tracker()->GetTransportRTT());
+  EXPECT_EQ(400, network_quality_tracker()->GetDownstreamThroughputKbps());
   base::RunLoop().RunUntilIdle();
 
   network_quality_observer2.reset();
@@ -162,6 +176,11 @@ TEST_F(NetworkQualityTrackerTest, UnregisteredObserverNotNotified) {
   effective_connection_type_observer()->WaitForNotification();
   EXPECT_EQ(net::EFFECTIVE_CONNECTION_TYPE_2G,
             effective_connection_type_observer()->effective_connection_type());
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(1800),
+            network_quality_tracker()->GetHttpRTT());
+  EXPECT_EQ(base::TimeDelta::FromMilliseconds(1500),
+            network_quality_tracker()->GetTransportRTT());
+  EXPECT_EQ(75, network_quality_tracker()->GetDownstreamThroughputKbps());
   EXPECT_EQ(2u, effective_connection_type_observer()->num_notifications());
 }
 

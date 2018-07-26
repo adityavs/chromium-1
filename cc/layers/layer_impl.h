@@ -133,9 +133,7 @@ class CC_EXPORT LayerImpl {
   // WillDraw must be called before AppendQuads. If WillDraw returns false,
   // AppendQuads and DidDraw will not be called. If WillDraw returns true,
   // DidDraw is guaranteed to be called before another WillDraw or before
-  // the layer is destroyed. To enforce this, any class that overrides
-  // WillDraw/DidDraw must call the base class version only if WillDraw
-  // returns true.
+  // the layer is destroyed.
   virtual bool WillDraw(DrawMode draw_mode,
                         viz::ClientResourceProvider* resource_provider);
   virtual void AppendQuads(viz::RenderPass* render_pass,
@@ -331,6 +329,16 @@ class CC_EXPORT LayerImpl {
     return touch_action_region_;
   }
 
+  // Set or get the region that contains wheel event handler.
+  // The |wheel_event_handler_region| specify the area where wheel event handler
+  // could block impl scrolling.
+  void SetWheelEventHandlerRegion(const Region& wheel_event_handler_region) {
+    wheel_event_handler_region_ = wheel_event_handler_region;
+  }
+  const Region& wheel_event_handler_region() const {
+    return wheel_event_handler_region_;
+  }
+
   // Note this rect is in layer space (not content space).
   void SetUpdateRect(const gfx::Rect& update_rect);
   const gfx::Rect& update_rect() const { return update_rect_; }
@@ -523,6 +531,7 @@ class CC_EXPORT LayerImpl {
 
   Region non_fast_scrollable_region_;
   TouchActionRegion touch_action_region_;
+  Region wheel_event_handler_region_;
   SkColor background_color_;
   SkColor safe_opaque_background_color_;
 

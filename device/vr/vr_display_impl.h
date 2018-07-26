@@ -20,23 +20,29 @@ namespace device {
 
 class VRDeviceBase;
 
-// VR device process implementation of a VRMagicWindowProvider within a WebVR
+// VR device process implementation of a XRFrameDataProvider within a WebVR
 // or WebXR site session.
 // VRDisplayImpl objects are owned by their respective XRRuntime instances.
 // TODO(offenwanger): Rename this.
-class DEVICE_VR_EXPORT VRDisplayImpl : public mojom::VRMagicWindowProvider,
-                                       public mojom::XRSessionController {
+class DEVICE_VR_EXPORT VRDisplayImpl
+    : public mojom::XRFrameDataProvider,
+      public mojom::XREnviromentIntegrationProvider,
+      public mojom::XRSessionController {
  public:
   VRDisplayImpl(VRDeviceBase* device,
-                mojom::VRMagicWindowProviderRequest,
+                mojom::XRFrameDataProviderRequest,
+                mojom::XREnviromentIntegrationProviderRequest,
                 mojom::XRSessionControllerRequest);
   ~VRDisplayImpl() override;
+
+  gfx::Size sessionFrameSize() { return session_frame_size_; };
+  display::Display::Rotation sessionRotation() { return session_rotation_; };
 
   device::VRDeviceBase* device() { return device_; };
 
   // Accessible to tests.
  protected:
-  // mojom::VRMagicWindowProvider
+  // mojom::XRFrameDataProvider
   void GetFrameData(GetFrameDataCallback callback) override;
   void UpdateSessionGeometry(const gfx::Size& frame_size,
                              display::Display::Rotation rotation) override;
@@ -48,13 +54,12 @@ class DEVICE_VR_EXPORT VRDisplayImpl : public mojom::VRMagicWindowProvider,
 
   void OnMojoConnectionError();
 
-  mojo::Binding<mojom::VRMagicWindowProvider> magic_window_binding_;
+  mojo::Binding<mojom::XRFrameDataProvider> magic_window_binding_;
+  mojo::Binding<mojom::XREnviromentIntegrationProvider> enviroment_binding_;
   mojo::Binding<mojom::XRSessionController> session_controller_binding_;
   device::VRDeviceBase* device_;
   bool restrict_frame_data_ = true;
 
-  // TODO(offenwanger) When device tracks it's own sessions, let it track this
-  // data.
   gfx::Size session_frame_size_ = gfx::Size(0, 0);
   display::Display::Rotation session_rotation_ = display::Display::ROTATE_0;
 };

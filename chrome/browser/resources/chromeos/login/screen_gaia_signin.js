@@ -706,6 +706,11 @@ login.createScreen('GaiaSigninScreen', 'gaia-signin', function() {
       $('login-header-bar').showCreateSupervisedButton =
           data.supervisedUsersCanCreate;
       $('login-header-bar').showGuestButton = data.guestSignin;
+      if (Oobe.getInstance().showingViewsLogin) {
+        chrome.send(
+            'showGuestButton',
+            [data.guestSignin && !this.closable && this.isAtTheBeginning()]);
+      }
 
       // Reset SAML
       this.classList.toggle('full-width', false);
@@ -716,14 +721,12 @@ login.createScreen('GaiaSigninScreen', 'gaia-signin', function() {
         $('signin-frame-container-v2').appendChild($('signin-frame'));
         $('gaia-signin')
             .insertBefore($('offline-gaia'), $('gaia-step-contents'));
-        $('offline-gaia').glifMode = true;
         $('offline-gaia').removeAttribute('not-a-dialog');
         $('offline-gaia').classList.toggle('fit', false);
       } else {
         $('gaia-signin-form-container').appendChild($('signin-frame'));
         $('gaia-signin-form-container')
             .appendChild($('offline-gaia'), $('gaia-step-contents'));
-        $('offline-gaia').glifMode = false;
         $('offline-gaia').setAttribute('not-a-dialog', true);
         $('offline-gaia').classList.toggle('fit', true);
       }
@@ -1086,8 +1089,8 @@ login.createScreen('GaiaSigninScreen', 'gaia-signin', function() {
       } else if (credentials.useOffline) {
         this.email = credentials.email;
         chrome.send(
-            'authenticateUser',
-            [credentials.email, credentials.password, false]);
+            'completeOfflineAuthentication',
+            [credentials.email, credentials.password]);
       } else if (credentials.authCode) {
         chrome.send('completeAuthentication', [
           credentials.gaiaId, credentials.email, credentials.password,

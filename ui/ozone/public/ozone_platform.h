@@ -105,10 +105,6 @@ class OZONE_EXPORT OzonePlatform {
   // provided by |args| as with InitalizeForUI.
   static void InitializeForGPU(const InitParams& args);
 
-  // Deletes the instance. Does nothing if OzonePlatform has not yet been
-  // initialized.
-  static void Shutdown();
-
   static OzonePlatform* GetInstance();
 
   // Registers a callback to be run when the OzonePlatform is initialized. Note
@@ -155,8 +151,7 @@ class OZONE_EXPORT OzonePlatform {
   //
   // A default do-nothing implementation is provided to permit platform
   // implementations to opt out of implementing any Mojo interfaces.
-  virtual void AddInterfaces(service_manager::BinderRegistryWithArgs<
-                             const service_manager::BindSourceInfo&>* registry);
+  virtual void AddInterfaces(service_manager::BinderRegistry* registry);
 
   // The GPU-specific portion of Ozone would typically run in a sandboxed
   // process for additional security. Some startup might need to wait until

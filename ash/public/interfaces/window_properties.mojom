@@ -14,6 +14,10 @@ const string kBlockedForAssistantSnapshot_Property =
 const string kCanConsumeSystemKeys_Property =
   "ash:can-consume-system-keys";
 
+// The bounds of the window control buttons (minimize, maximize, restore)
+// relative to the frame.
+const string kCaptionButtonBounds_Property = "ash:caption-button-bounds";
+
 // An UnguessableToken used to tell Mash the frame image to use for a custom
 // Browser theme, for both a window's active state and its inactive state.
 // The token to image mapping is stored in ash::ClientImageRegistry.
@@ -26,6 +30,14 @@ const string kFrameImageOverlayActive_Property =
     "ash:frame-image-overlay-active";
 const string kFrameImageOverlayInactive_Property =
     "ash:frame-image-overlay-inactive";
+
+// A boolean that tells Ash whether the frame's colors come from a PWA manifest.
+const string kFrameIsThemedByHostedApp_Property =
+    "ash:frame-is-themed-by-hosted-app";
+
+// The color of the text drawn on the frame (i.e. the window title). Only used
+// for tabless browser windows.
+const string kFrameTextColor_Property = "ash:frame-text-color";
 
 // True if the shelf should be hidden when this window is put into fullscreen.
 // Exposed because some windows want to explicitly opt-out of this.

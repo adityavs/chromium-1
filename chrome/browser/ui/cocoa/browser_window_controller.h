@@ -39,7 +39,7 @@ class Browser;
 class BrowserWindow;
 class BrowserWindowCocoa;
 @class BrowserWindowFullscreenTransition;
-@class BrowserWindowTouchBar;
+@class BrowserWindowTouchBarController;
 @class DevToolsController;
 @class DownloadShelfController;
 class ExtensionKeybindingRegistryCocoa;
@@ -47,17 +47,16 @@ class ExclusiveAccessController;
 class ExclusiveAccessContext;
 @class FindBarCocoaController;
 @class FullscreenModeController;
-@class FullscreenToolbarController;
+@class FullscreenToolbarControllerCocoa;
 @class FullscreenToolbarVisibilityLockController;
 @class FullscreenWindow;
 @class InfoBarContainerController;
 class LocationBarViewMac;
 @class OverlayableContentsController;
 class StatusBubbleMac;
-@class TabStripController;
+@class TabStripControllerCocoa;
 @class TabStripView;
 @class ToolbarController;
-@class TranslateBubbleController;
 
 namespace content {
 class WebContents;
@@ -83,7 +82,7 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
   NSWindow* savedRegularWindow_;
   std::unique_ptr<BrowserWindowCocoa> windowShim_;
   base::scoped_nsobject<ToolbarController> toolbarController_;
-  base::scoped_nsobject<TabStripController> tabStripController_;
+  base::scoped_nsobject<TabStripControllerCocoa> tabStripController_;
   base::scoped_nsobject<FindBarCocoaController> findBarCocoaController_;
   base::scoped_nsobject<InfoBarContainerController> infoBarContainerController_;
   base::scoped_nsobject<DownloadShelfController> downloadShelfController_;
@@ -91,12 +90,12 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
   base::scoped_nsobject<DevToolsController> devToolsController_;
   base::scoped_nsobject<OverlayableContentsController>
       overlayableContentsController_;
-  base::scoped_nsobject<FullscreenToolbarController>
+  base::scoped_nsobject<FullscreenToolbarControllerCocoa>
       fullscreenToolbarController_;
   std::unique_ptr<ExclusiveAccessController> exclusiveAccessController_;
   base::scoped_nsobject<BrowserWindowFullscreenTransition>
       fullscreenTransition_;
-  base::scoped_nsobject<BrowserWindowTouchBar> touchBar_;
+  base::scoped_nsobject<BrowserWindowTouchBarController> touchBarController_;
 
   // Strong. StatusBubble is a special case of a strong reference that
   // we don't wrap in a scoped_ptr because it is acting the same
@@ -108,8 +107,6 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
   BookmarkBubbleController* bookmarkBubbleController_;  // Weak.
   BOOL initializing_;  // YES while we are currently in initWithBrowser:
   BOOL ownsBrowser_;  // Only ever NO when testing
-
-  TranslateBubbleController* translateBubbleController_;  // Weak.
 
   // The total amount by which we've grown the window up or down (to display a
   // bookmark bar and/or download shelf), respectively; reset to 0 when moved
@@ -228,7 +225,7 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
 - (ToolbarController*)toolbarController;
 
 // Return a weak pointer to the tab strip controller.
-- (TabStripController*)tabStripController;
+- (TabStripControllerCocoa*)tabStripController;
 
 // Return a weak pointer to the find bar controller.
 - (FindBarCocoaController*)findBarCocoaController;
@@ -398,8 +395,9 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
 // UpdateAlertState.
 - (TabAlertState)alertState;
 
-// Returns the BrowserWindowTouchBar object associated with the window.
-- (BrowserWindowTouchBar*)browserWindowTouchBar;
+// Returns the BrowserWindowTouchBarController object associated with the
+// window.
+- (BrowserWindowTouchBarController*)browserWindowTouchBarController;
 
 // Indicates whether the toolbar is visible to the user. Toolbar is usually
 // triggered by moving mouse cursor to the top of the monitor.
@@ -621,13 +619,15 @@ constexpr const gfx::Size kMinCocoaPopupWindowSize(100, 122);
 - (BOOL)isActiveTabContentsControllerResizeBlocked;
 
 // Returns the fullscreen toolbar controller.
-- (FullscreenToolbarController*)fullscreenToolbarController;
+- (FullscreenToolbarControllerCocoa*)fullscreenToolbarController;
 
 // Sets the fullscreen toolbar controller.
-- (void)setFullscreenToolbarController:(FullscreenToolbarController*)controller;
+- (void)setFullscreenToolbarController:
+    (FullscreenToolbarControllerCocoa*)controller;
 
-// Sets |browserWindowTouchbar_|.
-- (void)setBrowserWindowTouchBar:(BrowserWindowTouchBar*)touchBar;
+// Sets |touchbarController_|.
+- (void)setBrowserWindowTouchBarController:
+    (BrowserWindowTouchBarController*)controller;
 
 @end  // @interface BrowserWindowController (TestingAPI)
 

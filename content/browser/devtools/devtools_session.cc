@@ -42,10 +42,16 @@ DevToolsSession::DevToolsSession(DevToolsAgentHostImpl* agent_host,
       host_(nullptr),
       dispatcher_(new protocol::UberDispatcher(this)),
       weak_factory_(this) {
-  dispatcher_->setFallThroughForNotFound(true);
 }
 
 DevToolsSession::~DevToolsSession() {
+  // It is Ok for session to be deleted without the dispose -
+  // it can be kicked out by an extension connect / disconnect.
+  if (dispatcher_)
+    Dispose();
+}
+
+void DevToolsSession::Dispose() {
   dispatcher_.reset();
   for (auto& pair : handlers_)
     pair.second->Disable();
@@ -69,7 +75,6 @@ void DevToolsSession::SetRenderer(int process_host_id,
 
 void DevToolsSession::SetBrowserOnly(bool browser_only) {
   browser_only_ = browser_only;
-  dispatcher_->setFallThroughForNotFound(!browser_only);
 }
 
 void DevToolsSession::AttachToAgent(
@@ -116,27 +121,41 @@ void DevToolsSession::MojoConnectionDestroyed() {
   io_session_ptr_.reset();
 }
 
-void DevToolsSession::DispatchProtocolMessage(const std::string& message) {
-  std::unique_ptr<base::Value> value = base::JSONReader::Read(message);
-
+void DevToolsSession::DispatchProtocolMessage(
+    const std::string& message,
+    std::unique_ptr<base::DictionaryValue> parsed_message) {
   DevToolsManagerDelegate* delegate =
       DevToolsManager::GetInstance()->delegate();
-  if (value && value->is_dict() && delegate) {
-    base::DictionaryValue* dict_value =
-        static_cast<base::DictionaryValue*>(value.get());
-
-    if (delegate->HandleCommand(agent_host_, client_, dict_value))
-      return;
+  if (delegate && parsed_message) {
+    delegate->HandleCommand(agent_host_, client_, std::move(parsed_message),
+                            message,
+                            base::BindOnce(&DevToolsSession::HandleCommand,
+                                           weak_factory_.GetWeakPtr()));
+  } else {
+    HandleCommand(std::move(parsed_message), message);
   }
+}
 
+void DevToolsSession::HandleCommand(
+    std::unique_ptr<base::DictionaryValue> parsed_message,
+    const std::string& message) {
+  std::unique_ptr<protocol::Value> protocol_command =
+      protocol::toProtocolValue(parsed_message.get(), 1000);
   int call_id;
   std::string method;
-  if (dispatcher_->dispatch(protocol::toProtocolValue(value.get(), 1000),
-                            &call_id,
-                            &method) != protocol::Response::kFallThrough) {
+  if (!dispatcher_->parseCommand(protocol_command.get(), &call_id, &method))
     return;
+  if (browser_only_ || dispatcher_->canDispatch(method)) {
+    dispatcher_->dispatch(call_id, method, std::move(protocol_command),
+                          message);
+  } else {
+    fallThrough(call_id, method, message);
   }
+}
 
+void DevToolsSession::fallThrough(int call_id,
+                                  const std::string& method,
+                                  const std::string& message) {
   // In browser-only mode, we should've handled everything in dispatcher.
   DCHECK(!browser_only_);
 

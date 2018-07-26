@@ -25,6 +25,7 @@
 #include "ash/login/ui/login_test_utils.h"
 #include "ash/login/ui/login_user_view.h"
 #include "ash/login/ui/scrollable_users_list_view.h"
+#include "ash/login/ui/views_utils.h"
 #include "ash/public/interfaces/tray_action.mojom.h"
 #include "ash/shell.h"
 #include "base/strings/utf_string_conversions.h"
@@ -370,12 +371,12 @@ TEST_F(LockContentsViewUnitTest, SwapAuthUsersInTwoUserLayout) {
   ASSERT_NE(nullptr, test_api.opt_secondary_big_view()->auth_user());
 
   // Send event to swap users.
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
   LoginAuthUserView::TestApi secondary_test_api(
       test_api.opt_secondary_big_view()->auth_user());
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       secondary_test_api.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   // User info is not swapped.
   EXPECT_EQ(primary_user, test_api.primary_big_view()
@@ -414,9 +415,9 @@ TEST_F(LockContentsViewUnitTest, SwapUserListToPrimaryAuthUser) {
     EXPECT_NE(auth_id, list_user_id);
 
     // Send event to swap users.
-    ui::test::EventGenerator& generator = GetEventGenerator();
-    generator.MoveMouseTo(list_user_view->GetBoundsInScreen().CenterPoint());
-    generator.ClickLeftButton();
+    ui::test::EventGenerator* generator = GetEventGenerator();
+    generator->MoveMouseTo(list_user_view->GetBoundsInScreen().CenterPoint());
+    generator->ClickLeftButton();
 
     // User info is swapped.
     EXPECT_EQ(list_user_id,
@@ -642,10 +643,10 @@ TEST_F(LockContentsViewUnitTest, EasyUnlockIconUpdatedDuringUserSwap) {
   // Makes |view| the active auth view so it will can show auth methods.
   auto make_active_auth_view = [&](LoginBigUserView* view) {
     // Send event to swap users.
-    ui::test::EventGenerator& generator = GetEventGenerator();
+    ui::test::EventGenerator* generator = GetEventGenerator();
     LoginUserView* user_view = view->GetUserView();
-    generator.MoveMouseTo(user_view->GetBoundsInScreen().CenterPoint());
-    generator.ClickLeftButton();
+    generator->MoveMouseTo(user_view->GetBoundsInScreen().CenterPoint());
+    generator->ClickLeftButton();
   };
 
   // NOTE: we cannot assert on non-active auth views because the easy unlock
@@ -708,16 +709,16 @@ TEST_F(LockContentsViewUnitTest, ShowErrorBubbleOnAuthFailure) {
       AuthenticateUser_(users()[0]->basic_user_info->account_id, _, false, _));
 
   // Submit password.
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(test_api.auth_error_bubble()->IsVisible());
 
   // The error bubble is expected to close on a user action - e.g. if they start
   // typing the password again.
-  generator.PressKey(ui::KeyboardCode::VKEY_B, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_B, 0);
   EXPECT_FALSE(test_api.auth_error_bubble()->IsVisible());
 }
 
@@ -735,9 +736,9 @@ TEST_F(LockContentsViewUnitTest, GaiaNeverShownOnLockAfterFailedAuth) {
   client->set_authenticate_user_callback_result(false);
 
   auto submit_password = [&]() {
-    ui::test::EventGenerator& generator = GetEventGenerator();
-    generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-    generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+    ui::test::EventGenerator* generator = GetEventGenerator();
+    generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+    generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
     base::RunLoop().RunUntilIdle();
   };
 
@@ -761,9 +762,9 @@ TEST_F(LockContentsViewUnitTest, ShowGaiaAuthAfterManyFailedLoginAttempts) {
   client->set_authenticate_user_callback_result(false);
 
   auto submit_password = [&]() {
-    ui::test::EventGenerator& generator = GetEventGenerator();
-    generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-    generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+    ui::test::EventGenerator* generator = GetEventGenerator();
+    generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+    generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
     base::RunLoop().RunUntilIdle();
   };
 
@@ -808,7 +809,7 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleOnUntrustedDetachableBase) {
   SetWidget(CreateWidgetWithContent(contents));
 
   LockContentsView::TestApi test_api(contents);
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
 
   EXPECT_FALSE(test_api.detachable_base_error_bubble()->IsVisible());
 
@@ -819,7 +820,7 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleOnUntrustedDetachableBase) {
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
 
   // Verify that the bubble is not hidden if the user starts typing.
-  generator.PressKey(ui::KeyboardCode::VKEY_B, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_B, 0);
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
 
   // Switching to the user that doesn't have previously used detachable base
@@ -827,18 +828,18 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleOnUntrustedDetachableBase) {
   // hide the login bubble.
   LoginAuthUserView::TestApi secondary_test_api(
       test_api.opt_secondary_big_view()->auth_user());
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       secondary_test_api.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   EXPECT_FALSE(test_api.detachable_base_error_bubble()->IsVisible());
 
   // The error should be shown again when switching back to the primary user.
   LoginAuthUserView::TestApi primary_test_api(
       test_api.primary_big_view()->auth_user());
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       primary_test_api.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
   EXPECT_FALSE(primary_test_api.password_view()->HasFocus());
@@ -855,8 +856,8 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleOnUntrustedDetachableBase) {
 
   // Submit password.
   primary_test_api.password_view()->RequestFocus();
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ("5678",
@@ -886,7 +887,7 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleForUnauthenticatedDetachableBase) {
   SetWidget(CreateWidgetWithContent(contents));
 
   LockContentsView::TestApi test_api(contents);
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
 
   EXPECT_FALSE(test_api.detachable_base_error_bubble()->IsVisible());
 
@@ -896,15 +897,15 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleForUnauthenticatedDetachableBase) {
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
 
   // Verify that the bubble is not hidden if the user starts typing.
-  generator.PressKey(ui::KeyboardCode::VKEY_B, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_B, 0);
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
 
   // Switching to another user should not hide the error bubble.
   LoginAuthUserView::TestApi secondary_test_api(
       test_api.opt_secondary_big_view()->auth_user());
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       secondary_test_api.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
   EXPECT_FALSE(secondary_test_api.password_view()->HasFocus());
@@ -917,8 +918,8 @@ TEST_F(LockContentsViewUnitTest, ErrorBubbleForUnauthenticatedDetachableBase) {
 
   // Submit password.
   secondary_test_api.password_view()->RequestFocus();
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ("", detachable_base_model->GetLastUsedBase(kFirstUserAccountId));
@@ -985,7 +986,7 @@ TEST_F(LockContentsViewUnitTest, DetachableBaseErrorClearsAuthError) {
   SetWidget(CreateWidgetWithContent(contents));
 
   LockContentsView::TestApi test_api(contents);
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
 
   EXPECT_FALSE(test_api.detachable_base_error_bubble()->IsVisible());
 
@@ -995,8 +996,8 @@ TEST_F(LockContentsViewUnitTest, DetachableBaseErrorClearsAuthError) {
   EXPECT_CALL(*client, AuthenticateUser_(kUserAccountId, _, false, _));
 
   // Submit password.
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(test_api.auth_error_bubble()->IsVisible());
@@ -1035,7 +1036,7 @@ TEST_F(LockContentsViewUnitTest, AuthErrorDoesNotRemoveDetachableBaseError) {
       DetachableBasePairingStatus::kAuthenticated, "1234");
 
   LockContentsView::TestApi test_api(contents);
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
 
   EXPECT_FALSE(test_api.detachable_base_error_bubble()->IsVisible());
 
@@ -1057,8 +1058,8 @@ TEST_F(LockContentsViewUnitTest, AuthErrorDoesNotRemoveDetachableBaseError) {
   LoginAuthUserView::TestApi(test_api.primary_big_view()->auth_user())
       .password_view()
       ->RequestFocus();
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_TRUE(test_api.auth_error_bubble()->IsVisible());
@@ -1066,7 +1067,7 @@ TEST_F(LockContentsViewUnitTest, AuthErrorDoesNotRemoveDetachableBaseError) {
 
   // User action, like pressing a key should close the auth error bubble, but
   // not the detachable base error bubble.
-  generator.PressKey(ui::KeyboardCode::VKEY_A, 0);
+  generator->PressKey(ui::KeyboardCode::VKEY_A, 0);
 
   EXPECT_TRUE(test_api.detachable_base_error_bubble()->IsVisible());
   EXPECT_FALSE(test_api.auth_error_bubble()->IsVisible());
@@ -1122,10 +1123,10 @@ TEST_F(LockContentsViewKeyboardUnitTest, SwitchUserWhileKeyboardShown) {
                   ->HasFocus());
 
   // Simulate a button click on the secondary UserView.
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.MoveMouseTo(
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->MoveMouseTo(
       secondary_user.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   EXPECT_TRUE(LoginPasswordView::TestApi(secondary_user.password_view())
                   .textfield()
@@ -1135,9 +1136,9 @@ TEST_F(LockContentsViewKeyboardUnitTest, SwitchUserWhileKeyboardShown) {
                    ->HasFocus());
 
   // Simulate a button click on the primary UserView.
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       primary_user.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   EXPECT_TRUE(LoginPasswordView::TestApi(primary_user.password_view())
                   .textfield()
@@ -1182,12 +1183,12 @@ TEST_F(LockContentsViewUnitTest, SwapAuthAndPublicAccountUserInTwoUserLayout) {
   ASSERT_TRUE(test_api.opt_secondary_big_view()->auth_user());
 
   // Send event to swap users.
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
   LoginAuthUserView::TestApi secondary_test_api(
       test_api.opt_secondary_big_view()->auth_user());
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       secondary_test_api.user_view()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
 
   // User info is not swapped.
   EXPECT_EQ(primary_user, test_api.primary_big_view()
@@ -1237,9 +1238,9 @@ TEST_F(LockContentsViewUnitTest, SwapUserListToPrimaryBigUser) {
 
   // Clicks on |view| to make it swap with the primary big user.
   auto click_view = [&](const LoginUserView* view) {
-    ui::test::EventGenerator& generator = GetEventGenerator();
-    generator.MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
-    generator.ClickLeftButton();
+    ui::test::EventGenerator* generator = GetEventGenerator();
+    generator->MoveMouseTo(view->GetBoundsInScreen().CenterPoint());
+    generator->ClickLeftButton();
   };
 
   auto is_public_account = [](const LoginUserView* view) -> bool {
@@ -1346,26 +1347,68 @@ TEST_F(LockContentsViewUnitTest, AuthUserSwapFocusesPassword) {
   AddUsers(2);
   std::unique_ptr<views::Widget> widget = CreateWidgetWithContent(contents);
 
-  LoginAuthUserView::TestApi primary_test_api =
-      MakeLoginAuthTestApi(contents, AuthTarget::kPrimary);
-  LoginAuthUserView::TestApi secondary_test_api =
-      MakeLoginAuthTestApi(contents, AuthTarget::kSecondary);
+  auto do_test = [&](AuthTarget auth_target) {
+    SCOPED_TRACE(AuthTargetToString(auth_target));
 
-  // Focus second user view, verify password does not have focus, activate it,
-  // verify password does have focus.
-  LoginPasswordView* secondary_password = secondary_test_api.password_view();
-  secondary_test_api.user_view()->RequestFocus();
-  EXPECT_FALSE(HasFocusInAnyChildView(secondary_password));
-  GetEventGenerator().PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
-  EXPECT_TRUE(HasFocusInAnyChildView(secondary_password));
+    LoginAuthUserView::TestApi test_api =
+        MakeLoginAuthTestApi(contents, auth_target);
+    LoginPasswordView* password = test_api.password_view();
 
-  // Focus primary user view, verify password does not have focus, activate it,
-  // verify password does have focus.
-  LoginPasswordView* primary_password = primary_test_api.password_view();
-  primary_test_api.user_view()->RequestFocus();
-  EXPECT_FALSE(HasFocusInAnyChildView(primary_password));
-  GetEventGenerator().PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
-  EXPECT_TRUE(HasFocusInAnyChildView(primary_password));
+    // Focus user, validate password did not get focused, then activate the
+    // user, which shows and focuses the password.
+    test_api.user_view()->RequestFocus();
+    EXPECT_FALSE(HasFocusInAnyChildView(password));
+    GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+    EXPECT_TRUE(HasFocusInAnyChildView(password));
+  };
+
+  // do_test requires that the auth target is not active, so do secondary before
+  // primary.
+  do_test(AuthTarget::kSecondary);
+  do_test(AuthTarget::kPrimary);
+}
+
+// Validates that tapping on an auth user will refocus the password.
+TEST_F(LockContentsViewUnitTest, TapOnAuthUserFocusesPassword) {
+  auto* contents = new LockContentsView(
+      mojom::TrayActionState::kNotAvailable, LockScreen::ScreenType::kLock,
+      data_dispatcher(),
+      std::make_unique<FakeLoginDetachableBaseModel>(data_dispatcher()));
+  std::unique_ptr<views::Widget> widget = CreateWidgetWithContent(contents);
+
+  auto do_test = [&](AuthTarget auth_target) {
+    SCOPED_TRACE(testing::Message()
+                 << "users=" << users().size()
+                 << ", auth_target=" << AuthTargetToString(auth_target));
+
+    LoginAuthUserView::TestApi auth_user_test_api =
+        MakeLoginAuthTestApi(contents, auth_target);
+    LoginPasswordView* password = auth_user_test_api.password_view();
+
+    // Activate |auth_target|.
+    auth_user_test_api.user_view()->RequestFocus();
+    GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+    // Move focus off of |auth_target|'s password.
+    ASSERT_TRUE(HasFocusInAnyChildView(password));
+    GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_TAB, 0);
+    EXPECT_FALSE(HasFocusInAnyChildView(password));
+
+    // Click the user view, verify the password was focused.
+    GetEventGenerator()->MoveMouseTo(
+        auth_user_test_api.user_view()->GetBoundsInScreen().CenterPoint());
+    GetEventGenerator()->ClickLeftButton();
+    EXPECT_TRUE(HasFocusInAnyChildView(password));
+  };
+
+  SetUserCount(1);
+  do_test(AuthTarget::kPrimary);
+
+  SetUserCount(2);
+  do_test(AuthTarget::kPrimary);
+  do_test(AuthTarget::kSecondary);
+
+  SetUserCount(3);
+  do_test(AuthTarget::kPrimary);
 }
 
 // Validates that swapping between users in user lists maintains password focus.
@@ -1388,8 +1431,39 @@ TEST_F(LockContentsViewUnitTest, UserListUserSwapFocusesPassword) {
   // user view, verify the password now has focus.
   user_view->RequestFocus();
   EXPECT_FALSE(HasFocusInAnyChildView(password_view));
-  GetEventGenerator().PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
   EXPECT_TRUE(HasFocusInAnyChildView(password_view));
+}
+
+TEST_F(LockContentsViewUnitTest, BadDetachableBaseUnfocusesPasswordView) {
+  auto fake_detachable_base_model =
+      std::make_unique<FakeLoginDetachableBaseModel>(data_dispatcher());
+  FakeLoginDetachableBaseModel* detachable_base_model =
+      fake_detachable_base_model.get();
+  auto* contents = new LockContentsView(
+      mojom::TrayActionState::kNotAvailable, LockScreen::ScreenType::kLock,
+      data_dispatcher(), std::move(fake_detachable_base_model));
+  SetUserCount(3);
+  std::unique_ptr<views::Widget> widget = CreateWidgetWithContent(contents);
+
+  LockContentsView::TestApi test_api(contents);
+  LoginBigUserView* primary_view = test_api.primary_big_view();
+  LoginPasswordView* primary_password_view =
+      LoginAuthUserView::TestApi(primary_view->auth_user()).password_view();
+
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  detachable_base_model->SetPairingStatus(
+      DetachableBasePairingStatus::kNotAuthenticated, "");
+  EXPECT_FALSE(
+      login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  // Swapping to another user should still not focus password view.
+  LoginUserView* first_list_user = test_api.users_list()->user_view_at(0);
+  first_list_user->RequestFocus();
+  GetEventGenerator()->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  EXPECT_FALSE(
+      login_views_utils::HasFocusInAnyChildView(primary_password_view));
 }
 
 TEST_F(LockContentsViewUnitTest, ExpandedPublicSessionView) {
@@ -1414,8 +1488,8 @@ TEST_F(LockContentsViewUnitTest, ExpandedPublicSessionView) {
       primary_big_view->GetCurrentUser()->basic_user_info->account_id;
 
   // Open the expanded public session view.
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::KeyboardCode::VKEY_RETURN, 0);
 
   EXPECT_FALSE(main_view->visible());
   EXPECT_TRUE(expanded_view->visible());
@@ -1428,9 +1502,9 @@ TEST_F(LockContentsViewUnitTest, ExpandedPublicSessionView) {
 
   // Click on the submit button.
   LoginExpandedPublicAccountView::TestApi expanded_view_api(expanded_view);
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       expanded_view_api.submit_button()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
   base::RunLoop().RunUntilIdle();
 }
 
@@ -1548,6 +1622,122 @@ TEST_F(LockContentsViewKeyboardUnitTest, PasswordClearedOnSuspend) {
   EXPECT_FALSE(textfield->text().empty());
   contents->SuspendImminent(power_manager::SuspendImminent_Reason_LID_CLOSED);
   EXPECT_TRUE(textfield->text().empty());
+}
+
+TEST_F(LockContentsViewKeyboardUnitTest, ArrowNavSingleUser) {
+  ASSERT_NO_FATAL_FAILURE(ShowLoginScreen());
+  LoadUsers(1);
+  LockContentsView* lock_contents =
+      LockScreen::TestApi(LockScreen::Get()).contents_view();
+
+  LoginBigUserView* primary_big_view =
+      LockContentsView::TestApi(lock_contents).primary_big_view();
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_big_view));
+
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_big_view));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_big_view));
+}
+
+TEST_F(LockContentsViewKeyboardUnitTest, ArrowNavTwoUsers) {
+  ASSERT_NO_FATAL_FAILURE(ShowLoginScreen());
+  LoadUsers(1);
+  LoadPublicAccountUsers(1);
+  LockContentsView::TestApi lock_contents = LockContentsView::TestApi(
+      LockScreen::TestApi(LockScreen::Get()).contents_view());
+
+  LoginPasswordView* primary_password_view =
+      LoginAuthUserView::TestApi(lock_contents.primary_big_view()->auth_user())
+          .password_view();
+  LoginBigUserView* secondary_user_view =
+      lock_contents.opt_secondary_big_view();
+
+  ASSERT_NE(nullptr, secondary_user_view);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(secondary_user_view));
+
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(secondary_user_view));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+}
+
+TEST_F(LockContentsViewKeyboardUnitTest, ArrowNavThreeUsers) {
+  ASSERT_NO_FATAL_FAILURE(ShowLoginScreen());
+  LoadUsers(3);
+  LockContentsView::TestApi lock_contents = LockContentsView::TestApi(
+      LockScreen::TestApi(LockScreen::Get()).contents_view());
+
+  LoginPasswordView* primary_password_view =
+      LoginAuthUserView::TestApi(lock_contents.primary_big_view()->auth_user())
+          .password_view();
+  LoginUserView* first_list_user = lock_contents.users_list()->user_view_at(0);
+  LoginUserView* second_list_user = lock_contents.users_list()->user_view_at(1);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(first_list_user));
+
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(second_list_user));
+
+  generator->PressKey(ui::VKEY_RIGHT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(second_list_user));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(first_list_user));
+
+  generator->PressKey(ui::VKEY_LEFT, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+}
+
+TEST_F(LockContentsViewKeyboardUnitTest, UserSwapFocusesBigView) {
+  ASSERT_NO_FATAL_FAILURE(ShowLoginScreen());
+  LoadUsers(3);
+  LockContentsView::TestApi lock_contents = LockContentsView::TestApi(
+      LockScreen::TestApi(LockScreen::Get()).contents_view());
+
+  LoginPasswordView* primary_password_view =
+      LoginAuthUserView::TestApi(lock_contents.primary_big_view()->auth_user())
+          .password_view();
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+
+  lock_contents.users_list()->user_view_at(0)->RequestFocus();
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::VKEY_RETURN, 0);
+  EXPECT_TRUE(login_views_utils::HasFocusInAnyChildView(primary_password_view));
+}
+
+TEST_F(LockContentsViewUnitTest, PowerwashShortcutSendsMojoCall) {
+  auto* contents = new LockContentsView(
+      mojom::TrayActionState::kNotAvailable, LockScreen::ScreenType::kLock,
+      data_dispatcher(),
+      std::make_unique<FakeLoginDetachableBaseModel>(data_dispatcher()));
+  SetUserCount(1);
+  SetWidget(CreateWidgetWithContent(contents));
+
+  std::unique_ptr<MockLoginScreenClient> client = BindMockLoginScreenClient();
+  EXPECT_CALL(*client, ShowResetScreen());
+
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->PressKey(ui::KeyboardCode::VKEY_R, ui::EF_CONTROL_DOWN |
+                                                    ui::EF_ALT_DOWN |
+                                                    ui::EF_SHIFT_DOWN);
+  base::RunLoop().RunUntilIdle();
 }
 
 }  // namespace ash

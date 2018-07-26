@@ -48,7 +48,6 @@ DEFINE_UI_CLASS_PROPERTY_KEY(bool, kConstrainedWindowKey, false);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kCreatedByUserGesture, false);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kDrawAttentionKey, false);
 DEFINE_UI_CLASS_PROPERTY_KEY(FocusClient*, kFocusClientKey, nullptr);
-DEFINE_UI_CLASS_PROPERTY_KEY(bool, kHasOverviewIcon, false);
 DEFINE_UI_CLASS_PROPERTY_KEY(Window*, kHostWindowKey, nullptr);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kImmersiveFullscreenKey, false);
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::Size, kMinimumSize, nullptr);
@@ -73,7 +72,6 @@ DEFINE_UI_CLASS_PROPERTY_KEY(
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(base::string16, kTitleKey, nullptr);
 DEFINE_UI_CLASS_PROPERTY_KEY(bool, kTitleShownKey, true);
 DEFINE_UI_CLASS_PROPERTY_KEY(int, kTopViewInset, 0);
-DEFINE_UI_CLASS_PROPERTY_KEY(SkColor, kTopViewColor, SK_ColorTRANSPARENT);
 DEFINE_OWNED_UI_CLASS_PROPERTY_KEY(gfx::ImageSkia, kWindowIconKey, nullptr);
 DEFINE_UI_CLASS_PROPERTY_KEY(int, kWindowCornerRadiusKey, -1);
 DEFINE_UI_CLASS_PROPERTY_KEY(ui::mojom::WindowType,

@@ -24,6 +24,7 @@
 #include "components/viz/common/quads/solid_color_draw_quad.h"
 #include "components/viz/common/quads/surface_draw_quad.h"
 #include "components/viz/common/quads/texture_draw_quad.h"
+#include "components/viz/common/surfaces/surface_range.h"
 #include "components/viz/service/display/display_resource_provider.h"
 #include "components/viz/service/surfaces/surface.h"
 #include "components/viz/service/surfaces/surface_client.h"
@@ -41,12 +42,11 @@ constexpr float kOpacityEpsilon = 0.001f;
 
 const char kUmaValidSurface[] =
     "Compositing.SurfaceAggregator.SurfaceDrawQuad.ValidSurface";
-const char kUmaMissingSurface[] =
-    "Compositing.SurfaceAggregator.SurfaceDrawQuad.MissingSurface";
-const char kUmaNoActiveFrame[] =
-    "Compositing.SurfaceAggregator.SurfaceDrawQuad.NoActiveFrame";
 const char kUmaUsingFallbackSurface[] =
     "Compositing.SurfaceAggregator.SurfaceDrawQuad.UsingFallbackSurface";
+const char kUmaManhattanDistanceToPrimary[] =
+    "Compositing.SurfaceAggregator.LatestInFlightSurface."
+    "ManhattanDistanceToPrimary";
 
 void MoveMatchingRequests(
     RenderPassId render_pass_id,
@@ -197,7 +197,7 @@ void SurfaceAggregator::HandleSurfaceQuad(
     bool ignore_undamaged,
     gfx::Rect* damage_rect_in_quad_space,
     bool* damage_rect_in_quad_space_valid) {
-  SurfaceId primary_surface_id = surface_quad->primary_surface_id;
+  SurfaceId primary_surface_id = surface_quad->surface_range.end();
   Surface* primary_surface = manager_->GetSurfaceForId(primary_surface_id);
   if (primary_surface && primary_surface->HasActiveFrame()) {
     EmitSurfaceContent(primary_surface, parent_device_scale_factor,
@@ -209,32 +209,34 @@ void SurfaceAggregator::HandleSurfaceQuad(
     return;
   }
 
-  // If there's no fallback surface ID provided, then simply emit a
-  // SolidColorDrawQuad with the provided default background color.
-  if (!surface_quad->fallback_surface_id) {
+  Surface* latest_surface = nullptr;
+  if (surface_quad->surface_range.start()) {
+    latest_surface = manager_->GetLatestInFlightSurface(
+        primary_surface_id, *surface_quad->surface_range.start());
+  }
+
+  // If there's no fallback surface ID available, then simply emit a
+  // SolidColorDrawQuad with the provided default background color. This
+  // can happen after a Viz process crash.
+  if (!latest_surface || !latest_surface->HasActiveFrame()) {
     EmitDefaultBackgroundColorQuad(surface_quad, target_transform, clip_rect,
                                    dest_pass);
     return;
   }
 
-  Surface* fallback_surface = manager_->GetLatestInFlightSurface(
-      primary_surface_id, *surface_quad->fallback_surface_id);
-
-  // If the fallback is specified and missing then that's an error. Report the
-  // error to console, and log the UMA.
-  if (!fallback_surface || !fallback_surface->HasActiveFrame()) {
-    ReportMissingFallbackSurface(*surface_quad->fallback_surface_id,
-                                 fallback_surface);
-    EmitDefaultBackgroundColorQuad(surface_quad, target_transform, clip_rect,
-                                   dest_pass);
-    return;
+  if (primary_surface_id.frame_sink_id() ==
+          latest_surface->surface_id().frame_sink_id() &&
+      primary_surface_id.local_surface_id().embed_token() ==
+          latest_surface->surface_id().local_surface_id().embed_token()) {
+    UMA_HISTOGRAM_COUNTS_100(
+        kUmaManhattanDistanceToPrimary,
+        latest_surface->surface_id().ManhattanDistanceTo(primary_surface_id));
   }
 
   if (!surface_quad->stretch_content_to_fill_bounds) {
-    const CompositorFrame& fallback_frame = fallback_surface->GetActiveFrame();
+    const CompositorFrame& fallback_frame = latest_surface->GetActiveFrame();
 
-    gfx::Rect fallback_rect(
-        fallback_surface->GetActiveFrame().size_in_pixels());
+    gfx::Rect fallback_rect(latest_surface->GetActiveFrame().size_in_pixels());
 
     float scale_ratio =
         parent_device_scale_factor / fallback_frame.device_scale_factor();
@@ -250,7 +252,7 @@ void SurfaceAggregator::HandleSurfaceQuad(
 
   ++uma_stats_.using_fallback_surface;
 
-  EmitSurfaceContent(fallback_surface, parent_device_scale_factor,
+  EmitSurfaceContent(latest_surface, parent_device_scale_factor,
                      surface_quad->shared_quad_state, surface_quad->rect,
                      surface_quad->visible_rect, target_transform, clip_rect,
                      surface_quad->stretch_content_to_fill_bounds, dest_pass,
@@ -477,8 +479,8 @@ void SurfaceAggregator::EmitDefaultBackgroundColorQuad(
   // If a fallback surface is specified but unavaialble then pick a very bright
   // and obvious color for the SolidColorDrawQuad so developers notice there's
   // an error when debugging.
-  if (surface_quad->fallback_surface_id.has_value() &&
-      surface_quad->fallback_surface_id->is_valid()) {
+  if (surface_quad->surface_range.start() &&
+      surface_quad->surface_range.start()->is_valid()) {
     background_color = SK_ColorMAGENTA;
   }
 #endif
@@ -537,20 +539,6 @@ void SurfaceAggregator::EmitGutterQuadsIfNecessary(
         dest_pass->CreateAndAppendDrawQuad<SolidColorDrawQuad>();
     bottom_gutter->SetNew(shared_quad_state, bottom_gutter_rect,
                           bottom_gutter_rect, background_color, false);
-  }
-}
-
-void SurfaceAggregator::ReportMissingFallbackSurface(
-    const SurfaceId& fallback_surface_id,
-    const Surface* fallback_surface) {
-  // If the fallback surface is unavailable then that's an error.
-  if (!fallback_surface) {
-    DLOG(ERROR) << fallback_surface_id << " is missing during aggregation";
-    ++uma_stats_.missing_surface;
-  } else {
-    DLOG(ERROR) << fallback_surface_id
-                << " has no active frame during aggregation";
-    ++uma_stats_.no_active_frame;
   }
 }
 
@@ -679,7 +667,7 @@ void SurfaceAggregator::CopyQuadsToPass(
       // current data.
       last_copied_source_shared_quad_state = nullptr;
 
-      if (!surface_quad->primary_surface_id.is_valid())
+      if (!surface_quad->surface_range.end().is_valid())
         continue;
 
       HandleSurfaceQuad(surface_quad, parent_device_scale_factor,
@@ -826,12 +814,6 @@ void SurfaceAggregator::ProcessAddedAndRemovedSurfaces() {
         provider_->DestroyChild(it->second);
         surface_id_to_resource_child_id_.erase(it);
       }
-
-      // Notify client of removed surface.
-      Surface* surface_ptr = manager_->GetSurfaceForId(surface.first);
-      if (surface_ptr) {
-        surface_ptr->RunDrawCallback();
-      }
     }
   }
 }
@@ -882,23 +864,20 @@ gfx::Rect SurfaceAggregator::PrewalkTree(Surface* surface,
     render_pass_dependencies_[parent_pass_id].insert(remapped_pass_id);
 
   struct SurfaceInfo {
-    SurfaceInfo(const SurfaceId& primary_id,
-                const base::Optional<SurfaceId>& fallback_id,
+    SurfaceInfo(const SurfaceRange& surface_range,
                 bool has_moved_pixels,
                 RenderPassId parent_pass_id,
                 const gfx::Transform& target_to_surface_transform,
                 const gfx::Rect& quad_rect,
                 bool stretch_content_to_fill_bounds)
-        : primary_id(primary_id),
-          fallback_id(fallback_id),
+        : surface_range(surface_range),
           has_moved_pixels(has_moved_pixels),
           parent_pass_id(parent_pass_id),
           target_to_surface_transform(target_to_surface_transform),
           quad_rect(quad_rect),
           stretch_content_to_fill_bounds(stretch_content_to_fill_bounds) {}
 
-    SurfaceId primary_id;
-    base::Optional<SurfaceId> fallback_id;
+    SurfaceRange surface_range;
     bool has_moved_pixels;
     RenderPassId parent_pass_id;
     gfx::Transform target_to_surface_transform;
@@ -943,9 +922,9 @@ gfx::Rect SurfaceAggregator::PrewalkTree(Surface* surface,
             render_pass->transform_to_root_target,
             surface_quad->shared_quad_state->quad_to_target_transform);
         child_surfaces.emplace_back(
-            surface_quad->primary_surface_id, surface_quad->fallback_surface_id,
-            in_moved_pixel_pass, remapped_pass_id, target_to_surface_transform,
-            surface_quad->rect, surface_quad->stretch_content_to_fill_bounds);
+            surface_quad->surface_range, in_moved_pixel_pass, remapped_pass_id,
+            target_to_surface_transform, surface_quad->rect,
+            surface_quad->stretch_content_to_fill_bounds);
       } else if (quad->material == DrawQuad::RENDER_PASS) {
         const auto* render_pass_quad = RenderPassDrawQuad::MaterialCast(quad);
         if (in_moved_pixel_pass) {
@@ -992,18 +971,44 @@ gfx::Rect SurfaceAggregator::PrewalkTree(Surface* surface,
   // referenced_surfaces_.
   referenced_surfaces_.insert(surface->surface_id());
   for (const auto& surface_info : child_surfaces) {
-    Surface* child_surface = manager_->GetSurfaceForId(surface_info.primary_id);
+    if (will_draw) {
+      // We only pick a surface between primary and fallback if both SurfaceIds
+      // are provided and they have the same FrameSinkId and embed token,
+      // otherwise the only Surface other than fallback that can be shown is the
+      // primary.
+      if (!surface_info.surface_range.start() ||
+          surface_info.surface_range.start()->frame_sink_id() !=
+              surface_info.surface_range.end().frame_sink_id() ||
+          surface_info.surface_range.start()
+                  ->local_surface_id()
+                  .embed_token() != surface_info.surface_range.end()
+                                        .local_surface_id()
+                                        .embed_token()) {
+        damage_ranges_[surface_info.surface_range.end().frame_sink_id()] =
+            std::make_pair(surface_info.surface_range.end().local_surface_id(),
+                           surface_info.surface_range.end().local_surface_id());
+      } else if (surface_info.surface_range.start() !=
+                 surface_info.surface_range.end()) {
+        damage_ranges_[surface_info.surface_range.end().frame_sink_id()] =
+            std::make_pair(
+                surface_info.surface_range.start()->local_surface_id(),
+                surface_info.surface_range.end().local_surface_id());
+      }
+    }
+    Surface* child_surface =
+        manager_->GetSurfaceForId(surface_info.surface_range.end());
     gfx::Rect surface_damage;
     if (!child_surface || !child_surface->HasActiveFrame()) {
       // If the primary surface is not available then we assume the damage is
       // the full size of the SurfaceDrawQuad because we might need to introduce
       // gutter.
       surface_damage = surface_info.quad_rect;
-      if (surface_info.fallback_id) {
+      if (surface_info.surface_range.start()) {
         // TODO(fsamuel): Consider caching this value somewhere so that
         // HandleSurfaceQuad doesn't need to call it again.
         Surface* fallback_surface = manager_->GetLatestInFlightSurface(
-            surface_info.primary_id, *surface_info.fallback_id);
+            surface_info.surface_range.end(),
+            *surface_info.surface_range.start());
         if (fallback_surface && fallback_surface->HasActiveFrame())
           child_surface = fallback_surface;
       }
@@ -1060,7 +1065,7 @@ gfx::Rect SurfaceAggregator::PrewalkTree(Surface* surface,
   if (will_draw)
     surface->OnWillBeDrawn();
 
-  for (const auto& surface_id : frame.metadata.referenced_surfaces) {
+  for (const SurfaceId& surface_id : surface->active_referenced_surfaces()) {
     if (!contained_surfaces_.count(surface_id)) {
       result->undrawn_surfaces.insert(surface_id);
       Surface* undrawn_surface = manager_->GetSurfaceForId(surface_id);
@@ -1105,12 +1110,11 @@ void SurfaceAggregator::CopyUndrawnSurfaces(PrewalkResult* prewalk_result) {
       continue;
     if (!surface->HasActiveFrame())
       continue;
-    const CompositorFrame& frame = surface->GetActiveFrame();
     if (!surface->HasCopyOutputRequests()) {
       // Children are not necessarily included in undrawn_surfaces (because
       // they weren't referenced directly from a drawn surface), but may have
       // copy requests, so make sure to check them as well.
-      for (const auto& child_id : frame.metadata.referenced_surfaces) {
+      for (const SurfaceId& child_id : surface->active_referenced_surfaces()) {
         // Don't iterate over the child Surface if it was already listed as a
         // child of a different Surface, or in the case where there's infinite
         // recursion.
@@ -1121,7 +1125,7 @@ void SurfaceAggregator::CopyUndrawnSurfaces(PrewalkResult* prewalk_result) {
       }
     } else {
       referenced_surfaces_.insert(surface_id);
-      CopyPasses(frame, surface);
+      CopyPasses(surface->GetActiveFrame(), surface);
       // CopyPasses may have mutated container, need to re-query to erase.
       referenced_surfaces_.erase(referenced_surfaces_.find(surface_id));
     }
@@ -1178,6 +1182,7 @@ CompositorFrame SurfaceAggregator::Aggregate(
 
   valid_surfaces_.clear();
   has_cached_render_passes_ = false;
+  damage_ranges_.clear();
   PrewalkResult prewalk_result;
   root_damage_rect_ =
       PrewalkTree(surface, false, 0, true /* will_draw */, &prewalk_result);
@@ -1238,10 +1243,6 @@ CompositorFrame SurfaceAggregator::Aggregate(
   // aggregated together and any failures.
   UMA_HISTOGRAM_EXACT_LINEAR(kUmaValidSurface, uma_stats_.valid_surface,
                              kUmaStatMaxSurfaces);
-  UMA_HISTOGRAM_EXACT_LINEAR(kUmaMissingSurface, uma_stats_.missing_surface,
-                             kUmaStatMaxSurfaces);
-  UMA_HISTOGRAM_EXACT_LINEAR(kUmaNoActiveFrame, uma_stats_.no_active_frame,
-                             kUmaStatMaxSurfaces);
   UMA_HISTOGRAM_EXACT_LINEAR(kUmaUsingFallbackSurface,
                              uma_stats_.using_fallback_surface,
                              kUmaStatMaxSurfaces);
@@ -1273,6 +1274,29 @@ void SurfaceAggregator::SetOutputColorSpace(
   output_color_space_ = output_color_space.IsValid()
                             ? output_color_space
                             : gfx::ColorSpace::CreateSRGB();
+}
+
+bool SurfaceAggregator::NotifySurfaceDamageAndCheckForDisplayDamage(
+    const SurfaceId& surface_id) {
+  if (previous_contained_surfaces_.count(surface_id)) {
+    Surface* surface = manager_->GetSurfaceForId(surface_id);
+    if (surface) {
+      DCHECK(surface->HasActiveFrame());
+      if (surface->GetActiveFrame().resource_list.empty())
+        ReleaseResources(surface_id);
+    }
+    return true;
+  }
+
+  auto it = damage_ranges_.find(surface_id.frame_sink_id());
+  if (it == damage_ranges_.end())
+    return false;
+
+  const LocalSurfaceId& fallback = it->second.first;
+  const LocalSurfaceId& primary = it->second.second;
+  return (primary == surface_id.local_surface_id()) ||
+         (primary.IsNewerThan(surface_id.local_surface_id()) &&
+          surface_id.local_surface_id().IsNewerThan(fallback));
 }
 
 }  // namespace viz

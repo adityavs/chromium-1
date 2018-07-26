@@ -42,10 +42,6 @@
         visibility: hidden;
       }
 
-      #clearBrowsingDataDialog [slot=footer] {
-        color: var(--paper-grey-600);
-      }
-
       #clearBrowsingDataDialog [slot=body] {
         padding-top: 8px;
       }
@@ -57,8 +53,8 @@
       }
 
       paper-spinner-lite {
-        -webkit-margin-end: 16px;
         margin-bottom: auto;
+        margin-inline-end: 16px;
         margin-top: auto;
       }
 
@@ -85,7 +81,7 @@
       }
 
       .time-range-select {
-        -webkit-margin-start: 12px;
+        margin-inline-start: 12px;
       }
 
       [slot=title] .secondary {
@@ -142,7 +138,10 @@
                 class="cookies-checkbox"
                 pref="{{prefs.browser.clear_data.cookies_basic}}"
                 label="$i18n{clearCookies}"
-                sub-label="$i18n{clearCookiesSummary}"
+                sub-label="[[cookiesCheckboxLabel_(
+                    shouldShowCookieException_,
+                    '$i18nPolymer{clearCookiesSummary}',
+                    '$i18nPolymer{clearCookiesSummarySignedIn}')]]"
                 disabled="[[clearingInProgress_]]">
             </settings-checkbox>
             <settings-checkbox id="cacheCheckboxBasic"

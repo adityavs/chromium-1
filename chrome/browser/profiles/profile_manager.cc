@@ -447,15 +447,19 @@ std::vector<Profile*> ProfileManager::GetLastOpenedProfiles() {
 // static
 Profile* ProfileManager::GetPrimaryUserProfile() {
   ProfileManager* profile_manager = g_browser_process->profile_manager();
+  if (!profile_manager)  // Can be null in unit tests.
+    return nullptr;
 #if defined(OS_CHROMEOS)
   if (!profile_manager->IsLoggedIn() ||
       !user_manager::UserManager::IsInitialized())
     return profile_manager->GetActiveUserOrOffTheRecordProfileFromPath(
         profile_manager->user_data_dir());
   user_manager::UserManager* manager = user_manager::UserManager::Get();
+  const user_manager::User* user = manager->GetActiveUser();
+  if (!user)  // Can be null in unit tests.
+    return nullptr;
   // Note: The ProfileHelper will take care of guest profiles.
-  return chromeos::ProfileHelper::Get()->GetProfileByUserUnsafe(
-      manager->GetPrimaryUser());
+  return chromeos::ProfileHelper::Get()->GetProfileByUserUnsafe(user);
 #else
   return profile_manager->GetActiveUserOrOffTheRecordProfileFromPath(
       profile_manager->user_data_dir());
@@ -1080,9 +1084,13 @@ void ProfileManager::InitProfileUserPrefs(Profile* profile) {
   // new even if the "Preferences" file already existed. (For example: The
   // master_preferences file is dumped into the default profile on first run,
   // before profile creation.)
-  if (profile->IsNewProfile() || first_run::IsChromeFirstRun())
+  if (profile->IsNewProfile() || first_run::IsChromeFirstRun()) {
     profile->GetPrefs()->SetBoolean(prefs::kHasSeenWelcomePage, false);
-#endif
+#if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
+    profile->GetPrefs()->SetBoolean(prefs::kHasSeenGoogleAppsPromoPage, false);
+#endif  // defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
+  }
+#endif  // !defined(OS_ANDROID)
 }
 
 void ProfileManager::RegisterTestingProfile(Profile* profile,

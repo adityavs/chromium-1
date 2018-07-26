@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "ash/accelerators/accelerator_controller.h"
 #include "ash/accessibility/accessibility_highlight_controller.h"
 #include "ash/accessibility/accessibility_observer.h"
 #include "ash/accessibility/accessibility_panel_layout_manager.h"
@@ -89,6 +90,7 @@ constexpr const char* const kCopiedOnSigninAccessibilityPrefs[]{
     prefs::kHighContrastAcceleratorDialogHasBeenAccepted,
     prefs::kScreenMagnifierAcceleratorDialogHasBeenAccepted,
     prefs::kDockedMagnifierAcceleratorDialogHasBeenAccepted,
+    prefs::kDictationAcceleratorDialogHasBeenAccepted,
 };
 
 // Returns true if |pref_service| is the one used for the signin screen.
@@ -230,9 +232,12 @@ AccessibilityController::AccessibilityController(
     : connector_(connector),
       autoclick_delay_(AutoclickController::GetDefaultAutoclickDelay()) {
   Shell::Get()->session_controller()->AddObserver(this);
+  Shell::Get()->tablet_mode_controller()->AddObserver(this);
 }
 
 AccessibilityController::~AccessibilityController() {
+  if (Shell::Get()->tablet_mode_controller())
+    Shell::Get()->tablet_mode_controller()->RemoveObserver(this);
   Shell::Get()->session_controller()->RemoveObserver(this);
 }
 
@@ -278,6 +283,8 @@ void AccessibilityController::RegisterProfilePrefs(PrefRegistrySimple* registry,
         prefs::kScreenMagnifierAcceleratorDialogHasBeenAccepted, false);
     registry->RegisterBooleanPref(
         prefs::kDockedMagnifierAcceleratorDialogHasBeenAccepted, false);
+    registry->RegisterBooleanPref(
+        prefs::kDictationAcceleratorDialogHasBeenAccepted, false);
     return;
   }
 
@@ -305,6 +312,8 @@ void AccessibilityController::RegisterProfilePrefs(PrefRegistrySimple* registry,
       prefs::kScreenMagnifierAcceleratorDialogHasBeenAccepted);
   registry->RegisterForeignPref(
       prefs::kDockedMagnifierAcceleratorDialogHasBeenAccepted);
+  registry->RegisterForeignPref(
+      prefs::kDictationAcceleratorDialogHasBeenAccepted);
 }
 
 void AccessibilityController::SetHighContrastAcceleratorDialogAccepted() {
@@ -350,6 +359,21 @@ bool AccessibilityController::HasDockedMagnifierAcceleratorDialogBeenAccepted()
   return active_user_prefs_ &&
          active_user_prefs_->GetBoolean(
              prefs::kDockedMagnifierAcceleratorDialogHasBeenAccepted);
+}
+
+void AccessibilityController::SetDictationAcceleratorDialogAccepted() {
+  if (!active_user_prefs_)
+    return;
+  active_user_prefs_->SetBoolean(
+      prefs::kDictationAcceleratorDialogHasBeenAccepted, true);
+  active_user_prefs_->CommitPendingWrite();
+}
+
+bool AccessibilityController::HasDictationAcceleratorDialogBeenAccepted()
+    const {
+  return active_user_prefs_ &&
+         active_user_prefs_->GetBoolean(
+             prefs::kDictationAcceleratorDialogHasBeenAccepted);
 }
 
 void AccessibilityController::AddObserver(AccessibilityObserver* observer) {
@@ -405,9 +429,24 @@ void AccessibilityController::SetDictationEnabled(bool enabled) {
   if (!active_user_prefs_)
     return;
 
-  active_user_prefs_->SetBoolean(prefs::kAccessibilityDictationEnabled,
-                                 enabled);
-  active_user_prefs_->CommitPendingWrite();
+  const bool dialog_ever_accepted = HasDictationAcceleratorDialogBeenAccepted();
+
+  if (enabled && !dialog_ever_accepted) {
+    Shell::Get()->accelerator_controller()->MaybeShowConfirmationDialog(
+        IDS_ASH_DICTATION_CONFIRMATION_TITLE,
+        IDS_ASH_DICTATION_CONFIRMATION_BODY, base::BindOnce([]() {
+          AccessibilityController* controller =
+              Shell::Get()->accessibility_controller();
+          controller->SetDictationAcceleratorDialogAccepted();
+          controller->active_user_prefs_->SetBoolean(
+              prefs::kAccessibilityDictationEnabled, true);
+          controller->active_user_prefs_->CommitPendingWrite();
+        }));
+  } else {
+    active_user_prefs_->SetBoolean(prefs::kAccessibilityDictationEnabled,
+                                   enabled);
+    active_user_prefs_->CommitPendingWrite();
+  }
 }
 
 bool AccessibilityController::IsDictationEnabled() const {
@@ -424,6 +463,14 @@ void AccessibilityController::SetFocusHighlightEnabled(bool enabled) {
 
 bool AccessibilityController::IsFocusHighlightEnabled() const {
   return focus_highlight_enabled_;
+}
+
+void AccessibilityController::SetFullscreenMagnifierEnabled(bool enabled) {
+  if (!active_user_prefs_)
+    return;
+  active_user_prefs_->SetBoolean(prefs::kAccessibilityScreenMagnifierEnabled,
+                                 enabled);
+  active_user_prefs_->CommitPendingWrite();
 }
 
 void AccessibilityController::SetHighContrastEnabled(bool enabled) {
@@ -687,6 +734,16 @@ void AccessibilityController::FlushMojoForTest() {
   client_.FlushForTesting();
 }
 
+void AccessibilityController::OnTabletModeStarted() {
+  if (IsSpokenFeedbackEnabled())
+    ShowAccessibilityNotification(A11yNotificationType::kSpokenFeedbackEnabled);
+}
+
+void AccessibilityController::OnTabletModeEnded() {
+  if (IsSpokenFeedbackEnabled())
+    ShowAccessibilityNotification(A11yNotificationType::kSpokenFeedbackEnabled);
+}
+
 void AccessibilityController::ObservePrefs(PrefService* prefs) {
   DCHECK(prefs);
 
@@ -785,7 +842,7 @@ void AccessibilityController::UpdateAutoclickFromPref() {
 
   NotifyAccessibilityStatusChanged();
 
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     if (!connector_)  // Null in tests.
       return;
     mash::mojom::LaunchablePtr launchable;
@@ -806,7 +863,7 @@ void AccessibilityController::UpdateAutoclickDelayFromPref() {
     return;
   autoclick_delay_ = autoclick_delay;
 
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     if (!connector_)  // Null in tests.
       return;
     autoclick::mojom::AutoclickControllerPtr autoclick_controller;
@@ -891,7 +948,7 @@ void AccessibilityController::UpdateHighContrastFromPref() {
   NotifyAccessibilityStatusChanged();
 
   // Under mash the UI service (window server) handles high contrast mode.
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     if (!connector_)  // Null in tests.
       return;
     ui::mojom::AccessibilityManagerPtr accessibility_ptr;

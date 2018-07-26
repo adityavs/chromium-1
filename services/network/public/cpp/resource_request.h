@@ -124,15 +124,23 @@ struct COMPONENT_EXPORT(NETWORK_CPP_BASE) ResourceRequest {
   // about this.
   bool skip_service_worker = false;
 
-  // The request mode passed to the ServiceWorker.
-  mojom::FetchRequestMode fetch_request_mode =
-      mojom::FetchRequestMode::kSameOrigin;
+  // https://fetch.spec.whatwg.org/#concept-request-mode
+  // Used mainly by CORS handling (out-of-blink CORS), CORB, Service Worker.
+  // CORS handling needs a proper origin (including a unique opaque origin).
+  // Hence a request with kSameOrigin, kCORS, or kCORSWithForcedPreflight should
+  // have a non-null request_initiator.
+  mojom::FetchRequestMode fetch_request_mode = mojom::FetchRequestMode::kNoCORS;
 
-  // The credentials mode passed to the ServiceWorker.
+  // https://fetch.spec.whatwg.org/#concept-request-credentials-mode
+  // Used mainly by CORS handling (out-of-blink CORS), Service Worker.
+  // If this member is kOmit, then DO_NOT_SAVE_COOKIES, DO_NOT_SEND_COOKIES,
+  // and DO_NOT_SEND_AUTH_DATA must be set on load_flags.
   mojom::FetchCredentialsMode fetch_credentials_mode =
-      mojom::FetchCredentialsMode::kOmit;
+      mojom::FetchCredentialsMode::kInclude;
 
-  // The redirect mode used in Fetch API.
+  // https://fetch.spec.whatwg.org/#concept-request-redirect-mode
+  // Used mainly by CORS handling (out-of-blink CORS), Service Worker.
+  // This member must be kFollow as long as |fetch_request_mode| is kNoCORS.
   mojom::FetchRedirectMode fetch_redirect_mode =
       mojom::FetchRedirectMode::kFollow;
 

@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stylus-tools-unstable-v1-server-protocol.h>
 #include <stylus-unstable-v2-server-protocol.h>
+#include <text-input-unstable-v1-server-protocol.h>
 #include <viewporter-server-protocol.h>
 #include <vsync-feedback-unstable-v1-server-protocol.h>
 #include <wayland-server-core.h>
@@ -71,6 +72,7 @@
 #include "components/exo/gamepad_delegate.h"
 #include "components/exo/gaming_seat.h"
 #include "components/exo/gaming_seat_delegate.h"
+#include "components/exo/input_method_surface.h"
 #include "components/exo/keyboard.h"
 #include "components/exo/keyboard_delegate.h"
 #include "components/exo/keyboard_device_configuration_delegate.h"
@@ -84,6 +86,7 @@
 #include "components/exo/shell_surface.h"
 #include "components/exo/sub_surface.h"
 #include "components/exo/surface.h"
+#include "components/exo/text_input.h"
 #include "components/exo/touch.h"
 #include "components/exo/touch_delegate.h"
 #include "components/exo/touch_stylus_delegate.h"
@@ -1382,11 +1385,27 @@ uint32_t InvertBitfield(uint32_t bitfield, uint32_t mask) {
 
 // TODO(oshima): propagate x/y flip state to children.
 struct WaylandPositioner {
+  static constexpr uint32_t kHorizontalAnchors =
+      ZXDG_POSITIONER_V6_ANCHOR_LEFT | ZXDG_POSITIONER_V6_ANCHOR_RIGHT;
+  static constexpr uint32_t kVerticalAnchors =
+      ZXDG_POSITIONER_V6_ANCHOR_TOP | ZXDG_POSITIONER_V6_ANCHOR_BOTTOM;
+  static constexpr uint32_t kHorizontalGravities =
+      ZXDG_POSITIONER_V6_GRAVITY_LEFT | ZXDG_POSITIONER_V6_GRAVITY_RIGHT;
+  static constexpr uint32_t kVerticalGravities =
+      ZXDG_POSITIONER_V6_GRAVITY_TOP | ZXDG_POSITIONER_V6_GRAVITY_BOTTOM;
+
   static int CalculateX(const gfx::Size& size,
                         const gfx::Rect& anchor_rect,
                         uint32_t anchor,
                         uint32_t gravity,
-                        int offset) {
+                        int offset,
+                        bool flipped) {
+    if (flipped) {
+      anchor = InvertBitfield(anchor, kHorizontalAnchors);
+      gravity = InvertBitfield(gravity, kHorizontalGravities);
+      offset = -offset;
+    }
+
     int x = offset;
     if (anchor & ZXDG_POSITIONER_V6_ANCHOR_LEFT)
       x += anchor_rect.x();
@@ -1406,7 +1425,14 @@ struct WaylandPositioner {
                         const gfx::Rect& anchor_rect,
                         uint32_t anchor,
                         uint32_t gravity,
-                        int offset) {
+                        int offset,
+                        bool flipped) {
+    if (flipped) {
+      anchor = InvertBitfield(anchor, kVerticalAnchors);
+      gravity = InvertBitfield(gravity, kVerticalGravities);
+      offset = -offset;
+    }
+
     int y = offset;
     if (anchor & ZXDG_POSITIONER_V6_ANCHOR_TOP)
       y += anchor_rect.y();
@@ -1423,22 +1449,14 @@ struct WaylandPositioner {
   }
 
   // Calculate and return position from current state.
-  gfx::Point CalculatePosition(const gfx::Rect& work_area) const {
-    constexpr uint32_t kHorizontalAnchors =
-        ZXDG_POSITIONER_V6_ANCHOR_LEFT | ZXDG_POSITIONER_V6_ANCHOR_RIGHT;
-    constexpr uint32_t kVerticalAnchors =
-        ZXDG_POSITIONER_V6_ANCHOR_TOP | ZXDG_POSITIONER_V6_ANCHOR_BOTTOM;
-    constexpr uint32_t kHorizontalGravities =
-        ZXDG_POSITIONER_V6_GRAVITY_LEFT | ZXDG_POSITIONER_V6_GRAVITY_RIGHT;
-    constexpr uint32_t kVerticalGravities =
-        ZXDG_POSITIONER_V6_GRAVITY_TOP | ZXDG_POSITIONER_V6_GRAVITY_BOTTOM;
-
+  gfx::Point CalculatePosition(const gfx::Rect& work_area) {
     // TODO(oshima): The size must be smaller than work area.
 
-    gfx::Rect bounds(
-        gfx::Point(CalculateX(size, anchor_rect, anchor, gravity, offset.x()),
-                   CalculateY(size, anchor_rect, anchor, gravity, offset.y())),
-        size);
+    gfx::Rect bounds(gfx::Point(CalculateX(size, anchor_rect, anchor, gravity,
+                                           offset.x(), x_flipped),
+                                CalculateY(size, anchor_rect, anchor, gravity,
+                                           offset.y(), y_flipped)),
+                     size);
 
     // Adjust x position if the bounds are not fully contained by the work area.
     if (work_area.x() > bounds.x() || work_area.right() < bounds.right()) {
@@ -1455,9 +1473,9 @@ struct WaylandPositioner {
         else if (bounds.right() > work_area.right())
           bounds.set_x(work_area.right() - size.width());
       } else if (adjustment & ZXDG_POSITIONER_V6_CONSTRAINT_ADJUSTMENT_FLIP_X) {
-        bounds.set_x(CalculateX(
-            size, anchor_rect, InvertBitfield(anchor, kHorizontalAnchors),
-            InvertBitfield(gravity, kHorizontalGravities), -offset.x()));
+        x_flipped = !x_flipped;
+        bounds.set_x(CalculateX(size, anchor_rect, anchor, gravity, offset.x(),
+                                x_flipped));
       }
     }
 
@@ -1476,9 +1494,9 @@ struct WaylandPositioner {
         else if (bounds.bottom() > work_area.bottom())
           bounds.set_y(work_area.bottom() - size.height());
       } else if (adjustment & ZXDG_POSITIONER_V6_CONSTRAINT_ADJUSTMENT_FLIP_Y) {
-        bounds.set_y(CalculateY(
-            size, anchor_rect, InvertBitfield(anchor, kVerticalAnchors),
-            InvertBitfield(gravity, kVerticalGravities), -offset.y()));
+        y_flipped = !y_flipped;
+        bounds.set_y(CalculateY(size, anchor_rect, anchor, gravity, offset.y(),
+                                y_flipped));
       }
     }
     return bounds.origin();
@@ -1490,6 +1508,8 @@ struct WaylandPositioner {
   uint32_t gravity = ZXDG_POSITIONER_V6_GRAVITY_NONE;
   uint32_t adjustment = ZXDG_POSITIONER_V6_CONSTRAINT_ADJUSTMENT_NONE;
   gfx::Vector2d offset;
+  bool y_flipped = false;
+  bool x_flipped = false;
 };
 
 void xdg_positioner_v6_destroy(wl_client* client, wl_resource* resource) {
@@ -1781,7 +1801,7 @@ void xdg_toplevel_v6_set_title(wl_client* client,
 void xdg_toplevel_v6_set_app_id(wl_client* client,
                                 wl_resource* resource,
                                 const char* app_id) {
-  NOTIMPLEMENTED();
+  GetUserDataAs<WaylandToplevel>(resource)->SetApplicationId(app_id);
 }
 
 void xdg_toplevel_v6_show_window_menu(wl_client* client,
@@ -1974,7 +1994,7 @@ void xdg_surface_v6_get_popup(wl_client* client,
     return;
   }
 
-  ShellSurface* parent = GetUserDataAs<ShellSurface>(parent_resource);
+  XdgShellSurface* parent = GetUserDataAs<XdgShellSurface>(parent_resource);
   if (!parent->GetWidget()) {
     wl_resource_post_error(resource, ZXDG_SURFACE_V6_ERROR_NOT_CONSTRUCTED,
                            "popup parent not constructed");
@@ -1986,14 +2006,25 @@ void xdg_surface_v6_get_popup(wl_client* client,
                            "get_popup is called after constructed");
     return;
   }
+
   display::Display display =
       display::Screen::GetScreen()->GetDisplayNearestWindow(
           parent->GetWidget()->GetNativeWindow());
   gfx::Rect work_area = display.work_area();
   wm::ConvertRectFromScreen(parent->GetWidget()->GetNativeWindow(), &work_area);
 
-  gfx::Point position = GetUserDataAs<WaylandPositioner>(positioner_resource)
-                            ->CalculatePosition(work_area);
+  WaylandPositioner* positioner =
+      GetUserDataAs<WaylandPositioner>(positioner_resource);
+  // Try layout using parent's flip state.
+  positioner->x_flipped = parent->x_flipped();
+  positioner->y_flipped = parent->y_flipped();
+
+  gfx::Point position = positioner->CalculatePosition(work_area);
+
+  // Remember the new flip state for its child popups.
+  shell_surface->set_x_flipped(positioner->x_flipped);
+  shell_surface->set_y_flipped(positioner->y_flipped);
+
   // |position| is relative to the parent's contents view origin, and |origin|
   // is in screen coordinates.
   gfx::Point origin = position;
@@ -2468,6 +2499,16 @@ const struct zcr_notification_surface_v1_interface
                                            notification_surface_set_app_id};
 
 ////////////////////////////////////////////////////////////////////////////////
+// input_method_surface_interface:
+
+void input_method_surface_destroy(wl_client* client, wl_resource* resource) {
+  wl_resource_destroy(resource);
+}
+
+const struct zcr_input_method_surface_v1_interface
+    input_method_surface_implementation = {input_method_surface_destroy};
+
+////////////////////////////////////////////////////////////////////////////////
 // remote_shell_interface:
 
 // Implements remote shell interface and monitors workspace state needed
@@ -2525,6 +2566,13 @@ class WaylandRemoteShell : public ash::TabletModeObserver,
       Surface* surface,
       const std::string& notification_key) {
     return display_->CreateNotificationSurface(surface, notification_key);
+  }
+
+  std::unique_ptr<InputMethodSurface> CreateInputMethodSurface(
+      Surface* surface,
+      double default_device_scale_factor) {
+    return display_->CreateInputMethodSurface(surface,
+                                              default_device_scale_factor);
   }
 
   // Overridden from display::DisplayObserver:
@@ -2886,11 +2934,39 @@ void remote_shell_get_notification_surface(wl_client* client,
                     std::move(notification_surface));
 }
 
+void remote_shell_get_input_method_surface(wl_client* client,
+                                           wl_resource* resource,
+                                           uint32_t id,
+                                           wl_resource* surface) {
+  if (GetUserDataAs<Surface>(surface)->HasSurfaceDelegate()) {
+    wl_resource_post_error(resource, ZCR_REMOTE_SHELL_V1_ERROR_ROLE,
+                           "surface has already been assigned a role");
+    return;
+  }
+
+  std::unique_ptr<ClientControlledShellSurface> input_method_surface =
+      GetUserDataAs<WaylandRemoteShell>(resource)->CreateInputMethodSurface(
+          GetUserDataAs<Surface>(surface), GetDefaultDeviceScaleFactor());
+  if (!input_method_surface) {
+    wl_resource_post_error(resource, ZCR_REMOTE_SHELL_V1_ERROR_ROLE,
+                           "Cannot create an IME surface");
+    return;
+  }
+
+  wl_resource* input_method_surface_resource =
+      wl_resource_create(client, &zcr_input_method_surface_v1_interface,
+                         wl_resource_get_version(resource), id);
+  SetImplementation(input_method_surface_resource,
+                    &input_method_surface_implementation,
+                    std::move(input_method_surface));
+}
+
 const struct zcr_remote_shell_v1_interface remote_shell_implementation = {
     remote_shell_destroy, remote_shell_get_remote_surface,
-    remote_shell_get_notification_surface};
+    remote_shell_get_notification_surface,
+    remote_shell_get_input_method_surface};
 
-const uint32_t remote_shell_version = 16;
+const uint32_t remote_shell_version = 17;
 
 void bind_remote_shell(wl_client* client,
                        void* data,
@@ -5248,6 +5324,350 @@ void bind_input_timestamps_manager(wl_client* client,
       resource, &input_timestamps_manager_implementation, nullptr, nullptr);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+// text_input_v1 interface:
+
+size_t OffsetFromUTF8Offset(const base::StringPiece& text, uint32_t offset) {
+  return base::UTF8ToUTF16(text.substr(0, offset)).size();
+}
+
+size_t OffsetFromUTF16Offset(const base::StringPiece16& text, uint32_t offset) {
+  return base::UTF16ToUTF8(text.substr(0, offset)).size();
+}
+
+class WaylandTextInputDelegate : public TextInput::Delegate {
+ public:
+  WaylandTextInputDelegate(wl_resource* text_input) : text_input_(text_input) {}
+  ~WaylandTextInputDelegate() override = default;
+
+  void set_surface(wl_resource* surface) { surface_ = surface; }
+
+ private:
+  wl_client* client() { return wl_resource_get_client(text_input_); }
+
+  uint32_t next_serial() {
+    return wl_display_next_serial(wl_client_get_display(client()));
+  }
+
+  // TextInput::Delegate:
+  void Activated() override {
+    zwp_text_input_v1_send_enter(text_input_, surface_);
+    wl_client_flush(client());
+  }
+
+  void Deactivated() override {
+    zwp_text_input_v1_send_leave(text_input_);
+    wl_client_flush(client());
+  }
+
+  void OnVirtualKeyboardVisibilityChanged(bool is_visible) override {
+    zwp_text_input_v1_send_input_panel_state(text_input_, is_visible);
+    wl_client_flush(client());
+  }
+
+  void SetCompositionText(const ui::CompositionText& composition) override {
+    for (const auto& span : composition.ime_text_spans) {
+      uint32_t style = ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_DEFAULT;
+      switch (span.type) {
+        case ui::ImeTextSpan::Type::kComposition:
+          if (span.thickness == ui::ImeTextSpan::Thickness::kThick) {
+            style = ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_HIGHLIGHT;
+          } else {
+            style = ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_UNDERLINE;
+          }
+          break;
+        case ui::ImeTextSpan::Type::kSuggestion:
+          style = ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_SELECTION;
+          break;
+        case ui::ImeTextSpan::Type::kMisspellingSuggestion:
+          style = ZWP_TEXT_INPUT_V1_PREEDIT_STYLE_INCORRECT;
+          break;
+      }
+      const size_t start =
+          OffsetFromUTF16Offset(composition.text, span.start_offset);
+      const size_t end =
+          OffsetFromUTF16Offset(composition.text, span.end_offset);
+      zwp_text_input_v1_send_preedit_styling(text_input_, start, end - start,
+                                             style);
+    }
+
+    const size_t pos =
+        OffsetFromUTF16Offset(composition.text, composition.selection.start());
+    zwp_text_input_v1_send_preedit_cursor(text_input_, pos);
+
+    const std::string utf8 = base::UTF16ToUTF8(composition.text);
+    zwp_text_input_v1_send_preedit_string(text_input_, next_serial(),
+                                          utf8.c_str(), utf8.c_str());
+
+    wl_client_flush(client());
+  }
+
+  void Commit(const base::string16& text) override {
+    zwp_text_input_v1_send_commit_string(text_input_, next_serial(),
+                                         base::UTF16ToUTF8(text).c_str());
+    wl_client_flush(client());
+  }
+
+  void SetCursor(const gfx::Range& selection) override {
+    // TODO(mukai): compute the utf8 offset for |selection| and call
+    // zwp_text_input_v1_send_cursor_position.
+    NOTIMPLEMENTED();
+  }
+
+  void DeleteSurroundingText(const gfx::Range& range) override {
+    // TODO(mukai): compute the utf8 offset for |range| and call
+    // zwp_text_input_send_delete_surrounding_text.
+    NOTIMPLEMENTED();
+  }
+
+  void SendKey(const ui::KeyEvent& event) override {
+    uint32_t code = ui::KeycodeConverter::DomCodeToNativeKeycode(event.code());
+    bool pressed = event.flags() | ui::ET_KEY_PRESSED;
+    // TODO(mukai): consolidate the definition of this modifiers_mask with other
+    // similar ones in components/exo/keyboard.cc or arc_ime_service.cc.
+    constexpr uint32_t modifiers_mask =
+        ui::EF_SHIFT_DOWN | ui::EF_CONTROL_DOWN | ui::EF_ALT_DOWN |
+        ui::EF_COMMAND_DOWN | ui::EF_ALTGR_DOWN | ui::EF_MOD3_DOWN;
+    // 1-bit shifts to adjust the bitpattern for the modifiers; see also
+    // WaylandTextInputDelegate::SendModifiers().
+    uint32_t modifiers = (event.flags() & modifiers_mask) >> 1;
+    zwp_text_input_v1_send_keysym(text_input_,
+                                  TimeTicksToMilliseconds(event.time_stamp()),
+                                  next_serial(), code,
+                                  pressed ? WL_KEYBOARD_KEY_STATE_PRESSED
+                                          : WL_KEYBOARD_KEY_STATE_RELEASED,
+                                  modifiers);
+    wl_client_flush(client());
+  }
+
+  void OnTextDirectionChanged(base::i18n::TextDirection direction) override {
+    uint32_t wayland_direction = ZWP_TEXT_INPUT_V1_TEXT_DIRECTION_AUTO;
+    switch (direction) {
+      case base::i18n::RIGHT_TO_LEFT:
+        wayland_direction = ZWP_TEXT_INPUT_V1_TEXT_DIRECTION_LTR;
+        break;
+      case base::i18n::LEFT_TO_RIGHT:
+        wayland_direction = ZWP_TEXT_INPUT_V1_TEXT_DIRECTION_RTL;
+        break;
+      case base::i18n::UNKNOWN_DIRECTION:
+        LOG(ERROR) << "Unrecognized direction: " << direction;
+    }
+    zwp_text_input_v1_send_text_direction(text_input_, next_serial(),
+                                          wayland_direction);
+  }
+
+  wl_resource* text_input_;
+  wl_resource* surface_ = nullptr;
+
+  DISALLOW_COPY_AND_ASSIGN(WaylandTextInputDelegate);
+};
+
+void text_input_activate(wl_client* client,
+                         wl_resource* resource,
+                         wl_resource* seat,
+                         wl_resource* surface_resource) {
+  TextInput* text_input = GetUserDataAs<TextInput>(resource);
+  Surface* surface = GetUserDataAs<Surface>(surface_resource);
+  static_cast<WaylandTextInputDelegate*>(text_input->delegate())
+      ->set_surface(surface_resource);
+  text_input->Activate(surface);
+
+  // Sending modifiers.
+  constexpr const char* kModifierNames[] = {
+      XKB_MOD_NAME_SHIFT,
+      XKB_MOD_NAME_CTRL,
+      XKB_MOD_NAME_ALT,
+      XKB_MOD_NAME_LOGO,
+      "Mod5",
+      "Mod3",
+  };
+  wl_array modifiers;
+  wl_array_init(&modifiers);
+  for (const char* modifier : kModifierNames) {
+    char* p =
+        static_cast<char*>(wl_array_add(&modifiers, ::strlen(modifier) + 1));
+    ::strcpy(p, modifier);
+  }
+  zwp_text_input_v1_send_modifiers_map(resource, &modifiers);
+  wl_array_release(&modifiers);
+}
+
+void text_input_deactivate(wl_client* client,
+                           wl_resource* resource,
+                           wl_resource* seat) {
+  TextInput* text_input = GetUserDataAs<TextInput>(resource);
+  text_input->Deactivate();
+}
+
+void text_input_show_input_panel(wl_client* client, wl_resource* resource) {
+  GetUserDataAs<TextInput>(resource)->ShowVirtualKeyboardIfEnabled();
+}
+
+void text_input_hide_input_panel(wl_client* client, wl_resource* resource) {
+  GetUserDataAs<TextInput>(resource)->HideVirtualKeyboard();
+}
+
+void text_input_reset(wl_client* client, wl_resource* resource) {
+  GetUserDataAs<TextInput>(resource)->Resync();
+}
+
+void text_input_set_surrounding_text(wl_client* client,
+                                     wl_resource* resource,
+                                     const char* text,
+                                     uint32_t cursor,
+                                     uint32_t anchor) {
+  TextInput* text_input = GetUserDataAs<TextInput>(resource);
+  text_input->SetSurroundingText(base::UTF8ToUTF16(text),
+                                 OffsetFromUTF8Offset(text, cursor));
+}
+
+void text_input_set_content_type(wl_client* client,
+                                 wl_resource* resource,
+                                 uint32_t hint,
+                                 uint32_t purpose) {
+  TextInput* text_input = GetUserDataAs<TextInput>(resource);
+  ui::TextInputType type = ui::TEXT_INPUT_TYPE_TEXT;
+  ui::TextInputMode mode = ui::TEXT_INPUT_MODE_DEFAULT;
+  int flags = ui::TEXT_INPUT_FLAG_NONE;
+  bool should_do_learning = true;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_AUTO_COMPLETION)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCOMPLETE_ON;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_AUTO_CORRECTION)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCORRECT_ON;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_AUTO_CAPITALIZATION)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCAPITALIZE_SENTENCES;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_LOWERCASE)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCAPITALIZE_NONE;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_UPPERCASE)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCAPITALIZE_CHARACTERS;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_TITLECASE)
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCAPITALIZE_WORDS;
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_HIDDEN_TEXT) {
+    flags |= ui::TEXT_INPUT_FLAG_AUTOCOMPLETE_OFF |
+             ui::TEXT_INPUT_FLAG_AUTOCORRECT_OFF;
+  }
+  if (hint & ZWP_TEXT_INPUT_V1_CONTENT_HINT_SENSITIVE_DATA)
+    should_do_learning = false;
+  // Unused hints: LATIN, MULTILINE.
+
+  switch (purpose) {
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_DIGITS:
+      mode = ui::TEXT_INPUT_MODE_DECIMAL;
+      type = ui::TEXT_INPUT_TYPE_NUMBER;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_NUMBER:
+      mode = ui::TEXT_INPUT_MODE_NUMERIC;
+      type = ui::TEXT_INPUT_TYPE_NUMBER;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_PHONE:
+      mode = ui::TEXT_INPUT_MODE_TEL;
+      type = ui::TEXT_INPUT_TYPE_TELEPHONE;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_URL:
+      mode = ui::TEXT_INPUT_MODE_URL;
+      type = ui::TEXT_INPUT_TYPE_URL;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_EMAIL:
+      mode = ui::TEXT_INPUT_MODE_EMAIL;
+      type = ui::TEXT_INPUT_TYPE_EMAIL;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_PASSWORD:
+      DCHECK(!should_do_learning);
+      type = ui::TEXT_INPUT_TYPE_PASSWORD;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_DATE:
+      type = ui::TEXT_INPUT_TYPE_DATE;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_TIME:
+      type = ui::TEXT_INPUT_TYPE_TIME;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_DATETIME:
+      type = ui::TEXT_INPUT_TYPE_DATE_TIME;
+      break;
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_NORMAL:
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_ALPHA:
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_NAME:
+    case ZWP_TEXT_INPUT_V1_CONTENT_PURPOSE_TERMINAL:
+      // No special type / mode are set.
+      break;
+  }
+
+  text_input->SetTypeModeFlags(type, mode, flags, should_do_learning);
+}
+
+void text_input_set_cursor_rectangle(wl_client* client,
+                                     wl_resource* resource,
+                                     int32_t x,
+                                     int32_t y,
+                                     int32_t width,
+                                     int32_t height) {
+  GetUserDataAs<TextInput>(resource)->SetCaretBounds(
+      gfx::Rect(x, y, width, height));
+}
+
+void text_input_set_preferred_language(wl_client* client,
+                                       wl_resource* resource,
+                                       const char* language) {
+  // Nothing needs to be done.
+}
+
+void text_input_commit_state(wl_client* client,
+                             wl_resource* resource,
+                             uint32_t serial) {
+  // Nothing needs to be done.
+}
+
+void text_input_invoke_action(wl_client* client,
+                              wl_resource* resource,
+                              uint32_t button,
+                              uint32_t index) {
+  GetUserDataAs<TextInput>(resource)->Resync();
+}
+
+const struct zwp_text_input_v1_interface text_input_v1_implementation = {
+    text_input_activate,
+    text_input_deactivate,
+    text_input_show_input_panel,
+    text_input_hide_input_panel,
+    text_input_reset,
+    text_input_set_surrounding_text,
+    text_input_set_content_type,
+    text_input_set_cursor_rectangle,
+    text_input_set_preferred_language,
+    text_input_commit_state,
+    text_input_invoke_action,
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// text_input_manager_v1 interface:
+
+void text_input_manager_create_text_input(wl_client* client,
+                                          wl_resource* resource,
+                                          uint32_t id) {
+  wl_resource* text_input_resource =
+      wl_resource_create(client, &zwp_text_input_v1_interface, 1, id);
+
+  SetImplementation(
+      text_input_resource, &text_input_v1_implementation,
+      std::make_unique<TextInput>(
+          std::make_unique<WaylandTextInputDelegate>(text_input_resource)));
+}
+
+const struct zwp_text_input_manager_v1_interface
+    text_input_manager_implementation = {
+        text_input_manager_create_text_input,
+};
+
+void bind_text_input_manager(wl_client* client,
+                             void* data,
+                             uint32_t version,
+                             uint32_t id) {
+  wl_resource* resource =
+      wl_resource_create(client, &zwp_text_input_manager_v1_interface, 1, id);
+  wl_resource_set_implementation(resource, &text_input_manager_implementation,
+                                 data, nullptr);
+}
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -5318,6 +5738,8 @@ Server::Server(Display* display)
   wl_global_create(wl_display_.get(),
                    &zwp_input_timestamps_manager_v1_interface, 1, display_,
                    bind_input_timestamps_manager);
+  wl_global_create(wl_display_.get(), &zwp_text_input_manager_v1_interface, 1,
+                   display_, bind_text_input_manager);
 }
 
 Server::~Server() {

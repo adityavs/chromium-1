@@ -10,7 +10,6 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/command_line.h"
 #include "base/files/file_util.h"
 #include "base/location.h"
 #include "base/optional.h"
@@ -19,9 +18,8 @@
 #include "base/stl_util.h"
 #include "base/threading/thread_restrictions.h"
 #include "base/threading/thread_task_runner_handle.h"
-#include "chromeos/attestation/attestation.pb.h"
 #include "chromeos/chromeos_paths.h"
-#include "chromeos/chromeos_switches.h"
+#include "chromeos/dbus/attestation/attestation.pb.h"
 #include "chromeos/dbus/cryptohome/key.pb.h"
 #include "chromeos/dbus/cryptohome/rpc.pb.h"
 #include "components/policy/proto/install_attributes.pb.h"
@@ -146,8 +144,10 @@ std::string FakeCryptohomeClient::BlockingGetSanitizedUsername(
                                : std::string();
 }
 
-void FakeCryptohomeClient::AsyncMountGuest(AsyncMethodCallback callback) {
-  ReturnAsyncMethodResult(std::move(callback));
+void FakeCryptohomeClient::MountGuestEx(
+    const cryptohome::MountGuestRequest& request,
+    DBusMethodCallback<cryptohome::BaseReply> callback) {
+  ReturnProtobufMethodCallback(cryptohome::BaseReply(), std::move(callback));
 }
 
 void FakeCryptohomeClient::TpmIsReady(DBusMethodCallback<bool> callback) {
@@ -575,9 +575,7 @@ void FakeCryptohomeClient::MountEx(
   cryptohome::MountReply* mount =
       reply.MutableExtension(cryptohome::MountReply::reply);
   mount->set_sanitized_username(GetStubSanitizedUsername(cryptohome_id));
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(
-          switches::kTestEncryptionMigrationUI) &&
-      !request.to_migrate_from_ecryptfs() &&
+  if (!request.to_migrate_from_ecryptfs() &&
       request.force_dircrypto_if_available()) {
     error = cryptohome::CRYPTOHOME_ERROR_MOUNT_OLD_ENCRYPTION;
   }

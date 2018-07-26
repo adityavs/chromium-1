@@ -244,6 +244,9 @@ void Preferences::RegisterProfilePrefs(
       ash::prefs::kScreenMagnifierAcceleratorDialogHasBeenAccepted, false,
       PrefRegistry::PUBLIC);
   registry->RegisterBooleanPref(
+      ash::prefs::kDictationAcceleratorDialogHasBeenAccepted, false,
+      PrefRegistry::PUBLIC);
+  registry->RegisterBooleanPref(
       ash::prefs::kAccessibilityScreenMagnifierEnabled, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF | PrefRegistry::PUBLIC);
   registry->RegisterBooleanPref(
@@ -295,6 +298,7 @@ void Preferences::RegisterProfilePrefs(
       prefs::kUse24HourClock,
       base::GetHourClockType() == base::k24HourClock,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterBooleanPref(prefs::kCameraMediaConsolidated, false);
   registry->RegisterBooleanPref(
       drive::prefs::kDisableDrive, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
@@ -304,6 +308,7 @@ void Preferences::RegisterProfilePrefs(
   registry->RegisterBooleanPref(
       drive::prefs::kDisableDriveHostedFiles, false,
       user_prefs::PrefRegistrySyncable::SYNCABLE_PREF);
+  registry->RegisterStringPref(drive::prefs::kDriveFsProfileSalt, "");
   // We don't sync prefs::kLanguageCurrentInputMethod and PreviousInputMethod
   // because they're just used to track the logout state of the device.
   registry->RegisterStringPref(prefs::kLanguageCurrentInputMethod, "");
@@ -314,7 +319,7 @@ void Preferences::RegisterProfilePrefs(
                                kFallbackInputMethodLocale);
   registry->RegisterStringPref(prefs::kLanguagePreloadEngines,
                                hardware_keyboard_id);
-  registry->RegisterStringPref(prefs::kLanguageEnabledExtensionImes, "");
+  registry->RegisterStringPref(prefs::kLanguageEnabledImes, "");
 
   registry->RegisterIntegerPref(
       prefs::kLanguageRemapSearchKeyTo,
@@ -502,8 +507,7 @@ void Preferences::InitUserPrefs(sync_preferences::PrefServiceSyncable* prefs) {
   download_default_directory_.Init(prefs::kDownloadDefaultDirectory,
                                    prefs, callback);
   preload_engines_.Init(prefs::kLanguagePreloadEngines, prefs, callback);
-  enabled_extension_imes_.Init(prefs::kLanguageEnabledExtensionImes,
-                               prefs, callback);
+  enabled_imes_.Init(prefs::kLanguageEnabledImes, prefs, callback);
   current_input_method_.Init(prefs::kLanguageCurrentInputMethod,
                              prefs, callback);
   previous_input_method_.Init(prefs::kLanguagePreviousInputMethod,
@@ -568,7 +572,11 @@ void Preferences::Init(Profile* profile, const user_manager::User* user) {
   // SetState() is modifying |current_input_method_| (via
   // PersistUserInputMethod() ). This way SetState() here may be called only
   // after ApplyPreferences().
-  input_method_manager_->SetState(ime_state_);
+  // As InputMethodManager only holds the active state for the active user,
+  // SetState() is only called if the preferences belongs to the active user.
+  // See https://crbug.com/841112.
+  if (user->is_active())
+    input_method_manager_->SetState(ime_state_);
 
   input_method_syncer_.reset(
       new input_method::InputMethodSyncer(prefs, ime_state_));
@@ -784,9 +792,9 @@ void Preferences::ApplyPreferences(ApplyReason reason,
   }
 
   if ((reason == REASON_INITIALIZATION) ||
-      (pref_name == prefs::kLanguageEnabledExtensionImes &&
+      (pref_name == prefs::kLanguageEnabledImes &&
        reason == REASON_PREF_CHANGED)) {
-    std::string value(enabled_extension_imes_.GetValue());
+    std::string value(enabled_imes_.GetValue());
 
     std::vector<std::string> split_values;
     if (!value.empty()) {

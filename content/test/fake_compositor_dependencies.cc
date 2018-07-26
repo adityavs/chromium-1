@@ -48,6 +48,10 @@ bool FakeCompositorDependencies::IsElasticOverscrollEnabled() {
   return true;
 }
 
+bool FakeCompositorDependencies::IsUseZoomForDSFEnabled() {
+  return use_zoom_for_dsf_;
+}
+
 scoped_refptr<base::SingleThreadTaskRunner>
 FakeCompositorDependencies::GetCompositorMainThreadTaskRunner() {
   return base::ThreadTaskRunnerHandle::Get();
@@ -67,10 +71,6 @@ cc::TaskGraphRunner* FakeCompositorDependencies::GetTaskGraphRunner() {
   return &task_graph_runner_;
 }
 
-bool FakeCompositorDependencies::IsThreadedAnimationEnabled() {
-  return true;
-}
-
 bool FakeCompositorDependencies::IsScrollAnimatorEnabled() {
   return false;
 }
@@ -79,5 +79,11 @@ std::unique_ptr<cc::UkmRecorderFactory>
 FakeCompositorDependencies::CreateUkmRecorderFactory() {
   return std::make_unique<cc::TestUkmRecorderFactory>();
 }
+
+#ifdef OS_ANDROID
+bool FakeCompositorDependencies::UsingSynchronousCompositing() {
+  return false;
+}
+#endif
 
 }  // namespace content

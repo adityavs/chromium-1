@@ -129,11 +129,6 @@
 
       Als dit beleid niet wordt ingesteld, is de standaardwaarde 'MultiProfileUserBehaviorMustBePrimary' van toepassing op gebruikers die op ondernemingsniveau worden beheerd en wordt 'MultiProfileUserBehaviorUnrestricted' gebruikt voor niet-beheerde gebruikers.</translation>
 <translation id="1465619815762735808">Klikken om af te spelen</translation>
-<translation id="1466133662354365542">Hiermee wordt de functie Automatisch aanvullen van <ph name="PRODUCT_NAME" /> ingeschakeld en wordt gebruikers toegestaan creditcard- of adresgegevens automatisch in te vullen op webformulieren aan de hand van eerder opgeslagen gegevens.
-
-      Als je deze instelling uitschakelt, worden er nooit creditcardgegevens voorgesteld of ingevuld door Automatisch aanvullen. Er worden ook geen aanvullende creditcardgegevens opgeslagen die de gebruiker mogelijk verzendt terwijl hij browst op internet.
-
-      Als je deze instelling inschakelt of geen waarde instelt, kan de gebruiker de functie Automatisch aanvullen (waaronder creditcards) beheren in de UI.</translation>
 <translation id="1468307069016535757">De standaardstatus van de toegankelijkheidsfunctie 'Modus voor hoog contrast' instellen op het inlogscherm
 
           Als dit beleid op 'waar' is ingesteld, wordt de modus voor hoog contrast ingeschakeld wanneer het inlogscherm wordt weergegeven.
@@ -215,12 +210,6 @@
       Het beleid moet op een URL worden ingesteld vanaf waar de Servicevoorwaarden door <ph name="PRODUCT_OS_NAME" /> kunnen worden gedownload. De Servicevoorwaarden moeten platte tekst zijn die als tekst met MIME-type/plat wordt weergegeven. Er is geen opmaak toegestaan.</translation>
 <translation id="1750315445671978749">Alle downloads blokkeren</translation>
 <translation id="1781356041596378058">Met dit beleid wordt ook de toegang tot de ontwikkelaarsopties van Android beheerd. Als je dit beleid instelt op True (Waar), hebben gebruikers geen toegang tot ontwikkelaarsopties. Als je dit beleid instelt op False (Onwaar) of niet instelt, hebben gebruikers toegang tot ontwikkelaarsopties door zeven keer op het buildnummer te tikken in de app Instellingen van Android.</translation>
-<translation id="178832255504524723">Stel de URL voor het wijzigen van het wachtwoord in (alleen http- en https-schema's). De wachtwoordbeveiligingsservice stuurt gebruikers naar deze URL, waar ze hun wachtwoord kunnen wijzigen als ze het slachtoffer zijn van phishing.
-      Als je er zeker van wilt zijn dat <ph name="PRODUCT_NAME" /> de nieuwe vingerafdruk van het wachtwoord correct vastlegt op deze pagina voor wachtwoordwijziging, moet je ervoor zorgen dat je pagina voor wachtwoordwijziging voldoet aan de richtlijnen op https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
-
-      Als deze instelling is ingeschakeld, stuurt de wachtwoordbeveiligingsservice gebruikers naar deze URL, waar ze hun wachtwoord kunnen wijzigen als ze het slachtoffer zijn van phishing.
-      Als deze instelling is uitgeschakeld of niet is ingesteld, stuurt de wachtwoordbeveiligingsservice gebruikers naar https://myaccounts.google.com, waar ze hun wachtwoord kunnen wijzigen.
-      Dit beleid is niet beschikbaar voor Windows-instanties die geen deel uitmaken van een <ph name="MS_AD_NAME" />-domein.</translation>
 <translation id="1797233582739332495">Toon de gebruiker een terugkerende prompt om aan te geven dat opnieuw opstarten vereist is</translation>
 <translation id="1803646570632580723">Lijst met vastgezette apps om weer te geven in het opstartprogramma</translation>
 <translation id="1808715480127969042">Cookies blokkeren op deze sites</translation>
@@ -243,6 +232,13 @@
       Als de compatibiliteit met een server met bugs moet worden behouden, kan dit beleid worden ingesteld op 'tls1.1'. Dit is slechts een noodoplossing. De server moet snel worden gerepareerd.</translation>
 <translation id="1864269674877167562">Als dit beleid is ingesteld op een lege tekenreeks of niet is geconfigureerd, geeft <ph name="PRODUCT_OS_NAME" /> geen optie voor Automatisch aanvullen weer tijdens het inlogproces van de gebruiker.
       Als dit beleid is ingesteld op een tekenreeks die een domeinnaam vertegenwoordigt, geeft <ph name="PRODUCT_OS_NAME" /> een optie voor Automatisch aanvullen weer tijdens het inlogproces van de gebruiker, waarbij de gebruiker alleen zijn gebruikersnaam hoeft te typen zonder de domeinnaamextensie. De gebruiker kan deze domeinnaamextensie overschrijven.</translation>
+<translation id="1864382791685519617">Hiermee wordt netwerkvoorspelling in <ph name="PRODUCT_NAME" /> ingeschakeld en wordt voorkomen dat gebruikers deze instelling kunnen wijzigen.
+
+      Hiermee wordt DNS-prefetching, vooraf verbinden met TCP en SSL en het vooraf weergeven van webpagina's beheerd.
+
+      Als je dit beleid instelt, kunnen gebruikers deze instelling niet wijzigen of overschrijven in <ph name="PRODUCT_NAME" />.
+
+      Als dit beleid niet wordt ingesteld, wordt netwerkvoorspelling ingeschakeld, maar kan de gebruiker dit wijzigen.</translation>
 <translation id="1865417998205858223">Rechten voor sleutels</translation>
 <translation id="186719019195685253">Actie die moet worden ondernomen wanneer de vertraging voor inactief wordt bereikt bij gebruik op netspanning</translation>
 <translation id="187819629719252111">Hiermee wordt toegang tot lokale bestanden op de computer toegestaan doordat <ph name="PRODUCT_NAME" /> dialoogvensters voor het selecteren van bestanden kan weergeven.
@@ -527,7 +523,7 @@
 
       Wanneer dit beleid niet is geconfigureerd of is ingesteld op 'Sites niet filteren op content voor volwassenen', worden de sites niet gefilterd.
 
-      Wanneer dit beleid is ingesteld op 'Sites op hoofdniveau filteren op content voor volwassenen', worden de sites gefilterd die zijn geclassificeerd als pornografisch.</translation>
+      Wanneer dit beleid is ingesteld op 'Sites op hoofdniveau filteren op inhoud voor volwassenen', worden de sites gefilterd die zijn geclassificeerd als pornografisch.</translation>
 <translation id="2485721741875148980">Als dit beleid is ingesteld op 'true' (waar), moet de gebruiker inloggen op <ph name="PRODUCT_NAME" /> met zijn profiel voordat hij de browser gebruikt. De standaardwaarde van BrowserGuestModeEnabled wordt ingesteld op 'false' (onwaar). Houd er rekening mee dat bestaande, niet-ingelogde profielen worden vergrendeld en niet toegankelijk zijn na inschakeling van dit beleid. Raadpleeg het Helpcentrum-artikel voor meer informatie.
 
       Als dit beleid is ingesteld op 'false' (onwaar) of niet is geconfigureerd, kan de gebruiker de browser gebruiken zonder in te loggen op <ph name="PRODUCT_NAME" />.</translation>
@@ -688,17 +684,24 @@
 
       Als je deze instelling inschakelt, gebruikt Afdrukvoorbeeld de standaardprinter van het besturingssysteem als standaardbestemming.</translation>
 <translation id="2867699958489427143">Herstel en blijf op de doelversie als de OS-versie nieuwer is dan de doelversie. Doe een volledige powerwash tijdens het proces.</translation>
-<translation id="286802604195763750">Hiermee kun je de activering van een beveiligingswaarschuwing voor je wachtwoord beheren. Wachtwoordbeveiliging waarschuwt gebruikers wanneer ze hun beveiligde wachtwoord hergebruiken op potentieel verdachte sites.
-
-      Als dit beleid is ingesteld op PasswordProtectionWarningOff, wordt er geen waarschuwing voor wachtwoordbeveiliging weergegeven.
-      Als dit beleid is ingesteld op PasswordProtectionWarningOnPasswordReuse, wordt er een waarschuwing voor wachtwoordbeveiliging weergegeven wanneer de gebruiker het Google-wachtwoord hergebruikt op een site die niet op de witte lijst staat.
-      Als dit beleid is ingesteld op PasswordProtectionWarningOnPhishingReuse, wordt er een waarschuwing voor wachtwoordbeveiliging weergegeven wanneer de gebruiker het Google-wachtwoord hergebruikt op een phishingsite.
-      Als dit beleid niet is ingesteld, wordt er een waarschuwing voor wachtwoordbeveiliging geactiveerd wanneer de gebruiker het Google-wachtwoord hergebruikt op een phishingsite, maar kan de gebruiker deze instelling aanpassen.</translation>
 <translation id="2872961005593481000">Afsluiten</translation>
 <translation id="2874209944580848064">Opmerking voor <ph name="PRODUCT_OS_NAME" />-apparaten die Android-apps ondersteunen:</translation>
 <translation id="2877225735001246144">CNAME-lookup uitschakelen bij het verwerken van Kerberos-authenticatie</translation>
 <translation id="2893546967669465276">Systeemlogboeken naar de beheerserver verzenden</translation>
 <translation id="2899002520262095963">Android-apps kunnen de netwerkconfiguraties en CA-certificaten gebruiken die via dit beleid zijn ingesteld, maar hebben geen toegang tot bepaalde configuratieopties.</translation>
+<translation id="290002216614278247">Hiermee kun je de gebruikerssessie vergrendelen op basis van de tijd op de client of de gebruikslimiet van de dag.
+
+          Met |time_window_limit| kun je een dagelijks tijdvenster opgeven waarin de gebruikerssessie moet worden vergrendeld. Omdat er slechts één regel voor elke dag van de week wordt ondersteund, mag de reeks |entries| qua grootte variëren van 0-7. |starts_at| en |ends_at| geven het begin en het einde van het tijdvenster aan. Als |ends_at| kleiner is dan |starts_at|, betekent dit dat |time_limit_window| eindigt op de volgende dag. |last_updated_millis| is de UTC-tijdstempel voor de laatste keer dat deze invoer is geüpdatet en wordt als reeks verzonden, omdat de tijdstempel niet in een geheel getal past.
+
+          Met |time_usage_limit| kun je een dagelijkse schermlimiet opgeven. Wanneer de gebruiker deze limiet bereikt, wordt de gebruikerssessie vergrendeld. Er is een eigenschap voor elke dag van de week en deze mag alleen worden ingesteld als er een actieve limiet voor die dag bestaat. |usage_quota_mins| is de hoeveelheid tijd waarin het beheerde apparaat op een dag kan worden gebruikt en |reset_at| is het tijdstip waarop de gebruikslimiet wordt vernieuwd. De standaardwaarde voor |reset_at| is middernacht ({'hour': 0, 'minute': 0}). |last_updated_millis| is de UTC-tijdstempel voor de laatste keer dat deze invoer is geüpdatet en wordt als reeks verzonden omdat de tijdstempel niet in een geheel getal past.
+
+          Met |overrides| kun je tijdelijk een of meer van de vorige regels ongeldig maken.
+          * Als time_window_limit en time_usage_limit geen van beide actief zijn, kun je |LOCK| gebruiken om het apparaat te vergrendelen.
+          * Met |LOCK| wordt een gebruikerssessie tijdelijk vergrendeld totdat de volgende time_window_limit of time_usage_limit begint.
+          * Met |UNLOCK| kun je een gebruikerssessie ontgrendelen die is vergrendeld door time_window_limit of time_usage_limit.
+          |created_time_millis| is de UTC-tijdstempel voor het maken van de overschrijving en wordt als reeks verzonden omdat de tijdstempel niet in een geheel getal past. Deze variabele wordt gebruikt om te bepalen of deze overschrijving nog steeds moet worden toegepast. Als de momenteel actieve tijdslimietfunctie (time_usage_limit of time_window_limit) is gestart nadat de overschrijving is gemaakt, onderneemt deze geen actie. Daarnaast is het zo dat de overschrijving niet wordt toegepast als deze is gemaakt vóór de laatste wijziging van de actieve time_window_limit of time_usage_window.
+
+          Er kunnen meerdere overschrijvingen worden verzonden. De nieuwste geldige invoer is de invoer die wordt toegepast.</translation>
 <translation id="2906874737073861391">Lijst met app-pakketextensies</translation>
 <translation id="2907992746861405243">Hiermee wordt beheerd welke printers uit <ph name="BULK_PRINTERS_POLICY" /> beschikbaar zijn voor gebruikers.
 
@@ -707,6 +710,7 @@
       Als dit beleid niet is ingesteld, wordt er uitgegaan van <ph name="PRINTERS_ALLOW_ALL" />.
       </translation>
 <translation id="2908277604670530363">Maximaal aantal gelijktijdige verbindingen met de proxyserver</translation>
+<translation id="2951386431828317490">Automatisch aanvullen inschakelen voor profielen</translation>
 <translation id="2956777931324644324">Dit beleid is buiten gebruik gesteld vanaf <ph name="PRODUCT_NAME" /> versie 36.
 
       Geeft aan of de extensie voor TLS-domeingebonden certificaten moet worden ingeschakeld.
@@ -715,6 +719,7 @@
 <translation id="2957506574938329824">Niet toestaan dat sites toegang tot Bluetooth-apparaten vragen via de Web Bluetooth API</translation>
 <translation id="2957513448235202597">Accounttype voor <ph name="HTTP_NEGOTIATE" />-verificatie</translation>
 <translation id="2959898425599642200">Regels voor proxyomzeiling</translation>
+<translation id="2960128438010718932">De gefaseerde planning voor het toepassen van nieuwe updates</translation>
 <translation id="2960691910306063964">Verificatie zonder pincode in- of uitschakelen voor hosts voor externe toegang</translation>
 <translation id="2976002782221275500">Hiermee wordt de tijdsduur zonder input van gebruikers gespecificeerd waarna het scherm wordt gedimd wanneer er op de batterij wordt gewerkt.
 
@@ -757,6 +762,7 @@
       Onafhankelijk van of en hoe dit beleid is ingesteld, kan de instelling voor WPAD-optimalisatie niet worden gewijzigd door gebruikers.</translation>
 <translation id="3072045631333522102">Screensaver voor gebruik in het inlogvenster in de winkelmodus</translation>
 <translation id="3072847235228302527">De Servicevoorwaarden instellen voor een apparaat-lokaal account</translation>
+<translation id="3077183141551274418">Hiermee schakel je levenscyclussen voor tabbladen in of uit</translation>
 <translation id="3086995894968271156">De Cast-receiver instellen in <ph name="PRODUCT_NAME" />.</translation>
 <translation id="3088796212846734853">Hiermee kun je een lijst met URL-patronen instellen waarmee sites worden gespecificeerd die afbeeldingen mogen weergeven.
 
@@ -1090,7 +1096,7 @@
 <translation id="4020682745012723568">Cookies die worden overgedragen naar het profiel van de gebruiker, zijn niet toegankelijk voor Android-apps.</translation>
 <translation id="402759845255257575">Niet toestaan dat sites JavaScript uitvoeren</translation>
 <translation id="4027608872760987929">De standaardzoekprovider inschakelen</translation>
-<translation id="4039085364173654945">Hiermee wordt bepaald of subinhoud van derden op een pagina een dialoogvenster voor algemene HTTP-authenticatie als pop-up mag weergeven.
+<translation id="4039085364173654945">Hiermee wordt bepaald of subinhoud van derden op een pagina een dialoogvenster voor algemene HTTP-authenticatie als pop-up mag bekijken.
 
           Deze optie is meestal uitgeschakeld als beveiliging tegen phishing. Als dit beleid niet wordt ingesteld, wordt de optie uitgeschakeld en mag subinhoud van derden geen dialoogvenster voor algemene HTTP-authenticatie als pop-up weergeven.</translation>
 <translation id="4056910949759281379">SPDY-protocol uitschakelen</translation>
@@ -1331,6 +1337,11 @@
       Deze suggesties worden extern via Google-servers opgehaald.
 
       Als dit is ingesteld op 'false' (onwaar), kunnen er geen suggesties worden opgehaald of weergegeven.</translation>
+<translation id="4788252609789586009">Hiermee wordt de functie 'Automatisch aanvullen' van <ph name="PRODUCT_NAME" /> ingeschakeld zodat gebruikers creditcardgegevens automatisch kunnen invullen op webformulieren aan de hand van eerder opgeslagen gegevens.
+
+      Als deze instelling is uitgeschakeld, worden er nooit creditcardgegevens voorgesteld of ingevuld door 'Automatisch aanvullen'. Er worden ook geen aanvullende creditcardgegevens opgeslagen die de gebruiker mogelijk verzendt terwijl deze browset op internet.
+
+      Als deze instelling is ingeschakeld of geen waarde heeft, kan de gebruiker 'Automatisch aanvullen' voor creditcards beheren in de UI.</translation>
 <translation id="4791031774429044540">De toegankelijkheidsfunctie 'Grote muisaanwijzer' inschakelen.
 
           Als dit beleid op 'waar' is ingesteld, is de grote muisaanwijzer altijd ingeschakeld.
@@ -1465,6 +1476,11 @@
       Als dit beleid is ingesteld op Waar (True), voorkomt <ph name="PRODUCT_OS_NAME" /> dat het apparaat wordt opgestart in de ontwikkelaarsmodus. Als de schakelaar voor de ontwikkelaarsmodus op 'Aan' is gezet, wordt het systeem niet opgestart en wordt een foutscherm weergegeven.
 
       Als dit beleid niet is ingesteld of is ingesteld op Onwaar, (False) blijft de ontwikkelaarsmodus beschikbaar voor het apparaat.</translation>
+<translation id="520403427390290017">De functie voor levenscyclussen voor tabbladen bespaart CPU en uiteindelijk geheugen voor tabbladen die al langere tijd niet worden gebruikt. Eerst worden deze beperkt, vervolgens worden ze vastgezet en uiteindelijk worden ze gedeactiveerd.
+
+      Als dit beleid is ingesteld op 'false' (onwaar), zijn levenscyclussen voor tabbladen uitgeschakeld en blijven alle tabbladen gewoon actief.
+
+      Als dit beleid is ingesteld op 'true' (waar) of niet is opgegeven, zijn levenscyclussen voor tabbladen ingeschakeld.</translation>
 <translation id="5208240613060747912">Hiermee kun je een lijst met URL-patronen opgeven van sites waarop geen meldingen mogen worden weergegeven.
 
           Als dit beleid niet wordt ingesteld, wordt de algemene standaardwaarde gebruikt voor alle sites op basis van het beleid 'DefaultNotificationsSetting' (als dit is ingesteld) of anders op basis van de configuratie van de gebruiker.</translation>
@@ -1512,6 +1528,11 @@
 
           Als dit beleid is ingesteld op 'False' (Onwaar), kunnen gebruikers geen content casten naar hun apparaat. Als dit beleid is ingesteld op 'True' (Waar), mogen gebruikers content casten. Als dit beleid niet is ingesteld, mogen gebruikers geen content naar geregistreerde Chrome OS-apparaten casten, maar wel naar niet-geregistreerde apparaten.</translation>
 <translation id="5330684698007383292"><ph name="PRODUCT_FRAME_NAME" /> toestaan de volgende soorten content te verwerken.</translation>
+<translation id="5360146044009867539">Hiermee wordt de functie 'Automatisch aanvullen' van <ph name="PRODUCT_NAME" /> ingeschakeld zodat en gebruikers profiel- en adresgegevens automatisch kunnen invullen op webformulieren aan de hand van eerder opgeslagen gegevens.
+
+      Als deze instelling is uitgeschakeld, worden er nooit adresgegevens voorgesteld of ingevuld door 'Automatisch aanvullen'. Er worden ook geen aanvullende adresgegevens opgeslagen die de gebruiker mogelijk verzendt terwijl deze browset op internet.
+
+      Als deze instelling is ingeschakeld of er geen waarde is ingesteld, kan de gebruiker 'Automatisch aanvullen' voor adressen beheren in de UI.</translation>
 <translation id="5365946944967967336">Knop 'Homepage' in de werkbalk weergeven</translation>
 <translation id="5366745336748853475">Hiermee kun je een lijst met URL-patronen opgeven die sites specificeren waarvoor automatisch een clientcertificaat moet worden geselecteerd op het inlogscherm in het frame waarin de SAML-procedure wordt gehost als de site vraagt om een certificaat. Een voorbeeld van het gebruik is een certificaat voor het hele apparaat configureren om te presenteren aan de SAML IdP.
 
@@ -1809,6 +1830,12 @@
 <translation id="6155936611791017817">De standaardstatus van de grote muisaanwijzer op het inlogscherm instellen</translation>
 <translation id="6157537876488211233">Door komma's gescheiden lijst van regels voor proxyomzeiling</translation>
 <translation id="6158324314836466367">Naam van zakelijke webwinkel (verouderd)</translation>
+<translation id="6164955668342404660">Beëindigd in M69. Gebruik in plaats daarvan OverrideSecurityRestrictionsOnInsecureOrigin.
+
+      Dit beleid specificeert een lijst met herkomsten (URL's) die moeten worden behandeld als beveiligde context. Het is de bedoeling dat organisaties hiermee een staging-server kunnen instellen voor interne webontwikkeling, zodat hun ontwikkelaars functies kunnen testen die een beveiligde context vereisen, zonder dat ze TLS op de staging-server hoeven te implementeren.
+      Wanneer er een lijst met URL's wordt ingesteld in dit beleid, heeft dit hetzelfde effect als wanneer de opdrachtregelmarkering '--unsafely-treat-insecure-origin-as-secure' wordt ingesteld op een door komma's gescheiden lijst met dezelfde URL's. Als het beleid is ingesteld, wordt de opdrachtregelmarkering overschreven.
+      Ga naar https://www.w3.org/TR/secure-contexts/ voor meer informatie over beveiligde contexten.
+      </translation>
 <translation id="6181608880636987460">Hiermee kun je een lijst met URL-patronen opgeven voor sites die de <ph name="FLASH_PLUGIN_NAME" />-plug-in niet mogen uitvoeren.
 
           Als dit beleid niet wordt ingesteld, wordt de algemene standaardwaarde gebruikt voor alle sites. Je vindt deze in het beleid 'DefaultPluginsSetting' (als dit is ingesteld), of in de persoonlijke configuratie van de gebruiker.</translation>
@@ -1933,13 +1960,6 @@
 
       Als je dit beleid niet instelt of als de lijst leeg is, zijn alle schema's toegankelijk in <ph name="PRODUCT_NAME" />.</translation>
 <translation id="6652197835259177259">Instellingen voor lokaal beheerde gebruikers</translation>
-<translation id="6654559957643809067">Hiermee wordt netwerkvoorspelling in <ph name="PRODUCT_NAME" /> ingeschakeld en wordt voorkomen dat gebruikers deze instelling kunnen wijzigen.
-
-      Hiermee wordt DNS-prefetching, vooraf verbinden met TCP en SSL en het vooraf renderen van webpagina's beheerd.
-
-      Als je deze voorkeur instelt op 'altijd', 'nooit' of 'alleen wifi', kunnen gebruikers deze instelling niet wijzigen of overschrijven in <ph name="PRODUCT_NAME" />.
-
-      Als dit beleid niet wordt ingesteld, wordt netwerkvoorspelling ingeschakeld, maar kan de gebruiker dit wijzigen.</translation>
 <translation id="6658245400435704251">Bepaalt het maximaal aantal seconden dat een apparaat willekeurig de download van een update mag uitstellen vanaf het moment dat de update voor het eerst naar de server werd gepusht. Het apparaat kan een deel van deze tijd wachten in termen van kloktijd en het resterende deel in termen van het aantal updatecontroles. De maximale spreiding is in elk geval begrensd door een constante periode zodat een apparaat nooit vastloopt tijdens het wachten tot een update kan worden gedownload.</translation>
 <translation id="6665670272107384733">Instellen hoe vaak een gebruiker het wachtwoord moet opgeven om de functie voor snel ontgrendelen te kunnen gebruiken</translation>
 <translation id="6681229465468164801">Hiermee kun je een lijst met URL-patronen opgeven voor sites die de gebruiker geen toestemming mogen vragen om ze toegang te verlenen tot een USB-apparaat.
@@ -1990,6 +2010,11 @@
 <translation id="6786967369487349613">De map voor roaming-profielen instellen</translation>
 <translation id="6810445994095397827">JavaScript blokkeren op deze sites</translation>
 <translation id="681446116407619279">Ondersteunde authenticatieschema's</translation>
+<translation id="6832455357698286434">
+      Dit beleid specificeert een lijst met herkomsten (URL's) of hostnaampatronen (zoals '*.example.com') die moeten worden behandeld als beveiligde context. Het is de bedoeling dat organisaties hiermee een staging-server kunnen instellen voor interne webontwikkeling, zodat hun ontwikkelaars functies kunnen testen die een beveiligde context vereisen, zonder dat ze TLS op de staging-server hoeven te implementeren.
+      Wanneer er een lijst met URL's wordt ingesteld in dit beleid, heeft dit hetzelfde effect als wanneer de opdrachtregelmarkering '--unsafely-treat-insecure-origin-as-secure' wordt ingesteld op een door komma's gescheiden lijst met dezelfde URL's. Als het beleid is ingesteld, wordt de opdrachtregelmarkering overschreven.
+      Ga naar https://www.w3.org/TR/secure-contexts/ voor meer informatie over beveiligde contexten.
+      </translation>
 <translation id="6835883744948188639">Toon de gebruiker een terugkerende prompt om aan te geven dat opnieuw opstarten wordt aanbevolen</translation>
 <translation id="6838056959556423778">Hiermee negeer je de regels van <ph name="PRODUCT_NAME" /> voor selectie van de standaardprinter.
 
@@ -2224,6 +2249,15 @@ Geheugengegevens worden in alle gevallen aan de pagina gerapporteerd, afgezien v
 
           Als deze instelling is uitgeschakeld, is deze functie niet beschikbaar.</translation>
 <translation id="7275334191706090484">Beheerde bladwijzers</translation>
+<translation id="729492886167634859">Dit beleid definieert een lijst van percentages. Deze percentages bepalen welk deel van <ph name="PRODUCT_OS_NAME" />-apparaten in de OE per week moet worden geüpdatet vanaf de dag waarop de update voor het eerst wordt ontdekt. De update wordt later ontdekt dan deze wordt gepubliceerd, aangezien het even kan duren voordat het apparaat controleert op updates.
+
+      De n-de waarde in de lijst wordt gebruikt als het percentage apparaten dat moet worden geüpdatet naar de volgende versie in de n-de week nadat de update voor het eerst wordt ontdekt. Als een update bijvoorbeeld vandaag wordt ontdekt, bepaalt de eerste waarde in de lijst welk percentage apparaten in de OE binnen een week moet worden geüpdatet naar die versie. De tweede waarde bepaalt het percentage apparaten in de OE dat naar die versie moet worden geüpdatet binnen twee weken vanaf vandaag, enzovoort.
+
+      Als er voor dit beleid een waarde is ingesteld, negeren updates het beleid <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" /> en wordt in plaats daarvan dit beleid gevolgd.
+
+      Als deze lijst leeg is, vindt het updaten niet gefaseerd plaats en worden updates toegepast volgens ander apparaatbeleid.
+
+      Dit beleid is niet van toepassing op kanaalwisselingen.</translation>
 <translation id="7295019613773647480">Gebruikers met beperkte rechten inschakelen</translation>
 <translation id="7301543427086558500">Hiermee wordt een lijst met alternatieve URL's gespecificeerd die kunnen worden gebruikt om zoektermen uit de zoekmachine te extraheren. De URL's moeten de tekenreeks <ph name="SEARCH_TERM_MARKER" /> bevatten die wordt gebruikt om de zoektermen te extraheren.
 
@@ -2302,17 +2336,6 @@ Geheugengegevens worden in alle gevallen aan de pagina gerapporteerd, afgezien v
 <translation id="7511361072385293666">Als dit beleid wordt ingesteld op 'waar' of niet wordt ingesteld, wordt het gebruik van het QUIC-protocol in <ph name="PRODUCT_NAME" /> toegestaan.
       Als dit beleid wordt ingesteld op 'onwaar', wordt het gebruik van het QUIC-protocol niet toegestaan.</translation>
 <translation id="7519251620064708155">Het genereren van sleutels toestaan op deze sites</translation>
-<translation id="7529083451528428240">Hiermee kun je de gebruikerssessie vergrendelen op basis van de tijd op de client of de gebruikslimiet van de dag.
-
-          Met |time_window_limit| kun je een dagelijks tijdvenster opgeven waarin de gebruikerssessie moet worden vergrendeld. Omdat er slechts één regel voor elke dag van de week wordt ondersteund, mag de reeks |entries| qua grootte variëren van 0-7. |starts_at| en |ends_at| geven het begin en het einde van het tijdvenster aan. Als |ends_at| kleiner is dan |starts_at|, betekent dit dat |time_limit_window| eindigt op de volgende dag. |last_updated_millis| is de UTC-tijdstempel voor de laatste keer dat deze invoer is geüpdatet en wordt als reeks verzonden, omdat de tijdstempel niet in een geheel getal past.
-
-          Met |time_usage_limit| kun je een dagelijkse schermlimiet opgeven. Wanneer de gebruiker deze limiet bereikt, wordt de gebruikerssessie vergrendeld. Er is een eigenschap voor elke dag van de week en deze mag alleen worden ingesteld als er een actieve limiet voor die dag bestaat. |usage_quota_mins| is de hoeveelheid tijd waarin het beheerde apparaat op een dag kan worden gebruikt en |reset_at| is het tijdstip waarop de gebruikslimiet wordt vernieuwd. De standaardwaarde voor |reset_at| is middernacht ({'hour': 0, 'minute': 0}). |last_updated_millis| is de UTC-tijdstempel voor de laatste keer dat deze invoer is geüpdatet en wordt als reeks verzonden omdat de tijdstempel niet in een geheel getal past.
-
-          Met |overrides| kun je tijdelijk een of meer van de vorige regels ongeldig maken.
-          * Als time_window_limit en time_usage_limit geen van beide actief zijn, kun je |LOCK| gebruiken om het apparaat te vergrendelen.
-          * Met |LOCK| wordt een gebruikerssessie tijdelijk vergrendeld totdat de volgende time_window_limit of time_usage_limit begint.
-          * Met |UNLOCK| kun je een gebruikerssessie ontgrendelen die is vergrendeld door time_window_limit of time_usage_limit.
-          |created_time_millis| is de UTC-tijdstempel voor het maken van de overschrijving en wordt als reeks verzonden omdat de tijdstempel niet in een geheel getal past. Deze variabele wordt gebruikt om te bepalen of deze overschrijving nog steeds moet worden toegepast. Als de momenteel actieve tijdslimietfunctie (time_usage_limit of time_window_limit) is gestart nadat de overschrijving is gemaakt, onderneemt deze geen actie. Daarnaast is het zo dat de overschrijving niet wordt toegepast als deze is gemaakt vóór de laatste wijziging van de actieve time_window_limit of time_usage_window.</translation>
 <translation id="7529100000224450960">Hiermee kun je een lijst met URL-patronen instellen waarmee sites worden gespecificeerd waarop pop-ups mogen worden geopend.
 
           Als dit beleid niet wordt ingesteld, wordt de algemene standaardwaarde gebruikt voor alle sites op basis van het beleid 'DefaultPopupsSetting' (als dit is ingesteld) of anders op basis van de configuratie van de gebruiker.</translation>
@@ -2349,6 +2372,7 @@ Geheugengegevens worden in alle gevallen aan de pagina gerapporteerd, afgezien v
 <translation id="7617319494457709698">Dit beleid geeft aan welke extensies de <ph name="ENTERPRISE_PLATFORM_KEYS_API" />-functie <ph name="CHALLENGE_USER_KEY_FUNCTION" /> mogen gebruiken voor externe bevestiging. Je moet extensies aan deze lijst toevoegen om de API te kunnen gebruiken.
 
           Als een extensie niet in de lijst voorkomt of als de lijst niet is ingesteld, mislukt het aanroepen van de API en wordt er een foutcode weergegeven.</translation>
+<translation id="7620300057302654932">Herkomsten of hostnaampatronen die moeten worden behandeld als beveiligde context.</translation>
 <translation id="7625444193696794922">Hiermee wordt het releasekanaal gespecificeerd waarmee dit apparaat moet worden vergrendeld.</translation>
 <translation id="7632724434767231364">Naam van GSSAPI-bibliotheek</translation>
 <translation id="7635471475589566552">Hiermee wordt de landinstelling voor de applicatie geconfigureerd in <ph name="PRODUCT_NAME" /> en wordt voorkomen dat gebruikers de landinstelling kunnen wijzigen.
@@ -2695,6 +2719,12 @@ De aanbevolen manier om beleidsregels te configureren op Windows, is via GPO, ma
 
           Ga voor voorbeeldpatronen naar https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8493645415242333585">Opslaan van browsegeschiedenis uitschakelen</translation>
+<translation id="8498293625012059298">Hiermee stel je de URL voor het wijzigen van het wachtwoord in (alleen http- en https-schema's). De wachtwoordbeveiligingsservice stuurt gebruikers naar deze URL, waar ze hun wachtwoord kunnen wijzigen nadat ze een waarschuwing in de browser hebben gezien.
+      Als je er zeker van wilt zijn dat <ph name="PRODUCT_NAME" /> de nieuwe vingerafdruk van het wachtwoord correct vastlegt op deze pagina voor wachtwoordwijziging, moet je ervoor zorgen dat je pagina voor wachtwoordwijziging voldoet aan de richtlijnen op https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
+
+      Als deze instelling is ingeschakeld, stuurt de wachtwoordbeveiligingsservice gebruikers naar deze URL, waar ze hun wachtwoord kunnen wijzigen nadat ze een waarschuwing in de browser hebben gezien.
+      Als deze instelling is uitgeschakeld of niet is ingesteld, stuurt de wachtwoordbeveiligingsservice gebruikers naar https://myaccounts.google.com, waar ze hun wachtwoord kunnen wijzigen.
+      Dit beleid is niet beschikbaar voor Windows-instanties die geen deel uitmaken van een <ph name="MS_AD_NAME" />-domein.</translation>
 <translation id="8499172469244085141">Standaardinstellingen (gebruikers kunnen overschrijven)</translation>
 <translation id="8507835864888987300">Hiermee stel je een doelversie voor 'Automatische updates' in.
 
@@ -2749,6 +2779,14 @@ Als dit beleid niet is ingesteld, worden er geen beperkingen toegepast en kan de
       Als dit beleid wordt gewijzigd naar False (Onwaar), wordt dit toegepast op nieuwe virtuele machines, maar worden reeds uitgevoerde virtuele machines niet uitgeschakeld.
       Als dit beleid op een beheerd apparaat niet is ingesteld, mogen er geen virtuele machines worden uitgevoerd op het apparaat.
       Virtuele machines mogen worden uitgevoerd op onbeheerde apparaten.</translation>
+<translation id="8669669491594628013">Hiermee kun je de activering van een waarschuwing voor wachtwoordbeveiliging beheren. Wachtwoordbeveiliging waarschuwt gebruikers wanneer ze hun beveiligde wachtwoord hergebruiken op potentieel verdachte sites.
+
+      Je kunt het beleid 'PasswordProtectionLoginURLs' en 'PasswordProtectionChangePasswordURL' gebruiken om te configureren welk wachtwoord moet worden beveiligd.
+
+      Als dit beleid is ingesteld op 'PasswordProtectionWarningOff', wordt er geen waarschuwing voor wachtwoordbeveiliging weergegeven.
+      Als dit beleid is ingesteld op 'PasswordProtectionWarningOnPasswordReuse', wordt er een waarschuwing voor wachtwoordbeveiliging weergegeven wanneer de gebruiker het beveiligde wachtwoord hergebruikt op een site die niet op de witte lijst staat.
+      Als dit beleid is ingesteld op 'PasswordProtectionWarningOnPhishingReuse', wordt er een waarschuwing voor wachtwoordbeveiliging weergegeven wanneer de gebruiker het beveiligde wachtwoord hergebruikt op een phishingsite.
+      Als dit beleid niet is ingesteld, beschermt de wachtwoordbeveiligingsservice alleen Google-wachtwoorden, maar kan de gebruiker deze instelling wijzigen.</translation>
 <translation id="8672321184841719703">Doelversie voor automatische updates</translation>
 <translation id="867410340948518937">U2F (Universal Second Factor)</translation>
 <translation id="8685024486845674965">Waarschuwing voor wachtwoordbeveiliging wordt geactiveerd bij hergebruik van een wachtwoord</translation>
@@ -2821,11 +2859,6 @@ Als dit beleid niet is ingesteld, worden er geen beperkingen toegepast en kan de
       Als je deze instelling niet instelt, kan de gebruiker ervoor kiezen deze functie wel of niet te gebruiken.</translation>
 <translation id="8870318296973696995">Homepage</translation>
 <translation id="8882006618241293596">De <ph name="FLASH_PLUGIN_NAME" />-plug-in blokkeren op deze sites</translation>
-<translation id="8894962626537183708">
-      Dit beleid bevat een lijst met beginpunten (URL's) die moeten worden behandeld als beveiligde context. Het is de bedoeling dat organisaties hiermee een staging-server kunnen instellen voor interne webontwikkelingen, zodat hun ontwikkelaars functies kunnen testen die een beveiligde context vereisen, zonder dat ze TLS op de staging-server hoeven te implementeren.
-      Wanneer er een lijst met URL's wordt ingesteld in dit beleid, heeft dit hetzelfde effect als wanneer de opdrachtregelmarkering '--unsafely-treat-insecure-origin-as-secure' wordt ingesteld voor een door komma's gescheiden lijst met dezelfde URL's. Als het beleid is ingesteld, wordt de opdrachtregelmarkering overschreven.
-      Ga naar https://www.w3.org/TR/secure-contexts/ voor meer informatie over beveiligde contexten.
-      </translation>
 <translation id="890403179930035128">De spellingcontrole van talen wordt afgedwongen. Niet-herkende talen in de lijst worden genegeerd.
 
       Als je dit beleid inschakelt, wordt de spellingcontrole ingeschakeld voor de opgegeven talen, naast de talen waarvoor de gebruiker de spellingcontrole heeft ingeschakeld.

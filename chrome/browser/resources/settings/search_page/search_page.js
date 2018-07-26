@@ -84,13 +84,13 @@ Polymer({
     if (settings.routes.SEARCH_ENGINES) {
       this.focusConfig_.set(
           settings.routes.SEARCH_ENGINES.path,
-          '#engines-subpage-trigger .subpage-arrow');
+          '#engines-subpage-trigger .subpage-arrow button');
     }
     // <if expr="chromeos">
     if (settings.routes.GOOGLE_ASSISTANT) {
       this.focusConfig_.set(
           settings.routes.GOOGLE_ASSISTANT.path,
-          '#assistant-subpage-trigger .subpage-arrow');
+          '#assistant-subpage-trigger .subpage-arrow button');
     }
     // </if>
   },
@@ -150,7 +150,7 @@ Polymer({
    */
   isAssistantTurnedOn_: function(
       arcEnabled, valuePropAccepted, assistantFeatureEnabled) {
-    return (arcEnabled || assistantFeatureEnabled) && valuePropAccepted;
+    return (arcEnabled && valuePropAccepted) || assistantFeatureEnabled;
   },
   // </if>
 

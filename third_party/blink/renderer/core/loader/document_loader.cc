@@ -31,11 +31,13 @@
 
 #include <memory>
 #include "base/auto_reset.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_network_provider.h"
+#include "third_party/blink/public/common/origin_policy/origin_policy.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_network_provider.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/web/web_history_commit_type.h"
 #include "third_party/blink/renderer/core/dom/document.h"
+#include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
 #include "third_party/blink/renderer/core/dom/scriptable_document_parser.h"
@@ -96,6 +98,7 @@
 #include "third_party/blink/renderer/platform/weborigin/scheme_registry.h"
 #include "third_party/blink/renderer/platform/weborigin/security_policy.h"
 #include "third_party/blink/renderer/platform/wtf/assertions.h"
+#include "third_party/blink/renderer/platform/wtf/text/string_utf8_adaptor.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
@@ -132,7 +135,10 @@ DocumentLoader::DocumentLoader(
       in_data_received_(false),
       data_buffer_(SharedBuffer::Create()),
       devtools_navigation_token_(devtools_navigation_token),
-      user_activated_(false) {
+      user_activated_(false),
+      use_counter_(frame_->GetChromeClient().IsSVGImageChromeClient()
+                       ? UseCounter::kSVGImageContext
+                       : UseCounter::kDefaultContext) {
   DCHECK(frame_);
 
   // The document URL needs to be added to the head of the list as that is
@@ -170,9 +176,11 @@ void DocumentLoader::Trace(blink::Visitor* visitor) {
   visitor->Trace(history_item_);
   visitor->Trace(parser_);
   visitor->Trace(subresource_filter_);
+  visitor->Trace(resource_loading_hints_);
   visitor->Trace(document_load_timing_);
   visitor->Trace(application_cache_host_);
   visitor->Trace(content_security_policy_);
+  visitor->Trace(use_counter_);
   RawResourceClient::Trace(visitor);
 }
 
@@ -603,6 +611,23 @@ void DocumentLoader::ResponseReceived(
   if (!frame_->GetSettings()->BypassCSP()) {
     content_security_policy_->DidReceiveHeaders(
         ContentSecurityPolicyResponseHeaders(response));
+
+    // Handle OriginPolicy. We can skip the entire block if the OP policies have
+    // already been passed down.
+    if (!content_security_policy_->HasPolicyFromSource(
+            kContentSecurityPolicyHeaderSourceOriginPolicy)) {
+      std::unique_ptr<OriginPolicy> origin_policy = OriginPolicy::From(
+          StringUTF8Adaptor(request_.GetOriginPolicy()).AsStringPiece());
+      if (origin_policy) {
+        for (auto csp : origin_policy->GetContentSecurityPolicies()) {
+          content_security_policy_->DidReceiveHeader(
+              WTF::String::FromUTF8(csp.policy.data(), csp.policy.length()),
+              csp.report_only ? kContentSecurityPolicyHeaderTypeReport
+                              : kContentSecurityPolicyHeaderTypeEnforce,
+              kContentSecurityPolicyHeaderSourceOriginPolicy);
+        }
+      }
+    }
   }
   if (!content_security_policy_->AllowAncestors(frame_, response.Url())) {
     CancelLoadAfterCSPDenied(response);
@@ -644,8 +669,11 @@ void DocumentLoader::ResponseReceived(
 
   DCHECK(!frame_->GetPage()->Paused());
 
+  // Pre-commit state, count usage the use counter associated with "this"
+  // (provisional document loader) instead of frame_'s document loader.
   if (response.DidServiceWorkerNavigationPreload())
-    UseCounter::Count(frame_, WebFeature::kServiceWorkerNavigationPreload);
+    UseCounter::Count(this, WebFeature::kServiceWorkerNavigationPreload);
+
   response_ = response;
 
   if (IsArchiveMIMEType(response_.MimeType()) &&
@@ -769,12 +797,8 @@ void DocumentLoader::ProcessDataBuffer() {
   // Process data received in reentrant invocations. Note that the invocations
   // of processData() may queue more data in reentrant invocations, so iterate
   // until it's empty.
-  const char* segment;
-  size_t pos = 0;
-  while (size_t length = data_buffer_->GetSomeData(segment, pos)) {
-    ProcessData(segment, length);
-    pos += length;
-  }
+  for (const auto& span : *data_buffer_)
+    ProcessData(span.data(), span.size());
   // All data has been consumed, so flush the buffer.
   data_buffer_->Clear();
 }
@@ -842,11 +866,8 @@ bool DocumentLoader::MaybeCreateArchive() {
     return false;
 
   scoped_refptr<SharedBuffer> data(main_resource->Data());
-  data->ForEachSegment(
-      [this](const char* segment, size_t segment_size, size_t segment_offset) {
-        CommitData(segment, segment_size);
-        return true;
-      });
+  for (const auto& span : *data)
+    CommitData(span.data(), span.size());
   return true;
 }
 
@@ -905,7 +926,9 @@ void DocumentLoader::DidInstallNewDocument(Document* document) {
   if (history_item_ && IsBackForwardLoadType(load_type_))
     document->SetStateForNewFormElements(history_item_->GetDocumentState());
 
-  document->GetClientHintsPreferences().UpdateFrom(client_hints_preferences_);
+  DCHECK(document->GetFrame());
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(
+      client_hints_preferences_);
 
   // TODO(japhet): There's no reason to wait until commit to set these bits.
   Settings* settings = document->GetSettings();
@@ -984,10 +1007,6 @@ void DocumentLoader::DidCommitNavigation(
         kWebLoadingBehaviorServiceWorkerControlled);
   }
 
-  // Links with media values need more information (like viewport information).
-  // This happens after the first chunk is parsed in HTMLDocumentParser.
-  DispatchLinkHeaderPreloads(nullptr, LinkLoader::kOnlyLoadNonMedia);
-
   Document* document = frame_->GetDocument();
   InteractiveDetector* interactive_detector =
       InteractiveDetector::From(*document);
@@ -996,16 +1015,24 @@ void DocumentLoader::DidCommitNavigation(
 
   TRACE_EVENT1("devtools.timeline", "CommitLoad", "data",
                InspectorCommitLoadEvent::Data(frame_));
+
+  // Needs to run before dispatching preloads, as it may evict the memory cache.
   probe::didCommitLoad(frame_, this);
+
+  // Links with media values need more information (like viewport information).
+  // This happens after the first chunk is parsed in HTMLDocumentParser.
+  DispatchLinkHeaderPreloads(nullptr, LinkLoader::kOnlyLoadNonMedia);
+
   frame_->GetPage()->DidCommitLoad(frame_);
+  GetUseCounter().DidCommitLoad(frame_);
 
   // Report legacy Symantec certificates after Page::DidCommitLoad, because the
   // latter clears the console.
   if (response_.IsLegacySymantecCert()) {
     UseCounter::Count(
-        frame_, frame_->Tree().Parent()
-                    ? WebFeature::kLegacySymantecCertInSubframeMainResource
-                    : WebFeature::kLegacySymantecCertMainFrameResource);
+        this, frame_->Tree().Parent()
+                  ? WebFeature::kLegacySymantecCertInSubframeMainResource
+                  : WebFeature::kLegacySymantecCertMainFrameResource);
     GetLocalFrameClient().ReportLegacySymantecCert(response_.Url(),
                                                    false /* did_fail */);
   }
@@ -1116,7 +1143,7 @@ void DocumentLoader::InstallNewDocument(
         document, response_.HttpHeaderField(HTTPNames::Origin_Trial));
   }
   bool stale_while_revalidate_enabled =
-      OriginTrials::staleWhileRevalidateEnabled(document);
+      OriginTrials::StaleWhileRevalidateEnabled(document);
   fetcher_->SetStaleWhileRevalidateEnabled(stale_while_revalidate_enabled);
 
   // If stale while revalidate is enabled via Origin Trials count it as such.
@@ -1189,12 +1216,8 @@ void DocumentLoader::ResumeParser() {
 
     // Append data to the parser that may have been received while the parser
     // was blocked.
-    const char* segment;
-    size_t pos = 0;
-    while (size_t length = committed_data_buffer_->GetSomeData(segment, pos)) {
-      parser_->AppendBytes(segment, length);
-      pos += length;
-    }
+    for (const auto& span : *committed_data_buffer_)
+      parser_->AppendBytes(span.data(), span.size());
     committed_data_buffer_->Clear();
 
     // DataReceived may be called in a nested message loop.
@@ -1205,6 +1228,29 @@ void DocumentLoader::ResumeParser() {
     finished_loading_ = false;
     parser_->Finish();
     parser_.Clear();
+  }
+}
+
+void DocumentLoader::UpdateNavigationTimings(
+    base::TimeTicks navigation_start_time,
+    base::TimeTicks redirect_start_time,
+    base::TimeTicks redirect_end_time,
+    base::TimeTicks fetch_start_time) {
+  // If we don't have any navigation timings yet, just start the navigation.
+  if (navigation_start_time.is_null()) {
+    GetTiming().SetNavigationStart(CurrentTimeTicks());
+    return;
+  }
+
+  GetTiming().SetNavigationStart(navigation_start_time);
+  if (!redirect_start_time.is_null()) {
+    GetTiming().SetRedirectStart(redirect_start_time);
+    GetTiming().SetRedirectEnd(redirect_end_time);
+  }
+  if (!fetch_start_time.is_null()) {
+    // If we started fetching, we should have started the navigation.
+    DCHECK(!navigation_start_time.is_null());
+    GetTiming().SetFetchStart(fetch_start_time);
   }
 }
 

@@ -6,9 +6,9 @@
 
 #include "ash/assistant/assistant_controller.h"
 #include "ash/assistant/assistant_interaction_controller.h"
+#include "ash/assistant/assistant_screen_context_controller.h"
 #include "ash/assistant/ui/assistant_container_view.h"
 #include "ash/assistant/util/deep_link_util.h"
-#include "ash/public/interfaces/assistant_setup.mojom.h"
 #include "ash/shell.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/toast/toast_data.h"
@@ -41,6 +41,7 @@ void ShowToast(const std::string& id, int message_id) {
 AssistantUiController::AssistantUiController(
     AssistantController* assistant_controller)
     : assistant_controller_(assistant_controller) {
+  AddModelObserver(this);
   assistant_controller_->AddObserver(this);
   Shell::Get()->highlighter_controller()->AddObserver(this);
 }
@@ -48,6 +49,7 @@ AssistantUiController::AssistantUiController(
 AssistantUiController::~AssistantUiController() {
   Shell::Get()->highlighter_controller()->RemoveObserver(this);
   assistant_controller_->RemoveObserver(this);
+  RemoveModelObserver(this);
 
   if (container_view_)
     container_view_->GetWidget()->RemoveObserver(this);
@@ -56,22 +58,6 @@ AssistantUiController::~AssistantUiController() {
 void AssistantUiController::SetAssistant(
     chromeos::assistant::mojom::Assistant* assistant) {
   assistant_ = assistant;
-}
-
-void AssistantUiController::SetAssistantInteractionController(
-    AssistantInteractionController* assistant_interaction_controller) {
-  if (assistant_interaction_controller_)
-    assistant_interaction_controller_->RemoveModelObserver(this);
-
-  assistant_interaction_controller_ = assistant_interaction_controller;
-
-  if (assistant_interaction_controller_)
-    assistant_interaction_controller_->AddModelObserver(this);
-}
-
-void AssistantUiController::SetAssistantSetup(
-    mojom::AssistantSetup* assistant_setup) {
-  assistant_setup_ = assistant_setup;
 }
 
 void AssistantUiController::AddModelObserver(
@@ -105,6 +91,16 @@ void AssistantUiController::OnWidgetDestroying(views::Widget* widget) {
   container_view_ = nullptr;
 }
 
+void AssistantUiController::OnAssistantControllerConstructed() {
+  assistant_controller_->interaction_controller()->AddModelObserver(this);
+  assistant_controller_->screen_context_controller()->AddModelObserver(this);
+}
+
+void AssistantUiController::OnAssistantControllerDestroying() {
+  assistant_controller_->screen_context_controller()->RemoveModelObserver(this);
+  assistant_controller_->interaction_controller()->RemoveModelObserver(this);
+}
+
 void AssistantUiController::OnInputModalityChanged(
     InputModality input_modality) {
   UpdateUiMode();
@@ -116,22 +112,47 @@ void AssistantUiController::OnInteractionStateChanged(
     return;
 
   // If there is an active interaction, we need to show Assistant UI if it is
-  // not already showing. An interaction can only be started when the Assistant
-  // UI is hidden if the entry point is hotword.
-  ShowUi(AssistantSource::kHotword);
+  // not already showing. We don't have enough information here to know what
+  // the interaction source is, but at the moment we have no need to know.
+  ShowUi(AssistantSource::kUnspecified);
 }
 
 void AssistantUiController::OnMicStateChanged(MicState mic_state) {
   UpdateUiMode();
 }
 
+void AssistantUiController::OnScreenContextRequestStateChanged(
+    ScreenContextRequestState request_state) {
+  if (!assistant_ui_model_.visible())
+    return;
+
+  // Once screen context request state has become idle, it is safe to activate
+  // the Assistant widget without causing complications.
+  if (request_state == ScreenContextRequestState::kIdle)
+    container_view_->GetWidget()->Activate();
+}
+
+void AssistantUiController::OnAssistantMiniViewPressed() {
+  InputModality input_modality = assistant_controller_->interaction_controller()
+                                     ->model()
+                                     ->input_modality();
+
+  // When not using stylus input modality, pressing the Assistant mini view
+  // will cause the UI to expand.
+  if (input_modality != InputModality::kStylus)
+    UpdateUiMode(AssistantUiMode::kMainUi);
+}
+
 bool AssistantUiController::OnCaptionButtonPressed(CaptionButtonId id) {
   switch (id) {
-    case CaptionButtonId::kMinimize:
-      UpdateUiMode(AssistantUiMode::kMiniUi);
+    case CaptionButtonId::kBack:
+      UpdateUiMode(AssistantUiMode::kMainUi);
       return true;
     case CaptionButtonId::kClose:
       return false;
+    case CaptionButtonId::kMinimize:
+      UpdateUiMode(AssistantUiMode::kMiniUi);
+      return true;
   }
   return false;
 }
@@ -158,14 +179,17 @@ void AssistantUiController::OnHighlighterEnabledChanged(
       if (assistant_ui_model_.visible())
         HideUi(AssistantSource::kStylus);
       break;
-    case HighlighterEnabledState::kDisabledBySessionEnd:
+    case HighlighterEnabledState::kDisabledBySessionComplete:
+    case HighlighterEnabledState::kDisabledBySessionAbort:
       // No action necessary.
       break;
   }
 }
 
-void AssistantUiController::OnDeepLinkReceived(const GURL& url) {
-  if (!assistant::util::IsWebDeepLink(url))
+void AssistantUiController::OnDeepLinkReceived(
+    assistant::util::DeepLinkType type,
+    const std::map<std::string, std::string>& params) {
+  if (!assistant::util::IsWebDeepLinkType(type))
     return;
 
   ShowUi(AssistantSource::kDeepLink);
@@ -177,12 +201,16 @@ void AssistantUiController::OnUrlOpened(const GURL& url) {
   HideUi(AssistantSource::kUnspecified);
 }
 
-void AssistantUiController::ShowUi(AssistantSource source) {
-  if (!Shell::Get()->voice_interaction_controller()->setup_completed()) {
-    assistant_setup_->StartAssistantOptInFlow();
+void AssistantUiController::OnUiVisibilityChanged(bool visible,
+                                                  AssistantSource source) {
+  if (visible)
     return;
-  }
 
+  // Metalayer mode should not be sticky. Disable it when hiding UI.
+  Shell::Get()->highlighter_controller()->AbortSession();
+}
+
+void AssistantUiController::ShowUi(AssistantSource source) {
   if (!Shell::Get()->voice_interaction_controller()->settings_enabled())
     return;
 
@@ -199,7 +227,10 @@ void AssistantUiController::ShowUi(AssistantSource source) {
     container_view_->GetWidget()->AddObserver(this);
   }
 
-  container_view_->GetWidget()->Show();
+  // Note that we initially show the Assistant widget as inactive. This is
+  // necessary due to limitations imposed by retrieving screen context. Once we
+  // have finished retrieving screen context, the Assistant widget is activated.
+  container_view_->GetWidget()->ShowInactive();
   assistant_ui_model_.SetVisible(true, source);
 }
 
@@ -229,13 +260,15 @@ void AssistantUiController::UpdateUiMode(
     return;
   }
 
+  InputModality input_modality = assistant_controller_->interaction_controller()
+                                     ->model()
+                                     ->input_modality();
+
   // When stylus input modality is selected, we should be in mini UI mode.
   // Otherwise we fall back to main UI mode.
-  assistant_ui_model_.SetUiMode(
-      assistant_interaction_controller_->model()->input_modality() ==
-              InputModality::kStylus
-          ? AssistantUiMode::kMiniUi
-          : AssistantUiMode::kMainUi);
+  assistant_ui_model_.SetUiMode(input_modality == InputModality::kStylus
+                                    ? AssistantUiMode::kMiniUi
+                                    : AssistantUiMode::kMainUi);
 }
 
 }  // namespace ash

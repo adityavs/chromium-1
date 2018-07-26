@@ -198,7 +198,7 @@ void StreamBufferManager::TakePhoto(
   DCHECK(ipc_task_runner_->BelongsToCurrentThread());
   DCHECK(stream_context_[StreamType::kStillCapture]);
 
-  pending_still_capture_callbacks_.push(std::move(callback));
+  still_capture_callbacks_yet_to_be_processed_.push(std::move(callback));
 
   std::vector<uint8_t> frame_orientation(sizeof(int32_t));
   *reinterpret_cast<int32_t*>(frame_orientation.data()) =
@@ -315,12 +315,18 @@ void StreamBufferManager::RegisterBuffer(StreamType stream_type) {
       stream_context_[stream_type]->stream->format;
 
   gfx::NativePixmapHandle buffer_handle =
-      buffer->GetHandle().native_pixmap_handle;
+      buffer->CloneHandle().native_pixmap_handle;
+  // Take ownership of FD at index 0.
+  base::ScopedFD fd(buffer_handle.fds[0].fd);
+  // There should be only one FD. Close all remaining FDs if there are any.
+  DCHECK_EQ(buffer_handle.fds.size(), 1U);
+  for (size_t i = 1; i < buffer_handle.fds.size(); ++i)
+    base::ScopedFD scoped_fd(buffer_handle.fds[i].fd);
+
   size_t num_planes = buffer_handle.planes.size();
   std::vector<StreamCaptureInterface::Plane> planes(num_planes);
   for (size_t i = 0; i < num_planes; ++i) {
-    // There is only one fd.
-    int dup_fd = dup(buffer_handle.fds[0].fd);
+    int dup_fd = dup(fd.get());
     if (dup_fd == -1) {
       device_context_->SetErrorState(FROM_HERE, "Failed to dup fd");
       return;
@@ -334,6 +340,11 @@ void StreamBufferManager::RegisterBuffer(StreamType stream_type) {
     }
     planes[i].stride = buffer_handle.planes[i].stride;
     planes[i].offset = buffer_handle.planes[i].offset;
+  }
+  if (stream_type == StreamType::kStillCapture) {
+    still_capture_callbacks_currently_processing_.push(
+        std::move(still_capture_callbacks_yet_to_be_processed_.front()));
+    still_capture_callbacks_yet_to_be_processed_.pop();
   }
   // We reuse BufferType::GRALLOC here since on ARC++ we are using DMA-buf-based
   // gralloc buffers.
@@ -392,7 +403,7 @@ void StreamBufferManager::ProcessCaptureRequest() {
   }
 
   if (!stream_context_[StreamType::kStillCapture]->registered_buffers.empty()) {
-    DCHECK(!pending_still_capture_callbacks_.empty());
+    DCHECK(!still_capture_callbacks_currently_processing_.empty());
     cros::mojom::Camera3StreamBufferPtr buffer =
         cros::mojom::Camera3StreamBuffer::New();
     buffer->stream_id = static_cast<uint64_t>(StreamType::kStillCapture);
@@ -407,8 +418,8 @@ void StreamBufferManager::ProcessCaptureRequest() {
     request->settings = std::move(oneshot_request_settings_.front());
     oneshot_request_settings_.pop();
     pending_result.still_capture_callback =
-        std::move(pending_still_capture_callbacks_.front());
-    pending_still_capture_callbacks_.pop();
+        std::move(still_capture_callbacks_currently_processing_.front());
+    still_capture_callbacks_currently_processing_.pop();
     request->output_buffers.push_back(std::move(buffer));
   }
 
@@ -752,7 +763,7 @@ void StreamBufferManager::SubmitCaptureResult(uint32_t frame_number,
     // Always keep the preview stream running.
     RegisterBuffer(StreamType::kPreview);
   } else {  // stream_type == StreamType::kStillCapture
-    if (!pending_still_capture_callbacks_.empty()) {
+    if (!still_capture_callbacks_yet_to_be_processed_.empty()) {
       RegisterBuffer(StreamType::kStillCapture);
     }
   }

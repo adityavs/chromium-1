@@ -16,7 +16,6 @@
 #include "base/supports_user_data.h"
 #include "content/common/content_export.h"
 #include "content/common/service_worker/controller_service_worker.mojom.h"
-#include "content/common/service_worker/service_worker.mojom.h"
 #include "content/common/service_worker/service_worker_provider.mojom.h"
 #include "content/renderer/service_worker/service_worker_provider_context.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_provider_type.mojom.h"
@@ -113,6 +112,9 @@ class CONTENT_EXPORT ServiceWorkerNetworkProvider {
   // Returns whether the context this provider is for is controlled by a service
   // worker. Can be called only for providers for service worker clients.
   blink::mojom::ControllerServiceWorkerMode IsControlledByServiceWorker() const;
+
+  // Called when blink::IdlenessDetector emits its network idle signal.
+  void DispatchNetworkQuiet();
 
  private:
   // Creates an invalid instance (provider_id() returns

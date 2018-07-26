@@ -37,7 +37,9 @@
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
+#include "third_party/blink/renderer/bindings/core/v8/usv_string_or_trusted_url.h"
 #include "third_party/blink/renderer/bindings/core/v8/window_proxy.h"
+#include "third_party/blink/renderer/core/aom/computed_accessible_node.h"
 #include "third_party/blink/renderer/core/css/css_computed_style_declaration.h"
 #include "third_party/blink/renderer/core/css/css_rule_list.h"
 #include "third_party/blink/renderer/core/css/dom_window_css.h"
@@ -45,8 +47,9 @@
 #include "third_party/blink/renderer/core/css/media_query_matcher.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_media.h"
-#include "third_party/blink/renderer/core/dom/computed_accessible_node.h"
+#include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/dom_implementation.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
 #include "third_party/blink/renderer/core/dom/frame_request_callback_collection.h"
 #include "third_party/blink/renderer/core/dom/scripted_idle_task_controller.h"
@@ -74,6 +77,7 @@
 #include "third_party/blink/renderer/core/frame/screen.h"
 #include "third_party/blink/renderer/core/frame/scroll_to_options.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/frame/visual_viewport.h"
 #include "third_party/blink/renderer/core/html/custom/custom_element_registry.h"
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
@@ -94,8 +98,8 @@
 #include "third_party/blink/renderer/core/script/modulator.h"
 #include "third_party/blink/renderer/core/timing/dom_window_performance.h"
 #include "third_party/blink/renderer/core/timing/window_performance.h"
+#include "third_party/blink/renderer/core/trustedtypes/trusted_url.h"
 #include "third_party/blink/renderer/platform/bindings/exception_messages.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/loader/fetch/resource_fetcher.h"
 #include "third_party/blink/renderer/platform/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/scroll/scrollbar_theme.h"
@@ -104,7 +108,7 @@
 namespace blink {
 
 // Timeout for link preloads to be used after window.onload
-static const int kUnusedPreloadTimeoutInSeconds = 3;
+static constexpr TimeDelta kUnusedPreloadTimeout = TimeDelta::FromSeconds(3);
 
 class PostMessageTimer final
     : public GarbageCollectedFinalized<PostMessageTimer>,
@@ -123,8 +127,7 @@ class PostMessageTimer final
         target_origin_(std::move(target_origin)),
         location_(std::move(location)),
         user_gesture_token_(user_gesture_token),
-        disposal_allowed_(true) {
-  }
+        disposal_allowed_(true) {}
 
   MessageEvent* Event() const { return event_; }
   const SecurityOrigin* TargetOrigin() const { return target_origin_.get(); }
@@ -316,7 +319,7 @@ Document* LocalDOMWindow::InstallNewDocument(const String& mime_type,
     return document_;
 
   GetFrame()->GetScriptController().UpdateDocument();
-  document_->UpdateViewportDescription();
+  document_->GetViewportData().UpdateViewportDescription();
 
   if (GetFrame()->GetPage() && GetFrame()->View()) {
     GetFrame()->GetPage()->GetChromeClient().InstallSupplements(*GetFrame());
@@ -329,12 +332,12 @@ Document* LocalDOMWindow::InstallNewDocument(const String& mime_type,
 }
 
 void LocalDOMWindow::EnqueueWindowEvent(Event* event, TaskType task_type) {
-  EnqueueAsyncEvent(event, task_type);
+  EnqueueEvent(event, task_type);
 }
 
 void LocalDOMWindow::EnqueueDocumentEvent(Event* event, TaskType task_type) {
   if (document_)
-    document_->EnqueueAsyncEvent(event, task_type);
+    document_->EnqueueEvent(event, task_type);
 }
 
 void LocalDOMWindow::DispatchWindowLoadEvent() {
@@ -1139,10 +1142,14 @@ void LocalDOMWindow::scrollBy(const ScrollToOptions& scroll_to_options) const {
                             y * GetFrame()->PageZoomFactor());
   FloatPoint new_scaled_position =
       viewport->ScrollOffsetToPosition(scaled_delta + current_offset);
-  if (SnapCoordinator* coordinator = document()->GetSnapCoordinator()) {
-    new_scaled_position = coordinator->GetSnapPositionForPoint(
-        *document()->GetLayoutView(), new_scaled_position,
-        scroll_to_options.hasLeft(), scroll_to_options.hasTop());
+  if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+    new_scaled_position =
+        document()
+            ->GetSnapCoordinator()
+            ->GetSnapPositionForPoint(
+                *document()->GetLayoutView(), new_scaled_position,
+                scroll_to_options.hasLeft(), scroll_to_options.hasTop())
+            .value_or(new_scaled_position);
   }
 
   ScrollBehavior scroll_behavior = kScrollBehaviorAuto;
@@ -1210,10 +1217,14 @@ void LocalDOMWindow::scrollTo(const ScrollToOptions& scroll_to_options) const {
 
   FloatPoint new_scaled_position =
       viewport->ScrollOffsetToPosition(ScrollOffset(scaled_x, scaled_y));
-  if (SnapCoordinator* coordinator = document()->GetSnapCoordinator()) {
-    new_scaled_position = coordinator->GetSnapPositionForPoint(
-        *document()->GetLayoutView(), new_scaled_position,
-        scroll_to_options.hasLeft(), scroll_to_options.hasTop());
+  if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+    new_scaled_position =
+        document()
+            ->GetSnapCoordinator()
+            ->GetSnapPositionForPoint(
+                *document()->GetLayoutView(), new_scaled_position,
+                scroll_to_options.hasLeft(), scroll_to_options.hasTop())
+            .value_or(new_scaled_position);
   }
 
   ScrollBehavior scroll_behavior = kScrollBehaviorAuto;
@@ -1410,12 +1421,20 @@ void LocalDOMWindow::RemovedEventListener(
 }
 
 void LocalDOMWindow::WarnUnusedPreloads(TimerBase* base) {
-  if (GetFrame() && GetFrame()->Loader().GetDocumentLoader()) {
-    ResourceFetcher* fetcher =
-        GetFrame()->Loader().GetDocumentLoader()->Fetcher();
-    DCHECK(fetcher);
-    if (fetcher->CountPreloads())
-      fetcher->WarnUnusedPreloads();
+  if (!GetFrame() || !GetFrame()->Loader().GetDocumentLoader())
+    return;
+  ResourceFetcher* fetcher =
+      GetFrame()->Loader().GetDocumentLoader()->Fetcher();
+  DCHECK(fetcher);
+  Vector<KURL> urls = fetcher->GetUrlsOfUnusedPreloads();
+  for (const KURL& url : urls) {
+    String message =
+        "The resource " + url.GetString() + " was preloaded using link " +
+        "preload but not used within a few seconds from the window's load " +
+        "event. Please make sure it has an appropriate `as` value and it is " +
+        "preloaded intentionally.";
+    GetFrameConsole()->AddMessage(ConsoleMessage::Create(
+        kJSMessageSource, kWarningMessageLevel, message));
   }
 }
 
@@ -1435,8 +1454,7 @@ void LocalDOMWindow::DispatchLoadEvent() {
     if (GetFrame() &&
         document_loader == GetFrame()->Loader().GetDocumentLoader() &&
         document_loader->Fetcher()->CountPreloads()) {
-      unused_preloads_timer_.StartOneShot(kUnusedPreloadTimeoutInSeconds,
-                                          FROM_HERE);
+      unused_preloads_timer_.StartOneShot(kUnusedPreloadTimeout, FROM_HERE);
     }
   } else {
     DispatchEvent(load_event, document());
@@ -1516,6 +1534,37 @@ DOMWindow* LocalDOMWindow::open(ExecutionContext* executionContext,
                                 const AtomicString& target,
                                 const String& features,
                                 ExceptionState& exception_state) {
+  if (document_->RequireTrustedTypes()) {
+    exception_state.ThrowTypeError(
+        "This document requires `TrustedURL` assignment.");
+    return nullptr;
+  }
+  return openFromString(executionContext, current_window, entered_window, url,
+                        target, features, exception_state);
+}
+
+DOMWindow* LocalDOMWindow::open(ExecutionContext* executionContext,
+                                LocalDOMWindow* current_window,
+                                LocalDOMWindow* entered_window,
+                                const USVStringOrTrustedURL& stringOrUrl,
+                                const AtomicString& target,
+                                const String& features,
+                                ExceptionState& exception_state) {
+  String url = TrustedURL::GetString(stringOrUrl, document_, exception_state);
+  if (!exception_state.HadException()) {
+    return openFromString(executionContext, current_window, entered_window, url,
+                          target, features, exception_state);
+  }
+  return nullptr;
+}
+
+DOMWindow* LocalDOMWindow::openFromString(ExecutionContext* executionContext,
+                                          LocalDOMWindow* current_window,
+                                          LocalDOMWindow* entered_window,
+                                          const String& url,
+                                          const AtomicString& target,
+                                          const String& features,
+                                          ExceptionState& exception_state) {
   // If the bindings implementation is 100% correct, the current realm and the
   // entered realm should be same origin-domain. However, to be on the safe
   // side and add some defense in depth, we'll check against the entered realm
@@ -1526,16 +1575,45 @@ DOMWindow* LocalDOMWindow::open(ExecutionContext* executionContext,
     return nullptr;
   }
   DCHECK(!target.IsNull());
-  return open(url, target, features, current_window, entered_window,
-              exception_state);
+  return openFromString(url, target, features, current_window, entered_window,
+                        exception_state);
 }
 
-DOMWindow* LocalDOMWindow::open(const String& url_string,
+DOMWindow* LocalDOMWindow::open(const String& url,
                                 const AtomicString& frame_name,
                                 const String& window_features_string,
                                 LocalDOMWindow* calling_window,
                                 LocalDOMWindow* entered_window,
                                 ExceptionState& exception_state) {
+  if (document_->RequireTrustedTypes()) {
+    exception_state.ThrowTypeError(
+        "This document requires `TrustedURL` assignment.");
+    return nullptr;
+  }
+  return openFromString(url, frame_name, window_features_string, calling_window,
+                        entered_window, exception_state);
+}
+
+DOMWindow* LocalDOMWindow::open(const USVStringOrTrustedURL& stringOrUrl,
+                                const AtomicString& frame_name,
+                                const String& window_features_string,
+                                LocalDOMWindow* calling_window,
+                                LocalDOMWindow* entered_window,
+                                ExceptionState& exception_state) {
+  String url = TrustedURL::GetString(stringOrUrl, document_, exception_state);
+  if (!exception_state.HadException()) {
+    return openFromString(url, frame_name, window_features_string,
+                          calling_window, entered_window, exception_state);
+  }
+  return nullptr;
+}
+
+DOMWindow* LocalDOMWindow::openFromString(const String& url_string,
+                                          const AtomicString& frame_name,
+                                          const String& window_features_string,
+                                          LocalDOMWindow* calling_window,
+                                          LocalDOMWindow* entered_window,
+                                          ExceptionState& exception_state) {
   if (!IsCurrentlyDisplayedInFrame())
     return nullptr;
   if (!calling_window->GetFrame())

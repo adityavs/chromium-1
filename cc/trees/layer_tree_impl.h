@@ -117,7 +117,6 @@ class CC_EXPORT LayerTreeImpl {
   ImageAnimationController* image_animation_controller() const;
   FrameRateCounter* frame_rate_counter() const;
   MemoryHistory* memory_history() const;
-  gfx::Size device_viewport_size() const;
   gfx::Rect viewport_visible_rect() const;
   DebugRectHistory* debug_rect_history() const;
   bool IsActiveTree() const;
@@ -129,7 +128,6 @@ class CC_EXPORT LayerTreeImpl {
   bool PinchGestureActive() const;
   viz::BeginFrameArgs CurrentBeginFrameArgs() const;
   base::TimeDelta CurrentBeginFrameInterval() const;
-  gfx::Rect DeviceViewport() const;
   const gfx::Rect ViewportRectForTilePriority() const;
   std::unique_ptr<ScrollbarAnimationController>
   CreateScrollbarAnimationController(ElementId scroll_element_id,
@@ -180,7 +178,7 @@ class CC_EXPORT LayerTreeImpl {
 
   void PushPropertyTreesTo(LayerTreeImpl* tree_impl);
   void PushPropertiesTo(LayerTreeImpl* tree_impl);
-  void PushSurfaceIdsTo(LayerTreeImpl* tree_impl);
+  void PushSurfaceRangesTo(LayerTreeImpl* tree_impl);
 
   void MoveChangeTrackingToLayers();
 
@@ -330,6 +328,14 @@ class CC_EXPORT LayerTreeImpl {
     return new_local_surface_id_request_;
   }
 
+  void SetDeviceViewportSize(const gfx::Size& device_viewport_size);
+
+  // TODO(fsamuel): The reason this is not a trivial accessor is because it
+  // may return an external viewport specified in LayerTreeHostImpl. In the
+  // future, all properties should flow through the pending and active layer
+  // trees and we shouldn't need to reach out to LayerTreeHostImpl.
+  gfx::Rect GetDeviceViewport() const;
+
   void SetRasterColorSpace(int raster_color_space_id,
                            const gfx::ColorSpace& raster_color_space);
   const gfx::ColorSpace& raster_color_space() const {
@@ -375,9 +381,9 @@ class CC_EXPORT LayerTreeImpl {
   void set_needs_full_tree_sync(bool needs) { needs_full_tree_sync_ = needs; }
   bool needs_full_tree_sync() const { return needs_full_tree_sync_; }
 
-  bool needs_surface_ids_sync() const { return needs_surface_ids_sync_; }
-  void set_needs_surface_ids_sync(bool needs_surface_ids_sync) {
-    needs_surface_ids_sync_ = needs_surface_ids_sync;
+  bool needs_surface_ranges_sync() const { return needs_surface_ranges_sync_; }
+  void set_needs_surface_ranges_sync(bool needs_surface_ranges_sync) {
+    needs_surface_ranges_sync_ = needs_surface_ranges_sync;
   }
 
   void ForceRedrawNextActivation() { next_activation_forces_redraw_ = true; }
@@ -405,10 +411,9 @@ class CC_EXPORT LayerTreeImpl {
   void AddToElementLayerList(ElementId element_id);
   void RemoveFromElementLayerList(ElementId element_id);
 
-  void SetSurfaceLayerIds(
-      const base::flat_set<viz::SurfaceId>& surface_layer_ids);
-  const base::flat_set<viz::SurfaceId>& SurfaceLayerIds() const;
-  void ClearSurfaceLayerIds();
+  void SetSurfaceRanges(const base::flat_set<viz::SurfaceRange> surface_ranges);
+  const base::flat_set<viz::SurfaceRange>& SurfaceRanges() const;
+  void ClearSurfaceRanges();
 
   void AddLayerShouldPushProperties(LayerImpl* layer);
   void RemoveLayerShouldPushProperties(LayerImpl* layer);
@@ -426,12 +431,6 @@ class CC_EXPORT LayerTreeImpl {
   size_t NumLayers();
 
   void DidBecomeActive();
-
-  // Set on the active tree when the viewport size recently changed
-  // and the active tree's size is now out of date.
-  bool ViewportSizeInvalid() const;
-  void SetViewportSizeInvalid();
-  void ResetViewportSizeInvalid();
 
   // Used for accessing the task runner and debug assertions.
   TaskRunnerProvider* task_runner_provider() const;
@@ -501,6 +500,9 @@ class CC_EXPORT LayerTreeImpl {
   LayerImpl* FindLayerThatIsHitByPointInTouchHandlerRegion(
       const gfx::PointF& screen_space_point);
 
+  LayerImpl* FindLayerThatIsHitByPointInWheelEventHandlerRegion(
+      const gfx::PointF& screen_space_point);
+
   void RegisterSelection(const LayerSelection& selection);
 
   bool HandleVisibilityChanged() const { return handle_visibility_changed_; }
@@ -518,10 +520,10 @@ class CC_EXPORT LayerTreeImpl {
   float CurrentBrowserControlsShownRatio() const {
     return top_controls_shown_ratio_->Current(IsActiveTree());
   }
-  void set_top_controls_height(float top_controls_height);
+  void SetTopControlsHeight(float top_controls_height);
   float top_controls_height() const { return top_controls_height_; }
   void PushBrowserControlsFromMainThread(float top_controls_shown_ratio);
-  void set_bottom_controls_height(float bottom_controls_height);
+  void SetBottomControlsHeight(float bottom_controls_height);
   float bottom_controls_height() const { return bottom_controls_height_; }
 
   void set_overscroll_behavior(const OverscrollBehavior& behavior);
@@ -602,6 +604,10 @@ class CC_EXPORT LayerTreeImpl {
 
   ElementListType GetElementTypeForAnimation() const;
   void UpdateTransformAnimation(ElementId element_id, int transform_node_index);
+  template <typename Functor>
+  LayerImpl* FindLayerThatIsHitByPointInEventHandlerRegion(
+      const gfx::PointF& screen_space_point,
+      const Functor& func);
 
   LayerTreeHostImpl* host_impl_;
   int source_frame_number_;
@@ -629,6 +635,7 @@ class CC_EXPORT LayerTreeImpl {
   uint32_t content_source_id_;
   viz::LocalSurfaceId local_surface_id_from_parent_;
   bool new_local_surface_id_request_ = false;
+  gfx::Size device_viewport_size_;
 
   scoped_refptr<SyncedElasticOverscroll> elastic_overscroll_;
 
@@ -659,7 +666,7 @@ class CC_EXPORT LayerTreeImpl {
 
   std::vector<PictureLayerImpl*> picture_layers_;
 
-  base::flat_set<viz::SurfaceId> surface_layer_ids_;
+  base::flat_set<viz::SurfaceRange> surface_layer_ranges_;
 
   // List of render surfaces for the most recently prepared frame.
   RenderSurfaceList render_surface_list_;
@@ -667,7 +674,6 @@ class CC_EXPORT LayerTreeImpl {
   // would not be fully covered by opaque content.
   Region unoccluded_screen_space_region_;
 
-  bool viewport_size_invalid_;
   bool needs_update_draw_properties_;
 
   // True if a scrollbar geometry value has changed. For example, if the scroll
@@ -678,7 +684,7 @@ class CC_EXPORT LayerTreeImpl {
   // structural differences relative to the active tree.
   bool needs_full_tree_sync_;
 
-  bool needs_surface_ids_sync_;
+  bool needs_surface_ranges_sync_;
 
   bool next_activation_forces_redraw_;
 
@@ -692,8 +698,8 @@ class CC_EXPORT LayerTreeImpl {
   UIResourceRequestQueue ui_resource_request_queue_;
 
   bool have_scroll_event_handlers_;
-  EventListenerProperties event_listener_properties_[static_cast<size_t>(
-      EventListenerClass::kNumClasses)];
+  EventListenerProperties event_listener_properties_
+      [static_cast<size_t>(EventListenerClass::kLast) + 1];
 
   // Whether or not Blink's viewport size was shrunk by the height of the top
   // controls at the time of the last layout.

@@ -150,8 +150,7 @@ PasswordFormManager::PasswordFormManager(
                              true /* should_migrate_http_passwords */,
                              true /* should_query_suppressed_https_forms */)),
       form_fetcher_(form_fetcher ? form_fetcher : owned_form_fetcher_.get()),
-      votes_uploader_(client, observed_form.IsPossibleChangePasswordForm()),
-      is_main_frame_secure_(client->IsMainFrameSecure()) {
+      votes_uploader_(client, observed_form.IsPossibleChangePasswordForm()) {
   // Non-HTML forms should not need any interaction with the renderer, and hence
   // no driver. Note that cloned PasswordFormManager instances can have HTML
   // forms without drivers as well.
@@ -625,17 +624,14 @@ void PasswordFormManager::CreatePendingCredentials() {
 
   // Look for the actually submitted credentials in the list of previously saved
   // credentials that were available to autofilling.
-  // This first match via FindBestSavedMatch focuses on matches by username and
-  // falls back to password based matches if |submitted_form_| has no username
-  // filled.
   const PasswordForm* saved_form = FindBestSavedMatch(submitted_form_.get());
-  if (saved_form != nullptr) {
+  if (saved_form) {
     // The user signed in with a login we autofilled.
     pending_credentials_ = *saved_form;
     SetPasswordOverridden(pending_credentials_.password_value !=
                           password_to_save.first);
 
-    if (IsPendingCredentialsPublicSuffixMatch()) {
+    if (pending_credentials_.is_public_suffix_match) {
       // If the autofilled credentials were a PSL match or credentials stored
       // from Android apps, store a copy with the current origin and signon
       // realm. This ensures that on the next visit, a precise match is found.
@@ -647,10 +643,6 @@ void PasswordFormManager::CreatePendingCredentials() {
       // If this isn't updated, then password generation uploads are off for
       // sites where PSL matching is required to fill the login form, as two
       // PASSWORD votes are uploaded per saved password instead of one.
-      //
-      // TODO(gcasto): It would be nice if other state were shared such that if
-      // say a password was updated on one match it would update on all related
-      // passwords. This is a much larger change.
       UpdateMetadataForUsage(&pending_credentials_);
 
       // Update |pending_credentials_| in order to be able correctly save it.
@@ -667,8 +659,7 @@ void PasswordFormManager::CreatePendingCredentials() {
       // actually correspond to two different accounts (see
       // http://crbug.com/385619). In that case the user should be asked again
       // before saving the password. This is ensured by setting
-      // |password_overriden_| on |pending_credentials_| to false and setting
-      // |origin| and |signon_realm| to correct values.
+      // |password_overriden_| on |pending_credentials_| to false.
       //
       // There is still the edge case when the autofilled credentials represent
       // the same account as |submitted_form_| but the stored password
@@ -746,14 +737,8 @@ void PasswordFormManager::CreatePendingCredentials() {
     }
   }
 
-  if (!IsValidAndroidFacetURI(pending_credentials_.signon_realm)) {
+  if (!IsValidAndroidFacetURI(pending_credentials_.signon_realm))
     pending_credentials_.action = submitted_form_->action;
-    // If the user selected credentials we autofilled from a PasswordForm
-    // that contained no action URL (IE6/7 imported passwords, for example),
-    // bless it with the action URL from the observed form. See b/1107719.
-    if (pending_credentials_.action.is_empty())
-      pending_credentials_.action = observed_form_.action;
-  }
 
   pending_credentials_.password_value = password_to_save.first;
   pending_credentials_.preferred = submitted_form_->preferred;
@@ -771,7 +756,9 @@ void PasswordFormManager::CreatePendingCredentials() {
     pending_credentials_.display_name = submitted_form_->display_name;
     pending_credentials_.federation_origin = submitted_form_->federation_origin;
     pending_credentials_.icon_url = submitted_form_->icon_url;
-    // Take the correct signon_realm for federated credentials.
+    // It's important to override |signon_realm| for federated credentials
+    // because it has format "federation://" + origin_host + "/" +
+    // federation_host
     pending_credentials_.signon_realm = submitted_form_->signon_realm;
   }
 
@@ -783,43 +770,24 @@ bool PasswordFormManager::IsMatch(const autofill::PasswordForm& form) const {
   return !form.blacklisted_by_user && form.scheme == observed_form_.scheme;
 }
 
-// Assuming that the user submitted a form with |current_password| and no
-// username, this function attempts to find a saved credential which likely
-// represents the same account, and should therefore be updated with the new
-// password from the submitted form (instead of creating a new username-less
-// stored credential with the new password). This can return null if there is no
-// such password. Note that |current_password| may be empty, e.g., for sign-up
-// forms. If it is not empty and there is a saved form with the same current
-// password, the latter is a likely candidate to be returned.
 const PasswordForm* PasswordFormManager::FindBestMatchForUpdatePassword(
-    const base::string16& current_password) const {
-  // First, filter out PSL-matches from |best_matches_|. Only credentials saved
-  // for the same origin as the submitted form should be considered for
-  // updating. A PSL match which does not have a copy in the origin of the
-  // submitted form was not accepted by the user as representing the same
-  // account, so it is unlikely that the user would like it updated.
-  std::vector<const PasswordForm*> same_origin_matches;
-  for (const auto& key_value : best_matches_) {
-    if (!key_value.second->is_public_suffix_match)
-      same_origin_matches.push_back(key_value.second);
-  }
-
-  if (same_origin_matches.size() == 1 && !has_generated_password_) {
+    const base::string16& password) const {
+  // This function is called for forms that do not contain a username field.
+  // This means that we cannot update credentials based on a matching username
+  // and that we may need to show an update prompt.
+  if (best_matches_.size() == 1 && !has_generated_password_) {
     // In case the submitted form contained no username but a password, and if
     // the user has only one credential stored, return it as the one that should
     // be updated.
-    return same_origin_matches[0];
+    return best_matches_.begin()->second;
   }
-
-  // Otherwise the old password provides guidance for selecting from multiple
-  // entries, so give up if there is none.
-  if (current_password.empty())
+  if (password.empty())
     return nullptr;
 
-  // Return any existing credential that has the same password saved already.
-  for (const PasswordForm* saved_form : same_origin_matches) {
-    if (saved_form->password_value == current_password)
-      return saved_form;
+  // Return any existing credential that has the same |password| saved already.
+  for (const auto& key_value : best_matches_) {
+    if (key_value.second->password_value == password)
+      return key_value.second;
   }
   return nullptr;
 }

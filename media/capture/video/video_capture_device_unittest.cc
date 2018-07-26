@@ -21,7 +21,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "media/base/bind_to_current_loop.h"
-#include "media/capture/video/video_capture_device_factory.h"
+#include "media/capture/video/create_video_capture_device_factory.h"
 #include "media/capture/video_capture_types.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -295,13 +295,16 @@ class VideoCaptureDeviceTest
     dbus_setter_ = chromeos::DBusThreadManager::GetSetterForTesting();
     VideoCaptureDeviceFactoryChromeOS::SetGpuBufferManager(
         local_gpu_memory_buffer_manager_.get());
-    CameraHalDispatcherImpl::GetInstance()->Start(
-        base::BindRepeating([](media::mojom::JpegDecodeAcceleratorRequest){}),
-        base::DoNothing::Repeatedly<
-            media::mojom::JpegEncodeAcceleratorRequest>());
+    if (!CameraHalDispatcherImpl::GetInstance()->IsStarted()) {
+      CameraHalDispatcherImpl::GetInstance()->Start(
+          base::DoNothing::Repeatedly<
+              media::mojom::JpegDecodeAcceleratorRequest>(),
+          base::DoNothing::Repeatedly<
+              media::mojom::JpegEncodeAcceleratorRequest>());
+    }
 #endif
-    video_capture_device_factory_ = VideoCaptureDeviceFactory::CreateFactory(
-        base::ThreadTaskRunnerHandle::Get());
+    video_capture_device_factory_ =
+        CreateVideoCaptureDeviceFactory(base::ThreadTaskRunnerHandle::Get());
   }
 
   void SetUp() override {

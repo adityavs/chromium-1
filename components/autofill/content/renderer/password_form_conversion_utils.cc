@@ -924,6 +924,9 @@ std::unique_ptr<PasswordForm> CreatePasswordFormFromWebForm(
   password_form->action = form_util::GetCanonicalActionForForm(web_form);
   if (!password_form->action.is_valid())
     return nullptr;
+  password_form->is_gaia_with_skip_save_password_form =
+      IsGaiaWithSkipSavePasswordForm(web_form) ||
+      IsGaiaReauthenticationForm(web_form);
 
   blink::WebVector<blink::WebFormControlElement> control_elements;
   web_form.GetFormControlElements(control_elements);
@@ -976,14 +979,6 @@ std::unique_ptr<PasswordForm> CreatePasswordFormFromUnownedInputElements(
   // No actual action on the form, so use the the origin as the action.
   password_form->action = password_form->origin;
   return password_form;
-}
-
-bool IsCreditCardVerificationPasswordField(
-    const blink::WebInputElement& field) {
-  if (!field.IsPasswordFieldForAutofill())
-    return false;
-  return StringMatchesCVC(field.GetAttribute("id").Utf16()) ||
-         StringMatchesCVC(field.GetAttribute("name").Utf16());
 }
 
 std::string GetSignOnRealm(const GURL& origin) {

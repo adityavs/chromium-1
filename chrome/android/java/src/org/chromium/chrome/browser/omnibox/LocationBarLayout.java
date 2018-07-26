@@ -20,6 +20,7 @@ import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.DrawableRes;
 import android.support.annotation.IntDef;
+import android.support.annotation.Nullable;
 import android.support.v4.view.MarginLayoutParamsCompat;
 import android.support.v7.content.res.AppCompatResources;
 import android.text.Editable;
@@ -69,6 +70,7 @@ import org.chromium.chrome.browser.search_engines.TemplateUrlService;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.toolbar.ToolbarActionModeCallback;
 import org.chromium.chrome.browser.toolbar.ToolbarDataProvider;
+import org.chromium.chrome.browser.toolbar.ToolbarManager;
 import org.chromium.chrome.browser.toolbar.ToolbarPhone;
 import org.chromium.chrome.browser.util.ColorUtils;
 import org.chromium.chrome.browser.util.FeatureUtilities;
@@ -103,6 +105,8 @@ public class LocationBarLayout extends FrameLayout
     // with the new characters.
     private static final long OMNIBOX_SUGGESTION_START_DELAY_MS = 30;
 
+    private final int mLightScrimColor;
+
     /** Params that control how the location bar interacts with the scrim. */
     private ScrimParams mScrimParams;
 
@@ -127,7 +131,7 @@ public class LocationBarLayout extends FrameLayout
     private final List<Runnable> mDeferredNativeRunnables = new ArrayList<Runnable>();
 
     // The type of the navigation button currently showing.
-    private NavigationButtonType mNavigationButtonType;
+    private @NavigationButtonType int mNavigationButtonType;
 
     // The type of the security icon currently active.
     @DrawableRes
@@ -182,7 +186,6 @@ public class LocationBarLayout extends FrameLayout
 
     private boolean mSuggestionModalShown;
     private boolean mUseDarkColors;
-    private boolean mIsEmphasizingHttpsScheme;
 
     private Runnable mShowSuggestions;
 
@@ -355,10 +358,12 @@ public class LocationBarLayout extends FrameLayout
     /**
      * Specifies the types of buttons shown to signify different types of navigation elements.
      */
-    protected enum NavigationButtonType {
-        PAGE,
-        MAGNIFIER,
-        EMPTY,
+    @IntDef({NavigationButtonType.PAGE, NavigationButtonType.MAGNIFIER, NavigationButtonType.EMPTY})
+    @Retention(RetentionPolicy.SOURCE)
+    public @interface NavigationButtonType {
+        int PAGE = 0;
+        int MAGNIFIER = 1;
+        int EMPTY = 2;
     }
 
     /** Specifies which button should be shown in location bar, if any. */
@@ -381,6 +386,8 @@ public class LocationBarLayout extends FrameLayout
 
         LayoutInflater.from(context).inflate(layoutId, this, true);
 
+        mLightScrimColor = ApiCompatibilityUtils.getColor(
+                context.getResources(), R.color.omnibox_focused_fading_background_color_light);
         mNavigationButton = (ImageView) findViewById(R.id.navigation_button);
         assert mNavigationButton != null : "Missing navigation type view.";
         mIsTablet = DeviceFormFactor.isNonMultiDisplayContextOnTablet(context);
@@ -715,11 +722,6 @@ public class LocationBarLayout extends FrameLayout
         }
     }
 
-    @Override
-    public long getFirstUrlBarFocusTime() {
-        return mUrlBar.getFirstFocusTime();
-    }
-
     /**
      * @return Whether the URL focus change is taking place, e.g. a focus animation is running on
      *         a phone device.
@@ -750,8 +752,8 @@ public class LocationBarLayout extends FrameLayout
         if (hasFocus) {
             if (mNativeInitialized) RecordUserAction.record("FocusLocation");
             UrlBarData urlBarData = mToolbarDataProvider.getUrlBarData();
-            if (urlBarData.editingText == null || !setUrlBarText(urlBarData)) {
-                mUrlBar.deEmphasizeUrl();
+            if (urlBarData.editingText != null) {
+                setUrlBarText(urlBarData);
             }
 
             // Explicitly tell InputMethodManager that the url bar is focused before any callbacks
@@ -769,7 +771,6 @@ public class LocationBarLayout extends FrameLayout
             // Focus change caused by a close-tab may result in an invalid current tab.
             if (mToolbarDataProvider.hasTab()) {
                 setUrlToPageUrl();
-                emphasizeUrl();
             }
 
             // Moving focus away from UrlBar(EditText) to a non-editable focus holder, such as
@@ -941,9 +942,13 @@ public class LocationBarLayout extends FrameLayout
         }
 
         if (pastedText != null) {
+            ToolbarManager.recordOmniboxFocusReason(
+                    ToolbarManager.OmniboxFocusReason.FAKE_BOX_LONG_PRESS);
             // This must be happen after requestUrlFocus(), which changes the selection.
             mUrlBar.setUrl(UrlBarData.forNonUrlText(pastedText));
             mUrlBar.setSelection(mUrlBar.getText().length());
+        } else {
+            ToolbarManager.recordOmniboxFocusReason(ToolbarManager.OmniboxFocusReason.FAKE_BOX_TAP);
         }
     }
 
@@ -998,7 +1003,7 @@ public class LocationBarLayout extends FrameLayout
         return mToolbarDataProvider;
     }
 
-    private static NavigationButtonType suggestionTypeToNavigationButtonType(
+    private static @NavigationButtonType int suggestionTypeToNavigationButtonType(
             OmniboxSuggestion suggestion) {
         if (suggestion.isUrlSuggestion()) {
             return NavigationButtonType.PAGE;
@@ -1009,7 +1014,8 @@ public class LocationBarLayout extends FrameLayout
 
     // Updates the navigation button based on the URL string
     private void updateNavigationButton() {
-        NavigationButtonType type = NavigationButtonType.EMPTY;
+        @NavigationButtonType
+        int type = NavigationButtonType.EMPTY;
         if (mIsTablet && !mSuggestionItems.isEmpty()) {
             // If there are suggestions showing, show the icon for the default suggestion.
             type = suggestionTypeToNavigationButtonType(
@@ -1036,11 +1042,13 @@ public class LocationBarLayout extends FrameLayout
             mSecurityButton.setTint(mToolbarDataProvider.getSecurityIconColorStateList());
         }
 
+        int contentDescriptionId = getToolbarDataProvider().getSecurityIconContentDescription();
+        String contentDescription = getContext().getString(contentDescriptionId);
+        mSecurityButton.setContentDescription(contentDescription);
+
         updateVerboseStatusVisibility();
 
-        boolean shouldEmphasizeHttpsScheme = shouldEmphasizeHttpsScheme();
-        if (mSecurityIconResource == id && mIsEmphasizingHttpsScheme == shouldEmphasizeHttpsScheme
-                && mLocationBarButtonType == getLocationBarButtonToShow()) {
+        if (mSecurityIconResource == id && mLocationBarButtonType == getLocationBarButtonToShow()) {
             return;
         }
         mSecurityIconResource = id;
@@ -1048,26 +1056,8 @@ public class LocationBarLayout extends FrameLayout
         changeLocationBarIcon();
         updateLocationBarIconContainerVisibility();
 
-        emphasizeUrl();
-        mIsEmphasizingHttpsScheme = shouldEmphasizeHttpsScheme;
-    }
-
-    private void emphasizeUrl() {
-        if (mToolbarDataProvider.shouldDisplaySearchTerms()) return;
-        mUrlBar.emphasizeUrl();
-    }
-
-    @Override
-    public boolean shouldEmphasizeUrl() {
-        return true;
-    }
-
-    @Override
-    public boolean shouldEmphasizeHttpsScheme() {
-        if (mToolbarDataProvider.isUsingBrandColor() || mToolbarDataProvider.isIncognito()) {
-            return false;
-        }
-        return true;
+        // Update the URL in case the scheme change triggers a URL emphasis change.
+        setUrlToPageUrl();
     }
 
     /**
@@ -1091,19 +1081,19 @@ public class LocationBarLayout extends FrameLayout
      * Sets the type of the current navigation type and updates the UI to match it.
      * @param buttonType The type of navigation button to be shown.
      */
-    private void setNavigationButtonType(NavigationButtonType buttonType) {
+    private void setNavigationButtonType(@NavigationButtonType int buttonType) {
         if (!mIsTablet) return;
         switch (buttonType) {
-            case PAGE:
+            case NavigationButtonType.PAGE:
                 Drawable page = TintedDrawable.constructTintedDrawable(getContext(),
                         R.drawable.ic_omnibox_page,
                         mUseDarkColors ? R.color.dark_mode_tint : R.color.light_mode_tint);
                 mNavigationButton.setImageDrawable(page);
                 break;
-            case MAGNIFIER:
+            case NavigationButtonType.MAGNIFIER:
                 mNavigationButton.setImageResource(R.drawable.ic_omnibox_magnifier);
                 break;
-            case EMPTY:
+            case NavigationButtonType.EMPTY:
                 mNavigationButton.setImageDrawable(null);
                 break;
             default:
@@ -1647,7 +1637,7 @@ public class LocationBarLayout extends FrameLayout
                 Activity activity = mWindowAndroid.getActivity().get();
                 if (activity != null) {
                     PageInfoController.show(activity, getCurrentTab(), null,
-                            PageInfoController.OPENED_FROM_TOOLBAR);
+                            PageInfoController.OpenedFromSource.TOOLBAR);
                 }
             }
         } else if (v == mMicButton && mVoiceRecognitionHandler != null) {
@@ -1828,9 +1818,7 @@ public class LocationBarLayout extends FrameLayout
         }
 
         mOriginalUrl = currentUrl;
-        if (setUrlBarText(mToolbarDataProvider.getUrlBarData())) {
-            emphasizeUrl();
-        }
+        setUrlBarText(mToolbarDataProvider.getUrlBarData());
         if (!mToolbarDataProvider.hasTab()) return;
 
         // Profile may be null if switching to a tab that has not yet been initialized.
@@ -1952,10 +1940,18 @@ public class LocationBarLayout extends FrameLayout
         updateSecurityIcon();
     }
 
-    @Override
-    public Tab getCurrentTab() {
+    /** @return The current active {@link Tab}. */
+    @Nullable
+    private Tab getCurrentTab() {
         if (mToolbarDataProvider == null) return null;
         return mToolbarDataProvider.getTab();
+    }
+
+    @Override
+    public View getViewForUrlBackFocus() {
+        Tab tab = getCurrentTab();
+        if (tab == null) return null;
+        return tab.getView();
     }
 
     @Override
@@ -2038,6 +2034,11 @@ public class LocationBarLayout extends FrameLayout
         boolean locationBarShownInNTP = ntp != null && ntp.isLocationBarShownInNTP();
 
         if (visible && (!locationBarShownInNTP || ignoreNtpChecks)) {
+            mScrimParams.backgroundColor =
+                    useModernDesign() && !mIsTablet && !mToolbarDataProvider.isIncognito()
+                    ? mLightScrimColor
+                    : null;
+
             // If the location bar is shown in the NTP, the toolbar will eventually trigger a
             // fade in.
             mScrim.showScrim(mScrimParams);
@@ -2104,16 +2105,19 @@ public class LocationBarLayout extends FrameLayout
      */
     @Override
     public void updateVisualsForState() {
-        if (updateUseDarkColors() || mIsEmphasizingHttpsScheme != shouldEmphasizeHttpsScheme()) {
-            updateSecurityIcon();
-        }
+        if (updateUseDarkColors()) updateSecurityIcon();
         int id = mUseDarkColors ? R.color.dark_mode_tint : R.color.light_mode_tint;
         ColorStateList colorStateList = AppCompatResources.getColorStateList(getContext(), id);
         mMicButton.setTint(colorStateList);
         mDeleteButton.setTint(colorStateList);
 
         setNavigationButtonType(mNavigationButtonType);
-        mUrlBar.setUseDarkTextColors(mUseDarkColors);
+
+        // If the URL changed colors and is not focused, update the URL to account for the new
+        // color scheme.
+        if (mUrlBar.setUseDarkTextColors(mUseDarkColors) && !mUrlBar.hasFocus()) {
+            setUrlToPageUrl();
+        }
 
         if (mSuggestionList != null) {
             mSuggestionList.refreshPopupBackground();

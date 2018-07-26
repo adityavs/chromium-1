@@ -31,11 +31,11 @@ class ModulatorImplBase : public Modulator {
   void Trace(blink::Visitor*) override;
 
  protected:
-  explicit ModulatorImplBase(scoped_refptr<ScriptState>);
+  explicit ModulatorImplBase(ScriptState*);
 
   ExecutionContext* GetExecutionContext() const;
 
-  ScriptState* GetScriptState() override { return script_state_.get(); }
+  ScriptState* GetScriptState() override { return script_state_; }
 
  private:
   // Implements Modulator
@@ -51,19 +51,19 @@ class ModulatorImplBase : public Modulator {
 
   void FetchTree(
       const KURL&,
-      const FetchClientSettingsObjectSnapshot& fetch_client_settings_object,
+      FetchClientSettingsObjectSnapshot* fetch_client_settings_object,
       WebURLRequest::RequestContext destination,
       const ScriptFetchOptions&,
       ModuleScriptCustomFetchType,
       ModuleTreeClient*) override;
   void FetchDescendantsForInlineScript(
       ModuleScript*,
-      const FetchClientSettingsObjectSnapshot& fetch_client_settings_object,
+      FetchClientSettingsObjectSnapshot* fetch_client_settings_object,
       WebURLRequest::RequestContext destination,
       ModuleTreeClient*) override;
   void FetchSingle(
       const ModuleScriptFetchRequest&,
-      const FetchClientSettingsObjectSnapshot& fetch_client_settings_object,
+      FetchClientSettingsObjectSnapshot* fetch_client_settings_object,
       ModuleGraphLevel,
       ModuleScriptCustomFetchType,
       SingleModuleClient*) override;
@@ -88,7 +88,7 @@ class ModulatorImplBase : public Modulator {
   // modification of |reason|.
   virtual bool IsDynamicImportForbidden(String* reason) = 0;
 
-  scoped_refptr<ScriptState> script_state_;
+  Member<ScriptState> script_state_;
   scoped_refptr<base::SingleThreadTaskRunner> task_runner_;
   TraceWrapperMember<ModuleMap> map_;
   TraceWrapperMember<ModuleTreeLinkerRegistry> tree_linker_registry_;

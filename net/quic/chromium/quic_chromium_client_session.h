@@ -38,11 +38,11 @@
 #include "net/spdy/http2_priority_dependencies.h"
 #include "net/spdy/multiplexed_session.h"
 #include "net/spdy/server_push_delegate.h"
-#include "net/third_party/quic/core/quic_client_push_promise_index.h"
+#include "net/third_party/quic/core/http/quic_client_push_promise_index.h"
+#include "net/third_party/quic/core/http/quic_spdy_client_session_base.h"
 #include "net/third_party/quic/core/quic_crypto_client_stream.h"
 #include "net/third_party/quic/core/quic_packets.h"
 #include "net/third_party/quic/core/quic_server_id.h"
-#include "net/third_party/quic/core/quic_spdy_client_session_base.h"
 #include "net/third_party/quic/core/quic_time.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 
@@ -430,6 +430,10 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
                        scoped_refptr<QuicChromiumPacketWriter::ReusableIOBuffer>
                            last_packet) override;
   void OnWriteError(int error_code) override;
+  // Called when the associated writer is unblocked. Write the cached |packet_|
+  // if |packet_| is set. May send a PING packet if
+  // |send_packet_after_migration_| is set and writer is not blocked after
+  // writing queued packets.
   void OnWriteUnblocked() override;
 
   // QuicConnectivityProbingManager::Delegate override.
@@ -548,12 +552,14 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
     return session_key_.server_id();
   }
 
-  // Attempts to migrate session when a write error is encountered.
-  void MigrateSessionOnWriteError(int error_code);
+  // Attempts to migrate session when |writer| encounters a write error.
+  // If |writer| is no longer actively used, abort migration.
+  void MigrateSessionOnWriteError(int error_code,
+                                  quic::QuicPacketWriter* writer);
 
-  // Helper method that writes a packet on the new socket after
-  // migration completes. If not null, the packet_ member is written,
-  // otherwise a PING packet is written.
+  // Helper method that completes connection/server migration.
+  // Unblocks packet writer on network level. If the writer becomes unblocked
+  // then, OnWriteUnblocked() will be invoked to send packet after migration.
   void WriteToNewSocket();
 
   // Migrates session over to use |peer_address| and |network|.
@@ -610,9 +616,6 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   const DatagramClientSocket* GetDefaultSocket() const;
 
   bool IsAuthorized(const std::string& hostname) override;
-
-  // Returns true if session has one ore more streams marked as non-migratable.
-  bool HasNonMigratableStreams() const;
 
   bool HandlePromised(quic::QuicStreamId associated_id,
                       quic::QuicStreamId promised_id,
@@ -688,6 +691,10 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   // Returns true if session is migratable. If not, a task is posted to
   // close the session later if |close_session_if_not_migratable| is true.
   bool IsSessionMigratable(bool close_session_if_not_migratable);
+  // Close non-migratable streams in both directions by sending reset stream to
+  // peer when connection migration attempts to migrate to the alternate
+  // network.
+  void ResetNonMigratableStreams();
   void LogMetricsOnNetworkDisconnected();
   void LogMetricsOnNetworkMadeDefault();
   void LogConnectionMigrationResultToHistogram(
@@ -765,8 +772,9 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   int streams_pushed_and_claimed_count_;
   uint64_t bytes_pushed_count_;
   uint64_t bytes_pushed_and_unclaimed_count_;
-  // Stores packet that witnesses socket write error. This packet is
-  // written to a new socket after migration completes.
+  // Stores the packet that witnesses socket write error. This packet will be
+  // written to an alternate socket when the migration completes and the
+  // alternate socket is unblocked.
   scoped_refptr<QuicChromiumPacketWriter::ReusableIOBuffer> packet_;
   // Stores the latest default network platform marks.
   NetworkChangeNotifier::NetworkHandle default_network_;
@@ -774,11 +782,16 @@ class NET_EXPORT_PRIVATE QuicChromiumClientSession
   int retry_migrate_back_count_;
   base::OneShotTimer migrate_back_to_default_timer_;
   ConnectionMigrationCause current_connection_migration_cause_;
-  // TODO(jri): Replace use of migration_pending_ sockets_.size().
-  // When a task is posted for MigrateSessionOnError, pass in
-  // sockets_.size(). Then in MigrateSessionOnError, check to see if
-  // the current sockets_.size() == the passed in value.
-  bool migration_pending_;  // True while migration is underway.
+  // True if a packet needs to be sent when packet writer is unblocked to
+  // complete connection migration. The packet can be a cached packet if
+  // |packet_| is set, a queued packet, or a PING packet.
+  bool send_packet_after_migration_;
+  // True if migration is triggered, and there is no alternate network to
+  // migrate to.
+  bool wait_for_new_network_;
+  // True if read errors should be ignored. Set when migration on write error is
+  // posted and unset until the first packet is written after migration.
+  bool ignore_read_error_;
 
   // If true, client headers will include HTTP/2 stream dependency info derived
   // from spdy::SpdyPriority.

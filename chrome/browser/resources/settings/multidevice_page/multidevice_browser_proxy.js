@@ -6,6 +6,9 @@ cr.define('settings', function() {
   /** @interface */
   class MultiDeviceBrowserProxy {
     showMultiDeviceSetupDialog() {}
+
+    /** @return Promise<!MultiDevicePageContentData> */
+    getPageContentData() {}
   }
 
   /**
@@ -15,6 +18,19 @@ cr.define('settings', function() {
     /** @override */
     showMultiDeviceSetupDialog() {
       chrome.send('showMultiDeviceSetupDialog');
+    }
+
+    /** @override */
+    getPageContentData() {
+      // TODO(jordynass): change method content to
+      //    return cr.sendWithPromise('getPageContentData');
+      // once handler is built.
+      return Promise.resolve({
+        mode: settings.MultiDeviceSettingsMode.HOST_SET_VERIFIED,
+        hostDevice: {
+          name: 'Pixel XL',
+        },
+      });
     }
   }
 

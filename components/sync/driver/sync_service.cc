@@ -13,4 +13,48 @@ SyncSetupInProgressHandle::~SyncSetupInProgressHandle() {
   on_destroy_.Run();
 }
 
+bool SyncService::CanSyncStart() const {
+  return GetDisableReasons() == DISABLE_REASON_NONE;
+}
+
+bool SyncService::IsEngineInitialized() const {
+  switch (GetState()) {
+    case State::DISABLED:
+    case State::WAITING_FOR_START_REQUEST:
+    case State::START_DEFERRED:
+    case State::INITIALIZING:
+      return false;
+    case State::PENDING_DESIRED_CONFIGURATION:
+    case State::CONFIGURING:
+    case State::ACTIVE:
+      return true;
+  }
+  NOTREACHED();
+  return false;
+}
+
+bool SyncService::IsSyncActive() const {
+  switch (GetState()) {
+    case State::DISABLED:
+    case State::WAITING_FOR_START_REQUEST:
+    case State::START_DEFERRED:
+    case State::INITIALIZING:
+    case State::PENDING_DESIRED_CONFIGURATION:
+      return false;
+    case State::CONFIGURING:
+    case State::ACTIVE:
+      return true;
+  }
+  NOTREACHED();
+  return false;
+}
+
+bool SyncService::IsFirstSetupInProgress() const {
+  return !IsFirstSetupComplete() && IsSetupInProgress();
+}
+
+bool SyncService::HasUnrecoverableError() const {
+  return HasDisableReason(DISABLE_REASON_UNRECOVERABLE_ERROR);
+}
+
 }  // namespace syncer

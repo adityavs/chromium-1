@@ -5,7 +5,6 @@
 #include "ios/web_view/internal/signin/ios_web_view_signin_client.h"
 
 #include "components/signin/core/browser/cookie_settings_util.h"
-#include "components/signin/core/browser/signin_cookie_change_subscription.h"
 #include "google_apis/gaia/gaia_auth_fetcher.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 
@@ -98,18 +97,6 @@ void IOSWebViewSigninClient::RemoveContentSettingsObserver(
   host_content_settings_map_->RemoveObserver(observer);
 }
 
-std::unique_ptr<SigninClient::CookieChangeSubscription>
-IOSWebViewSigninClient::AddCookieChangeCallback(
-    const GURL& url,
-    const std::string& name,
-    net::CookieChangeCallback callback) {
-  scoped_refptr<net::URLRequestContextGetter> context_getter =
-      GetURLRequestContext();
-  DCHECK(context_getter.get());
-  return std::make_unique<SigninCookieChangeSubscription>(
-      context_getter, url, name, std::move(callback));
-}
-
 void IOSWebViewSigninClient::DelayNetworkCall(const base::Closure& callback) {
   network_callback_helper_->HandleCallback(callback);
 }
@@ -117,8 +104,9 @@ void IOSWebViewSigninClient::DelayNetworkCall(const base::Closure& callback) {
 std::unique_ptr<GaiaAuthFetcher> IOSWebViewSigninClient::CreateGaiaAuthFetcher(
     GaiaAuthConsumer* consumer,
     const std::string& source,
-    net::URLRequestContextGetter* getter) {
-  return std::make_unique<GaiaAuthFetcher>(consumer, source, getter);
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+  return std::make_unique<GaiaAuthFetcher>(consumer, source,
+                                           url_loader_factory);
 }
 
 void IOSWebViewSigninClient::OnErrorChanged() {}

@@ -421,7 +421,7 @@ void FeatureInfo::InitializeFeatures() {
   gl_version_info_.reset(
       new gl::GLVersionInfo(version_str, renderer_str, extensions));
 
-  bool enable_es3 = IsWebGL2OrES3Context();
+  bool enable_es3 = IsWebGL2OrES3OrHigherContext();
 
   // Pixel buffer bindings can be manipulated by the client if ES3 is enabled or
   // the GL_NV_pixel_buffer_object extension is exposed by ANGLE when using the
@@ -698,7 +698,7 @@ void FeatureInfo::InitializeFeatures() {
     validators_.texture_format.AddValue(GL_SRGB_EXT);
     validators_.texture_format.AddValue(GL_SRGB_ALPHA_EXT);
     validators_.render_buffer_format.AddValue(GL_SRGB8_ALPHA8_EXT);
-    validators_.framebuffer_parameter.AddValue(
+    validators_.framebuffer_attachment_parameter.AddValue(
         GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING_EXT);
     validators_.texture_unsized_internal_format.AddValue(GL_SRGB_EXT);
     validators_.texture_unsized_internal_format.AddValue(GL_SRGB_ALPHA_EXT);
@@ -815,6 +815,7 @@ void FeatureInfo::InitializeFeatures() {
         break;
       case CONTEXT_TYPE_WEBGL1:
       case CONTEXT_TYPE_WEBGL2:
+      case CONTEXT_TYPE_WEBGL2_COMPUTE:
         break;
     }
   }
@@ -934,7 +935,7 @@ void FeatureInfo::InitializeFeatures() {
   if (feature_flags_.multisampled_render_to_texture) {
     validators_.render_buffer_parameter.AddValue(GL_RENDERBUFFER_SAMPLES_EXT);
     validators_.g_l_state.AddValue(GL_MAX_SAMPLES_EXT);
-    validators_.framebuffer_parameter.AddValue(
+    validators_.framebuffer_attachment_parameter.AddValue(
         GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_SAMPLES_EXT);
     AddExtensionString("GL_EXT_multisampled_render_to_texture");
   }
@@ -1193,7 +1194,7 @@ void FeatureInfo::InitializeFeatures() {
                                      !have_es2_draw_buffers_vendor_agnostic;
   }
 
-  if (IsWebGL2OrES3Context() || have_es2_draw_buffers) {
+  if (IsWebGL2OrES3OrHigherContext() || have_es2_draw_buffers) {
     GLint max_color_attachments = 0;
     glGetIntegerv(GL_MAX_COLOR_ATTACHMENTS_EXT, &max_color_attachments);
     for (GLenum i = GL_COLOR_ATTACHMENT1_EXT;
@@ -1490,6 +1491,12 @@ void FeatureInfo::InitializeFeatures() {
   // https://github.com/KhronosGroup/WebGL/pull/2583
   feature_flags_.separate_stencil_ref_mask_writemask =
       !(gl_version_info_->is_d3d) && !IsWebGLContext();
+
+  if (gfx::HasExtension(extensions, "GL_MESA_framebuffer_flip_y")) {
+    feature_flags_.mesa_framebuffer_flip_y = true;
+    validators_.framebuffer_parameter.AddValue(GL_FRAMEBUFFER_FLIP_Y_MESA);
+    AddExtensionString("GL_MESA_framebuffer_flip_y");
+  }
 }
 
 void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
@@ -1505,7 +1512,7 @@ void FeatureInfo::InitializeFloatAndHalfFloatFeatures(
 
   bool may_enable_chromium_color_buffer_float = false;
 
-  bool enable_es3 = IsWebGL2OrES3Context();
+  bool enable_es3 = IsWebGL2OrES3OrHigherContext();
 
   // These extensions allow a variety of floating point formats to be
   // rendered to via framebuffer objects.
@@ -1822,6 +1829,14 @@ bool FeatureInfo::IsWebGL1OrES2Context() const {
 
 bool FeatureInfo::IsWebGL2OrES3Context() const {
   return IsWebGL2OrES3ContextType(context_type_);
+}
+
+bool FeatureInfo::IsWebGL2OrES3OrHigherContext() const {
+  return IsWebGL2OrES3OrHigherContextType(context_type_);
+}
+
+bool FeatureInfo::IsWebGL2ComputeContext() const {
+  return IsWebGL2ComputeContextType(context_type_);
 }
 
 void FeatureInfo::AddExtensionString(const base::StringPiece& extension) {

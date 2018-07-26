@@ -4,7 +4,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -22,7 +22,7 @@
     "AdFramePriority": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -412,20 +412,18 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "AudioProcess_v3",
+                    "name": "AudioProcess_LaunchOnStartup_v3",
                     "params": {
-                        "teardown_timeout_s": "900"
+                        "teardown_timeout_s": "0"
                     },
                     "enable_features": [
                         "AudioServiceAudioStreams",
+                        "AudioServiceLaunchOnStartup",
                         "AudioServiceOutOfProcess"
-                    ],
-                    "disable_features": [
-                        "AudioServiceLaunchOnStartup"
                     ]
                 }
             ]
@@ -445,7 +443,7 @@
             ]
         }
     ],
-    "AutofillCreditCardBankNameDisplay": [
+    "AutofillDynamicForms": [
         {
             "platforms": [
                 "android",
@@ -453,13 +451,13 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "BankName_Experiment",
+                    "name": "Enabled",
                     "enable_features": [
-                        "AutofillCreditCardBankNameDisplay"
+                        "AutofillDynamicForms"
                     ]
                 }
             ]
@@ -471,7 +469,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -491,32 +489,9 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
-                {
-                    "name": "Enabled"
-                }
-            ]
-        }
-    ],
-    "AutofillProfileOrderByFrecency": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "ios",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "EnabledLimitTo3",
-                    "params": {
-                        "limit": "3"
-                    }
-                },
                 {
                     "name": "Enabled"
                 }
@@ -531,7 +506,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -543,7 +518,22 @@
             ]
         }
     ],
-    "AutofillRestrictUnownedFieldsToFormlessCheckout": [
+    "AutofillSingleClick": [
+        {
+            "platforms": [
+                "chromeos",
+                "linux",
+                "mac",
+                "windows"
+            ],
+            "experiments": [
+                {
+                    "name": "Enabled"
+                }
+            ]
+        }
+    ],
+    "AutofillSmallFormSupport": [
         {
             "platforms": [
                 "android",
@@ -551,29 +541,17 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "Disabled",
+                    "name": "Enabled",
                     "disable_features": [
+                        "AutofillEnforceMinRequiredFieldsForHeuristics",
+                        "AutofillEnforceMinRequiredFieldsForQuery",
+                        "AutofillEnforceMinRequiredFieldsForUpload",
                         "AutofillRestrictUnownedFieldsToFormlessCheckout"
                     ]
-                }
-            ]
-        }
-    ],
-    "AutofillSingleClick": [
-        {
-            "platforms": [
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled"
                 }
             ]
         }
@@ -586,7 +564,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -618,7 +596,7 @@
         {
             "platforms": [
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -636,7 +614,7 @@
     "BackgroundPagePriority": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -653,13 +631,28 @@
             ]
         }
     ],
+    "BackgroundTaskComponentUpdate": [
+        {
+            "platforms": [
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "BackgroundTaskComponentUpdateEnabled",
+                    "enable_features": [
+                        "BackgroundTaskComponentUpdate"
+                    ]
+                }
+            ]
+        }
+    ],
     "BackgroundVideoOptimizations": [
         {
             "platforms": [
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -740,7 +733,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -757,7 +750,7 @@
             ]
         }
     ],
-    "BlinkSchedulerHighPriorityInput": [
+    "BlinkSchedulerHighPriorityInputOnCompositorThread": [
         {
             "platforms": [
                 "android",
@@ -765,13 +758,13 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "BlinkSchedulerHighPriorityInput",
+                    "name": "Enabled",
                     "enable_features": [
-                        "BlinkSchedulerHighPriorityInput"
+                        "BlinkSchedulerHighPriorityInputOnCompositorThread"
                     ]
                 }
             ]
@@ -784,7 +777,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -800,7 +793,7 @@
         {
             "platforms": [
                 "linux",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -824,7 +817,7 @@
     "BrowserBlacklist": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -841,7 +834,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -872,7 +865,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -887,7 +880,7 @@
     "CSSExternalScanner": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -910,7 +903,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -925,7 +918,7 @@
     "ChromeCleanupDistribution": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -974,7 +967,7 @@
     "ChromeSuggestionsTuningForceTopSites": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -1011,7 +1004,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1184,7 +1177,7 @@
         {
             "platforms": [
                 "android",
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux"
@@ -1210,7 +1203,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1225,7 +1218,7 @@
     "DefaultBrowserInfobar": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1238,7 +1231,7 @@
         {
             "platforms": [
                 "mac",
-                "win",
+                "windows",
                 "chromeos",
                 "android"
             ],
@@ -1270,7 +1263,7 @@
     "DefaultPassthroughCommandDecoder": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1286,7 +1279,7 @@
         {
             "platforms": [
                 "android",
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux"
@@ -1307,7 +1300,7 @@
     "DesktopIOSPromotion": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1322,6 +1315,21 @@
                     },
                     "enable_features": [
                         "DesktopIOSPromotion"
+                    ]
+                }
+            ]
+        }
+    ],
+    "DetectingHeavyPages": [
+        {
+            "platforms": [
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "Enabled",
+                    "enable_features": [
+                        "DetectingHeavyPages"
                     ]
                 }
             ]
@@ -1398,7 +1406,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1417,7 +1425,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1432,7 +1440,7 @@
     "EnableAppContainer": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1447,7 +1455,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1462,7 +1470,7 @@
     "EnableCsrssLockdown": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1480,7 +1488,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1492,12 +1500,32 @@
             ]
         }
     ],
+    "EnableEasterEggBdayMode": [
+        {
+            "platforms": [
+                "android",
+                "chromeos",
+                "ios",
+                "linux",
+                "mac",
+                "windows"
+            ],
+            "experiments": [
+                {
+                    "name": "enabled",
+                    "enable_features": [
+                        "DinoEasterEggBdayMode"
+                    ]
+                }
+            ]
+        }
+    ],
     "EnableEmojiContextMenu": [
         {
             "platforms": [
                 "chromeos",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1515,7 +1543,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1530,7 +1558,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1550,7 +1578,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1587,7 +1615,7 @@
     "ExtensionContentVerification": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1612,7 +1640,7 @@
         {
             "platforms": [
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1621,31 +1649,18 @@
             ]
         }
     ],
-    "ExternalDataUseObserver": [
+    "FrameTypePriorityExperiment": [
         {
             "platforms": [
-                "android"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled"
-                }
-            ]
-        }
-    ],
-    "FrameAndTaskTypePriorityDuringLoading": [
-        {
-            "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
-                "ios",
                 "android"
             ],
             "experiments": [
                 {
-                    "name": "LowPriorityForHiddenFrameDuringLoading",
+                    "name": "LowPriorityForHiddenFrameDuringLoadingEnabled",
                     "enable_features": [
                         "BlinkSchedulerExperimentOnlyWhenLoading",
                         "BlinkSchedulerLowPriorityForHiddenFrame"
@@ -1660,7 +1675,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1672,7 +1687,7 @@
     "GoogleNow": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1685,7 +1700,7 @@
         {
             "platforms": [
                 "mac",
-                "win",
+                "windows",
                 "linux",
                 "chromeos",
                 "android"
@@ -1706,7 +1721,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1726,7 +1741,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1762,7 +1777,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1781,7 +1796,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1800,7 +1815,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1830,7 +1845,7 @@
     "ImprovedRecoveryComponent": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac"
             ],
             "experiments": [
@@ -1849,7 +1864,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1865,7 +1880,7 @@
         {
             "platforms": [
                 "linux",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1887,7 +1902,7 @@
     "IncompatibleApplicationsWarning": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1905,7 +1920,7 @@
     "IncreaseInputAudioBufferSize": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1923,7 +1938,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1940,7 +1955,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -1980,7 +1995,7 @@
         {
             "platforms": [
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2027,7 +2042,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win",
+                "windows",
                 "chromeos"
             ],
             "experiments": [
@@ -2045,7 +2060,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win",
+                "windows",
                 "android",
                 "chromeos"
             ],
@@ -2125,7 +2140,7 @@
     "MediaFoundationH264Encoding": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2140,7 +2155,7 @@
     "MediaFoundationVideoCapture": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2159,7 +2174,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2178,7 +2193,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2194,7 +2209,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2216,6 +2231,27 @@
                     "name": "Enabled",
                     "enable_features": [
                         "NTPArticleSuggestionsExpandableHeader"
+                    ]
+                }
+            ]
+        }
+    ],
+    "NTPBirthdayFeatures": [
+        {
+            "platforms": [
+                "chromeos",
+                "linux",
+                "mac",
+                "windows"
+            ],
+            "experiments": [
+                {
+                    "name": "NewTabPageAllBirthday_Enabled",
+                    "enable_features": [
+                        "NewTabPageBackgrounds",
+                        "NewTabPageCustomLinks",
+                        "NewTabPageIcons",
+                        "NewTabPageUIMd"
                     ]
                 }
             ]
@@ -2353,7 +2389,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2375,7 +2411,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2390,7 +2426,7 @@
     "NativeNotifications": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2406,7 +2442,7 @@
         {
             "platforms": [
                 "android",
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux"
@@ -2433,7 +2469,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2449,7 +2485,7 @@
         {
             "platforms": [
                 "linux",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2489,7 +2525,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2508,7 +2544,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2632,7 +2668,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2701,6 +2737,25 @@
             ]
         }
     ],
+    "OriginTypePriorityExperiment": [
+        {
+            "platforms": [
+                "windows",
+                "mac",
+                "chromeos",
+                "linux",
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "LowPriorityForCrossOriginFrame",
+                    "enable_features": [
+                        "BlinkSchedulerLowPriorityForCrossOrigin"
+                    ]
+                }
+            ]
+        }
+    ],
     "OverflowIconsForMediaControls": [
         {
             "platforms": [
@@ -2708,7 +2763,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2727,32 +2782,13 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
                     "name": "Enabled",
                     "enable_features": [
                         "ClickToOpenPDFPlaceholder"
-                    ]
-                }
-            ]
-        }
-    ],
-    "PWAFullCodeCache": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "PWAFullCodeCache"
                     ]
                 }
             ]
@@ -2786,7 +2822,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2805,7 +2841,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2820,7 +2856,7 @@
     "PasswordGeneration": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2836,7 +2872,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2891,7 +2927,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2908,7 +2944,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2926,7 +2962,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -2988,7 +3024,7 @@
             "platforms": [
                 "chromeos",
                 "linux",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3008,7 +3044,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3126,13 +3162,39 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
                     "name": "Enabled",
                     "enable_features": [
                         "PrioritizedSimpleCacheTasks"
+                    ]
+                }
+            ]
+        }
+    ],
+    "ProactiveTabFreezeAndDiscard": [
+        {
+            "platforms": [
+                "chromeos",
+                "linux",
+                "mac",
+                "windows"
+            ],
+            "experiments": [
+                {
+                    "name": "FreezeAndDiscardWithUnfreeze",
+                    "params": {
+                        "ShouldPeriodicallyUnfreeze": "true",
+                        "ShouldProactivelyDiscard": "true",
+                        "mainThreadTaskLoadLowThreshold": "25"
+                    },
+                    "enable_features": [
+                        "PageAlmostIdle",
+                        "PageLifecycle",
+                        "ProactiveTabFreezeAndDiscard",
+                        "SiteCharacteristicsDatabase"
                     ]
                 }
             ]
@@ -3161,11 +3223,14 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "Enabled"
+                    "name": "Enabled",
+                    "params": {
+                        "connection_options": "NSTP"
+                    }
                 }
             ]
         }
@@ -3218,16 +3283,32 @@
     "RecurrentSSLInterstitial": [
         {
             "platforms": [
-                "android",
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
                     "name": "RecurrentInterstitialWithUIEnabled",
                     "params": {
+                        "show_error_ui": "true"
+                    },
+                    "enable_features": [
+                        "RecurrentInterstitialFeature"
+                    ]
+                }
+            ]
+        },
+        {
+            "platforms": [
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "RecurrentInterstitialWithUIEnabled",
+                    "params": {
+                        "mode": "pref",
                         "show_error_ui": "true"
                     },
                     "enable_features": [
@@ -3244,7 +3325,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3264,7 +3345,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3331,7 +3412,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3354,7 +3435,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3367,6 +3448,33 @@
             ]
         }
     ],
+    "ResourceFetchPriorityExperiment": [
+        {
+            "platforms": [
+                "windows",
+                "mac",
+                "chromeos",
+                "linux",
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "BlinkSchedulerUseResourceFetchPriority_Map3",
+                    "params": {
+                        "HIGHEST": "HIGH",
+                        "IDLE": "LOW",
+                        "LOW": "LOW",
+                        "LOWEST": "LOW",
+                        "MEDIUM": "NORMAL",
+                        "THROTTLED": "LOW"
+                    },
+                    "enable_features": [
+                        "BlinkSchedulerResourceFetchPriority"
+                    ]
+                }
+            ]
+        }
+    ],
     "ResourceLoadScheduler": [
         {
             "platforms": [
@@ -3374,7 +3482,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3393,7 +3501,7 @@
     "SRTPromptFieldTrial": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3414,7 +3522,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3430,7 +3538,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3483,7 +3591,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3512,7 +3620,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3540,7 +3648,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3565,7 +3673,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3596,7 +3704,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3630,7 +3738,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3646,31 +3754,6 @@
             ]
         }
     ],
-    "ServiceWorkerNavigationPreload": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "ServiceWorkerNavigationPreload"
-                    ]
-                },
-                {
-                    "name": "Disabled",
-                    "disable_features": [
-                        "ServiceWorkerNavigationPreload"
-                    ]
-                }
-            ]
-        }
-    ],
     "ServiceWorkerPaymentApps": [
         {
             "platforms": [
@@ -3678,7 +3761,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3690,61 +3773,11 @@
             ]
         }
     ],
-    "ServiceWorkerScriptFullCodeCache": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "ServiceWorkerScriptFullCodeCache"
-                    ]
-                },
-                {
-                    "name": "Disabled",
-                    "disable_features": [
-                        "ServiceWorkerScriptFullCodeCache"
-                    ]
-                }
-            ]
-        }
-    ],
-    "ServiceWorkerScriptStreaming": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "ServiceWorkerScriptStreaming"
-                    ]
-                },
-                {
-                    "name": "Disabled",
-                    "disable_features": [
-                        "ServiceWorkerScriptStreaming"
-                    ]
-                }
-            ]
-        }
-    ],
     "SettingsEnforcement": [
         {
             "platforms": [
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3756,7 +3789,7 @@
     "SettingsResetPrompt": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3794,7 +3827,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3875,7 +3908,7 @@
             "platforms": [
                 "chromeos",
                 "linux",
-                "win",
+                "windows",
                 "mac"
             ],
             "experiments": [
@@ -3896,7 +3929,7 @@
             "platforms": [
                 "chromeos",
                 "linux",
-                "win",
+                "windows",
                 "mac"
             ],
             "experiments": [
@@ -3917,7 +3950,7 @@
                 "linux",
                 "mac",
                 "ios",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -3929,51 +3962,10 @@
             ]
         }
     ],
-    "SpdyProxiesRequestsDelayable": [
-        {
-            "platforms": [
-                "android",
-                "win",
-                "mac",
-                "chromeos",
-                "linux"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "SpdyProxiesRequestsDelayable"
-                    ]
-                }
-            ]
-        }
-    ],
-    "SpeculativeLaunchServiceWorker": [
-        {
-            "platforms": [
-                "android",
-                "chromeos",
-                "linux",
-                "mac",
-                "win"
-            ],
-            "experiments": [
-                {
-                    "name": "Enabled",
-                    "enable_features": [
-                        "SpeculativeLaunchServiceWorker"
-                    ]
-                },
-                {
-                    "name": "Disabled"
-                }
-            ]
-        }
-    ],
     "StabilityDebugging": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4004,10 +3996,25 @@
             ]
         }
     ],
+    "StopNonTimersInBackground": [
+        {
+            "platforms": [
+                "android"
+            ],
+            "experiments": [
+                {
+                    "name": "Experiment",
+                    "enable_features": [
+                        "stop-non-timers-in-background"
+                    ]
+                }
+            ]
+        }
+    ],
     "SuperfishInterstitial": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4026,7 +4033,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4046,7 +4053,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4080,15 +4087,15 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
-                    "name": "Enabled",
+                    "name": "MaxDelayable_v1_3g_15_Weight3",
                     "params": {
                         "EffectiveConnectionType1": "3G",
-                        "MaxDelayableRequests1": "14",
-                        "NonDelayableWeight1": "2.0"
+                        "MaxDelayableRequests1": "15",
+                        "NonDelayableWeight1": "3.0"
                     },
                     "enable_features": [
                         "ThrottleDelayable"
@@ -4104,7 +4111,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4141,7 +4148,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4185,7 +4192,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4220,7 +4227,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4236,7 +4243,7 @@
     "TriggeredResetFieldTrial": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4253,7 +4260,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4272,7 +4279,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win",
+                "windows",
                 "ios"
             ],
             "experiments": [
@@ -4311,7 +4318,7 @@
                 "ios",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4341,7 +4348,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4386,7 +4393,7 @@
     "UserInitiatedChromeCleanupsFieldTrial": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4405,7 +4412,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4423,7 +4430,7 @@
                 "android",
                 "chromeos",
                 "linux",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4441,7 +4448,7 @@
                 "android",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4466,7 +4473,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4517,7 +4524,7 @@
     "VariationsHttpDisabled": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -4539,7 +4546,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win",
+                "windows",
                 "ios"
             ],
             "experiments": [
@@ -4557,7 +4564,7 @@
             "platforms": [
                 "linux",
                 "mac",
-                "win",
+                "windows",
                 "chromeos",
                 "android"
             ],
@@ -4578,7 +4585,7 @@
             ],
             "experiments": [
                 {
-                    "name": "Enabled",
+                    "name": "Enabled_20180703",
                     "enable_features": [
                         "ViewsBrowserWindows"
                     ]
@@ -4593,7 +4600,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4612,7 +4619,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4650,7 +4657,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4671,7 +4678,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4683,7 +4690,7 @@
     "WebRTC-Audio-NetEqPostponeDecodingAfterExpand": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux",
@@ -4703,7 +4710,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4721,7 +4728,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4740,7 +4747,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4755,7 +4762,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4767,7 +4774,7 @@
     "WebRTC-NewCpuLoadEstimator": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux"
@@ -4785,7 +4792,7 @@
     "WebRTC-ProbingScreenshareBwe": [
         {
             "platforms": [
-                "win",
+                "windows",
                 "mac",
                 "chromeos",
                 "linux"
@@ -4803,7 +4810,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4818,7 +4825,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4837,7 +4844,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4853,7 +4860,7 @@
     "Win10AcceleratedDefaultBrowserFlow": [
         {
             "platforms": [
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4872,7 +4879,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {
@@ -4891,7 +4898,7 @@
                 "chromeos",
                 "linux",
                 "mac",
-                "win"
+                "windows"
             ],
             "experiments": [
                 {

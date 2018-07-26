@@ -314,7 +314,7 @@ bool CanHandleCycleMru(const ui::Accelerator& accelerator) {
   // http://crbug.com/638269
   auto* keyboard_controller = keyboard::KeyboardController::Get();
   return !(keyboard_controller->enabled() &&
-           keyboard_controller->keyboard_visible());
+           keyboard_controller->IsKeyboardVisible());
 }
 
 void HandleNextIme() {
@@ -677,14 +677,6 @@ void HandleToggleVoiceInteraction(const ui::Accelerator& accelerator) {
         base::UserMetricsAction("VoiceInteraction.Started.Assistant"));
   }
 
-  // TODO(dmblack): Remove. Enabling eligibility check bypass for development
-  // purposes only. We should otherwise respect the eligibility rules below.
-  if (chromeos::switches::IsAssistantEnabled()) {
-    Shell::Get()->assistant_controller()->ui_controller()->ToggleUi(
-        AssistantSource::kHotkey);
-    return;
-  }
-
   switch (Shell::Get()->voice_interaction_controller()->allowed_state()) {
     case mojom::AssistantAllowedState::DISALLOWED_BY_NONPRIMARY_USER:
       // Show a toast if the active user is not primary.
@@ -800,7 +792,7 @@ void HandleToggleDictation() {
 }
 
 bool CanHandleToggleDockedMagnifier() {
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     // TODO: Mash support for the Docked Magnifier https://crbug.com/814481.
     NOTIMPLEMENTED();
     return false;
@@ -880,7 +872,13 @@ void SetFullscreenMagnifierEnabled(bool enabled) {
   } else {
     RemoveStickyNotitification(kFullscreenMagnifierToggleAccelNotificationId);
   }
-  Shell::Get()->magnification_controller()->SetEnabled(enabled);
+
+  // TODO (afakhry): Move the below into a single call (crbug/817157).
+  // Necessary to make magnification controller in ash observe changes to the
+  // prefs iteself.
+  Shell* shell = Shell::Get();
+  shell->accessibility_controller()->SetFullscreenMagnifierEnabled(enabled);
+  shell->magnification_controller()->SetEnabled(enabled);
 }
 
 void SetHighContrastEnabled(bool enabled) {
@@ -918,7 +916,7 @@ void HandleToggleHighContrast() {
 }
 
 bool CanHandleToggleFullscreenMagnifier() {
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     // TODO: Mash support for the Fullscreen Magnifier
     // https://crbug.com/821551.
     NOTIMPLEMENTED();
@@ -997,7 +995,7 @@ bool CanHandleActiveMagnifierZoom() {
 // Change the scale of the active magnifier.
 void HandleActiveMagnifierZoom(int delta_index) {
   // TODO(crbug.com/612331): Mash support.
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     NOTIMPLEMENTED();
     return;
   }
@@ -1016,7 +1014,7 @@ void HandleActiveMagnifierZoom(int delta_index) {
 
 bool CanHandleTouchHud() {
   // TODO(crbug.com/612331): Mash support.
-  if (Shell::GetAshConfig() == Config::MASH)
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
     return false;
 
   return RootWindowController::ForTargetRootWindow()->touch_hud_debug();
@@ -1024,7 +1022,7 @@ bool CanHandleTouchHud() {
 
 void HandleTouchHudClear() {
   // TODO(crbug.com/612331): Mash support.
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     NOTIMPLEMENTED();
     return;
   }
@@ -1033,7 +1031,7 @@ void HandleTouchHudClear() {
 
 void HandleTouchHudModeChange() {
   // TODO(crbug.com/612331): Mash support.
-  if (Shell::GetAshConfig() == Config::MASH) {
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     NOTIMPLEMENTED();
     return;
   }

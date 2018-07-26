@@ -10,7 +10,8 @@
 
 class PrefService;
 
-class ChromeUnifiedConsentServiceClient : public UnifiedConsentServiceClient {
+class ChromeUnifiedConsentServiceClient
+    : public unified_consent::UnifiedConsentServiceClient {
  public:
   explicit ChromeUnifiedConsentServiceClient(PrefService* pref_service);
   ~ChromeUnifiedConsentServiceClient() override = default;
@@ -21,6 +22,7 @@ class ChromeUnifiedConsentServiceClient : public UnifiedConsentServiceClient {
   void SetSafeBrowsingEnabled(bool enabled) override;
   void SetSafeBrowsingExtendedReportingEnabled(bool enabled) override;
   void SetNetworkPredictionEnabled(bool enabled) override;
+  void SetSpellCheckEnabled(bool enabled) override;
 
  private:
   PrefService* pref_service_;

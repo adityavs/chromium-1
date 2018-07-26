@@ -37,7 +37,9 @@
 #include "third_party/blink/public/mojom/blob/blob_url_store.mojom-blink.h"
 #include "third_party/blink/public/platform/web_insecure_request_policy.h"
 #include "third_party/blink/public/web/commit_result.mojom-shared.h"
+#include "third_party/blink/public/web/web_document_loader.h"
 #include "third_party/blink/public/web/web_frame_load_type.h"
+#include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_navigation_type.h"
 #include "third_party/blink/public/web/web_triggering_event_info.h"
 #include "third_party/blink/renderer/core/core_export.h"
@@ -63,7 +65,6 @@ namespace blink {
 class Document;
 class DocumentLoader;
 class ExecutionContext;
-class HTMLFormElement;
 class LocalFrame;
 class Frame;
 class LocalFrameClient;
@@ -105,9 +106,12 @@ class CORE_EXPORT FrameLoader final {
   // that browser process has already performed any checks necessary.
   // For history navigations, a history item should be provided and
   // an appropriate WebFrameLoadType should be given.
-  void CommitNavigation(const FrameLoadRequest&,
-                        WebFrameLoadType = WebFrameLoadType::kStandard,
-                        HistoryItem* = nullptr);
+  void CommitNavigation(
+      const FrameLoadRequest&,
+      WebFrameLoadType = WebFrameLoadType::kStandard,
+      HistoryItem* = nullptr,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data = nullptr,
+      const WebNavigationTimings& navigation_timings = WebNavigationTimings());
 
   // Called when the browser process has asked this renderer process to commit a
   // same document navigation in that frame. Returns false if the navigation
@@ -204,23 +208,6 @@ class CORE_EXPORT FrameLoader final {
   void SaveScrollState();
   void RestoreScrollPositionAndViewState();
 
-  // The navigation should only be continued immediately in this frame if this
-  // returns NavigationPolicyCurrentTab.
-  NavigationPolicy ShouldContinueForNavigationPolicy(
-      const ResourceRequest&,
-      Document* origin_document,
-      const SubstituteData&,
-      DocumentLoader*,
-      ContentSecurityPolicyDisposition,
-      WebNavigationType,
-      NavigationPolicy,
-      WebFrameLoadType,
-      bool is_client_redirect,
-      WebTriggeringEventInfo,
-      HTMLFormElement*,
-      mojom::blink::BlobURLTokenPtr,
-      bool check_with_client);
-
   // Note: When a PlzNavigtate navigation is handled by the client, we will
   // have created a dummy provisional DocumentLoader, so this will return true
   // while the client handles the navigation.
@@ -252,12 +239,6 @@ class CORE_EXPORT FrameLoader final {
   // Returns whether we should continue with new navigation.
   bool CancelProvisionalLoaderForNewNavigation(NavigationPolicy);
 
-  void StartLoad(FrameLoadRequest&,
-                 WebFrameLoadType,
-                 NavigationPolicy,
-                 HistoryItem*,
-                 bool check_with_client);
-
   void ClearInitialScrollState();
 
   void LoadInSameDocument(const KURL&,
@@ -278,10 +259,13 @@ class CORE_EXPORT FrameLoader final {
   std::unique_ptr<TracedValue> ToTracedValue() const;
   void TakeObjectSnapshot() const;
 
-  DocumentLoader* CreateDocumentLoader(const ResourceRequest&,
-                                       const FrameLoadRequest&,
-                                       WebFrameLoadType,
-                                       WebNavigationType);
+  DocumentLoader* CreateDocumentLoader(
+      const ResourceRequest&,
+      const FrameLoadRequest&,
+      WebFrameLoadType,
+      WebNavigationType,
+      std::unique_ptr<WebDocumentLoader::ExtraData>,
+      const WebNavigationTimings&);
 
   LocalFrameClient* Client() const;
 

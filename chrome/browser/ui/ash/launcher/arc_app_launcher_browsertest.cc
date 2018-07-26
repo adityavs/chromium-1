@@ -33,6 +33,7 @@
 #include "components/arc/arc_bridge_service.h"
 #include "components/arc/arc_service_manager.h"
 #include "components/arc/arc_util.h"
+#include "components/arc/metrics/arc_metrics_constants.h"
 #include "components/arc/test/fake_app_instance.h"
 #include "content/public/test/browser_test_utils.h"
 #include "ui/display/types/display_constants.h"
@@ -406,7 +407,8 @@ IN_PROC_BROWSER_TEST_P(ArcAppDeferredLauncherWithParamsBrowserTest,
               SelectShelfItem(shelf_id, ui::ET_MOUSE_PRESSED,
                               display::kInvalidDisplayId));
   } else {
-    arc::LaunchApp(profile(), app_id, ui::EF_LEFT_MOUSE_BUTTON);
+    arc::LaunchApp(profile(), app_id, ui::EF_LEFT_MOUSE_BUTTON,
+                   arc::UserInteractionType::NOT_USER_INITIATED);
   }
 
   const ash::ShelfItem* item = controller->GetItem(shelf_id);
@@ -494,7 +496,8 @@ IN_PROC_BROWSER_TEST_F(ArcAppLauncherBrowserTest, IsAppOpen) {
   AppListClientImpl* client = AppListClientImpl::GetInstance();
   AppListControllerDelegate* delegate = client;
   EXPECT_FALSE(delegate->IsAppOpen(app_id));
-  arc::LaunchApp(profile(), app_id, ui::EF_LEFT_MOUSE_BUTTON);
+  arc::LaunchApp(profile(), app_id, ui::EF_LEFT_MOUSE_BUTTON,
+                 arc::UserInteractionType::NOT_USER_INITIATED);
   EXPECT_FALSE(delegate->IsAppOpen(app_id));
   // Simulate task creation so the app is marked as running/open.
   std::unique_ptr<ArcAppListPrefs::AppInfo> info = app_prefs()->GetApp(app_id);

@@ -4,6 +4,9 @@
 
 #include "chrome/browser/chromeos/crostini/crostini_registry_service.h"
 
+#include <map>
+#include <string>
+
 #include "ash/public/cpp/app_list/app_list_config.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
@@ -34,10 +37,6 @@ constexpr char kCrostiniWindowAppIdPrefix[] = "org.chromium.termina.";
 // This comes after kCrostiniWindowAppIdPrefix
 constexpr char kWMClassPrefix[] = "wmclass.";
 
-// This prefix is used when generating the crostini app list id, and used as a
-// prefix when generating shelf ids for windows we couldn't match to an app.
-constexpr char kCrostiniAppIdPrefix[] = "crostini:";
-
 constexpr char kCrostiniRegistryPref[] = "crostini.registry";
 constexpr char kCrostiniIconFolder[] = "crostini.icons";
 
@@ -56,6 +55,15 @@ constexpr char kAppLastLaunchTimeKey[] = "last_launch_time";
 
 constexpr char kCrostiniAppsInstalledHistogram[] =
     "Crostini.AppsInstalledAtLogin";
+
+// A hard-coded mapping from WMClass to app names.
+// This is used to deal with the Linux apps that don't specify the correct
+// WMClass in their desktop files so that their aura windows can be identified
+// with their respective app IDs.
+const std::map<std::string, std::string> wmclass_to_name = {
+    {"Octave-gui", "GNU Octave"},
+    {"MuseScore2", "MuseScore 2"},
+    {"XnViewMP", "XnView Multi Platform"}};
 
 std::string GenerateAppId(const std::string& desktop_file_id,
                           const std::string& vm_name,
@@ -113,14 +121,28 @@ base::Time GetTime(const base::Value& pref, const char* key) {
       base::TimeDelta::FromMicroseconds(time));
 }
 
+bool MatchingString(const std::string& search_string,
+                    const std::string& value_string,
+                    bool ignore_space) {
+  std::string search = search_string;
+  std::string value = value_string;
+  if (ignore_space) {
+    base::RemoveChars(search, " ", &search);
+    base::RemoveChars(value, " ", &value);
+  }
+  return base::EqualsCaseInsensitiveASCII(search, value);
+}
+
 enum class FindAppIdResult { NoMatch, UniqueMatch, NonUniqueMatch };
 // Looks for an app where prefs_key is set to search_value. Returns the apps id
 // if there was only one app matching, otherwise returns an empty string.
 FindAppIdResult FindAppId(const base::DictionaryValue* prefs,
-                          base::StringPiece prefs_key,
-                          base::StringPiece search_value,
+                          const base::StringPiece& prefs_key,
+                          const base::StringPiece& search_value,
                           std::string* result,
-                          bool require_startup_notify = false) {
+                          bool require_startup_notify = false,
+                          bool need_display = false,
+                          bool ignore_space = false) {
   result->clear();
   for (const auto& item : prefs->DictItems()) {
     if (item.first == kCrostiniTerminalId)
@@ -132,17 +154,26 @@ FindAppIdResult FindAppId(const base::DictionaryValue* prefs,
              ->GetBool())
       continue;
 
+    if (need_display) {
+      const base::Value* no_display = item.second.FindKeyOfType(
+          kAppNoDisplayKey, base::Value::Type::BOOLEAN);
+      if (no_display && no_display->GetBool())
+        continue;
+    }
+
     const base::Value* value = item.second.FindKey(prefs_key);
     if (!value)
       continue;
     if (value->type() == base::Value::Type::STRING) {
-      if (!EqualsCaseInsensitiveASCII(search_value, value->GetString()))
+      if (!MatchingString(search_value.as_string(), value->GetString(),
+                          ignore_space)) {
         continue;
+      }
     } else if (value->type() == base::Value::Type::DICTIONARY) {
       // Look at the unlocalized name to see if that matches.
       value = value->FindKeyOfType("", base::Value::Type::STRING);
-      if (!value ||
-          !EqualsCaseInsensitiveASCII(search_value, value->GetString())) {
+      if (!value || !MatchingString(search_value.as_string(),
+                                    value->GetString(), ignore_space)) {
         continue;
       }
     } else {
@@ -318,6 +349,10 @@ CrostiniRegistryService::CrostiniRegistryService(Profile* profile)
 
 CrostiniRegistryService::~CrostiniRegistryService() = default;
 
+base::WeakPtr<CrostiniRegistryService> CrostiniRegistryService::GetWeakPtr() {
+  return weak_ptr_factory_.GetWeakPtr();
+}
+
 // The code follows these steps to identify apps and returns the first match:
 // 1) Ignore windows if the App Id is prefixed by org.chromium.arc.
 // 2) If the Startup Id is set, look for a matching desktop file id.
@@ -382,8 +417,17 @@ std::string CrostiniRegistryService::GetCrostiniShelfAppId(
       FindAppIdResult::UniqueMatch)
     return app_id;
 
-  if (FindAppId(apps, kAppNameKey, key, &app_id) ==
-      FindAppIdResult::UniqueMatch)
+  if (FindAppId(apps, kAppNameKey, key, &app_id,
+                false /* require_startup_notification */,
+                true /* need_display */,
+                true /* ignore_space */) == FindAppIdResult::UniqueMatch)
+    return app_id;
+
+  auto it = wmclass_to_name.find(key.as_string());
+  if (it != wmclass_to_name.end() &&
+      FindAppId(apps, kAppNameKey, it->second, &app_id,
+                false /* require_startup_notification */,
+                true /* need_display */) == FindAppIdResult::UniqueMatch)
     return app_id;
 
   return kCrostiniAppIdPrefix + *window_app_id;

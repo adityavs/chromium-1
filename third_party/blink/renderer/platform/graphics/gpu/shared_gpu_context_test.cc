@@ -14,6 +14,7 @@
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
 #include "third_party/blink/renderer/platform/graphics/test/fake_gles2_interface.h"
 #include "third_party/blink/renderer/platform/graphics/test/fake_web_graphics_context_3d_provider.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/khronos/GLES2/gl2ext.h"
 
 using testing::_;
@@ -133,9 +134,7 @@ TEST_F(SharedGpuContextTest, Canvas2DLayerBridgeAutoRecovery) {
   CanvasColorParams color_params;
   std::unique_ptr<Canvas2DLayerBridge> bridge =
       std::make_unique<Canvas2DLayerBridge>(
-          size, 0,
-          /*msaa sample count*/ Canvas2DLayerBridge::kEnableAcceleration,
-          color_params);
+          size, Canvas2DLayerBridge::kEnableAcceleration, color_params);
   EXPECT_TRUE(bridge->IsAccelerated());
   EXPECT_TRUE(SharedGpuContext::IsValidWithoutRestoring());
 }

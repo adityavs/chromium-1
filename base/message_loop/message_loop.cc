@@ -9,12 +9,12 @@
 
 #include "base/bind.h"
 #include "base/compiler_specific.h"
+#include "base/debug/task_annotator.h"
 #include "base/logging.h"
 #include "base/memory/ptr_util.h"
 #include "base/message_loop/message_pump_default.h"
 #include "base/message_loop/message_pump_for_io.h"
 #include "base/message_loop/message_pump_for_ui.h"
-#include "base/metrics/histogram_macros.h"
 #include "base/run_loop.h"
 #include "base/third_party/dynamic_annotations/dynamic_annotations.h"
 #include "base/threading/thread_id_name_manager.h"
@@ -35,38 +35,96 @@ std::unique_ptr<MessagePump> ReturnPump(std::unique_ptr<MessagePump> pump) {
   return pump;
 }
 
-enum class ScheduledWakeupResult {
-  // The MessageLoop went to sleep with a timeout and woke up because of that
-  // timeout.
-  kCompleted,
-  // The MessageLoop went to sleep with a timeout but was woken up before it
-  // fired.
-  kInterrupted,
+}  // namespace
+
+class MessageLoop::Controller : public internal::IncomingTaskQueue::Observer {
+ public:
+  // Constructs a MessageLoopController which controls |message_loop|, notifying
+  // |task_annotator_| when tasks are queued scheduling work on |message_loop|
+  // as fits. |message_loop| and |task_annotator_| will not be used after
+  // DisconnectFromParent() returns.
+  Controller(MessageLoop* message_loop);
+
+  ~Controller() override;
+
+  // IncomingTaskQueue::Observer:
+  void WillQueueTask(PendingTask* task) final;
+  void DidQueueTask(bool was_empty) final;
+
+  void StartScheduling();
+
+  // Disconnects |message_loop_| from this Controller instance (DidQueueTask()
+  // will no-op from this point forward).
+  void DisconnectFromParent();
+
+  // Shares this Controller's TaskAnnotator with MessageLoop as TaskAnnotator
+  // requires DidQueueTask(x)/RunTask(x) to be invoked on the same TaskAnnotator
+  // instance.
+  debug::TaskAnnotator& task_annotator() { return task_annotator_; }
+
+ private:
+  // A TaskAnnotator which is owned by this Controller to be able to use it
+  // without locking |message_loop_lock_|. It cannot be owned by MessageLoop
+  // because this Controller cannot access |message_loop_| safely without the
+  // lock. Note: the TaskAnnotator API itself is thread-safe.
+  debug::TaskAnnotator task_annotator_;
+
+  // Lock that serializes |message_loop_->ScheduleWork()| and access to all
+  // members below.
+  base::Lock message_loop_lock_;
+
+  // Points to this Controller's outer MessageLoop instance. Null after
+  // DisconnectFromParent().
+  MessageLoop* message_loop_;
+
+  // False until StartScheduling() is called.
+  bool is_ready_for_scheduling_ = false;
+
+  // True if DidQueueTask() has been called before StartScheduling(); letting it
+  // know whether it needs to ScheduleWork() right away or not.
+  bool pending_schedule_work_ = false;
+
+  DISALLOW_COPY_AND_ASSIGN(Controller);
 };
 
-// Reports a ScheduledWakeup's result when waking up from a non-infinite sleep.
-// Reports are using a 14 day spread (maximum examined delay for
-// https://crbug.com/850450#c3), with 50 buckets that still yields 7 buckets
-// under 16ms and hence plenty of resolution.
-void ReportScheduledWakeupResult(ScheduledWakeupResult result,
-                                 TimeDelta intended_sleep) {
-  switch (result) {
-    case ScheduledWakeupResult::kCompleted:
-      UMA_HISTOGRAM_CUSTOM_TIMES("MessageLoop.ScheduledSleep.Completed",
-                                 intended_sleep,
-                                 base::TimeDelta::FromMilliseconds(1),
-                                 base::TimeDelta::FromDays(14), 50);
-      break;
-    case ScheduledWakeupResult::kInterrupted:
-      UMA_HISTOGRAM_CUSTOM_TIMES("MessageLoop.ScheduledSleep.Interrupted",
-                                 intended_sleep,
-                                 base::TimeDelta::FromMilliseconds(1),
-                                 base::TimeDelta::FromDays(14), 50);
-      break;
-  }
+MessageLoop::Controller::Controller(MessageLoop* message_loop)
+    : message_loop_(message_loop) {}
+
+MessageLoop::Controller::~Controller() {
+  DCHECK(!message_loop_)
+      << "DisconnectFromParent() needs to be invoked before destruction.";
 }
 
-}  // namespace
+void MessageLoop::Controller::WillQueueTask(PendingTask* task) {
+  task_annotator_.WillQueueTask("MessageLoop::PostTask", task);
+}
+
+void MessageLoop::Controller::DidQueueTask(bool was_empty) {
+  // Avoid locking if we don't need to schedule.
+  if (!was_empty)
+    return;
+
+  AutoLock auto_lock(message_loop_lock_);
+
+  if (message_loop_ && is_ready_for_scheduling_)
+    message_loop_->ScheduleWork();
+  else
+    pending_schedule_work_ = true;
+}
+
+void MessageLoop::Controller::StartScheduling() {
+  AutoLock lock(message_loop_lock_);
+  DCHECK(message_loop_);
+  DCHECK(!is_ready_for_scheduling_);
+  is_ready_for_scheduling_ = true;
+  if (pending_schedule_work_)
+    message_loop_->ScheduleWork();
+}
+
+void MessageLoop::Controller::DisconnectFromParent() {
+  AutoLock lock(message_loop_lock_);
+  message_loop_ = nullptr;
+}
 
 //------------------------------------------------------------------------------
 
@@ -126,7 +184,8 @@ MessageLoop::~MessageLoop() {
   thread_task_runner_handle_.reset();
 
   // Tell the incoming queue that we are dying.
-  incoming_task_queue_->WillDestroyCurrentMessageLoop();
+  message_loop_controller_->DisconnectFromParent();
+  incoming_task_queue_->Shutdown();
   incoming_task_queue_ = nullptr;
   unbound_task_runner_ = nullptr;
   task_runner_ = nullptr;
@@ -224,13 +283,18 @@ std::unique_ptr<MessageLoop> MessageLoop::CreateUnbound(
   return WrapUnique(new MessageLoop(type, std::move(pump_factory)));
 }
 
+// TODO(gab): Avoid bare new + WrapUnique below when introducing
+// SequencedTaskSource in follow-up @
+// https://chromium-review.googlesource.com/c/chromium/src/+/1088762.
 MessageLoop::MessageLoop(Type type, MessagePumpFactoryCallback pump_factory)
     : MessageLoopCurrent(this),
       type_(type),
       pump_factory_(std::move(pump_factory)),
-      incoming_task_queue_(new internal::IncomingTaskQueue(this)),
-      unbound_task_runner_(
-          new internal::MessageLoopTaskRunner(incoming_task_queue_)),
+      message_loop_controller_(new Controller(this)),
+      incoming_task_queue_(MakeRefCounted<internal::IncomingTaskQueue>(
+          WrapUnique(message_loop_controller_))),
+      unbound_task_runner_(MakeRefCounted<internal::MessageLoopTaskRunner>(
+          incoming_task_queue_)),
       task_runner_(unbound_task_runner_) {
   // If type is TYPE_CUSTOM non-null pump_factory must be given.
   DCHECK(type_ != TYPE_CUSTOM || !pump_factory_.is_null());
@@ -252,7 +316,7 @@ void MessageLoop::BindToCurrentThread() {
       << "should only have one message loop per thread";
   MessageLoopCurrent::BindToCurrentThreadInternal(this);
 
-  incoming_task_queue_->StartScheduling();
+  message_loop_controller_->StartScheduling();
   unbound_task_runner_->BindToCurrentThread();
   unbound_task_runner_ = nullptr;
   SetThreadTaskRunnerHandle();
@@ -263,6 +327,12 @@ void MessageLoop::BindToCurrentThread() {
       &sequence_local_storage_map_);
 
   RunLoop::RegisterDelegateForCurrentThread(this);
+
+#if defined(OS_ANDROID)
+  // On Android, attach to the native loop when there is one.
+  if (type_ == TYPE_UI || type_ == TYPE_JAVA)
+    static_cast<MessagePumpForUI*>(pump_.get())->Attach(this);
+#endif
 }
 
 std::string MessageLoop::GetThreadName() const {
@@ -348,7 +418,8 @@ void MessageLoop::RunTask(PendingTask* pending_task) {
 
   for (auto& observer : task_observers_)
     observer.WillProcessTask(*pending_task);
-  incoming_task_queue_->RunTask(pending_task);
+  message_loop_controller_->task_annotator().RunTask("MessageLoop::PostTask",
+                                                     pending_task);
   for (auto& observer : task_observers_)
     observer.DidProcessTask(*pending_task);
 
@@ -383,26 +454,16 @@ void MessageLoop::ScheduleWork() {
   pump_->ScheduleWork();
 }
 
+TimeTicks MessageLoop::CapAtOneDay(TimeTicks next_run_time) {
+  return std::min(next_run_time, recent_time_ + TimeDelta::FromDays(1));
+}
+
 bool MessageLoop::DoWork() {
   if (!task_execution_allowed_)
     return false;
 
   // Execute oldest task.
   while (incoming_task_queue_->triage_tasks().HasTasks()) {
-    if (!scheduled_wakeup_.next_run_time.is_null()) {
-      // While the frontmost task may racily be ripe. The MessageLoop was awaken
-      // without needing the timeout anyways. Since this metric is about
-      // determining whether sleeping for long periods ever succeeds: it's
-      // easier to just consider any untriaged task as an interrupt (this also
-      // makes the logic simpler for untriaged delayed tasks which may alter the
-      // top of the task queue prior to DoDelayedWork() but did cause a wakeup
-      // regardless -- per currently requiring this immediate triage step even
-      // for long delays).
-      ReportScheduledWakeupResult(ScheduledWakeupResult::kInterrupted,
-                                  scheduled_wakeup_.intended_sleep);
-      scheduled_wakeup_ = ScheduledWakeup();
-    }
-
     PendingTask pending_task = incoming_task_queue_->triage_tasks().Pop();
     if (pending_task.task.IsCancelled())
       continue;
@@ -428,18 +489,7 @@ bool MessageLoop::DoWork() {
 bool MessageLoop::DoDelayedWork(TimeTicks* next_delayed_work_time) {
   if (!task_execution_allowed_ ||
       !incoming_task_queue_->delayed_tasks().HasTasks()) {
-    recent_time_ = *next_delayed_work_time = TimeTicks();
-
-    // It's possible to be woken up by a system event and have it cancel the
-    // upcoming delayed task from under us before DoDelayedWork() -- see comment
-    // under |next_run_time > recent_time_|. This condition covers the special
-    // case where such a system event cancelled *all* pending delayed tasks.
-    if (!scheduled_wakeup_.next_run_time.is_null()) {
-      ReportScheduledWakeupResult(ScheduledWakeupResult::kInterrupted,
-                                  scheduled_wakeup_.intended_sleep);
-      scheduled_wakeup_ = ScheduledWakeup();
-    }
-
+    *next_delayed_work_time = TimeTicks();
     return false;
   }
 
@@ -456,42 +506,16 @@ bool MessageLoop::DoDelayedWork(TimeTicks* next_delayed_work_time) {
   if (next_run_time > recent_time_) {
     recent_time_ = TimeTicks::Now();  // Get a better view of Now();
     if (next_run_time > recent_time_) {
-      *next_delayed_work_time = next_run_time;
-
-      // If the loop was woken up early by an untriaged task:
-      // |scheduled_wakeup_| will have been handled already in DoWork(). If it
-      // wasn't, it means the early wake up was caused by a system event (e.g.
-      // MessageLoopForUI or IO).
-      if (!scheduled_wakeup_.next_run_time.is_null()) {
-        // Handling the system event may have resulted in cancelling the
-        // upcoming delayed task (and then it being pruned by
-        // DelayedTaskQueue::HasTasks()); hence, we cannot check for strict
-        // equality here. We can however check that the pending task is either
-        // still there or that a later delay replaced it in front of the queue.
-        // There shouldn't have been new tasks added in |delayed_tasks()| per
-        // DoWork() not having triaged new tasks since the last DoIdleWork().
-        DCHECK_GE(next_run_time, scheduled_wakeup_.next_run_time);
-
-        ReportScheduledWakeupResult(ScheduledWakeupResult::kInterrupted,
-                                    scheduled_wakeup_.intended_sleep);
-        scheduled_wakeup_ = ScheduledWakeup();
-      }
-
+      *next_delayed_work_time = CapAtOneDay(next_run_time);
       return false;
     }
-  }
-
-  if (next_run_time == scheduled_wakeup_.next_run_time) {
-    ReportScheduledWakeupResult(ScheduledWakeupResult::kCompleted,
-                                scheduled_wakeup_.intended_sleep);
-    scheduled_wakeup_ = ScheduledWakeup();
   }
 
   PendingTask pending_task = incoming_task_queue_->delayed_tasks().Pop();
 
   if (incoming_task_queue_->delayed_tasks().HasTasks()) {
-    *next_delayed_work_time =
-        incoming_task_queue_->delayed_tasks().Peek().delayed_run_time;
+    *next_delayed_work_time = CapAtOneDay(
+        incoming_task_queue_->delayed_tasks().Peek().delayed_run_time);
   }
 
   return DeferOrRunPendingTask(std::move(pending_task));
@@ -505,38 +529,19 @@ bool MessageLoop::DoIdleWork() {
   bool need_high_res_timers = false;
 #endif
 
+  // Do not report idle metrics if about to quit the loop and/or in a nested
+  // loop where |!task_execution_allowed_|. In the former case, the loop isn't
+  // going to sleep and in the latter case DoDelayedWork() will not actually do
+  // the work this is prepping for.
   if (ShouldQuitWhenIdle()) {
     pump_->Quit();
-  } else {
-    incoming_task_queue_->ReportMetricsOnIdle();
-
-    if (incoming_task_queue_->delayed_tasks().HasTasks()) {
-      TimeTicks scheduled_wakeup_time =
-          incoming_task_queue_->delayed_tasks().Peek().delayed_run_time;
-
-      if (!scheduled_wakeup_.next_run_time.is_null()) {
-        // It's possible for DoIdleWork() to be invoked twice in a row (e.g. if
-        // the MessagePump processed system work and became idle twice in a row
-        // without application tasks in between -- some pumps with a native
-        // message loop do not invoke DoWork() / DoDelayedWork() when awaken for
-        // system work only). As in DoDelayedWork(), we cannot check for strict
-        // equality below as the system work may have cancelled the frontmost
-        // task.
-        DCHECK_GE(scheduled_wakeup_time, scheduled_wakeup_.next_run_time);
-
-        ReportScheduledWakeupResult(ScheduledWakeupResult::kInterrupted,
-                                    scheduled_wakeup_.intended_sleep);
-        scheduled_wakeup_ = ScheduledWakeup();
-      }
-
-      // Store the remaining delay as well as the programmed wakeup time in
-      // order to know next time this MessageLoop wakes up whether it woke up
-      // because of this pending task (is it still the frontmost task in the
-      // queue?) and be able to report the slept delta (which is lost if not
-      // saved here).
-      scheduled_wakeup_ = ScheduledWakeup{
-          scheduled_wakeup_time, scheduled_wakeup_time - TimeTicks::Now()};
-    }
+  } else if (task_execution_allowed_) {
+    // Only track idle metrics in MessageLoopForUI to avoid too much contention
+    // logging the histogram (https://crbug.com/860801) -- there's typically
+    // only one UI thread per process and, for practical purposes, restricting
+    // the MessageLoop diagnostic metrics to it yields similar information.
+    if (type_ == TYPE_UI)
+      incoming_task_queue_->ReportMetricsOnIdle();
 
 #if defined(OS_WIN)
     // On Windows we activate the high resolution timer so that the wait
@@ -564,8 +569,13 @@ bool MessageLoop::DoIdleWork() {
 //------------------------------------------------------------------------------
 // MessageLoopForUI
 
-MessageLoopForUI::MessageLoopForUI(std::unique_ptr<MessagePump> pump)
-    : MessageLoop(TYPE_UI, BindOnce(&ReturnPump, std::move(pump))) {}
+MessageLoopForUI::MessageLoopForUI(Type type) : MessageLoop(type) {
+#if defined(OS_ANDROID)
+  DCHECK(type == TYPE_UI || type == TYPE_JAVA);
+#else
+  DCHECK_EQ(type, TYPE_UI);
+#endif
+}
 
 // static
 MessageLoopCurrentForUI MessageLoopForUI::current() {
@@ -584,15 +594,25 @@ void MessageLoopForUI::Attach() {
 #endif  // defined(OS_IOS)
 
 #if defined(OS_ANDROID)
-void MessageLoopForUI::Start() {
-  // No Histogram support for UI message loop as it is managed by Java side
-  static_cast<MessagePumpForUI*>(pump_.get())->Start(this);
-}
-
 void MessageLoopForUI::Abort() {
   static_cast<MessagePumpForUI*>(pump_.get())->Abort();
 }
+
+bool MessageLoopForUI::IsAborted() {
+  return static_cast<MessagePumpForUI*>(pump_.get())->IsAborted();
+}
+
+void MessageLoopForUI::QuitWhenIdle(base::OnceClosure callback) {
+  static_cast<MessagePumpForUI*>(pump_.get())
+      ->QuitWhenIdle(std::move(callback));
+}
 #endif  // defined(OS_ANDROID)
+
+#if defined(OS_WIN)
+void MessageLoopForUI::EnableWmQuit() {
+  static_cast<MessagePumpForUI*>(pump_.get())->EnableWmQuit();
+}
+#endif  // defined(OS_WIN)
 
 #endif  // !defined(OS_NACL)
 

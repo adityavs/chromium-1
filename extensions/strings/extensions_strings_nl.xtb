@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Lokalisatie gebruikt, maar er is geen 'default_locale' opgegeven in het manifest.</translation>
 <translation id="2576842806987913196">Er is al een CRX-bestand aanwezig met deze naam.</translation>
 <translation id="2753617847762399167">Illegaal pad (absoluut of relatief met '..'): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">Deze extensie heeft een netwerkverzoek niet kunnen aanpassen, omdat de aanpassing zorgde voor een conflict met een andere extensie.</translation>
 <translation id="2785530881066938471">Kan bestand '<ph name="RELATIVE_PATH" />' niet laden voor inhoudsscript. Het bestand bevat geen UTF-8-codering.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (extensie-ID '<ph name="EXTENSION_ID" />') is geblokkeerd door de beheerder. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Kan pakket niet installeren: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">Onbekend product <ph name="PRODUCT_ID" /> van <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">Manifestbestand is ongeldig</translation>
 <translation id="7217838517480956708">De beheerder van dit apparaat vereist dat <ph name="EXTENSION_NAME" /> is geïnstalleerd. Het kan niet worden verwijderd of gewijzigd.</translation>
+<translation id="7939686037314084444">De extensie wordt niet goed geladen. Mogelijk kan deze geen netwerkverzoeken onderscheppen.</translation>
 <translation id="7972881773422714442">Opties: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Camera aan voorzijde</translation>
 <translation id="8047248493720652249">Deze extensie kan de download niet de naam '<ph name="ATTEMPTED_FILENAME" />' geven, omdat een andere extensie (<ph name="EXTENSION_NAME" />) een andere bestandsnaam '<ph name="ACTUAL_FILENAME" />' heeft bepaald.</translation>

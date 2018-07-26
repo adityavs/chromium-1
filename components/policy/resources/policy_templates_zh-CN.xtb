@@ -42,6 +42,9 @@
       有关可用变量的列表，请访问 https://www.chromium.org/administrators/policy-list-3/user-data-directory-variables。
 
       如果未设置此政策，则系统将使用默认缓存目录，而且日后用户将可以通过“--disk-cache-dir”命令行标记来替换此目录。</translation>
+<translation id="1135264353752122851">配置允许在 <ph name="PRODUCT_OS_NAME" />用户会话中使用哪些键盘布局。
+
+      如果设置了此政策，用户只能从此政策指定的输入法中选择其一。如果未设置此政策或将此政策设为空列表，用户则可选择任一受支持的输入法。如果此政策不允许使用当前输入法，这一输入法便会切换到硬件键盘布局（如果允许）或此列表中的第一个有效条目。系统将会忽略此列表中所有无效或不受支持的输入法。</translation>
 <translation id="1138294736309071213">此政策仅在零售模式下有效。
 
       确定在零售模式设备的登录屏幕上显示屏幕保护程序之前的闲置时间。
@@ -68,6 +71,7 @@
 <translation id="1221359380862872747">在演示登录时加载指定网址</translation>
 <translation id="1223789468190631420">针对可信来源的安全浏览功能启用状态</translation>
 <translation id="123081309365616809">允许向设备投射内容</translation>
+<translation id="1243570869342663665">控制 SafeSites 的成人内容滤除机制。</translation>
 <translation id="1257550411839719984">设置默认下载目录</translation>
 <translation id="1265053460044691532">限制通过SAML验证身份的用户可离线登录的时长</translation>
 <translation id="1291880496936992484">警告：从 52 版开始，<ph name="PRODUCT_NAME" /> 中将彻底移除 RC4（2016 年 9 月左右）。届时，此政策将不再有效。
@@ -124,11 +128,6 @@
 
       如果此政策未设置，则对于受企业管理的用户，将使用默认值“MultiProfileUserBehaviorMustBePrimary”；对于不受企业管理的用户，则使用“MultiProfileUserBehaviorUnrestricted”。</translation>
 <translation id="1465619815762735808">点击运行</translation>
-<translation id="1466133662354365542">启用 <ph name="PRODUCT_NAME" /> 的“自动填充”功能，并允许用户使用以前存储的信息自动填写网络表单中的信用卡信息和地址信息。
-
-      如果您停用了此设置，“自动填充”功能将不会提示或填充信用卡信息，也不会保存用户在浏览网页时可能提交的其他信用卡信息。
-
-      如果您启用了此设置或未设置任何值，那么用户将能够在界面中控制整个“自动填充”功能（包括信用卡信息）。</translation>
 <translation id="1468307069016535757">设置登录屏幕上高反差模式辅助功能的默认状态。
 
           如果此政策的值设为 True，则登录屏幕显示时将会启用高反差模式。
@@ -201,12 +200,6 @@
       该政策的值应设置为供 <ph name="PRODUCT_OS_NAME" />下载服务条款的网址。该服务条款必须是纯文本，以 MIME 纯文本形式提供，不允许进行任何标记。</translation>
 <translation id="1750315445671978749">拦截所有下载内容</translation>
 <translation id="1781356041596378058">此政策亦用于控制对 Android 开发者选项的访问。如果此政策设为 true，用户将无法访问开发者选项。如果此政策设为 false 或未设置，用户只需在 Android 的“设置”应用中连续点按 7 次版本号即可访问开发者选项。</translation>
-<translation id="178832255504524723">配置用于更改密码的网址（仅限 HTTP 和 HTTPS 方案）。密码保护服务会在用户遭遇网上诱骗时将用户转到此网址，以便其更改密码。
-      为了使 <ph name="PRODUCT_NAME" /> 能够正确捕获这一用于更改密码的页面中的新密码指纹，请务必确保该页面遵循了 https://www.chromium.org/developers/design-documents/create-amazing-password-forms 上所述的准则。
-
-      如果启用了此设置，密码保护服务就会在用户遭遇网上诱骗时将用户转到此网址，以便其更改密码。
-      如果停用了或未设定此设置，密码保护服务则会将用户转到 https://myaccounts.google.com，以便其更改密码。
-      此政策不适用于未加入 <ph name="MS_AD_NAME" /> 网域的 Windows 实例。</translation>
 <translation id="1797233582739332495">显示要求用户重新启动浏览器的周期性提示</translation>
 <translation id="1803646570632580723">要在启动程序中显示的固定应用的列表</translation>
 <translation id="1808715480127969042">在这些网站上阻止 Cookie</translation>
@@ -229,6 +222,13 @@
       在其他情况下，如果必须与存在错误的服务器保持兼容，则可将此政策设为“tls1.1”。这是一种权宜之计，服务器中的错误应该很快会得到解决。</translation>
 <translation id="1864269674877167562">如果此政策设为空字符串或未设置，<ph name="PRODUCT_OS_NAME" />将不会在用户登录期间显示自动填充选项。
       如果此政策设为表示域名的字符串，<ph name="PRODUCT_OS_NAME" />将在用户登录期间显示自动填充选项，以便用户只输入自己的用户名，而无需输入网域扩展名。用户可以覆盖此网域扩展名。</translation>
+<translation id="1864382791685519617">在 <ph name="PRODUCT_NAME" /> 中启用网络联想查询功能，并禁止用户更改此设置。
+
+      此政策用于控制 DNS 预提取、TCP 和 SSL 预连接以及网页预呈现。
+
+      如果您设置了此政策，用户将无法在 <ph name="PRODUCT_NAME" /> 中更改或替换此设置。
+
+      如果未设置此政策，系统将会启用网络联想查询功能，但用户将能够自行更改此设置。</translation>
 <translation id="1865417998205858223">密钥使用权限</translation>
 <translation id="186719019195685253">当闲置延迟时间已过且使用交流电源供电时执行的操作</translation>
 <translation id="187819629719252111">允许 <ph name="PRODUCT_NAME" />显示文件选择对话框，从而允许用户访问计算机上的本地文件。如果您启用了此设置，用户就可以正常地打开文件选择对话框。如果您停用了此设置，那么只要用户执行了会触发文件选择对话框的操作（如导入书签、上传文件、保存链接等），系统就会显示一条讯息，并且假定用户已在该文件选择对话框中点击了“取消”。如果您未设定此设置，用户就可以正常地打开文件选择对话框。</translation>
@@ -241,6 +241,7 @@
       时区值格式遵循“IANA 时区数据库”（请访问“https://en.wikipedia.org/wiki/Tz_database”）中的时区名称所采用的格式。具体而言，大多数时区均可以依照“大陆/大城市”或“海洋/大城市”的格式命名。
 
       设置此政策后，系统将完全停用根据设备位置信息自动解析时区的功能，SystemTimezoneAutomaticDetection 政策也会遭到覆盖。</translation>
+<translation id="1885782360784839335">允许使用整个标签页显示宣传内容</translation>
 <translation id="1888871729456797026">云政策在桌面设备上的注册令牌</translation>
 <translation id="1897365952389968758">允许所有网站运行 JavaScript</translation>
 <translation id="1906888171268104594">控制是否要将使用情况指标和诊断数据（包括崩溃报告）反馈给 Google。
@@ -347,6 +348,7 @@
 
       如果此政策未设置，那么默认值为 0 度，并且用户可以更改该值。如果用户更改了默认值，显示屏在重新启动后不会重新应用默认值。</translation>
 <translation id="2156132677421487971">为 <ph name="PRODUCT_NAME" /> 配置相关政策。借助这项功能，用户可从浏览器将标签页、网站或桌面中的内容发送到远程显示器和音响系统。</translation>
+<translation id="2166472654199325139">不滤除提供成人内容的网站</translation>
 <translation id="2168397434410358693">使用交流电源供电时的闲置延迟时间</translation>
 <translation id="2170233653554726857">启用WPAD优化</translation>
 <translation id="2176565653304920879">设置此政策后，系统会根据所设的值采用下列某种方式执行自动检测时区流程：
@@ -486,6 +488,12 @@
 <translation id="2466131534462628618">进行强制门户身份验证时忽略代理服务器</translation>
 <translation id="2482676533225429905">本地消息传递</translation>
 <translation id="2483146640187052324">采用任何网络连接时，均预测网络操作</translation>
+<translation id="2484208301968418871">此政策用于控制是否应用 SafeSites 网址滤除机制。
+      这一滤除机制使用 Google Safe Search API 将网址归类为色情内容和其他。
+
+      如果未配置此政策或将其设为“不滤除提供成人内容的网站”，系统不会滤除这类网站。
+
+      如果将此政策设为“滤除提供成人内容的顶级网站”，系统会滤除被归类为色情内容的网站。</translation>
 <translation id="2485721741875148980">如果此政策设为 true，用户必须先使用其个人资料登录<ph name="PRODUCT_NAME" />，然后才能使用该浏览器。此外，BrowserGuestModeEnabled 的默认值会设为 false。请注意，启用此政策后，现有的未登录个人资料将会处于锁定且不可访问的状态。有关详情，请参阅帮助中心文章。
 
       如果此政策设为 false 或未配置，用户无需登录<ph name="PRODUCT_NAME" />即可使用该浏览器。</translation>
@@ -636,17 +644,24 @@
 
       如果您启用此设置，打印预览则会将操作系统默认打印机用作默认目标选项。</translation>
 <translation id="2867699958489427143">如果操作系统版本比目标版本新，则回滚到并持续使用目标版本。在此过程中，请执行完整的 Powerwash 操作。</translation>
-<translation id="286802604195763750">可让您控制“密码保护服务警告”功能的触发条件。当用户在可疑的网站上重复使用受保护的密码时，密码保护服务会向用户发出提醒。
-
-      如果此政策设为“PasswordProtectionWarningOff”，则一律不会触发密码保护服务警告。
-      如果此政策设为“PasswordProtectionWarningOnPasswordReuse”，那么每当用户在任何未列入白名单的网站上重复使用 Google 密码时，都会触发密码保护服务警告。
-      如果此政策设为“PasswordProtectionWarningOnPhishingReuse”，那么每当用户在网上诱骗网站上重复使用 Google 密码时，都会触发密码保护服务警告。
-      如果未设置此政策，那么当用户在网上诱骗网站上重复使用 Google 密码时，密码保护服务警告便会被触发，但用户可以更改此设置。</translation>
 <translation id="2872961005593481000">关机</translation>
 <translation id="2874209944580848064">针对支持 Android 应用的 <ph name="PRODUCT_OS_NAME" />设备的注意事项：</translation>
 <translation id="2877225735001246144">在协商 Kerberos 身份验证时停用 CNAME 查找</translation>
 <translation id="2893546967669465276">将系统日志发送到管理服务器</translation>
 <translation id="2899002520262095963">Android 应用可以使用通过此政策设置的网络配置和 CA 证书，但无法访问某些配置选项。</translation>
+<translation id="290002216614278247">让您能够根据客户端时间或当天用量配额锁定用户的会话。
+
+          |time_window_limit| 用于指定一个每日时段 - 在这段时间内，系统应锁定用户的会话。我们仅支持为一周中的每一天指定 1 条规则，因此 |entries| 数组的大小可能会有所不同（介于 0-7 之间）。|starts_at| 和 |ends_at| 是时段限制的开始时间和结束时间，如果 |ends_at| 小于 |starts_at|，即表示 |time_limit_window| 要到次日才会结束。|last_updated_millis| 是表示此条目的上次更新时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。
+
+          |time_usage_limit| 用于指定每日屏幕使用时间配额，当用户用尽配额时，系统就会锁定用户的会话。一周中的每一天都有一个对应的属性，只有在当天具备有效配额的情况下才能设置相应属性。|usage_quota_mins| 是受管理设备的单日可用时间配额，|reset_at| 则是用量配额的更新时间。|reset_at| 的默认值是午夜 ({'hour': 0, 'minute': 0})。|last_updated_millis| 是此条目的上次更新时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。
+
+          提供 |overrides| 是为了让一项或多项先前设定的规则暂时失效。
+          * 如果 time_window_limit 和 time_usage_limit 都处于无效状态，则可使用 |LOCK| 锁定设备。
+          * |LOCK| 可暂时锁定用户会话，直到下一个 time_window_limit 或 time_usage_limit 开始为止。
+          * |UNLOCK| 可解锁根据 time_window_limit 或 time_usage_limit 锁定的用户会话。
+          |created_time_millis| 是表示替换值的创建时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。这项参数用于确定是否仍应将相应替换值付诸应用。如果目前有效的时间限制功能（时间用量限制或时段限制）的开始时间晚于替换值的创建时间，系统便不应采取任何行动。另外，如果替换值的创建时间早于有效 time_window_limit 或 time_usage_window 的上次更改时间，系统也不应将该替换值付诸应用。
+
+          可以发送多个替换值，最新的有效条目会得到应用。</translation>
 <translation id="2906874737073861391">AppPack 扩展程序列表</translation>
 <translation id="2907992746861405243">控制用户可以使用 <ph name="BULK_PRINTERS_POLICY" /> 中的哪些打印机。
 
@@ -655,6 +670,7 @@
       如果未设置此政策，系统将会默认使用 <ph name="PRINTERS_ALLOW_ALL" />。
       </translation>
 <translation id="2908277604670530363">可同时连接到代理服务器的连接数上限</translation>
+<translation id="2951386431828317490">允许使用“自动填充”功能填写个人资料</translation>
 <translation id="2956777931324644324">此政策自36版<ph name="PRODUCT_NAME" />起已停止使用。
 
       用于指定是否启用TLS网域绑定证书扩展程序。
@@ -663,6 +679,7 @@
 <translation id="2957506574938329824">不允许任何网站通过 Web Bluetooth API 请求访问蓝牙设备</translation>
 <translation id="2957513448235202597">进行 <ph name="HTTP_NEGOTIATE" />身份验证时使用的帐号类型</translation>
 <translation id="2959898425599642200">代理绕过规则</translation>
+<translation id="2960128438010718932">分阶段应用新更新的时间表</translation>
 <translation id="2960691910306063964">针对远程访问主机启用或停用无 PIN 码身份验证</translation>
 <translation id="2976002782221275500">指定在使用电池供电时用户停止输入后隔多久屏幕才变暗。
 
@@ -700,6 +717,7 @@
       无论是否设置此政策或如何设置此政策，用户都无法更改 WPAD 优化设置。</translation>
 <translation id="3072045631333522102">用于零售模式登录屏幕的屏幕保护程序</translation>
 <translation id="3072847235228302527">为设备本地帐号设置服务条款</translation>
+<translation id="3077183141551274418">启用或停用标签页生命周期</translation>
 <translation id="3086995894968271156">在 <ph name="PRODUCT_NAME" />中配置 Cast 接收器。</translation>
 <translation id="3088796212846734853">让您能够设置一系列网址格式，以用于指定允许哪些网站显示图片。
 
@@ -1245,6 +1263,11 @@
       这些建议是从 Google 服务器远程提取的。
 
       如果此政策设为 false，将不会提取或显示此类建议。</translation>
+<translation id="4788252609789586009">启用 <ph name="PRODUCT_NAME" /> 的“自动填充”功能，并允许用户使用以前存储的信用卡信息在网络表单中自动填写相关信息。
+
+      如果停用了此设置，“自动填充”功能将不会提供建议或填充信用卡信息，也不会保存用户可能会在浏览网页时提交的其他信用卡信息。
+
+      如果启用了此设置或未设置任何值，用户将能够控制是否要在界面中自动填充信用卡信息。</translation>
 <translation id="4791031774429044540">启用大号光标辅助功能。
 
           如果此政策的值设为 True，则系统将会始终启用大号光标。
@@ -1280,6 +1303,7 @@
 
       如果此政策未设置或为空，那么所有用户都可以登录 <ph name="PRODUCT_NAME" />。</translation>
 <translation id="4858735034935305895">允许全屏模式</translation>
+<translation id="4861767323695239729">配置可在用户会话中使用的输入法</translation>
 <translation id="4869787217450099946">指定是否允许使用屏幕唤醒锁定。扩展程序可通过 Power Management Extension API 请求使用屏幕唤醒锁定。
 
           如果将此政策设为 true 或未进行设置，系统就会允许使用屏幕唤醒锁定，以便进行电源管理。
@@ -1365,6 +1389,11 @@
       如果该政策设为True，<ph name="PRODUCT_OS_NAME" />将阻止相应设备进入开发者模式。当开发者模式开关处于打开状态时，系统将无法启动并显示错误屏幕。
 
       如果该政策未设置或设为False，相应设备将可以使用开发者模式。</translation>
+<translation id="520403427390290017">标签页生命周期功能可回收 CPU，并最终回收与很长时间未使用的正在运行的标签页关联的内存（具体方法是：先限制，再冻结，最终将其舍弃）。
+
+      如果此政策设为 false，系统会停用标签页生命周期，并且所有标签页都将保持正常运行。
+
+      如果此政策设为 true 或未指定，系统会启用标签页生命周期。</translation>
 <translation id="5208240613060747912">可让您设置网址格式的列表，这些网址格式用于指定不允许显示通知的网站。在未设置此政策的情况下，如果设置了“DefaultNotificationsSetting”政策，那么将对该政策中的所有网站使用全局默认值，否则将对用户个人配置中的所有网站使用全局默认值。</translation>
 <translation id="5219844027738217407">对于 Android 应用，此政策仅会影响麦克风。当此政策设为 true 时，系统会针对所有 Android 应用（无一例外）将麦克风设为静音。</translation>
 <translation id="523505283826916779">无障碍设置</translation>
@@ -1410,6 +1439,11 @@
 
           如果此政策设为 False，用户将无法向其设备投射内容。如果此政策设为 True，用户将能够投射内容。如果此政策未设置，用户将被禁止向已注册的 Chrome 操作系统设备投射内容，但可将内容投射到未注册的设备。</translation>
 <translation id="5330684698007383292">允许 <ph name="PRODUCT_FRAME_NAME" />处理以下内容类型</translation>
+<translation id="5360146044009867539">启用 <ph name="PRODUCT_NAME" /> 的“自动填充”功能，并允许用户使用以前存储的信息自动填写网络表单中的个人资料信息和地址信息。
+
+      如果您停用了此设置，“自动填充”功能将不会提示或填充地址信息，也不会保存用户在浏览网页时可能提交的其他地址信息。
+
+      如果启用了此设置或未设置任何值，那么用户将能够在界面中控制地址信息的自动填充。</translation>
 <translation id="5365946944967967336">在工具栏上显示“主页”按钮</translation>
 <translation id="5366745336748853475">可让您指定一系列网址格式，从而指定要在 SAML 流程托管框架的登录屏幕上自动为哪些网站选择客户端证书（如果相应网站要求提供证书）。例如，配置一个要向 SAML IdP 出示的设备级证书。
 
@@ -1689,6 +1723,12 @@
 <translation id="6155936611791017817">设置登录屏幕上大号光标的默认状态</translation>
 <translation id="6157537876488211233">代理绕过规则的逗号分隔列表</translation>
 <translation id="6158324314836466367">企业网上应用店名称（已弃用）</translation>
+<translation id="6164955668342404660">已在 M69 中弃用。请改用 OverrideSecurityRestrictionsOnInsecureOrigin。
+
+      此政策会指定一系列将被视为安全上下文的来源（网址），意在允许相关单位设置临时服务器以用于开发内部网络，这样一来，他们的开发者就能够测试需要安全上下文的功能，而无需在临时服务器上部署传输层安全协议 (TLS)。
+      在此政策中设置一系列网址与将“--unsafely-treat-insecure-origin-as-secure”命令行标记设为同一系列的网址（以英文逗号分隔）具有同样的效果。如果此政策已设置，则会替换上述命令行标记。
+      有关安全上下文的详情，请访问 https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6181608880636987460">可让您设置一系列网址格式，以用于指定禁止哪些网站运行 <ph name="FLASH_PLUGIN_NAME" /> 插件。
 
           如果未设置此政策，系统将会对所有网站使用“DefaultPluginsSetting”政策中的全局默认值（倘若已设置“DefaultPluginsSetting”政策），或使用用户个人配置中的全局默认值（倘若未设置“DefaultPluginsSetting”政策）。</translation>
@@ -1805,13 +1845,6 @@
 
       如果未设置此政策或此列表为空，则可在 <ph name="PRODUCT_NAME" /> 中使用所有架构。</translation>
 <translation id="6652197835259177259">本地托管用户设置</translation>
-<translation id="6654559957643809067">在 <ph name="PRODUCT_NAME" /> 中启用网络联想查询功能，并禁止用户更改此设置。
-
-      此政策用于控制 DNS 预提取、TCP 和 SSL 预连接以及网页预呈现。
-
-      如果您将此设置设为“始终”、“一律不”或“仅限 WiFi”，用户将无法在 <ph name="PRODUCT_NAME" /> 中更改或覆盖此设置。
-
-      如果此政策未设置，系统将启用网络联想查询功能，但用户可以自行更改。</translation>
 <translation id="6658245400435704251">指定一个时间（以秒为单位），即从更新首次推送到服务器起设备随机延迟更新下载的最大时间。设备的这一等待时间一部分会按照实际时间计算，而剩下的部分则取决于更新检查的次数。在任何情况下，分配的时间上限都是固定的，因此设备绝不会一直等待下载某个更新。</translation>
 <translation id="6665670272107384733">指定用户必须按什么样的频率输入密码才能使用快速解锁功能</translation>
 <translation id="6681229465468164801">让您能够设置一系列网址格式，以用于指定禁止哪些网站请求用户授权其访问 USB 设备。
@@ -1826,6 +1859,7 @@
       如果此政策已停用或未设置，则系统只会使用常规的本地个人资料。
 
       <ph name="SYNC_DISABLED_POLICY_NAME" /> 政策会停用所有数据同步，并会替换 RoamingProfileSupportEnabled。</translation>
+<translation id="6731757988219967594">滤除提供成人内容的顶级网站（但不滤除嵌入式 iframe）</translation>
 <translation id="6735701345096330595">强制检查语言拼写</translation>
 <translation id="673699536430961464">您可以通过此设置允许用户在登录其 <ph name="PRODUCT_OS_NAME" />设备后从浏览器窗口的内容区域切换 Google 帐号。
 
@@ -1848,12 +1882,24 @@
 <translation id="6757438632136860443">可让您设置一系列网址格式，以用于指定允许哪些网站运行 <ph name="FLASH_PLUGIN_NAME" /> 插件。
 
           如果未设置此政策，系统将会对所有网站使用“DefaultPluginsSetting”政策中的全局默认值（倘若已设置“DefaultPluginsSetting”政策），或使用用户个人配置中的全局默认值（倘若未设置“DefaultPluginsSetting”政策）。</translation>
+<translation id="6762235610019366960">让您能够控制是否在 <ph name="PRODUCT_NAME" /> 中使用整个标签页显示宣传内容和/或教育内容。
+
+      如果未配置或已启用（设为 true），<ph name="PRODUCT_NAME" /> 便可能会使用整个标签页向用户提供产品信息。
+
+      如果已停用（设为 false），<ph name="PRODUCT_NAME" /> 则不会使用整个标签页向用户提供产品信息。
+
+      此设置旨在控制是否允许系统显示具有下列功用的欢迎页面：帮助用户登录 <ph name="PRODUCT_NAME" />、将它选为用户的默认浏览器，或以其方式将产品功能告知用户。</translation>
 <translation id="6766216162565713893">允许网站请求用户授予对附近蓝牙设备的访问权限</translation>
 <translation id="6770454900105963262">报告自助服务终端的相关信息</translation>
 <translation id="6786747875388722282">扩展程序</translation>
 <translation id="6786967369487349613">设置漫游个人资料目录</translation>
 <translation id="6810445994095397827">在这些网站上阻止 JavaScript</translation>
 <translation id="681446116407619279">支持的身份验证方案</translation>
+<translation id="6832455357698286434">
+      此政策会指定一系列将被视为安全上下文的来源（网址）或主机名模式（例如“*.example.com”），意在允许相关单位设置临时服务器以用于开发内部网络，这样一来，他们的开发者就能够测试需要安全上下文的功能，而无需在临时服务器上部署传输层安全协议 (TLS)。
+      在此政策中设置一系列网址与将“--unsafely-treat-insecure-origin-as-secure”命令行标记设为同一系列的网址（以英文逗号分隔）具有同样的效果。如果此政策已设置，则会替换上述命令行标记。
+      有关安全上下文的详情，请访问 https://www.w3.org/TR/secure-contexts/
+      </translation>
 <translation id="6835883744948188639">显示建议用户重新启动浏览器的周期性提示</translation>
 <translation id="6838056959556423778">替换 <ph name="PRODUCT_NAME" /> 默认打印机选择规则。
       此政策用于确定：当用户以相应个人资料首次在 <ph name="PRODUCT_NAME" /> 中使用打印功能时，系统会遵循什么样的规则来选择默认打印机。
@@ -1894,7 +1940,7 @@
 <translation id="687046793986382807">此政策自35版<ph name="PRODUCT_NAME" />起已停止使用。
 
       无论选项值是什么，系统都会向网页报告内存信息，但出于安全考虑，系统会限制所报告的内存大小，并会限制更新率。要获取准确的实时数据，请使用遥测等工具。</translation>
-<translation id="6894178810167845842">“打开新的标签页”页面网址</translation>
+<translation id="6894178810167845842">在新标签页中打开的页面网址</translation>
 <translation id="6899705656741990703">自动检测代理设置</translation>
 <translation id="6903814433019432303">此政策仅在零售模式下有效。
 
@@ -2074,6 +2120,15 @@
 
           如果停用此设置，则无法使用该功能。</translation>
 <translation id="7275334191706090484">受管理的书签</translation>
+<translation id="729492886167634859">此政策可指定一个百分比列表，这些百分比用于界定组织单元中每周（从首次发现相应更新的那一天起算）要更新的那部分 <ph name="PRODUCT_OS_NAME" />设备。发现时间会晚于更新发布时间，这是因为设备可能要在更新发布一段时间之后才会检查是否有更新。
+
+      列表中的第 n 个值将用作应在发现相应更新后的第 n 周内更新到下一版本的设备所占的百分比。例如，如果某项更新是在今天发现的，那么列表中的第 1 个值将会界定组织单元中应在从今天起算的第 1 周内更新到该版本的设备所占的百分比。第 2 个值将会界定组织单元中应在从今天起算的第 2 周内更新到该版本的设备所占的百分比，以此类推。
+
+      如果为此政策指定了值，相应更新将会忽略 <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" /> 政策并改为遵守此政策。
+
+      如果此列表为空，系统将不会分阶段进行更新，而是会根据其他设备政策应用更新。
+
+      此政策不适用于版本切换。</translation>
 <translation id="7295019613773647480">启用受监管用户</translation>
 <translation id="7301543427086558500">指定可用于从搜索引擎提取搜索字词的备选网址列表。网址应当包含字符串“<ph name="SEARCH_TERM_MARKER" />”，以便提取搜索字词。
 
@@ -2150,17 +2205,6 @@
 <translation id="7511361072385293666">如果此政策设为 true 或未设置，则允许在 <ph name="PRODUCT_NAME" /> 中使用 QUIC 协议。
       如果此政策设为 false，则禁止使用 QUIC 协议。</translation>
 <translation id="7519251620064708155">允许在这些网站上使用密钥生成功能</translation>
-<translation id="7529083451528428240">让您能够根据客户端时间或当天用量配额锁定用户的会话。
-
-          |time_window_limit| 用于指定一个每日时段 - 在这段时间内，系统应锁定用户的会话。我们仅支持为一周中的每一天指定 1 条规则，因此 |entries| 数组的大小可能会有所不同（介于 0-7 之间）。|starts_at| 和 |ends_at| 是时段限制的开始时间和结束时间，如果 |ends_at| 小于 |starts_at|，即表示 |time_limit_window| 要到次日才会结束。|last_updated_millis| 是表示此条目的上次更新时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。
-
-          |time_usage_limit| 用于指定每日屏幕使用时间配额，当用户用尽配额时，系统就会锁定用户的会话。一周中的每一天都有一个对应的属性，只有在当天具备有效配额的情况下才能设置相应属性。|usage_quota_mins| 是受管理设备的单日可用时间配额，|reset_at| 则是用量配额的更新时间。|reset_at| 的默认值是午夜 ({'hour': 0, 'minute': 0})。|last_updated_millis| 是此条目的上次更新时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。
-
-          提供 |overrides| 是为了让一项或多项先前设定的规则暂时失效。
-          * 如果 time_window_limit 和 time_usage_limit 都处于无效状态，则可使用 |LOCK| 锁定设备。
-          * |LOCK| 可暂时锁定用户会话，直到下一个 time_window_limit 或 time_usage_limit 开始为止。
-          * |UNLOCK| 可解锁根据 time_window_limit 或 time_usage_limit 锁定的用户会话。
-          |created_time_millis| 是表示替换值的创建时间的时间戳（采用世界协调时间），由于时间戳无法转换成整数，因此这项参数会以字符串的形式发送。这项参数用于确定是否仍应将相应替换值付诸应用。如果目前有效的时间限制功能（时间用量限制或时段限制）的开始时间晚于替换值的创建时间，系统便不应采取任何行动。另外，如果替换值的创建时间早于有效 time_window_limit 或 time_usage_window 的上次更改时间，系统也不应将该替换值付诸应用。</translation>
 <translation id="7529100000224450960">可让您设置网址格式的列表，这些网址格式用于指定允许打开弹出式窗口的网站。在未设置此政策的情况下，如果设置了“DefaultPopupsSetting”政策，那么将对该政策中的所有网站使用全局默认值，否则将对用户个人配置中的所有网站使用全局默认值。</translation>
 <translation id="7529144158022474049">自动更新分配因素</translation>
 <translation id="7534199150025803530">此政策对 Android 版“Google 云端硬盘”应用没有任何影响。如果您想阻止通过移动网络连接使用 Google 云端硬盘，则应禁止安装 Android 版“Google 云端硬盘”应用。</translation>
@@ -2195,6 +2239,7 @@
 <translation id="7617319494457709698">此政策指定了允许使用 <ph name="ENTERPRISE_PLATFORM_KEYS_API" /> 函数 <ph name="CHALLENGE_USER_KEY_FUNCTION" /> 进行远程认证的扩展程序。只有添加到此列表中的扩展程序才能使用该 API。
 
           如果扩展程序不在此列表中，或者未设置此列表，则会导致无法调用此 API，并返回错误代码。</translation>
+<translation id="7620300057302654932">指定将被视为安全上下文的来源或主机名模式。</translation>
 <translation id="7625444193696794922">指定该设备应锁定到的发布渠道。</translation>
 <translation id="7632724434767231364">GSSAPI 库名称</translation>
 <translation id="7635471475589566552">在 <ph name="PRODUCT_NAME" />中配置应用的语言区域，并禁止用户更改语言区域。如果您启用了此设置，<ph name="PRODUCT_NAME" />就会使用指定的语言区域。如果配置的语言区域不受支持，就会改用“en-US”。如果已停用或未配置此设置，<ph name="PRODUCT_NAME" />就会使用由用户指定的首选语言区域（如果已配置）、系统语言区域或备用语言区域“en-US”。</translation>
@@ -2523,6 +2568,12 @@
 
           要查看示例格式，请访问 https://www.chromium.org/developers/how-tos/chrome-frame-getting-started。</translation>
 <translation id="8493645415242333585">停用保存浏览器历史记录的功能</translation>
+<translation id="8498293625012059298">配置用于更改密码的网址（仅限 HTTP 和 HTTPS 方案）。当在浏览器中向用户发出警告后，密码保护服务即会将用户转到此网址，以便其更改密码。
+      为了使 <ph name="PRODUCT_NAME" /> 能够正确捕获这一用于更改密码的页面中的新密码指纹，请务必确保该页面遵循了 https://www.chromium.org/developers/design-documents/create-amazing-password-forms 上所述的准则。
+
+      如果启用了此设置，那么当在浏览器中向用户发出警告后，密码保护服务即会将用户转到此网址，以便其更改密码。
+      如果停用了或未设定此设置，密码保护服务则会将用户转到 https://myaccounts.google.com，以便其更改密码。
+      此政策不适用于未加入 <ph name="MS_AD_NAME" /> 网域的 Windows 实例。</translation>
 <translation id="8499172469244085141">默认设置（用户可以覆盖）</translation>
 <translation id="8507835864888987300">为自动更新设定目标版本。
 
@@ -2576,6 +2627,14 @@
       如果此政策改设为 false，则只会导致无法启动新的虚拟机，而不会关闭已在运行的虚拟机。
       如果未在某部托管设备上设置此政策，该设备将无法运行虚拟机。
       非托管设备可以运行虚拟机。</translation>
+<translation id="8669669491594628013">让您能够控制密码保护服务警告的触发条件。当用户在可疑的网站上重复使用受保护的密码时，密码保护服务就会向用户发出提醒。
+
+      您可以使用“PasswordProtectionLoginURLs”和“PasswordProtectionChangePasswordURL”政策来配置要保护的密码。
+
+      如果此政策设为“PasswordProtectionWarningOff”，则一律不会触发密码保护服务警告。
+      如果此政策设为“PasswordProtectionWarningOnPasswordReuse”，那么每当用户在任何未列入白名单的网站上重复使用受保护的密码时，都会触发密码保护服务警告。
+      如果此政策设为“PasswordProtectionWarningOnPhishingReuse”，那么每当用户在“网上诱骗”性质的网站上重复使用受保护的密码时，都会触发密码保护服务警告。
+      如果未设置此政策，那么密码保护服务仅会保护 Google 密码，但用户将能够更改此设置。</translation>
 <translation id="8672321184841719703">目标自动更新版本</translation>
 <translation id="867410340948518937">U2F（通用第二重因素）</translation>
 <translation id="8685024486845674965">重复使用密码可触发密码保护服务警告功能</translation>
@@ -2638,11 +2697,6 @@
       如果您未指定此设置，用户则可自行决定是否要使用该功能。</translation>
 <translation id="8870318296973696995">主页</translation>
 <translation id="8882006618241293596">禁止这些网站运行 <ph name="FLASH_PLUGIN_NAME" /> 插件</translation>
-<translation id="8894962626537183708">
-      此政策会指定一系列将被视为安全上下文的来源（网址），意在允许相关组织设置临时服务器以用于开发内部网络，以便他们的开发者能够测试需要安全上下文但无需在临时服务器上部署 TLS 的功能。
-      在此政策中设置一系列网址与将“--unsafely-treat-insecure-origin-as-secure”命令行标记设为同一系列的网址（以英文逗号分隔）具有同样的效果。如果此政策已设置，则会替换上述命令行标记。
-      有关安全上下文的详情，请访问 https://www.w3.org/TR/secure-contexts/
-      </translation>
 <translation id="890403179930035128">强制检查语言拼写。未在下方列表中列出的语言将被忽略。
 
       如果您启用了此政策，那么除了已由用户启用拼写检查的语言之外，系统还将为您所指定的语言启用拼写检查。

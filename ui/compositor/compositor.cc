@@ -195,8 +195,6 @@ Compositor::Compositor(const viz::FrameSinkId& frame_sink_id,
   settings.always_request_presentation_time =
       command_line->HasSwitch(cc::switches::kAlwaysRequestPresentationTime);
 
-  base::TimeTicks before_create = base::TimeTicks::Now();
-
   animation_host_ = cc::AnimationHost::CreateMainInstance();
 
   cc::LayerTreeHost::InitParams params;
@@ -206,8 +204,6 @@ Compositor::Compositor(const viz::FrameSinkId& frame_sink_id,
   params.main_task_runner = task_runner_;
   params.mutator_host = animation_host_.get();
   host_ = cc::LayerTreeHost::CreateSingleThreaded(this, &params);
-  UMA_HISTOGRAM_TIMES("GPU.CreateBrowserCompositor",
-                      base::TimeTicks::Now() - before_create);
 
   if (base::FeatureList::IsEnabled(features::kUiCompositorScrollWithLayers) &&
       host_->GetInputHandler()) {
@@ -437,16 +433,17 @@ bool Compositor::IsVisible() {
   return host_->IsVisible();
 }
 
-bool Compositor::ScrollLayerTo(int layer_id, const gfx::ScrollOffset& offset) {
+bool Compositor::ScrollLayerTo(cc::ElementId element_id,
+                               const gfx::ScrollOffset& offset) {
   auto input_handler = host_->GetInputHandler();
-  return input_handler && input_handler->ScrollLayerTo(layer_id, offset);
+  return input_handler && input_handler->ScrollLayerTo(element_id, offset);
 }
 
-bool Compositor::GetScrollOffsetForLayer(int layer_id,
+bool Compositor::GetScrollOffsetForLayer(cc::ElementId element_id,
                                          gfx::ScrollOffset* offset) const {
   auto input_handler = host_->GetInputHandler();
   return input_handler &&
-         input_handler->GetScrollOffsetForLayer(layer_id, offset);
+         input_handler->GetScrollOffsetForLayer(element_id, offset);
 }
 
 void Compositor::SetAuthoritativeVSyncInterval(

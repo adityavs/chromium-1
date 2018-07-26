@@ -45,6 +45,10 @@ class PixelExpectations(GpuTestExpectations):
     self.Fail('Pixel_ScissorTestWithPreserveDrawingBuffer',
         ['android'], bug=521588)
 
+    # Tests crashing on marshmallow bot
+    self.Fail('Pixel_CanvasLowLatency2D', ['android'], bug=865957)
+    self.Fail('Pixel_CanvasUnacceleratedLowLatency2D', ['android'], bug=865957)
+
     # TODO(vmiura) check / generate reference images for Android devices
     self.Fail('Pixel_SolidColorBackground', ['mac', 'android'], bug=624256)
 
@@ -57,11 +61,11 @@ class PixelExpectations(GpuTestExpectations):
     self.Flaky('Pixel_Video_MP4', ['android', 'nvidia'], bug=716564)
     self.Flaky('Pixel_Video_MP4', ['linux', 'nvidia'], bug=819635)
 
-    # TODO(junov); validate new test results
-    self.Fail('Pixel_CanvasLowLatency2D',
-        ['mac', 'linux', 'win', 'android', 'chromeos'], bug=788439)
-    self.Fail('Pixel_CanvasUnacceleratedLowLatency2D',
-        ['mac', 'linux', 'win', 'android', 'chromeos'], bug=788439)
+    # TODO(junov): rebaselining
+    self.Fail('Pixel_OffscreenCanvasUnaccelerated2DGPUCompositing',
+              ['mac', 'linux', 'win', 'android', 'chromeos'], bug=788439)
+    self.Fail('Pixel_OffscreenCanvasUnaccelerated2DGPUCompositingWorker',
+              ['mac', 'linux', 'win', 'android', 'chromeos'], bug=788439)
 
     # Flaky for unknown reasons only on macOS. Not planning to investigate
     # further.
@@ -107,3 +111,6 @@ class PixelExpectations(GpuTestExpectations):
     # TODO(kbr): temporary suppression for new test.
     self.Flaky('Pixel_WebGLSadCanvas', ['linux', 'mac', 'win'], bug=575305)
     self.Fail('Pixel_WebGLSadCanvas', ['android'], bug=575305)
+
+    # Flaky on Android: crbug.com/860548
+    self.Flaky('Pixel_Video_VP9', ['android'], bug=860548)

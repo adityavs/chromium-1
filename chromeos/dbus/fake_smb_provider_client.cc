@@ -51,6 +51,9 @@ void FakeSmbProviderClient::Mount(const base::FilePath& share_path,
 
 void FakeSmbProviderClient::Remount(const base::FilePath& share_path,
                                     int32_t mount_id,
+                                    const std::string& workgroup,
+                                    const std::string& username,
+                                    base::ScopedFD password_fd,
                                     StatusCallback callback) {
   base::ThreadTaskRunnerHandle::Get()->PostTask(
       FROM_HERE, base::BindOnce(std::move(callback), smbprovider::ERROR_OK));
@@ -206,6 +209,22 @@ void FakeSmbProviderClient::ParseNetBiosPacket(
   }
 
   std::move(callback).Run(result);
+}
+
+void FakeSmbProviderClient::StartCopy(int32_t mount_id,
+                                      const base::FilePath& source_path,
+                                      const base::FilePath& target_path,
+                                      StartCopyCallback callback) {
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), smbprovider::ERROR_OK,
+                                -1 /* copy_token */));
+}
+
+void FakeSmbProviderClient::ContinueCopy(int32_t mount_id,
+                                         int32_t copy_token,
+                                         StatusCallback callback) {
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), smbprovider::ERROR_OK));
 }
 
 void FakeSmbProviderClient::ClearShares() {

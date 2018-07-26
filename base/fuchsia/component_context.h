@@ -18,7 +18,7 @@ template <typename Interface>
 class InterfacePtr;
 
 template <typename Interface>
-class Synchronous2InterfacePtr;
+class SynchronousInterfacePtr;
 
 }  // namespace fidl
 
@@ -36,7 +36,7 @@ class BASE_EXPORT ComponentContext {
   static ComponentContext* GetDefault();
 
   // Satisfies the interface |request| by binding the channel to a service.
-  void ConnectToService(FidlInterfaceRequest request);
+  zx_status_t ConnectToService(FidlInterfaceRequest request);
 
   // Same as above, but returns interface pointer instead of taking a request.
   template <typename Interface>
@@ -49,8 +49,8 @@ class BASE_EXPORT ComponentContext {
   // Connects to an environment service and returns synchronous interface
   // implementation.
   template <typename Interface>
-  fidl::Synchronous2InterfacePtr<Interface> ConnectToServiceSync() {
-    fidl::Synchronous2InterfacePtr<Interface> result;
+  fidl::SynchronousInterfacePtr<Interface> ConnectToServiceSync() {
+    fidl::SynchronousInterfacePtr<Interface> result;
     ConnectToService(FidlInterfaceRequest(&result));
     return result;
   }

@@ -7,6 +7,7 @@ include_rules = [
   "+chrome/install_static",
   "+chrome/installer/util",
   "+chrome/notification_helper/notification_helper_constants.h",
+  "+chrome/services/cups_ipp_validator/public",
   "+chrome/services/file_util/public",
   "+chrome/services/media_gallery_util/public",
   "+chrome/services/printing/public",
@@ -42,6 +43,7 @@ include_rules = [
   "+mash/public/mojom",
   "+media/audio", # For media audio hang monitor.
   "+media/base",  # For media switches
+  "+media/capabilities", # For InMemoryVideoDecodeStatsDB
   "+media/cdm/cdm_paths.h",
   "+media/capture",
   "+media/midi",  # For midi switches
@@ -54,6 +56,7 @@ include_rules = [
   "+rlz",
   "+sandbox/win/src",  # The path doesn't say it, but this is the Windows sandbox.
   "+services/audio/public",
+  "+services/content/simple_browser/public",
   "+services/data_decoder/public",
   "+services/device/public",
   "+services/identity/public",

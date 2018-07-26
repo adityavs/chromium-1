@@ -6,9 +6,9 @@
 #import <UIKit/UIKit.h>
 #import <XCTest/XCTest.h>
 
-#include "base/ios/ios_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/test/ios/wait_util.h"
 #import "ios/chrome/app/main_controller.h"
 #import "ios/chrome/browser/tabs/tab_model.h"
 #import "ios/chrome/browser/ui/tab_grid/tab_grid_egtest_util.h"
@@ -22,7 +22,6 @@
 #import "ios/chrome/test/earl_grey/chrome_earl_grey_ui.h"
 #import "ios/chrome/test/earl_grey/chrome_matchers.h"
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
-#import "ios/testing/wait_util.h"
 #include "net/test/embedded_test_server/http_request.h"
 #include "net/test/embedded_test_server/http_response.h"
 #include "net/test/embedded_test_server/request_handler_util.h"
@@ -261,11 +260,6 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
 // Tests exiting the switcher by tapping the new tab button or selecting new tab
 // from the menu (on phone only).
 - (void)testLeaveSwitcherByOpeningNewNormalTab {
-  // TODO(crbug.com/849937): re-enable this test on iOS 10.
-  if (!base::ios::IsRunningOnIOS11OrLater()) {
-    EARL_GREY_TEST_DISABLED(@"Disabled on iOS10");
-  }
-
   NSString* tab1_title = @"NormalTab1";
   NSString* tab2_title = @"NormalTab2";
   [self setUpTestServer];
@@ -498,8 +492,8 @@ std::unique_ptr<net::test_server::HttpResponse> HandleQueryTitle(
         return error == nil;
       };
 
-      GREYAssertTrue(testing::WaitUntilConditionOrTimeout(
-                         testing::kWaitForUIElementTimeout, condition),
+      GREYAssertTrue(base::test::ios::WaitUntilConditionOrTimeout(
+                         base::test::ios::kWaitForUIElementTimeout, condition),
                      @"Incognito card wasn't interactable.");
       [[EarlGrey
           selectElementWithMatcher:grey_allOf(

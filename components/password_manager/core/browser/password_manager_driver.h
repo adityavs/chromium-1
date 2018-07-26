@@ -8,9 +8,11 @@
 #include <map>
 #include <vector>
 
+#include "base/callback.h"
 #include "base/macros.h"
 #include "base/memory/weak_ptr.h"
 #include "base/strings/string16.h"
+#include "components/autofill/core/common/filling_status.h"
 #include "components/autofill/core/common/password_form_field_prediction_map.h"
 
 namespace autofill {
@@ -62,17 +64,16 @@ class PasswordManagerDriver
   // Notifies the driver that the user has accepted a generated password.
   virtual void GeneratedPasswordAccepted(const base::string16& password) = 0;
 
-  // User have selected a password generation option.
-  virtual void UserSelectedManualGenerationOption() = 0;
-
   // Tells the driver to fill the form with the |username| and |password|.
   virtual void FillSuggestion(const base::string16& username,
                               const base::string16& password) = 0;
 
   // Tells the renderer to fill the given credential into the focused element.
+  // Always calls |completed_callback| with a status indicating success/error.
   virtual void FillIntoFocusedField(
       bool is_password,
-      const base::string16& user_provided_credential) {}
+      const base::string16& user_provided_credential,
+      base::OnceCallback<void(autofill::FillingStatus)> compeleted_callback) {}
 
   // Tells the driver to preview filling form with the |username| and
   // |password|.
@@ -116,9 +117,6 @@ class PasswordManagerDriver
 
   // Return true iff the driver corresponds to the main frame.
   virtual bool IsMainFrame() const = 0;
-
-  // Tells the driver that the matching blacklisted form was found.
-  virtual void MatchingBlacklistedFormFound() = 0;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(PasswordManagerDriver);

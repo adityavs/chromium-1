@@ -11,6 +11,7 @@
 
 #include "base/strings/string_number_conversions.h"
 #include "content/common/media/media_stream_controls.h"
+#include "content/public/common/content_features.h"
 #include "content/renderer/media/stream/media_stream_audio_source.h"
 #include "content/renderer/media/stream/media_stream_constraints_util_sets.h"
 #include "content/renderer/media/stream/media_stream_video_source.h"
@@ -21,6 +22,8 @@
 #include "third_party/blink/public/platform/web_string.h"
 
 namespace content {
+
+using EchoCancellationType = AudioProcessingProperties::EchoCancellationType;
 
 namespace {
 
@@ -149,12 +152,16 @@ std::vector<std::string> GetEchoCancellationTypesFromParameters(
   if (audio_parameters.effects() &
       (media::AudioParameters::EXPERIMENTAL_ECHO_CANCELLER |
        media::AudioParameters::ECHO_CANCELLER)) {
-    // If the hardware supports echo cancellation, return both echo cancellers.
+    // If the system/hardware supports echo cancellation, return all echo
+    // cancellers.
     return {blink::kEchoCancellationTypeBrowser,
+            blink::kEchoCancellationTypeAec3,
             blink::kEchoCancellationTypeSystem};
   }
-  // The browser echo canceller is always available.
-  return {blink::kEchoCancellationTypeBrowser};
+
+  // The browser and AEC3 echo cancellers are always available.
+  return {blink::kEchoCancellationTypeBrowser,
+          blink::kEchoCancellationTypeAec3};
 }
 
 // This class represents all the candidates settings for a single audio device.
@@ -192,38 +199,46 @@ class SingleDeviceCandidateSet {
 
     // Properties related with audio processing.
     AudioProcessingProperties properties;
-    if (ProcessedLocalAudioSource* processed_source =
-            ProcessedLocalAudioSource::From(source)) {
+    ProcessedLocalAudioSource* processed_source =
+        ProcessedLocalAudioSource::From(source);
+    if (processed_source)
       properties = processed_source->audio_processing_properties();
-    } else {
+    else
       properties.DisableDefaultProperties();
-    }
 
-    const bool experimental_hardware_cancellation_available =
-        properties.enable_experimental_hw_echo_cancellation &&
-        (parameters_.effects() &
-         media::AudioParameters::EXPERIMENTAL_ECHO_CANCELLER);
-
-    const bool hardware_echo_cancellation_available =
+    const bool system_echo_cancellation_available =
+        (properties.echo_cancellation_type ==
+             EchoCancellationType::kEchoCancellationSystem ||
+         !processed_source) &&
         parameters_.effects() & media::AudioParameters::ECHO_CANCELLER;
 
-    const bool hardware_echo_cancellation_enabled =
-        !properties.disable_hw_echo_cancellation &&
-        (hardware_echo_cancellation_available ||
-         experimental_hardware_cancellation_available);
+    const bool experimental_system_cancellation_available =
+        properties.echo_cancellation_type ==
+            EchoCancellationType::kEchoCancellationSystem &&
+        parameters_.effects() &
+            media::AudioParameters::EXPERIMENTAL_ECHO_CANCELLER;
+
+    const bool system_echo_cancellation_enabled =
+        system_echo_cancellation_available ||
+        experimental_system_cancellation_available;
 
     const bool echo_cancellation_enabled =
-        properties.enable_sw_echo_cancellation ||
-        hardware_echo_cancellation_enabled;
+        properties.EchoCancellationIsWebRtcProvided() ||
+        system_echo_cancellation_enabled;
 
     bool_sets_[ECHO_CANCELLATION] =
         DiscreteSet<bool>({echo_cancellation_enabled});
     bool_sets_[GOOG_ECHO_CANCELLATION] = bool_sets_[ECHO_CANCELLATION];
 
-    if (properties.enable_sw_echo_cancellation) {
+    if (properties.echo_cancellation_type ==
+        EchoCancellationType::kEchoCancellationAec2) {
       echo_cancellation_type_set_ =
           DiscreteSet<std::string>({blink::kEchoCancellationTypeBrowser});
-    } else if (hardware_echo_cancellation_enabled) {
+    } else if (properties.echo_cancellation_type ==
+               EchoCancellationType::kEchoCancellationAec3) {
+      echo_cancellation_type_set_ =
+          DiscreteSet<std::string>({blink::kEchoCancellationTypeAec3});
+    } else if (system_echo_cancellation_enabled) {
       echo_cancellation_type_set_ =
           DiscreteSet<std::string>({blink::kEchoCancellationTypeSystem});
     }
@@ -391,10 +406,9 @@ class SingleDeviceCandidateSet {
   }
 
  private:
-  void SelectEchoCancellationFlags(
+  EchoCancellationType SelectEchoCancellationType(
       const blink::StringConstraint& echo_cancellation_type,
-      const media::AudioParameters& audio_parameters,
-      AudioProcessingProperties* properties_out) const {
+      const media::AudioParameters& audio_parameters) const {
     // Try to use an ideal candidate, if supplied.
     base::Optional<std::string> selected_type;
     if (echo_cancellation_type.HasIdeal()) {
@@ -416,26 +430,38 @@ class SingleDeviceCandidateSet {
       }
     }
 
-    // Set properties based the type selected.
+    // Return type based the selected type.
     if (selected_type == blink::kEchoCancellationTypeBrowser) {
-      properties_out->enable_sw_echo_cancellation = true;
-      properties_out->disable_hw_echo_cancellation = true;
-      properties_out->enable_experimental_hw_echo_cancellation = false;
+      return EchoCancellationType::kEchoCancellationAec2;
+    } else if (selected_type == blink::kEchoCancellationTypeAec3) {
+      return EchoCancellationType::kEchoCancellationAec3;
     } else if (selected_type == blink::kEchoCancellationTypeSystem) {
-      properties_out->enable_sw_echo_cancellation = false;
-      properties_out->disable_hw_echo_cancellation = false;
-      properties_out->enable_experimental_hw_echo_cancellation = true;
-    } else {
-      // If no type has been selected, choose 'system' if the device has the
-      // ECHO_CANCELLER flag set. Choose 'browser' otherwise. Never
-      // automatically enable an experimental hardware echo canceller.
-      const bool has_hw_echo_canceller =
-          audio_parameters.IsValid() &&
-          (audio_parameters.effects() & media::AudioParameters::ECHO_CANCELLER);
-      properties_out->enable_sw_echo_cancellation = !has_hw_echo_canceller;
-      properties_out->disable_hw_echo_cancellation = !has_hw_echo_canceller;
-      properties_out->enable_experimental_hw_echo_cancellation = false;
+      return EchoCancellationType::kEchoCancellationSystem;
     }
+
+    // If no type has been selected, choose system if the device has the
+    // ECHO_CANCELLER flag set. Never automatically enable an experimental
+    // system echo canceller.
+    if (audio_parameters.IsValid() &&
+        audio_parameters.effects() & media::AudioParameters::ECHO_CANCELLER) {
+      return EchoCancellationType::kEchoCancellationSystem;
+    }
+
+    // Finally, choose the browser provided AEC2 or AEC3 based on an optional
+    // override setting for AEC3 or feature.
+    // In unit tests not creating a message filter, |aec_dump_message_filter|
+    // will be null. We can just ignore that. Other unit tests and browser tests
+    // ensure that we do get the filter when we should.
+    base::Optional<bool> override_aec3;
+    scoped_refptr<AecDumpMessageFilter> aec_dump_message_filter =
+        AecDumpMessageFilter::Get();
+    if (aec_dump_message_filter)
+      override_aec3 = aec_dump_message_filter->GetOverrideAec3();
+    const bool use_aec3 = override_aec3.value_or(
+        base::FeatureList::IsEnabled(features::kWebRtcUseEchoCanceller3));
+
+    return use_aec3 ? EchoCancellationType::kEchoCancellationAec3
+                    : EchoCancellationType::kEchoCancellationAec2;
   }
 
   // Returns the audio-processing properties supported by this
@@ -463,17 +489,17 @@ class SingleDeviceCandidateSet {
 
     AudioProcessingProperties properties;
     if (use_echo_cancellation) {
-      SelectEchoCancellationFlags(basic_constraint_set.echo_cancellation_type,
-                                  parameters_, &properties);
+      properties.echo_cancellation_type = SelectEchoCancellationType(
+          basic_constraint_set.echo_cancellation_type, parameters_);
     } else {
-      properties.enable_sw_echo_cancellation = false;
-      properties.disable_hw_echo_cancellation = true;
-      properties.enable_experimental_hw_echo_cancellation = false;
+      properties.echo_cancellation_type =
+          EchoCancellationType::kEchoCancellationDisabled;
     }
 
     properties.disable_hw_noise_suppression =
         should_disable_hardware_noise_suppression &&
-        !properties.disable_hw_echo_cancellation;
+        properties.echo_cancellation_type ==
+            EchoCancellationType::kEchoCancellationSystem;
 
     properties.goog_audio_mirroring =
         SelectBool(bool_sets_[GOOG_AUDIO_MIRRORING],
@@ -524,16 +550,15 @@ constexpr blink::BooleanConstraint blink::WebMediaTrackConstraintSet::* const
 
 // This class represents a set of possible candidate settings.
 // The SelectSettings algorithm starts with a set containing all possible
-// candidates based on hardware capabilities and/or allowed values for supported
-// properties. The set is then reduced progressively as the basic and advanced
-// constraint sets are applied.
-// In the end, if the set of candidates is empty, SelectSettings fails.
-// If not, the ideal values (if any) or tie breaker rules are used to select
-// the final settings based on the candidates that survived the application
-// of the constraint sets.
-// This class is implemented as a collection of more specific sets for the
-// various supported properties. If any of the specific sets is empty, the
-// whole AudioCaptureCandidates set is considered empty as well.
+// candidates based on system/hardware capabilities and/or allowed values for
+// supported properties. The set is then reduced progressively as the basic and
+// advanced constraint sets are applied. In the end, if the set of candidates is
+// empty, SelectSettings fails. If not, the ideal values (if any) or tie breaker
+// rules are used to select the final settings based on the candidates that
+// survived the application of the constraint sets. This class is implemented as
+// a collection of more specific sets for the various supported properties. If
+// any of the specific sets is empty, the whole AudioCaptureCandidates set is
+// considered empty as well.
 class AudioCaptureCandidates {
  public:
   AudioCaptureCandidates(

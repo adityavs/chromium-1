@@ -545,7 +545,7 @@ bool OmniboxViewIOS::OnWillChange(NSRange range, NSString* new_text) {
 
 void OmniboxViewIOS::OnDidChange(bool processing_user_event) {
   omnibox_interacted_while_focused_ = YES;
-
+  DCHECK(processing_user_event);
   // Sanitize pasted text.
   if (model()->is_pasting()) {
     base::string16 pastedText = base::SysNSStringToUTF16([field_ text]);
@@ -897,10 +897,6 @@ bool OmniboxViewIOS::ShouldIgnoreUserInputDueToPendingVoiceSearch() {
   return [[field_ text] rangeOfString:objectReplacementChar].length > 0;
 }
 
-void OmniboxViewIOS::SetLeftImage(int imageId) {
-  [left_image_consumer_ setLeftImageId:imageId];
-}
-
 void OmniboxViewIOS::HideKeyboardAndEndEditing() {
   [field_ resignFirstResponder];
 
@@ -934,9 +930,8 @@ int OmniboxViewIOS::GetIcon(bool offlinePage) const {
     return GetIconForSecurityState(
         controller()->GetToolbarModel()->GetSecurityLevel(false));
   }
-
   return GetIconForAutocompleteMatchType(
-      model() ? model()->CurrentTextType()
+      model() ? model()->CurrentMatch(nullptr).type
               : AutocompleteMatchType::URL_WHAT_YOU_TYPED,
       /* is_starred */ false, /* is_incognito */ false);
 }
@@ -960,8 +955,9 @@ void OmniboxViewIOS::EmphasizeURLComponents() {
 
 #pragma mark - OmniboxPopupViewSuggestionsDelegate
 
-void OmniboxViewIOS::OnTopmostSuggestionImageChanged(int imageId) {
-  this->SetLeftImage(imageId);
+void OmniboxViewIOS::OnTopmostSuggestionImageChanged(
+    AutocompleteMatchType::Type type) {
+  [left_image_consumer_ setLeftImageForAutocompleteType:type];
 }
 
 void OmniboxViewIOS::OnResultsChanged(const AutocompleteResult& result) {
@@ -983,6 +979,9 @@ void OmniboxViewIOS::OnPopupDidScroll() {
 }
 
 void OmniboxViewIOS::OnSelectedMatchForAppending(const base::string16& str) {
+  // Exit preedit state and append the match. Refocus if necessary.
+  if ([field_ isPreEditing])
+    [field_ exitPreEditState];
   this->SetUserText(str);
   this->FocusOmnibox();
 }

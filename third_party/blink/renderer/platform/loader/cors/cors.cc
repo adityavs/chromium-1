@@ -4,7 +4,9 @@
 
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"
 
+#include <memory>
 #include <string>
+#include <utility>
 
 #include "services/network/public/cpp/cors/cors.h"
 #include "services/network/public/cpp/cors/preflight_cache.h"
@@ -68,7 +70,7 @@ std::unique_ptr<net::HttpRequestHeaders> CreateNetHttpRequestHeaders(
 
 namespace CORS {
 
-base::Optional<network::mojom::CORSError> CheckAccess(
+base::Optional<network::CORSErrorStatus> CheckAccess(
     const KURL& response_url,
     const int response_status_code,
     const HTTPHeaderMap& response_header,
@@ -85,7 +87,7 @@ base::Optional<network::mojom::CORSError> CheckAccess(
       !privilege->block_local_access_from_local_origin_);
 }
 
-base::Optional<network::mojom::CORSError> CheckPreflightAccess(
+base::Optional<network::CORSErrorStatus> CheckPreflightAccess(
     const KURL& response_url,
     const int response_status_code,
     const HTTPHeaderMap& response_header,
@@ -121,7 +123,7 @@ base::Optional<network::mojom::CORSError> CheckPreflight(
   return network::cors::CheckPreflight(preflight_response_status_code);
 }
 
-base::Optional<network::mojom::CORSError> CheckExternalPreflight(
+base::Optional<network::CORSErrorStatus> CheckExternalPreflight(
     const HTTPHeaderMap& response_header) {
   return network::cors::CheckExternalPreflight(GetHeaderValue(
       response_header, HTTPNames::Access_Control_Allow_External));
@@ -144,6 +146,7 @@ bool EnsurePreflightResultAndCacheOnSuccess(
   DCHECK(error_description);
 
   base::Optional<network::mojom::CORSError> error;
+  base::Optional<network::CORSErrorStatus> status;
 
   std::unique_ptr<network::cors::PreflightResult> result =
       network::cors::PreflightResult::Create(
@@ -162,23 +165,22 @@ bool EnsurePreflightResultAndCacheOnSuccess(
     return false;
   }
 
-  error = result->EnsureAllowedCrossOriginMethod(
+  status = result->EnsureAllowedCrossOriginMethod(
       std::string(request_method.Ascii().data()));
-  if (error) {
+  if (status) {
     *error_description = CORS::GetErrorString(
-        CORS::ErrorParameter::CreateForPreflightResponseCheck(*error,
-                                                              request_method));
+        CORS::ErrorParameter::CreateForPreflightResponseCheck(
+            status->cors_error, request_method));
     return false;
   }
 
-  std::string detected_error_header;
-  error = result->EnsureAllowedCrossOriginHeaders(
-      *CreateNetHttpRequestHeaders(request_header_map), &detected_error_header);
-  if (error) {
+  status = result->EnsureAllowedCrossOriginHeaders(
+      *CreateNetHttpRequestHeaders(request_header_map));
+  if (status) {
     *error_description = CORS::GetErrorString(
         CORS::ErrorParameter::CreateForPreflightResponseCheck(
-            *error, String(detected_error_header.data(),
-                           detected_error_header.length())));
+            status->cors_error, String(status->failed_parameter.data(),
+                                       status->failed_parameter.length())));
     return false;
   }
 

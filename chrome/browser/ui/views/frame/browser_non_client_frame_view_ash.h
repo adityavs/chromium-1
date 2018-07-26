@@ -12,6 +12,7 @@
 #include "ash/shell_observer.h"
 #include "base/gtest_prod_util.h"
 #include "base/macros.h"
+#include "base/scoped_observer.h"
 #include "chrome/browser/command_observer.h"
 #include "chrome/browser/ui/ash/browser_image_registrar.h"
 #include "chrome/browser/ui/ash/tablet_mode_client_observer.h"
@@ -27,13 +28,14 @@ namespace {
 class HostedAppNonClientFrameViewAshTest;
 }
 
+class HostedAppOriginText;
 class HostedAppButtonContainer;
 class TabIconView;
 
 namespace ash {
+class DefaultFrameHeader;
 class FrameCaptionButton;
 class FrameCaptionButtonContainerView;
-class FrameHeaderOriginText;
 }
 
 // Provides the BrowserNonClientFrameView for Chrome OS.
@@ -48,9 +50,6 @@ class BrowserNonClientFrameViewAsh
       public aura::WindowObserver,
       public ImmersiveModeController::Observer {
  public:
-  // How long to delay the hosted app origin text animation from starting.
-  static const base::TimeDelta kTitlebarAnimationDelay;
-
   BrowserNonClientFrameViewAsh(BrowserFrame* frame, BrowserView* browser_view);
   ~BrowserNonClientFrameViewAsh() override;
 
@@ -59,6 +58,7 @@ class BrowserNonClientFrameViewAsh
   ash::mojom::SplitViewObserverPtr CreateInterfacePtrForTesting();
 
   // BrowserNonClientFrameView:
+  void OnSingleTabModeChanged() override;
   gfx::Rect GetBoundsForTabStrip(views::View* tabstrip) const override;
   int GetTopInset(bool restored) const override;
   int GetThemeBackgroundXInset() const override;
@@ -90,6 +90,7 @@ class BrowserNonClientFrameViewAsh
   void ChildPreferredSizeChanged(views::View* child) override;
 
   // ash::CustomFrameHeader::AppearanceProvider:
+  SkColor GetTitleColor() override;
   SkColor GetFrameHeaderColor(bool active) override;
   gfx::ImageSkia GetFrameHeaderImage(bool active) override;
   gfx::ImageSkia GetFrameHeaderOverlayImage(bool active) override;
@@ -165,12 +166,9 @@ class BrowserNonClientFrameViewAsh
   friend class HostedAppNonClientFrameViewAshTest;
   friend class ImmersiveModeControllerAshHostedAppBrowserTest;
 
-  // Returns whether a caption item (such as window controls, window icons, and
-  // the back button) should be currently visible. They're split in two methods
-  // because the caption buttons's visibility has a special treatment when in
-  // tablet mode.
+  // Returns whether the caption buttons should be visible. They are hidden, for
+  // example, in overview mode and tablet mode.
   bool ShouldShowCaptionButtons() const;
-  bool ShouldShowIconAndBackButton() const;
 
   // Distance between the right edge of the NonClientFrameView and the tab
   // strip.
@@ -187,9 +185,16 @@ class BrowserNonClientFrameViewAsh
   // Creates the frame header for the browser window.
   std::unique_ptr<ash::FrameHeader> CreateFrameHeader();
 
+  // Creates views and does other setup for a hosted app.
+  // TODO(estade): remove the parameter as it's unused in Mash.
+  void SetUpForHostedApp(ash::DefaultFrameHeader* header);
+
   // Triggers the hosted app origin and icon animations, assumes the hosted
   // app UI elements exist.
   void StartHostedAppAnimation();
+
+  // To be called after the frame's colors may have changed.
+  void UpdateFrameColors();
 
   // View which contains the window controls.
   ash::FrameCaptionButtonContainerView* caption_button_container_ = nullptr;
@@ -208,13 +213,20 @@ class BrowserNonClientFrameViewAsh
 
   // URL origin text for hosted app windows.
   // Owned by views hierarchy.
-  ash::FrameHeaderOriginText* frame_header_origin_text_ = nullptr;
+  HostedAppOriginText* hosted_app_origin_text_ = nullptr;
+
+  // A view that contains the extra views used for hosted apps
+  // (|hosted_app_button_container_| and |hosted_app_origin_text_|).
+  // Only used in Mash.
+  views::View* hosted_app_extras_container_ = nullptr;
 
   // Ash's mojom::SplitViewController.
   ash::mojom::SplitViewControllerPtr split_view_controller_;
 
   // The binding this instance uses to implement mojom::SplitViewObserver.
   mojo::Binding<ash::mojom::SplitViewObserver> observer_binding_{this};
+
+  ScopedObserver<aura::Window, aura::WindowObserver> window_observer_{this};
 
   // Indicates whether overview mode is active. Hide the header for V1 apps in
   // overview mode because a fake header is added for better UX. If also in
@@ -232,8 +244,6 @@ class BrowserNonClientFrameViewAsh
   scoped_refptr<ImageRegistration> inactive_frame_image_registration_;
   scoped_refptr<ImageRegistration> active_frame_overlay_image_registration_;
   scoped_refptr<ImageRegistration> inactive_frame_overlay_image_registration_;
-
-  base::WeakPtrFactory<BrowserNonClientFrameViewAsh> weak_factory_{this};
 
   DISALLOW_COPY_AND_ASSIGN(BrowserNonClientFrameViewAsh);
 };

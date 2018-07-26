@@ -49,7 +49,6 @@
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_initiator_type_names.h"
 #include "third_party/blink/renderer/platform/network/http_names.h"
 #include "third_party/blink/renderer/platform/network/mime/mock_mime_registry.h"
-#include "third_party/blink/renderer/platform/scheduler/base/sequence_manager_forward.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/wtf/allocator/partitions.h"
 #include "third_party/blink/renderer/platform/wtf/wtf.h"
@@ -64,6 +63,11 @@ class TestingPlatformSupport::TestingInterfaceProvider
 
   void GetInterface(const char* name,
                     mojo::ScopedMessagePipeHandle handle) override {
+    auto& override_callback = GetOverrideCallback();
+    if (!override_callback.is_null()) {
+      override_callback.Run(name, std::move(handle));
+      return;
+    }
     if (std::string(name) == mojom::blink::MimeRegistry::Name_) {
       mojo::MakeStrongBinding(
           std::make_unique<MockMimeRegistry>(),
@@ -71,7 +75,22 @@ class TestingPlatformSupport::TestingInterfaceProvider
       return;
     }
   }
+
+  static ScopedOverrideMojoInterface::GetInterfaceCallback&
+  GetOverrideCallback() {
+    DEFINE_THREAD_SAFE_STATIC_LOCAL(
+        ScopedOverrideMojoInterface::GetInterfaceCallback, callback, ());
+    return callback;
+  }
 };
+
+TestingPlatformSupport::ScopedOverrideMojoInterface::
+    ScopedOverrideMojoInterface(GetInterfaceCallback callback)
+    : auto_reset_(&TestingInterfaceProvider::GetOverrideCallback(),
+                  std::move(callback)) {}
+
+TestingPlatformSupport::ScopedOverrideMojoInterface::
+    ~ScopedOverrideMojoInterface() = default;
 
 namespace {
 

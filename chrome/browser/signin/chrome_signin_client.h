@@ -64,16 +64,13 @@ class ChromeSigninClient
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
       GaiaAuthConsumer* consumer,
       const std::string& source,
-      net::URLRequestContextGetter* getter) override;
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+      override;
 
   // Returns a string describing the chrome version environment. Version format:
   // <Build Info> <OS> <Version number> (<Last change>)<channel or "-devel">
   // If version information is unavailable, returns "invalid."
   std::string GetProductVersion() override;
-  std::unique_ptr<CookieChangeSubscription> AddCookieChangeCallback(
-      const GURL& url,
-      const std::string& name,
-      net::CookieChangeCallback callback) override;
   void OnSignedIn(const std::string& account_id,
                   const std::string& gaia_id,
                   const std::string& username,

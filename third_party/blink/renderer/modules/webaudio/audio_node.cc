@@ -730,8 +730,7 @@ AudioNode* AudioNode::connect(AudioNode* destination,
     connected_nodes_[output_index] = new HeapHashSet<Member<AudioNode>>();
   connected_nodes_[output_index]->insert(destination);
 
-  // Let context know that a connection has been made.
-  context()->IncrementConnectionCount();
+  Handler().UpdatePullStatusIfNeeded();
 
   return destination;
 }
@@ -776,6 +775,8 @@ void AudioNode::connect(AudioParam* param,
   if (!connected_params_[output_index])
     connected_params_[output_index] = new HeapHashSet<Member<AudioParam>>();
   connected_params_[output_index]->insert(param);
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::DisconnectAllFromOutput(unsigned output_index) {
@@ -815,6 +816,8 @@ void AudioNode::disconnect() {
   // Disconnect all outgoing connections.
   for (unsigned i = 0; i < numberOfOutputs(); ++i)
     DisconnectAllFromOutput(i);
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(unsigned output_index,
@@ -834,6 +837,8 @@ void AudioNode::disconnect(unsigned output_index,
   }
   // Disconnect all outgoing connections from the given output.
   DisconnectAllFromOutput(output_index);
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(AudioNode* destination,
@@ -862,6 +867,8 @@ void AudioNode::disconnect(AudioNode* destination,
         "the given destination is not connected.");
     return;
   }
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(AudioNode* destination,
@@ -898,6 +905,8 @@ void AudioNode::disconnect(AudioNode* destination,
         "output (" + String::Number(output_index) +
             ") is not connected to the given destination.");
   }
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(AudioNode* destination,
@@ -937,6 +946,8 @@ void AudioNode::disconnect(AudioNode* destination,
             ") of the destination.");
     return;
   }
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(AudioParam* destination_param,
@@ -961,6 +972,8 @@ void AudioNode::disconnect(AudioParam* destination_param,
                                       "the given AudioParam is not connected.");
     return;
   }
+
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 void AudioNode::disconnect(AudioParam* destination_param,
@@ -988,16 +1001,8 @@ void AudioNode::disconnect(AudioParam* destination_param,
             String::Number(output_index) + ") are not connected.");
     return;
   }
-}
 
-void AudioNode::DisconnectWithoutException(unsigned output_index) {
-  DCHECK(IsMainThread());
-  BaseAudioContext::GraphAutoLocker locker(context());
-
-  // Sanity check input and output indices.
-  if (output_index >= Handler().NumberOfOutputs())
-    return;
-  DisconnectAllFromOutput(output_index);
+  Handler().UpdatePullStatusIfNeeded();
 }
 
 unsigned AudioNode::numberOfInputs() const {

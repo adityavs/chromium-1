@@ -14,13 +14,13 @@
 #include "base/macros.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
+#include "content/browser/permissions/permission_controller_impl.h"
 #include "content/browser/renderer_host/render_process_host_impl.h"
 #include "content/browser/service_worker/service_worker_context_core.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_storage.h"
 #include "content/common/push_messaging.mojom.h"
 #include "content/public/browser/browser_context.h"
-#include "content/public/browser/permission_manager.h"
 #include "content/public/browser/permission_type.h"
 #include "content/public/browser/push_messaging_service.h"
 #include "content/public/browser/render_frame_host.h"
@@ -340,7 +340,7 @@ void PushMessagingManager::DidCheckForExistingRegistration(
 
   // Validate the stored subscription against the subscription request made by
   // the developer. The authorized entity must match.
-  if (service_worker_status == blink::SERVICE_WORKER_OK) {
+  if (service_worker_status == blink::ServiceWorkerStatusCode::kOk) {
     DCHECK_EQ(2u, subscription_id_and_sender_id.size());
 
     const std::string& subscription_id = subscription_id_and_sender_id[0];
@@ -364,8 +364,8 @@ void PushMessagingManager::DidCheckForExistingRegistration(
   }
 
   // TODO(peter): Handle failures other than
-  // blink::SERVICE_WORKER_ERROR_NOT_FOUND by rejecting the subscription
-  // algorithm instead of trying to subscribe.
+  // blink::ServiceWorkerStatusCode::kErrorNotFound by rejecting
+  // the subscription algorithm instead of trying to subscribe.
 
   if (!data.options.sender_info.empty()) {
     BrowserThread::PostTask(
@@ -388,7 +388,7 @@ void PushMessagingManager::DidGetSenderIdFromStorage(
     const std::vector<std::string>& stored_sender_id,
     blink::ServiceWorkerStatusCode service_worker_status) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  if (service_worker_status != blink::SERVICE_WORKER_OK) {
+  if (service_worker_status != blink::ServiceWorkerStatusCode::kOk) {
     SendSubscriptionError(std::move(data),
                           mojom::PushRegistrationStatus::NO_SENDER_ID);
     return;
@@ -445,29 +445,17 @@ void PushMessagingManager::Core::RegisterOnUI(
 
           BrowserContext* browser_context = web_contents->GetBrowserContext();
 
-          // It's valid for embedders to return a null permission manager.
-          // Immediately reject the permission request when this happens.
-          if (!browser_context->GetPermissionManager()) {
-            BrowserThread::PostTask(
-                BrowserThread::IO, FROM_HERE,
-                base::BindOnce(&PushMessagingManager::SendSubscriptionError,
-                               io_parent_, std::move(data),
-                               mojom::PushRegistrationStatus::
-                                   INCOGNITO_PERMISSION_DENIED));
-
-            return;
-          }
-
           // Request notifications permission (which will fail, since
           // notifications aren't supported in incognito), so the website can't
           // detect whether incognito is active.
-          GURL requesting_origin = data.requesting_origin;
-          browser_context->GetPermissionManager()->RequestPermission(
-              PermissionType::NOTIFICATIONS, render_frame_host,
-              requesting_origin, data.user_gesture,
-              base::Bind(
-                  &PushMessagingManager::Core::DidRequestPermissionInIncognito,
-                  weak_factory_ui_to_ui_.GetWeakPtr(), base::Passed(&data)));
+          PermissionControllerImpl::FromBrowserContext(browser_context)
+              ->RequestPermission(
+                  PermissionType::NOTIFICATIONS, render_frame_host,
+                  data.requesting_origin, data.user_gesture,
+                  base::Bind(&PushMessagingManager::Core::
+                                 DidRequestPermissionInIncognito,
+                             weak_factory_ui_to_ui_.GetWeakPtr(),
+                             base::Passed(&data)));
         }
       }
     }
@@ -566,7 +554,7 @@ void PushMessagingManager::DidPersistRegistrationOnIO(
     mojom::PushRegistrationStatus push_registration_status,
     blink::ServiceWorkerStatusCode service_worker_status) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  if (service_worker_status == blink::SERVICE_WORKER_OK) {
+  if (service_worker_status == blink::ServiceWorkerStatusCode::kOk) {
     SendSubscriptionSuccess(std::move(data), push_registration_status,
                             push_subscription_id, p256dh, auth);
   } else {
@@ -643,7 +631,7 @@ void PushMessagingManager::UnsubscribeHavingGottenSenderId(
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
 
   std::string sender_id;
-  if (service_worker_status == blink::SERVICE_WORKER_OK) {
+  if (service_worker_status == blink::ServiceWorkerStatusCode::kOk) {
     DCHECK_EQ(1u, sender_ids.size());
     sender_id = sender_ids[0];
   }
@@ -752,7 +740,7 @@ void PushMessagingManager::DidGetSubscription(
   mojom::PushGetRegistrationStatus get_status =
       mojom::PushGetRegistrationStatus::STORAGE_ERROR;
   switch (service_worker_status) {
-    case blink::SERVICE_WORKER_OK: {
+    case blink::ServiceWorkerStatusCode::kOk: {
       DCHECK_EQ(2u, push_subscription_id_and_sender_info.size());
       const std::string& push_subscription_id =
           push_subscription_id_and_sender_info[0];
@@ -795,33 +783,33 @@ void PushMessagingManager::DidGetSubscription(
 
       return;
     }
-    case blink::SERVICE_WORKER_ERROR_NOT_FOUND: {
+    case blink::ServiceWorkerStatusCode::kErrorNotFound: {
       get_status = mojom::PushGetRegistrationStatus::REGISTRATION_NOT_FOUND;
       break;
     }
-    case blink::SERVICE_WORKER_ERROR_FAILED: {
+    case blink::ServiceWorkerStatusCode::kErrorFailed: {
       get_status = mojom::PushGetRegistrationStatus::STORAGE_ERROR;
       break;
     }
-    case blink::SERVICE_WORKER_ERROR_ABORT:
-    case blink::SERVICE_WORKER_ERROR_START_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_PROCESS_NOT_FOUND:
-    case blink::SERVICE_WORKER_ERROR_EXISTS:
-    case blink::SERVICE_WORKER_ERROR_INSTALL_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_ACTIVATE_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_IPC_FAILED:
-    case blink::SERVICE_WORKER_ERROR_NETWORK:
-    case blink::SERVICE_WORKER_ERROR_SECURITY:
-    case blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED:
-    case blink::SERVICE_WORKER_ERROR_STATE:
-    case blink::SERVICE_WORKER_ERROR_TIMEOUT:
-    case blink::SERVICE_WORKER_ERROR_SCRIPT_EVALUATE_FAILED:
-    case blink::SERVICE_WORKER_ERROR_DISK_CACHE:
-    case blink::SERVICE_WORKER_ERROR_REDUNDANT:
-    case blink::SERVICE_WORKER_ERROR_DISALLOWED:
-    case blink::SERVICE_WORKER_ERROR_MAX_VALUE: {
-      NOTREACHED() << "Got unexpected error code: " << service_worker_status
-                   << " " << ServiceWorkerStatusToString(service_worker_status);
+    case blink::ServiceWorkerStatusCode::kErrorAbort:
+    case blink::ServiceWorkerStatusCode::kErrorStartWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorProcessNotFound:
+    case blink::ServiceWorkerStatusCode::kErrorExists:
+    case blink::ServiceWorkerStatusCode::kErrorInstallWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorActivateWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorIpcFailed:
+    case blink::ServiceWorkerStatusCode::kErrorNetwork:
+    case blink::ServiceWorkerStatusCode::kErrorSecurity:
+    case blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected:
+    case blink::ServiceWorkerStatusCode::kErrorState:
+    case blink::ServiceWorkerStatusCode::kErrorTimeout:
+    case blink::ServiceWorkerStatusCode::kErrorScriptEvaluateFailed:
+    case blink::ServiceWorkerStatusCode::kErrorDiskCache:
+    case blink::ServiceWorkerStatusCode::kErrorRedundant:
+    case blink::ServiceWorkerStatusCode::kErrorDisallowed: {
+      NOTREACHED() << "Got unexpected error code: "
+                   << static_cast<uint32_t>(service_worker_status) << " "
+                   << blink::ServiceWorkerStatusToString(service_worker_status);
       get_status = mojom::PushGetRegistrationStatus::STORAGE_ERROR;
       break;
     }

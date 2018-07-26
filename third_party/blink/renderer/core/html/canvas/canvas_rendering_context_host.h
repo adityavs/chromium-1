@@ -21,9 +21,11 @@ namespace blink {
 
 class CanvasColorParams;
 class CanvasRenderingContext;
+class CanvasResource;
+class CanvasResourceDispatcher;
 class FontSelector;
-class StaticBitmapImage;
 class KURL;
+class StaticBitmapImage;
 
 class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
                                                public GarbageCollectedMixin {
@@ -36,12 +38,13 @@ class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
   virtual void DidDraw() = 0;
 
   virtual void FinalizeFrame() = 0;
-  virtual void PushFrame(scoped_refptr<StaticBitmapImage> image,
-                         const SkIRect& damage_rect);
+  virtual void PushFrame(scoped_refptr<CanvasResource> frame,
+                         const SkIRect& damage_rect) = 0;
   virtual bool OriginClean() const = 0;
   virtual void SetOriginTainted() = 0;
   virtual const IntSize& Size() const = 0;
   virtual CanvasRenderingContext* RenderingContext() const = 0;
+  virtual CanvasResourceDispatcher* GetOrCreateResourceDispatcher() = 0;
 
   virtual ExecutionContext* GetTopExecutionContext() const = 0;
   virtual DispatchEventResult HostDispatchEvent(Event*) = 0;
@@ -58,24 +61,26 @@ class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
 
   virtual FontSelector* GetFontSelector() = 0;
 
+  virtual bool ShouldAccelerate2dContext() const = 0;
+  virtual unsigned GetMSAASampleCountFor2dContext() const = 0;
+
   // TODO(fserb): remove this.
   virtual bool IsOffscreenCanvas() const { return false; }
   virtual bool IsNeutered() const { return false; }
 
-  virtual void Commit(scoped_refptr<StaticBitmapImage> bitmap_image,
+  virtual void Commit(scoped_refptr<CanvasResource> canvas_resource,
                       const SkIRect& damage_rect);
 
   bool IsPaintable() const;
 
-  virtual void RegisterContextToDispatch(CanvasRenderingContext*) {}
-
   // Partial CanvasResourceHost implementation
   void RestoreCanvasMatrixClipStack(cc::PaintCanvas*) const final;
+  CanvasResourceProvider* GetOrCreateCanvasResourceProvider(
+      AccelerationHint hint) final;
 
   bool Is3d() const;
   bool Is2d() const;
   CanvasColorParams ColorParams() const;
-  CanvasResourceProvider* GetOrCreateCanvasResourceProvider();
 
   ScriptPromise convertToBlob(ScriptState*,
                               const ImageEncodeOptions&,
@@ -87,7 +92,6 @@ class CORE_EXPORT CanvasRenderingContextHost : public CanvasResourceHost,
   scoped_refptr<StaticBitmapImage> CreateTransparentImage(const IntSize&) const;
 
   bool did_fail_to_create_resource_provider_ = false;
-  bool resource_provider_is_clear_ = false;
 };
 
 }  // namespace blink

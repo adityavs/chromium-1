@@ -120,24 +120,12 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
                                             kTrafficAnnotation)),
         connect_delegate_(std::move(connect_delegate)),
         handshake_stream_(nullptr),
-        on_handshake_stream_created_has_been_called_(false),
         perform_upgrade_has_been_called_(false),
         api_delegate_(std::move(api_delegate)) {
     create_helper->set_stream_request(this);
     HttpRequestHeaders headers = additional_headers;
     headers.SetHeader(websockets::kUpgrade, websockets::kWebSocketLowercase);
-    if (base::FeatureList::IsEnabled(WebSocketBasicHandshakeStream::
-                                         kWebSocketHandshakeReuseConnection)) {
-      // "Keep-Alive" is included in the "Connection" header for consistency
-      // with Firefox, even though they don't send a Keep-Alive header and
-      // neither do we. Firefox writes "keep-alive" in lowercase, but hopefully
-      // no servers care about the difference.  TODO(ricea): See if we can do
-      // without the "Keep-Alive".
-      constexpr char kKeepAliveUpgrade[] = "Keep-Alive, Upgrade";
-      headers.SetHeader(HttpRequestHeaders::kConnection, kKeepAliveUpgrade);
-    } else {
-      headers.SetHeader(HttpRequestHeaders::kConnection, websockets::kUpgrade);
-    }
+    headers.SetHeader(HttpRequestHeaders::kConnection, websockets::kUpgrade);
     headers.SetHeader(HttpRequestHeaders::kOrigin, origin.Serialize());
     headers.SetHeader(websockets::kSecWebSocketVersion,
                       websockets::kSupportedVersion);
@@ -184,7 +172,7 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
     failure_message_ = message;
   }
 
-  void Start(std::unique_ptr<base::Timer> timer) {
+  void Start(std::unique_ptr<base::OneShotTimer> timer) {
     DCHECK(timer);
     base::TimeDelta timeout(base::TimeDelta::FromSeconds(
         kHandshakeTimeoutIntervalInSeconds));
@@ -198,14 +186,19 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
   void PerformUpgrade() {
     DCHECK(timer_);
     CHECK(!perform_upgrade_has_been_called_);
-    CHECK(on_handshake_stream_created_has_been_called_);
     // TODO(bnc): Change to DCHECK after https://crbug.com/850183 is fixed.
-    CHECK(handshake_stream_);
     CHECK(connect_delegate_);
 
     perform_upgrade_has_been_called_ = true;
 
     timer_->Stop();
+
+    if (!handshake_stream_) {
+      // TODO(https://crbug.com/850183):
+      // Find out why this can happen and make it stop.
+      ReportFailureWithMessage("No handshake stream has been created.");
+      return;
+    }
 
     std::unique_ptr<URLRequest> url_request = std::move(url_request_);
     WebSocketHandshakeStreamBase* handshake_stream = handshake_stream_;
@@ -278,8 +271,6 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
     // TODO(bnc): Change to DCHECK after https://crbug.com/850183 is fixed.
     CHECK(handshake_stream);
 
-    on_handshake_stream_created_has_been_called_ = true;
-
     handshake_stream_ = handshake_stream;
   }
 
@@ -302,14 +293,13 @@ class WebSocketStreamRequestImpl : public WebSocketStreamRequestAPI {
   WebSocketHandshakeStreamBase* handshake_stream_;
 
   // TODO(bnc): Remove after https://crbug.com/850183 is fixed.
-  bool on_handshake_stream_created_has_been_called_;
   bool perform_upgrade_has_been_called_;
 
   // The failure message supplied by WebSocketBasicHandshakeStream, if any.
   std::string failure_message_;
 
   // A timer for handshake timeout.
-  std::unique_ptr<base::Timer> timer_;
+  std::unique_ptr<base::OneShotTimer> timer_;
 
   // A delegate for On*HandshakeCreated and OnFailure calls.
   std::unique_ptr<WebSocketStreamRequestAPI> api_delegate_;
@@ -364,7 +354,7 @@ void Delegate::OnReceivedRedirect(URLRequest* request,
 void Delegate::OnResponseStarted(URLRequest* request, int net_error) {
   DCHECK_NE(ERR_IO_PENDING, net_error);
   // All error codes, including OK and ABORTED, as with
-  // Net.ErrorCodesForMainFrame3
+  // Net.ErrorCodesForMainFrame4
   base::UmaHistogramSparse("Net.WebSocket.ErrorCodes", -net_error);
   if (net::IsLocalhost(request->url())) {
     base::UmaHistogramSparse("Net.WebSocket.ErrorCodes_Localhost", -net_error);
@@ -489,7 +479,7 @@ std::unique_ptr<WebSocketStreamRequest> WebSocketStream::CreateAndConnectStream(
       socket_url, url_request_context, origin, site_for_cookies,
       additional_headers, std::move(connect_delegate), std::move(create_helper),
       nullptr);
-  request->Start(std::make_unique<base::Timer>(false, false));
+  request->Start(std::make_unique<base::OneShotTimer>());
   return std::move(request);
 }
 
@@ -503,7 +493,7 @@ WebSocketStream::CreateAndConnectStreamForTesting(
     URLRequestContext* url_request_context,
     const NetLogWithSource& net_log,
     std::unique_ptr<WebSocketStream::ConnectDelegate> connect_delegate,
-    std::unique_ptr<base::Timer> timer,
+    std::unique_ptr<base::OneShotTimer> timer,
     std::unique_ptr<WebSocketStreamRequestAPI> api_delegate) {
   auto request = std::make_unique<WebSocketStreamRequestImpl>(
       socket_url, url_request_context, origin, site_for_cookies,

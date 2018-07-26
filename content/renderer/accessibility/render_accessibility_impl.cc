@@ -31,6 +31,7 @@
 #include "ui/accessibility/ax_enum_util.h"
 #include "ui/accessibility/ax_event.h"
 #include "ui/accessibility/ax_node.h"
+#include "ui/accessibility/ax_role_properties.h"
 
 using blink::WebAXObject;
 using blink::WebDocument;
@@ -125,9 +126,6 @@ RenderAccessibilityImpl::RenderAccessibilityImpl(RenderFrameImpl* render_frame,
     settings->SetInlineTextBoxAccessibilityEnabled(true);
 #endif
 
-  if (render_frame_->IsHidden())
-    tree_source_.WasHidden();
-
   const WebDocument& document = GetMainDocument();
   if (!document.IsNull()) {
     // It's possible that the webview has already loaded a webpage without
@@ -197,22 +195,8 @@ bool RenderAccessibilityImpl::OnMessageReceived(const IPC::Message& message) {
   return handled;
 }
 
-void RenderAccessibilityImpl::WasHidden() {
-  pending_events_.clear();
-  tree_source_.WasHidden();
-  HandleAXEvent(tree_source_.GetRoot(), ax::mojom::Event::kNone);
-}
-
-void RenderAccessibilityImpl::WasShown() {
-  pending_events_.clear();
-  tree_source_.WasShown();
-  HandleAXEvent(tree_source_.GetRoot(), ax::mojom::Event::kNone);
-}
-
 void RenderAccessibilityImpl::HandleWebAccessibilityEvent(
     const blink::WebAXObject& obj, blink::WebAXEvent event) {
-  if (render_frame_->IsHidden())
-    return;
   HandleAXEvent(obj, AXEventFromBlink(event));
 }
 
@@ -466,6 +450,30 @@ void RenderAccessibilityImpl::SendPendingAccessibilityEvents() {
 
     bundle.events.push_back(event);
 
+    // Whenever there's a change to an inline node, it's important to
+    // invalidate the whole surrounding block so that we have the full
+    // information about the line layout.
+    auto block = obj;
+    while (!block.IsDetached() && (block.ComputedStyleDisplay() != "block" ||
+                                   block.AccessibilityIsIgnored())) {
+      block = block.ParentObject();
+    }
+    if (!block.IsDetached() && !block.Equals(obj))
+      serializer_.DeleteClientSubtree(block);
+
+    // Whenever there's a change within a table, invalidate the
+    // whole table so that row and cell indexes are recomputed.
+    ax::mojom::Role role = AXRoleFromBlink(obj.Role());
+    if (ui::IsTableLikeRole(role) || role == ax::mojom::Role::kRow ||
+        ui::IsCellOrTableHeaderRole(role)) {
+      auto table = obj;
+      while (!table.IsDetached() &&
+             !ui::IsTableLikeRole(AXRoleFromBlink(table.Role())))
+        table = table.ParentObject();
+      if (!table.IsDetached())
+        serializer_.DeleteClientSubtree(table);
+    }
+
     VLOG(1) << "Accessibility event: " << ui::ToString(event.event_type)
             << " on node id " << event.id;
 
@@ -652,7 +660,7 @@ void RenderAccessibilityImpl::OnPerformAction(
       target.SetSequentialFocusNavigationStartingPoint();
       break;
     case ax::mojom::Action::kSetValue:
-      target.SetValue(blink::WebString::FromUTF16(data.value));
+      target.SetValue(blink::WebString::FromUTF8(data.value));
       HandleAXEvent(target, ax::mojom::Event::kValueChanged);
       break;
     case ax::mojom::Action::kShowContextMenu:

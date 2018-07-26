@@ -50,7 +50,7 @@ PrintPreviewSettingsSectionsTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
+      '../settings/test_util.js',
       '../test_browser_proxy.js',
       'native_layer_stub.js',
       'plugin_stub.js',
@@ -187,7 +187,7 @@ PrintPreviewPagesSettingsTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
+      '../settings/test_util.js',
       'print_preview_test_utils.js',
       'pages_settings_test.js',
     ]);
@@ -252,6 +252,7 @@ PrintPreviewModelTest = class extends NewPrintPreviewTest {
   get extraLibraries() {
     return super.extraLibraries.concat([
       '../settings/test_util.js',
+      'print_preview_test_utils.js',
       'model_test.js',
     ]);
   }
@@ -264,6 +265,14 @@ PrintPreviewModelTest = class extends NewPrintPreviewTest {
 
 TEST_F('PrintPreviewModelTest', 'SetStickySettings', function() {
   this.runMochaTest(model_test.TestNames.SetStickySettings);
+});
+
+TEST_F('PrintPreviewModelTest', 'GetPrintTicket', function() {
+  this.runMochaTest(model_test.TestNames.GetPrintTicket);
+});
+
+TEST_F('PrintPreviewModelTest', 'GetCloudPrintTicket', function() {
+  this.runMochaTest(model_test.TestNames.GetCloudPrintTicket);
 });
 
 PrintPreviewPreviewGenerationTest = class extends NewPrintPreviewTest {
@@ -391,7 +400,7 @@ PrintPreviewSystemDialogBrowserTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
+      '../settings/test_util.js',
       '../test_browser_proxy.js',
       'native_layer_stub.js',
       'plugin_stub.js',
@@ -430,8 +439,8 @@ PrintPreviewInvalidSettingsBrowserTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
       ROOT_PATH + 'ui/webui/resources/js/cr/event_target.js',
+      '../settings/test_util.js',
       '../test_browser_proxy.js',
       'cloud_print_interface_stub.js',
       'native_layer_stub.js',
@@ -544,9 +553,9 @@ PrintPreviewDestinationDialogTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
       ROOT_PATH + 'ui/webui/resources/js/webui_listener_tracker.js',
       ROOT_PATH + 'ui/webui/resources/js/cr/event_target.js',
+      '../settings/test_util.js',
       '../test_browser_proxy.js',
       'cloud_print_interface_stub.js',
       'native_layer_stub.js',
@@ -574,7 +583,7 @@ PrintPreviewAdvancedDialogTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
+      '../settings/test_util.js',
       'print_preview_test_utils.js',
       'advanced_dialog_test.js',
     ]);
@@ -617,7 +626,7 @@ PrintPreviewCustomMarginsTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
+      '../settings/test_util.js',
       'print_preview_test_utils.js',
       'custom_margins_test.js',
     ]);
@@ -654,8 +663,8 @@ PrintPreviewNewDestinationSearchTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
-      ROOT_PATH + 'chrome/test/data/webui/settings/test_util.js',
       ROOT_PATH + 'ui/webui/resources/js/webui_listener_tracker.js',
+      '../settings/test_util.js',
       '../test_browser_proxy.js',
       'native_layer_stub.js',
       'print_preview_test_utils.js',
@@ -831,6 +840,7 @@ PrintPreviewDestinationListTest = class extends NewPrintPreviewTest {
   /** @override */
   get extraLibraries() {
     return super.extraLibraries.concat([
+      '../settings/test_util.js',
       'destination_list_test.js',
     ]);
   }
@@ -843,4 +853,9 @@ PrintPreviewDestinationListTest = class extends NewPrintPreviewTest {
 
 TEST_F('PrintPreviewDestinationListTest', 'FilterDestinations', function() {
   this.runMochaTest(destination_list_test.TestNames.FilterDestinations);
+});
+
+TEST_F('PrintPreviewDestinationListTest', 'FireDestinationSelected',
+    function() {
+  this.runMochaTest(destination_list_test.TestNames.FireDestinationSelected);
 });

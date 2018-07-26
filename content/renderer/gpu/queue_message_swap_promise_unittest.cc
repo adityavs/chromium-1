@@ -13,9 +13,10 @@
 #include "base/memory/ptr_util.h"
 #include "base/test/scoped_task_environment.h"
 #include "cc/trees/swap_promise.h"
+#include "content/common/render_frame_metadata.mojom.h"
 #include "content/common/view_messages.h"
 #include "content/renderer/gpu/frame_swap_message_queue.h"
-#include "content/renderer/gpu/render_widget_compositor.h"
+#include "content/renderer/gpu/layer_tree_view.h"
 #include "content/renderer/render_widget.h"
 #include "content/test/mock_render_process.h"
 #include "ipc/ipc_message.h"
@@ -24,16 +25,6 @@
 #include "testing/gtest/include/gtest/gtest.h"
 
 namespace content {
-
-class TestRenderWidget : public RenderWidget {
- public:
-  using RenderWidget::QueueMessageImpl;
-
- private:
-  ~TestRenderWidget() override {}
-
-  DISALLOW_COPY_AND_ASSIGN(TestRenderWidget);
-};
 
 class TestSyncMessageFilter : public IPC::SyncMessageFilter {
  public:
@@ -89,7 +80,7 @@ class QueueMessageSwapPromiseTest : public testing::Test {
       IPC::Message* msg,
       MessageDeliveryPolicy policy,
       int source_frame_number) {
-    return TestRenderWidget::QueueMessageImpl(
+    return RenderWidget::QueueMessageImpl(
         msg, policy, frame_swap_message_queue_.get(), sync_message_filter_,
         source_frame_number);
   }

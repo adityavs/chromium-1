@@ -139,8 +139,6 @@ static_library("browser") {
     "psl_matching_helper.h",
     "site_affiliation/asset_link_data.cc",
     "site_affiliation/asset_link_data.h",
-    "site_affiliation/asset_link_retriever.cc",
-    "site_affiliation/asset_link_retriever.h",
     "sql_table_builder.cc",
     "sql_table_builder.h",
     "statistics_table.cc",
@@ -205,6 +203,7 @@ static_library("browser") {
     "//net",
     "//services/metrics/public/cpp:metrics_cpp",
     "//services/metrics/public/cpp:ukm_builders",
+    "//services/network/public/cpp",
     "//sql",
     "//third_party/protobuf:protobuf_lite",
     "//third_party/re2",
@@ -243,6 +242,7 @@ static_library("password_hash_data") {
   deps = [
     "//base",
     "//crypto",
+    "//google_apis",
   ]
 }
 
@@ -295,6 +295,7 @@ static_library("test_support") {
     ":browser",
     ":hash_password_manager",
     "//components/ukm",
+    "//services/network/public/cpp",
     "//testing/gmock",
     "//url:url",
   ]
@@ -390,7 +391,6 @@ source_set("unit_tests") {
     "password_ui_utils_unittest.cc",
     "psl_matching_helper_unittest.cc",
     "site_affiliation/asset_link_data_unittest.cc",
-    "site_affiliation/asset_link_retriever_unittest.cc",
     "sql_table_builder_unittest.cc",
     "statistics_table_unittest.cc",
     "suppressed_form_fetcher_unittest.cc",
@@ -438,11 +438,15 @@ source_set("unit_tests") {
     "//components/sync:test_support_model",
     "//components/ukm:test_support",
     "//components/variations",
+    "//google_apis:google_apis",
     "//net:test_support",
     "//services/metrics/public/cpp:ukm_builders",
+    "//services/network:test_support",
+    "//services/network/public/cpp",
     "//sql:test_support",
     "//testing/gmock",
     "//testing/gtest",
+    "//third_party/sqlite",
     "//ui/base",
     "//url",
   ]

@@ -78,20 +78,14 @@ void DeviceOrientationDispatcher::StopListening() {
 }
 
 void DeviceOrientationDispatcher::DidChangeDeviceOrientation(
-    const device::OrientationData& motion) {
-  last_device_orientation_data_ = DeviceOrientationData::Create(motion);
+    DeviceOrientationData* orientation) {
+  last_device_orientation_data_ = orientation;
   NotifyControllers();
 }
 
 DeviceOrientationData*
 DeviceOrientationDispatcher::LatestDeviceOrientationData() {
   return last_device_orientation_data_.Get();
-}
-
-WebPlatformEventType DeviceOrientationDispatcher::GetWebPlatformEventType()
-    const {
-  return (absolute_) ? kWebPlatformEventTypeDeviceOrientationAbsolute
-                     : kWebPlatformEventTypeDeviceOrientation;
 }
 
 }  // namespace blink

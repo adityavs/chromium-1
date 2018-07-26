@@ -40,6 +40,8 @@ _CONFIG = [
             'base::OptionalOrNullptr',
             'base::RefCountedData',
             'base::CreateSequencedTaskRunnerWithTraits',
+            'base::ReadOnlySharedMemoryMapping',
+            'base::ReadOnlySharedMemoryRegion',
             'base::SequencedTaskRunner',
             'base::SingleThreadTaskRunner',
             'base::ScopedFD',
@@ -116,6 +118,13 @@ _CONFIG = [
             # Base atomic utilities
             'base::AtomicSequenceNumber',
 
+            # Task traits
+            'base::TaskTraits',
+            'base::MayBlock',
+            'base::TaskPriority',
+            'base::TaskShutdownBehavior',
+            'base::WithBaseSyncPrimitives',
+
             # Byte order
             'base::ByteSwap',
             'base::NetToHost(16|32|64)',
@@ -146,12 +155,18 @@ _CONFIG = [
             'gfx::Size',
             'gfx::SizeF',
             'gfx::Transform',
+            'gfx::Vector2d',
+            'gfx::Vector2dF',
             # Wrapper of SkRegion used in Chromium.
             'cc::Region',
 
             # A geometric set of TouchActions associated with areas, and only
             # depends on the geometry types above.
             'cc::TouchActionRegion',
+
+            # Selection bounds.
+            'cc::LayerSelection',
+            'gfx::SelectionBound',
 
             # cc::Layers.
             'cc::Layer',
@@ -172,6 +187,9 @@ _CONFIG = [
             'cc::VERTICAL',
             'cc::THUMB',
             'cc::TICKMARKS',
+            'cc::BrowserControlsState',
+            'cc::EventListenerClass',
+            'cc::EventListenerProperties',
 
             # Standalone utility libraries that only depend on //base
             'skia::.+',
@@ -248,7 +266,7 @@ _CONFIG = [
     },
     {
         'paths': ['third_party/blink/renderer/core/clipboard'],
-        'allowed': ['gfx::PNGCodec'],
+        'allowed': ['gfx::PNGCodec', 'net::EscapeForHTML'],
     },
     {
         'paths': ['third_party/blink/renderer/core/css'],
@@ -293,7 +311,10 @@ _CONFIG = [
             'third_party/blink/renderer/modules/gamepad/',
             'third_party/blink/renderer/modules/sensor/',
         ],
-        'allowed': ['device::.+'],
+        'allowed': [
+            'base::subtle::Atomic32',
+            'device::.+',
+        ],
     },
     {
         'paths': [
@@ -445,6 +466,7 @@ def check(path, contents):
     # Only check code. Ignore tests.
     # TODO(tkent): Remove 'Test' after the great mv.
     if (ext not in ('.cc', '.cpp', '.h', '.mm')
+            or path.find('/testing/') >= 0
             or basename.endswith('Test')
             or basename.endswith('_test')
             or basename.endswith('_test_helpers')

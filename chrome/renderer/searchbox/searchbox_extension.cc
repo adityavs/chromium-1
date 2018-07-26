@@ -23,6 +23,7 @@
 #include "chrome/grit/renderer_resources.h"
 #include "chrome/renderer/searchbox/searchbox.h"
 #include "components/crx_file/id_util.h"
+#include "components/ntp_tiles/constants.h"
 #include "components/ntp_tiles/ntp_tile_impression.h"
 #include "components/ntp_tiles/tile_source.h"
 #include "components/ntp_tiles/tile_visual_type.h"
@@ -73,7 +74,7 @@ const char kCSSBackgroundColorFormat[] = "rgba(%d,%d,%d,%s)";
 const char kCSSBackgroundPositionCenter[] = "center";
 const char kCSSBackgroundPositionLeft[] = "left";
 const char kCSSBackgroundPositionTop[] = "top";
-const char kCSSBackgroundPositionTopCover[] = "top/cover";
+const char kCSSBackgroundPositionCenterCover[] = "center/cover";
 const char kCSSBackgroundPositionRight[] = "right";
 const char kCSSBackgroundPositionBottom[] = "bottom";
 
@@ -342,9 +343,15 @@ v8::Local<v8::Object> GenerateThemeBackgroundInfo(
                 "url('" + theme_info.custom_background_url.spec() + "')");
     builder.Set("imageTiling", std::string(kCSSBackgroundRepeatNo));
     builder.Set("imageHorizontalAlignment",
-                std::string(kCSSBackgroundPositionLeft));
+                std::string(kCSSBackgroundPositionCenter));
     builder.Set("imageVerticalAlignment",
-                std::string(kCSSBackgroundPositionTopCover));
+                std::string(kCSSBackgroundPositionCenterCover));
+    builder.Set("attributionActionUrl",
+                theme_info.custom_background_attribution_action_url.spec());
+    builder.Set("attribution1",
+                theme_info.custom_background_attribution_line_1);
+    builder.Set("attribution2",
+                theme_info.custom_background_attribution_line_2);
   }
 
   return builder.Build();
@@ -576,10 +583,14 @@ class NewTabPageBindings : public gin::Wrappable<NewTabPageBindings> {
   static void UndoMostVisitedDeletion(v8::Isolate* isolate,
                                       v8::Local<v8::Value> rid);
 
-  // Handlers for JS functions visible only to the most visited iframe and/or
-  // the local NTP.
+  // Handlers for JS functions visible only to the most visited iframe, the edit
+  // custom links iframe, and/or the local NTP.
   static v8::Local<v8::Value> GetMostVisitedItemData(v8::Isolate* isolate,
                                                      int rid);
+  static void UpdateCustomLink(int rid,
+                               const std::string& url,
+                               const std::string& title);
+  static void ResetCustomLinks();
   static void LogEvent(int event);
   static void LogMostVisitedImpression(
       int position,
@@ -594,6 +605,12 @@ class NewTabPageBindings : public gin::Wrappable<NewTabPageBindings> {
       int tile_type,
       v8::Local<v8::Value> data_generation_time);
   static void SetCustomBackgroundURL(const std::string& background_url);
+  static void SetCustomBackgroundURLWithAttributions(
+      const std::string& background_url,
+      const std::string& attribution_line_1,
+      const std::string& attribution_line_2,
+      const std::string& attributionActionUrl);
+  static void SelectLocalBackgroundImage();
 
   DISALLOW_COPY_AND_ASSIGN(NewTabPageBindings);
 };
@@ -625,13 +642,19 @@ gin::ObjectTemplateBuilder NewTabPageBindings::GetObjectTemplateBuilder(
                  &NewTabPageBindings::UndoMostVisitedDeletion)
       .SetMethod("getMostVisitedItemData",
                  &NewTabPageBindings::GetMostVisitedItemData)
+      .SetMethod("updateCustomLink", &NewTabPageBindings::UpdateCustomLink)
+      .SetMethod("resetCustomLinks", &NewTabPageBindings::ResetCustomLinks)
       .SetMethod("logEvent", &NewTabPageBindings::LogEvent)
       .SetMethod("logMostVisitedImpression",
                  &NewTabPageBindings::LogMostVisitedImpression)
       .SetMethod("logMostVisitedNavigation",
                  &NewTabPageBindings::LogMostVisitedNavigation)
       .SetMethod("setBackgroundURL",
-                 &NewTabPageBindings::SetCustomBackgroundURL);
+                 &NewTabPageBindings::SetCustomBackgroundURL)
+      .SetMethod("setBackgroundURLWithAttributions",
+                 &NewTabPageBindings::SetCustomBackgroundURLWithAttributions)
+      .SetMethod("selectLocalBackgroundImage",
+                 &NewTabPageBindings::SelectLocalBackgroundImage);
 }
 
 // static
@@ -725,7 +748,16 @@ void NewTabPageBindings::DeleteMostVisitedItem(v8::Isolate* isolate,
   SearchBox* search_box = GetSearchBoxForCurrentContext();
   if (!search_box)
     return;
-  search_box->DeleteMostVisitedItem(*rid);
+
+  // Treat the Most Visited item as a custom link if called from the Most
+  // Visited or edit custom link iframes, and if custom links is enabled. This
+  // will initialize custom links if they have not already been initialized.
+  if (ntp_tiles::IsCustomLinksEnabled() &&
+      HasOrigin(GURL(chrome::kChromeSearchMostVisitedUrl))) {
+    search_box->DeleteCustomLink(*rid);
+  } else {
+    search_box->DeleteMostVisitedItem(*rid);
+  }
 }
 
 // static
@@ -747,7 +779,16 @@ void NewTabPageBindings::UndoMostVisitedDeletion(
   SearchBox* search_box = GetSearchBoxForCurrentContext();
   if (!search_box)
     return;
-  search_box->UndoMostVisitedDeletion(*rid);
+
+  // Treat the Most Visited item as a custom link if called from the Most
+  // Visited or edit custom link iframes, and if custom links is enabled. This
+  // will not initialize custom links.
+  if (ntp_tiles::IsCustomLinksEnabled() &&
+      HasOrigin(GURL(chrome::kChromeSearchMostVisitedUrl))) {
+    search_box->UndoDeleteCustomLink();
+  } else {
+    search_box->UndoMostVisitedDeletion(*rid);
+  }
 }
 
 // static
@@ -765,6 +806,38 @@ v8::Local<v8::Value> NewTabPageBindings::GetMostVisitedItemData(
   int render_view_id =
       GetMainRenderFrameForCurrentContext()->GetRenderView()->GetRoutingID();
   return GenerateMostVisitedItemData(isolate, render_view_id, rid, item);
+}
+
+// static
+void NewTabPageBindings::UpdateCustomLink(int rid,
+                                          const std::string& url,
+                                          const std::string& title) {
+  if (!ntp_tiles::IsCustomLinksEnabled())
+    return;
+  SearchBox* search_box = GetSearchBoxForCurrentContext();
+  if (!search_box || !HasOrigin(GURL(chrome::kChromeSearchMostVisitedUrl)))
+    return;
+
+  // If rid is -1, adds a new link. Otherwise, updates the existing link
+  // indicated by the rid. This will initialize custom links if they have not
+  // already been initialized.
+  // TODO(856394): Add support for editing links when edit link API is complete.
+  if (rid == -1) {
+    const GURL gurl(url);
+    if (!gurl.is_valid())
+      return;
+    search_box->AddCustomLink(std::move(gurl), title);
+  }
+}
+
+// static
+void NewTabPageBindings::ResetCustomLinks() {
+  if (!ntp_tiles::IsCustomLinksEnabled())
+    return;
+  SearchBox* search_box = GetSearchBoxForCurrentContext();
+  if (!search_box || !HasOrigin(GURL(chrome::kChromeSearchMostVisitedUrl)))
+    return;
+  search_box->ResetCustomLinks();
 }
 
 // static
@@ -834,6 +907,24 @@ void NewTabPageBindings::SetCustomBackgroundURL(
   SearchBox* search_box = GetSearchBoxForCurrentContext();
   GURL url(background_url);
   search_box->SetCustomBackgroundURL(url);
+}
+
+// static
+void NewTabPageBindings::SetCustomBackgroundURLWithAttributions(
+    const std::string& background_url,
+    const std::string& attribution_line_1,
+    const std::string& attribution_line_2,
+    const std::string& attribution_action_url) {
+  SearchBox* search_box = GetSearchBoxForCurrentContext();
+  search_box->SetCustomBackgroundURLWithAttributions(
+      GURL(background_url), attribution_line_1, attribution_line_2,
+      GURL(attribution_action_url));
+}
+
+// static
+void NewTabPageBindings::SelectLocalBackgroundImage() {
+  SearchBox* search_box = GetSearchBoxForCurrentContext();
+  search_box->SelectLocalBackgroundImage();
 }
 
 }  // namespace

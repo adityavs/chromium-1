@@ -7,13 +7,11 @@
 #include "ash/app_list/pagination_controller.h"
 #include "ash/app_list/views/app_list_view.h"
 #include "ash/app_list/views/apps_container_view.h"
-#include "ash/app_list/views/assistant_container_view.h"
 #include "ash/app_list/views/contents_view.h"
 #include "ash/app_list/views/search_box_view.h"
 #include "ash/app_list/views/search_result_page_view.h"
 #include "ash/public/cpp/app_list/app_list_constants.h"
 #include "base/strings/utf_string_conversions.h"
-#include "chromeos/chromeos_switches.h"
 #include "ui/chromeos/search_box/search_box_constants.h"
 #include "ui/views/controls/label.h"
 
@@ -29,11 +27,6 @@ HorizontalPageContainer::HorizontalPageContainer(ContentsView* contents_view,
       &pagination_model_, PaginationController::SCROLL_AXIS_HORIZONTAL));
 
   // Add horizontal pages.
-  if (chromeos::switches::IsAssistantEnabled()) {
-    assistant_container_view_ = new AssistantContainerView(contents_view_);
-    AddHorizontalPage(assistant_container_view_);
-  }
-
   apps_container_view_ = new AppsContainerView(contents_view_, model);
   AddHorizontalPage(apps_container_view_);
   pagination_model_.SetTotalPages(horizontal_pages_.size());
@@ -50,8 +43,7 @@ gfx::Size HorizontalPageContainer::CalculatePreferredSize() const {
   if (!GetWidget())
     return gfx::Size();
 
-  return gfx::Size(contents_view_->GetDisplayWidth(),
-                   contents_view_->GetDisplayHeight());
+  return contents_view_->GetWorkAreaSize();
 }
 
 void HorizontalPageContainer::Layout() {
@@ -63,6 +55,7 @@ void HorizontalPageContainer::Layout() {
     gfx::Rect page_bounds(
         page->GetPageBoundsForState(contents_view_->GetActiveState()));
     page_bounds.Offset(GetOffsetForPageIndex(i));
+    page->InvalidateLayout();
     page->SetBoundsRect(page_bounds);
   }
 }
@@ -88,6 +81,7 @@ void HorizontalPageContainer::OnAnimationUpdated(double progress,
     gfx::Rect bounds(
         gfx::Tween::RectValueBetween(progress, from_rect, to_rect));
     bounds.Offset(GetOffsetForPageIndex(i));
+    page->InvalidateLayout();
     page->SetBoundsRect(bounds);
   }
 }
@@ -100,7 +94,7 @@ gfx::Rect HorizontalPageContainer::GetSearchBoxBoundsForState(
     ash::AppListState state) const {
   // The search box bounds are decided by AppsContainerView and are not changed
   // during horizontal page switching.
-  return apps_container_view_->GetSearchBoxBoundsForState(state);
+  return apps_container_view_->GetSearchBoxExpectedBounds();
 }
 
 gfx::Rect HorizontalPageContainer::GetPageBoundsForState(

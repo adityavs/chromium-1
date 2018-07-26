@@ -30,7 +30,6 @@ import org.chromium.chrome.browser.util.FeatureUtilities;
 import org.chromium.chrome.browser.util.MathUtils;
 import org.chromium.chrome.browser.widget.ScrimView;
 import org.chromium.chrome.browser.widget.ScrimView.ScrimParams;
-import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.base.LocalizationUtils;
 import org.chromium.ui.resources.ResourceManager;
 
@@ -117,8 +116,7 @@ public class ContextualSearchPanel extends OverlayPanel {
     @Override
     protected void initializeUiState() {
         mUseGenericSheetUx = mActivity.supportsContextualSuggestionsBottomSheet()
-                && FeatureUtilities.areContextualSuggestionsEnabled(
-                           DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivity));
+                && FeatureUtilities.areContextualSuggestionsEnabled(mActivity);
     }
 
     @Override
@@ -278,7 +276,7 @@ public class ContextualSearchPanel extends OverlayPanel {
     @Override
     protected void onClosed(@StateChangeReason int reason) {
         // Must be called before destroying Content because unseen visits should be removed from
-        // history, and if the Content gets destroyed there won't be a ContentViewCore to do that.
+        // history, and if the Content gets destroyed there won't be a Webcontents to do that.
         mManagementDelegate.onCloseContextualSearch(reason);
 
         setProgressBarCompletion(0);
@@ -451,7 +449,7 @@ public class ContextualSearchPanel extends OverlayPanel {
     // ============================================================================================
 
     /**
-     * Notify the panel that the ContentViewCore was seen.
+     * Notify the panel that the content was seen.
      */
     public void setWasSearchContentViewSeen() {
         mPanelMetrics.setWasSearchContentViewSeen();
@@ -504,6 +502,16 @@ public class ContextualSearchPanel extends OverlayPanel {
     }
 
     /**
+     * Maximizes the Contextual Search Panel.
+     * @param reason The {@code StateChangeReason} behind the maximization.
+     */
+    @Override
+    public void maximizePanel(@StateChangeReason int reason) {
+        mShouldPromoteToTabAfterMaximizing = false;
+        maximizePanel(reason);
+    }
+
+    /**
      * Maximizes the Contextual Search Panel, then promotes it to a regular Tab.
      * @param reason The {@code StateChangeReason} behind the maximization and promotion to tab.
      */
@@ -540,6 +548,11 @@ public class ContextualSearchPanel extends OverlayPanel {
     public void closePanel(@StateChangeReason int reason, boolean animate) {
         super.closePanel(reason, animate);
         mHasContentBeenTouched = false;
+    }
+
+    @Override
+    public void expandPanel(@StateChangeReason int reason) {
+        super.expandPanel(reason);
     }
 
     @Override

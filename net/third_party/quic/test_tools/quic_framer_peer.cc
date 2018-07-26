@@ -8,7 +8,6 @@
 #include "net/third_party/quic/core/quic_packets.h"
 #include "net/third_party/quic/platform/api/quic_map_util.h"
 
-using std::string;
 
 namespace quic {
 namespace test {
@@ -301,6 +300,16 @@ QuicEncrypter* QuicFramerPeer::GetEncrypter(QuicFramer* framer,
 void QuicFramerPeer::SetLastPacketIsIetfQuic(QuicFramer* framer,
                                              bool last_packet_is_ietf_quic) {
   framer->last_packet_is_ietf_quic_ = last_packet_is_ietf_quic;
+}
+
+// static
+size_t QuicFramerPeer::ComputeFrameLength(
+    QuicFramer* framer,
+    const QuicFrame& frame,
+    bool last_frame_in_packet,
+    QuicPacketNumberLength packet_number_length) {
+  return framer->ComputeFrameLength(frame, last_frame_in_packet,
+                                    packet_number_length);
 }
 
 }  // namespace test

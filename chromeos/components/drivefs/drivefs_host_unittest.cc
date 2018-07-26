@@ -109,10 +109,7 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate {
   TestingDriveFsHostDelegate(
       std::unique_ptr<service_manager::Connector> connector,
       const AccountId& account_id)
-      : connector_(std::move(connector)), account_id_(account_id) {
-    ON_CALL(*this, AreRefreshTokensReady())
-        .WillByDefault(testing::Return(true));
-  }
+      : connector_(std::move(connector)), account_id_(account_id) {}
 
   MockOAuth2MintTokenFlow& mock_flow() { return mock_flow_; }
 
@@ -122,7 +119,8 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate {
 
   // DriveFsHost::Delegate:
   MOCK_METHOD1(OnMounted, void(const base::FilePath&));
-  MOCK_METHOD0(AreRefreshTokensReady, bool());
+  MOCK_METHOD1(OnMountFailed, void(base::Optional<base::TimeDelta>));
+  MOCK_METHOD1(OnUnmounted, void(base::Optional<base::TimeDelta>));
 
  private:
   // DriveFsHost::Delegate:
@@ -131,6 +129,9 @@ class TestingDriveFsHostDelegate : public DriveFsHost::Delegate {
     return connector_.get();
   }
   const AccountId& GetAccountId() override { return account_id_; }
+  std::string GetObfuscatedAccountId() override {
+    return "salt-" + account_id_.GetAccountIdKey();
+  }
 
   std::unique_ptr<OAuth2MintTokenFlow> CreateMintTokenFlow(
       OAuth2MintTokenFlow::Delegate* delegate,
@@ -192,6 +193,16 @@ class FakeIdentityService
   }
 
   // identity::mojom::IdentityManagerInterceptorForTesting overrides:
+  void GetPrimaryAccountWhenAvailable(
+      GetPrimaryAccountWhenAvailableCallback callback) override {
+    auto account_id = AccountId::FromUserEmailGaiaId("test@example.com", "ID");
+    AccountInfo account_info;
+    account_info.email = account_id.GetUserEmail();
+    account_info.gaia = account_id.GetGaiaId();
+    account_info.account_id = account_id.GetAccountIdKey();
+    std::move(callback).Run(account_info, {});
+  }
+
   void GetAccessToken(const std::string& account_id,
                       const ::identity::ScopeSet& scopes,
                       const std::string& consumer_id,
@@ -262,9 +273,10 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
     std::string source;
     EXPECT_CALL(
         *disk_manager_,
-        MountPath(testing::StartsWith("drivefs://"), "", "drivefs-g-ID",
-                  testing::Contains("datadir=/path/to/profile/GCache/v2/g-ID"),
-                  _, chromeos::MOUNT_ACCESS_MODE_READ_WRITE))
+        MountPath(
+            testing::StartsWith("drivefs://"), "", "drivefs-salt-g-ID",
+            testing::Contains("datadir=/path/to/profile/GCache/v2/salt-g-ID"),
+            _, chromeos::MOUNT_ACCESS_MODE_READ_WRITE))
         .WillOnce(testing::SaveArg<0>(&source));
 
     mojom::DriveFsBootstrapPtrInfo bootstrap;
@@ -282,14 +294,22 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
     DispatchMountEvent(chromeos::disks::DiskMountManager::MOUNTING,
                        chromeos::MOUNT_ERROR_NONE,
                        {base::StrCat({"drivefs://", token}),
-                        "/media/drivefsroot/g-ID",
+                        "/media/drivefsroot/salt-g-ID",
                         chromeos::MOUNT_TYPE_NETWORK_STORAGE,
                         {}});
   }
 
   void SendOnMounted() { delegate_ptr_->OnMounted(); }
 
-  void DoMount() {
+  void SendOnUnmounted(base::Optional<base::TimeDelta> delay) {
+    delegate_ptr_->OnUnmounted(std::move(delay));
+  }
+
+  void SendMountFailed(base::Optional<base::TimeDelta> delay) {
+    delegate_ptr_->OnMountFailed(std::move(delay));
+  }
+
+  void EstablishConnection() {
     auto token = StartMount();
     DispatchMountSuccessEvent(token);
 
@@ -299,10 +319,14 @@ class DriveFsHostTest : public ::testing::Test, public mojom::DriveFsBootstrap {
       bootstrap_binding_.set_connection_error_handler(run_loop.QuitClosure());
       run_loop.Run();
     }
+  }
+
+  void DoMount() {
+    EstablishConnection();
     base::RunLoop run_loop;
     base::OnceClosure quit_closure = run_loop.QuitClosure();
     EXPECT_CALL(*host_delegate_,
-                OnMounted(base::FilePath("/media/drivefsroot/g-ID")))
+                OnMounted(base::FilePath("/media/drivefsroot/salt-g-ID")))
         .WillOnce(RunQuitClosure(&quit_closure));
     SendOnMounted();
     run_loop.Run();
@@ -341,7 +365,8 @@ TEST_F(DriveFsHostTest, Basic) {
 
   ASSERT_NO_FATAL_FAILURE(DoMount());
 
-  EXPECT_EQ(base::FilePath("/media/drivefsroot/g-ID"), host_->GetMountPath());
+  EXPECT_EQ(base::FilePath("/media/drivefsroot/salt-g-ID"),
+            host_->GetMountPath());
 }
 
 TEST_F(DriveFsHostTest, OnMountedBeforeMountEvent) {
@@ -356,12 +381,46 @@ TEST_F(DriveFsHostTest, OnMountedBeforeMountEvent) {
   EXPECT_FALSE(host_->IsMounted());
 
   EXPECT_CALL(*host_delegate_,
-              OnMounted(base::FilePath("/media/drivefsroot/g-ID")));
+              OnMounted(base::FilePath("/media/drivefsroot/salt-g-ID")));
 
   DispatchMountSuccessEvent(token);
 
   ASSERT_TRUE(host_->IsMounted());
-  EXPECT_EQ(base::FilePath("/media/drivefsroot/g-ID"), host_->GetMountPath());
+  EXPECT_EQ(base::FilePath("/media/drivefsroot/salt-g-ID"),
+            host_->GetMountPath());
+}
+
+TEST_F(DriveFsHostTest, OnMountFailedFromMojo) {
+  ASSERT_FALSE(host_->IsMounted());
+
+  ASSERT_NO_FATAL_FAILURE(EstablishConnection());
+  base::RunLoop run_loop;
+  base::OnceClosure quit_closure = run_loop.QuitClosure();
+  EXPECT_CALL(*host_delegate_, OnMountFailed(_))
+      .WillOnce(RunQuitClosure(&quit_closure));
+  SendMountFailed({});
+  run_loop.Run();
+  ASSERT_FALSE(host_->IsMounted());
+}
+
+TEST_F(DriveFsHostTest, OnMountFailedFromDbus) {
+  ASSERT_FALSE(host_->IsMounted());
+
+  auto token = StartMount();
+
+  base::RunLoop run_loop;
+  base::OnceClosure quit_closure = run_loop.QuitClosure();
+  EXPECT_CALL(*host_delegate_, OnMountFailed(_))
+      .WillOnce(RunQuitClosure(&quit_closure));
+  DispatchMountEvent(chromeos::disks::DiskMountManager::MOUNTING,
+                     chromeos::MOUNT_ERROR_INVALID_MOUNT_OPTIONS,
+                     {base::StrCat({"drivefs://", token}),
+                      "/media/drivefsroot/salt-g-ID",
+                      chromeos::MOUNT_TYPE_NETWORK_STORAGE,
+                      {}});
+  run_loop.Run();
+
+  ASSERT_FALSE(host_->IsMounted());
 }
 
 TEST_F(DriveFsHostTest, UnmountAfterMountComplete) {
@@ -371,7 +430,7 @@ TEST_F(DriveFsHostTest, UnmountAfterMountComplete) {
 
   ASSERT_NO_FATAL_FAILURE(DoMount());
 
-  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/g-ID",
+  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/salt-g-ID",
                                           chromeos::UNMOUNT_OPTIONS_NONE, _));
   EXPECT_CALL(observer, OnUnmounted());
   base::RunLoop run_loop;
@@ -402,7 +461,7 @@ TEST_F(DriveFsHostTest, UnmountBeforeMojoConnection) {
   DispatchMountSuccessEvent(token);
 
   EXPECT_FALSE(host_->IsMounted());
-  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/g-ID",
+  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/salt-g-ID",
                                           chromeos::UNMOUNT_OPTIONS_NONE, _));
 
   host_->Unmount();
@@ -420,7 +479,7 @@ TEST_F(DriveFsHostTest, DestroyBeforeMountEvent) {
 TEST_F(DriveFsHostTest, DestroyBeforeMojoConnection) {
   auto token = StartMount();
   DispatchMountSuccessEvent(token);
-  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/g-ID",
+  EXPECT_CALL(*disk_manager_, UnmountPath("/media/drivefsroot/salt-g-ID",
                                           chromeos::UNMOUNT_OPTIONS_NONE, _));
 
   host_.reset();
@@ -440,7 +499,7 @@ TEST_F(DriveFsHostTest, ObserveOtherMount) {
   DispatchMountEvent(chromeos::disks::DiskMountManager::UNMOUNTING,
                      chromeos::MOUNT_ERROR_NONE,
                      {base::StrCat({"drivefs://", token}),
-                      "/media/drivefsroot/g-ID",
+                      "/media/drivefsroot/salt-g-ID",
                       chromeos::MOUNT_TYPE_NETWORK_STORAGE,
                       {}});
   EXPECT_FALSE(host_->IsMounted());
@@ -464,6 +523,14 @@ TEST_F(DriveFsHostTest, MountError) {
 TEST_F(DriveFsHostTest, MountWhileAlreadyMounted) {
   DoMount();
   EXPECT_FALSE(host_->Mount());
+}
+
+TEST_F(DriveFsHostTest, UnmountByRemote) {
+  ASSERT_NO_FATAL_FAILURE(DoMount());
+  base::Optional<base::TimeDelta> delay = base::TimeDelta::FromSeconds(5);
+  EXPECT_CALL(*host_delegate_, OnUnmounted(delay));
+  SendOnUnmounted(delay);
+  base::RunLoop().RunUntilIdle();
 }
 
 TEST_F(DriveFsHostTest, UnsupportedAccountTypes) {
@@ -569,29 +636,6 @@ TEST_F(DriveFsHostTest, GetAccessToken_SequentialRequests) {
             }));
     run_loop.Run();
   }
-}
-
-TEST_F(DriveFsHostTest, GetAccessToken_RefreshTokensNotReadyYet) {
-  ASSERT_NO_FATAL_FAILURE(DoMount());
-
-  EXPECT_CALL(*host_delegate_, AreRefreshTokensReady())
-      .WillOnce(testing::Return(false));
-  EXPECT_CALL(mock_identity_manager_,
-              GetAccessToken("test@example.com", _, "drivefs"))
-      .Times(0);
-  host_delegate_->mock_flow().ExpectNoStartCalls();
-
-  base::RunLoop run_loop;
-  auto quit_closure = run_loop.QuitClosure();
-  delegate_ptr_->GetAccessToken(
-      "client ID", "app ID", {"scope1", "scope2"},
-      base::BindLambdaForTesting(
-          [&](mojom::AccessTokenStatus status, const std::string& token) {
-            EXPECT_EQ(mojom::AccessTokenStatus::kTransientError, status);
-            EXPECT_TRUE(token.empty());
-            std::move(quit_closure).Run();
-          }));
-  run_loop.Run();
 }
 
 TEST_F(DriveFsHostTest, GetAccessToken_GetAccessTokenFailure_Permanent) {

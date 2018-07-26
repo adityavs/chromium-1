@@ -10,6 +10,7 @@
 #include "ash/public/cpp/ash_pref_names.h"
 #include "ash/root_window_controller.h"
 #include "ash/session/session_controller.h"
+#include "ash/shelf/login_shelf_view.h"
 #include "ash/shelf/shelf.h"
 #include "ash/shelf/shelf_widget.h"
 #include "ash/shell.h"
@@ -83,8 +84,9 @@ void LoginScreenController::AuthenticateUser(const AccountId& account_id,
                                              OnAuthenticateCallback callback) {
   // It is an error to call this function while an authentication is in
   // progress.
-  LOG_IF(ERROR, !IsAuthenticating())
-      << "Authentication stage is " << static_cast<int>(authentication_stage_);
+  LOG_IF(ERROR, IsAuthenticating())
+      << "Duplicate authentication attempt; current authentication stage is "
+      << static_cast<int>(authentication_stage_);
   CHECK(!IsAuthenticating());
 
   if (!login_screen_client_) {
@@ -313,9 +315,8 @@ void LoginScreenController::SetAuthType(
   }
 }
 
-void LoginScreenController::LoadUsers(
-    std::vector<mojom::LoginUserInfoPtr> users,
-    bool show_guest) {
+void LoginScreenController::SetUserList(
+    std::vector<mojom::LoginUserInfoPtr> users) {
   DCHECK(DataDispatcher());
 
   DataDispatcher()->NotifyUsers(users);
@@ -404,17 +405,42 @@ void LoginScreenController::SetKioskApps(
     std::vector<mojom::KioskAppInfoPtr> kiosk_apps) {
   Shelf::ForWindow(Shell::Get()->GetPrimaryRootWindow())
       ->shelf_widget()
-      ->SetLoginKioskApps(std::move(kiosk_apps));
+      ->login_shelf_view()
+      ->SetKioskApps(std::move(kiosk_apps));
 }
 
-void LoginScreenController::NotifyOobeDialogVisibility(bool visible) {
+void LoginScreenController::NotifyOobeDialogState(
+    mojom::OobeDialogState state) {
   Shelf::ForWindow(Shell::Get()->GetPrimaryRootWindow())
       ->shelf_widget()
-      ->SetLoginDialogVisible(visible);
+      ->login_shelf_view()
+      ->SetLoginDialogState(state);
+}
+
+void LoginScreenController::SetAllowLoginAsGuest(bool allow_guest) {
+  Shelf::ForWindow(Shell::Get()->GetPrimaryRootWindow())
+      ->shelf_widget()
+      ->login_shelf_view()
+      ->SetAllowLoginAsGuest(allow_guest);
+}
+
+void LoginScreenController::SetAddUserButtonEnabled(bool enable) {
+  Shelf::ForWindow(Shell::Get()->GetPrimaryRootWindow())
+      ->shelf_widget()
+      ->login_shelf_view()
+      ->SetAddUserButtonEnabled(enable);
 }
 
 void LoginScreenController::LaunchKioskApp(const std::string& app_id) {
   login_screen_client_->LaunchKioskApp(app_id);
+}
+
+void LoginScreenController::LaunchArcKioskApp(const AccountId& account_id) {
+  login_screen_client_->LaunchArcKioskApp(account_id);
+}
+
+void LoginScreenController::ShowResetScreen() {
+  login_screen_client_->ShowResetScreen();
 }
 
 void LoginScreenController::DoAuthenticateUser(const AccountId& account_id,

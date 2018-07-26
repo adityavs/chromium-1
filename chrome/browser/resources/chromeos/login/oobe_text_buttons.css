@@ -2,6 +2,14 @@
    Use of this source code is governed by a BSD-style license that can be
    found in the LICENSE file. */
 
-:host ::slotted(*) {
+:host {
+  margin: 0 4px; /* So that two adjacent buttons are 8px separated. */
+}
+
+/* Default slot data is not selected by ::slotted() selector, see
+ * https://crbug.com/703984.
+ */
+:host ::slotted(*),
+#text {
   font-size: 12px;
 }

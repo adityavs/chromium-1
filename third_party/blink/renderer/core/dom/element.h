@@ -81,6 +81,7 @@ class StringOrTrustedHTML;
 class StringOrTrustedScriptURL;
 class StylePropertyMap;
 class StylePropertyMapReadOnly;
+class USVStringOrTrustedURL;
 class V0CustomElementDefinition;
 class V8ScrollStateCallback;
 
@@ -206,9 +207,19 @@ class CORE_EXPORT Element : public ContainerNode {
                     ExceptionState&);
   void setAttribute(const AtomicString& name, const AtomicString& value);
 
-  // Trusted Type variant of the above.
+  // Trusted Type ScriptURL variant of the above.
   void setAttribute(const QualifiedName&,
                     const StringOrTrustedScriptURL&,
+                    ExceptionState&);
+
+  // Trusted Type HTML variant
+  void setAttribute(const QualifiedName&,
+                    const StringOrTrustedHTML&,
+                    ExceptionState&);
+
+  // Trusted Type URL variant
+  void setAttribute(const QualifiedName&,
+                    const USVStringOrTrustedURL&,
                     ExceptionState&);
 
   static bool ParseAttributeName(QualifiedName&,
@@ -491,13 +502,8 @@ class CORE_EXPORT Element : public ContainerNode {
   // creation of multiple shadow roots is prohibited in any combination and
   // throws an exception.  Multiple shadow roots are allowed only when
   // createShadowRoot() is used without any parameters from JavaScript.
-  //
-  // TODO(esprehn): These take a ScriptState only for calling
-  // HostsUsingFeatures::countMainWorldOnly, which should be handled in the
-  // bindings instead so adding a ShadowRoot from C++ doesn't need one.
-  ShadowRoot* createShadowRoot(const ScriptState*, ExceptionState&);
-  ShadowRoot* attachShadow(const ScriptState*,
-                           const ShadowRootInit&,
+  ShadowRoot* createShadowRoot(ExceptionState&);
+  ShadowRoot* attachShadow(const ShadowRootInit&,
                            ExceptionState&);
 
   ShadowRoot& CreateV0ShadowRootForTesting() {
@@ -583,6 +589,9 @@ class CORE_EXPORT Element : public ContainerNode {
 
   KURL GetURLAttribute(const QualifiedName&) const;
   void GetURLAttribute(const QualifiedName&, StringOrTrustedScriptURL&) const;
+  void GetURLAttribute(const QualifiedName&, USVStringOrTrustedURL&) const;
+  void FastGetAttribute(const QualifiedName&, USVStringOrTrustedURL&) const;
+  void FastGetAttribute(const QualifiedName&, StringOrTrustedHTML&) const;
 
   KURL GetNonEmptyURLAttribute(const QualifiedName&) const;
 

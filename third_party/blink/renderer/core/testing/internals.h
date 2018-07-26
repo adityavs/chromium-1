@@ -57,6 +57,7 @@ class Element;
 class ExceptionState;
 class ExecutionContext;
 class GCObservation;
+class HitTestLocation;
 class HitTestResult;
 class HTMLInputElement;
 class HTMLMediaElement;
@@ -525,6 +526,7 @@ class Internals final : public ScriptWrappable {
   bool isUseCounted(Document*, uint32_t feature);
   bool isCSSPropertyUseCounted(Document*, const String&);
   bool isAnimatedCSSPropertyUseCounted(Document*, const String&);
+  void clearUseCounter(Document*, uint32_t feature);
 
   Vector<String> getCSSPropertyLonghands() const;
   Vector<String> getCSSPropertyShorthands() const;
@@ -592,7 +594,8 @@ class Internals final : public ScriptWrappable {
   LocalFrame* GetFrame() const;
   Vector<String> IconURLs(Document*, int icon_types_mask) const;
   DOMRectList* AnnotatedRegions(Document*, bool draggable, ExceptionState&);
-  void HitTestRect(HitTestResult&,
+  void HitTestRect(HitTestLocation&,
+                   HitTestResult&,
                    long x,
                    long y,
                    long width,

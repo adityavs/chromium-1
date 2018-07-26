@@ -26,6 +26,7 @@ using ::mojom::LifecycleUnitState;
 
 class DecisionDetails;
 class LifecycleUnitObserver;
+class LifecycleUnitSource;
 class TabLifecycleUnitExternal;
 
 // A LifecycleUnit represents a unit that can switch between the "loaded" and
@@ -70,6 +71,9 @@ class LifecycleUnit {
 
   virtual ~LifecycleUnit();
 
+  // Returns the LifecycleUnitSource associated with this unit.
+  virtual LifecycleUnitSource* GetSource() const = 0;
+
   // Returns the TabLifecycleUnitExternal associated with this LifecycleUnit, if
   // any.
   virtual TabLifecycleUnitExternal* AsTabLifecycleUnitExternal() = 0;
@@ -88,11 +92,13 @@ class LifecycleUnit {
   // Returns the current visibility of this LifecycleUnit.
   virtual content::Visibility GetVisibility() const = 0;
 
-  // Returns TimeTicks::Max() if the LifecycleUnit is currently visible, the
-  // last time at which the LifecycleUnit was visible if it's not currently
-  // visible but has been visible in the past, the LifecycleUnit creation time
-  // otherwise.
-  virtual base::TimeTicks GetLastActiveTime() const = 0;
+  // Returns the TimeTicks from when the LifecycleUnit was hidden, or
+  // TimeTicks::Max() if it is currently visible.
+  virtual base::TimeTicks GetWallTimeWhenHidden() const = 0;
+
+  // Returns the Chrome usage time from when the LifecycleUnit was hidden, or
+  // TimeDelta::Max() if it is currently visible.
+  virtual base::TimeDelta GetChromeUsageTimeWhenHidden() const = 0;
 
   // Returns the loading state associated with a LifecycleUnit.
   virtual LifecycleUnitLoadingState GetLoadingState() const = 0;
@@ -117,6 +123,9 @@ class LifecycleUnit {
 
   // Returns the current state of this LifecycleUnit.
   virtual LifecycleUnitState GetState() const = 0;
+
+  // Returns the last time at which the state of this LifecycleUnit changed.
+  virtual base::TimeTicks GetStateChangeTime() const = 0;
 
   // Request that the LifecycleUnit be loaded, return true if the request is
   // successful.

@@ -258,9 +258,6 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter
                                         gfx::PointF* transformed_point,
                                         viz::EventSource source) const;
 
-  // TODO(851958): Remove once we understand the cause of 851958.
-  void ReportMouseTargetNotInRoot(RenderWidgetHostViewBase* target_root,
-                                  RenderWidgetHostViewBase* specified_root);
   // TODO(828422): Remove once this issue no longer occurs.
   void ReportBubblingScrollToSameView(const blink::WebGestureEvent& event,
                                       const RenderWidgetHostViewBase* view);
@@ -286,8 +283,7 @@ class CONTENT_EXPORT RenderWidgetHostInputEventRouter
   TargetData touchpad_gesture_target_;
   TargetData bubbling_gesture_scroll_target_;
   TargetData first_bubbling_scroll_target_;
-  // Used to target wheel events for the duration of a scroll when wheel scroll
-  // latching is enabled.
+  // Used to target wheel events for the duration of a scroll.
   TargetData wheel_target_;
   // Maintains the same target between mouse down and mouse up.
   TargetData mouse_capture_target_;

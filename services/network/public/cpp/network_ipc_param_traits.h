@@ -103,6 +103,9 @@ IPC_ENUM_TRAITS_MAX_VALUE(network::mojom::FetchRequestMode,
 IPC_ENUM_TRAITS_MAX_VALUE(network::mojom::RequestContextFrameType,
                           network::mojom::RequestContextFrameType::kMaxValue)
 
+IPC_ENUM_TRAITS_MAX_VALUE(network::mojom::CORSPreflightPolicy,
+                          network::mojom::CORSPreflightPolicy::kMaxValue)
+
 IPC_STRUCT_TRAITS_BEGIN(network::CORSErrorStatus)
   IPC_STRUCT_TRAITS_MEMBER(cors_error)
   IPC_STRUCT_TRAITS_MEMBER(failed_parameter)
@@ -138,6 +141,7 @@ IPC_STRUCT_TRAITS_BEGIN(network::ResourceRequest)
   IPC_STRUCT_TRAITS_MEMBER(priority)
   IPC_STRUCT_TRAITS_MEMBER(appcache_host_id)
   IPC_STRUCT_TRAITS_MEMBER(should_reset_appcache)
+  IPC_STRUCT_TRAITS_MEMBER(cors_preflight_policy)
   IPC_STRUCT_TRAITS_MEMBER(service_worker_provider_id)
   IPC_STRUCT_TRAITS_MEMBER(originated_from_service_worker)
   IPC_STRUCT_TRAITS_MEMBER(skip_service_worker)
@@ -195,7 +199,6 @@ IPC_STRUCT_TRAITS_BEGIN(network::ResourceResponseInfo)
   IPC_STRUCT_TRAITS_MEMBER(is_in_cache_storage)
   IPC_STRUCT_TRAITS_MEMBER(cache_storage_cache_name)
   IPC_STRUCT_TRAITS_MEMBER(did_service_worker_navigation_preload)
-  IPC_STRUCT_TRAITS_MEMBER(previews_state)
   IPC_STRUCT_TRAITS_MEMBER(effective_connection_type)
   IPC_STRUCT_TRAITS_MEMBER(cert_status)
   IPC_STRUCT_TRAITS_MEMBER(ssl_info)

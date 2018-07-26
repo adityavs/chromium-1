@@ -30,6 +30,7 @@ chrome.automation.EventType = {
   CHILDREN_CHANGED: 'childrenChanged',
   CLICKED: 'clicked',
   DOCUMENT_SELECTION_CHANGED: 'documentSelectionChanged',
+  DOCUMENT_TITLE_CHANGED: 'documentTitleChanged',
   EXPANDED_CHANGED: 'expandedChanged',
   FOCUS: 'focus',
   FOCUS_CONTEXT: 'focusContext',
@@ -530,8 +531,8 @@ chrome.automation.AutomationNode.prototype.location;
 /**
  * Computes the bounding box of a subrange of this node in global screen
  * coordinates. Returns the same as |location| if range information is not
- * available. The start and end indices are zero-based offsets into the node's
- * "name" string attribute.
+ * available; bounds are clipped by ancestors. The start and end indices are
+ * zero-based offsets into the node's "name" string attribute.
  * @param {number} startIndex
  * @param {number} endIndex
  * @return {!chrome.automation.Rect}

@@ -6,9 +6,11 @@
 #define BASE_FUCHSIA_ASYNC_DISPATCHER_H_
 
 #include <lib/async/dispatcher.h>
+#include <lib/zx/event.h>
+#include <lib/zx/port.h>
+#include <lib/zx/timer.h>
 
 #include "base/containers/linked_list.h"
-#include "base/fuchsia/scoped_zx_handle.h"
 #include "base/macros.h"
 #include "base/synchronization/lock.h"
 #include "base/threading/thread_checker.h"
@@ -17,7 +19,7 @@ namespace base {
 
 // Implementation of dispatcher for Fuchsia's async library. It's necessary to
 // run Fuchsia's library on chromium threads.
-class BASE_EXPORT AsyncDispatcher : public async_t {
+class BASE_EXPORT AsyncDispatcher : public async_dispatcher_t {
  public:
   AsyncDispatcher();
   ~AsyncDispatcher();
@@ -36,15 +38,17 @@ class BASE_EXPORT AsyncDispatcher : public async_t {
   class WaitState;
   class TaskState;
 
-  static zx_time_t NowOp(async_t* async);
-  static zx_status_t BeginWaitOp(async_t* async, async_wait_t* wait);
-  static zx_status_t CancelWaitOp(async_t* async, async_wait_t* wait);
-  static zx_status_t PostTaskOp(async_t* async, async_task_t* task);
-  static zx_status_t CancelTaskOp(async_t* async, async_task_t* task);
-  static zx_status_t QueuePacketOp(async_t* async,
+  static zx_time_t NowOp(async_dispatcher_t* async);
+  static zx_status_t BeginWaitOp(async_dispatcher_t* async, async_wait_t* wait);
+  static zx_status_t CancelWaitOp(async_dispatcher_t* async,
+                                  async_wait_t* wait);
+  static zx_status_t PostTaskOp(async_dispatcher_t* async, async_task_t* task);
+  static zx_status_t CancelTaskOp(async_dispatcher_t* async,
+                                  async_task_t* task);
+  static zx_status_t QueuePacketOp(async_dispatcher_t* async,
                                    async_receiver_t* receiver,
                                    const zx_packet_user_t* data);
-  static zx_status_t SetGuestBellTrapOp(async_t* async,
+  static zx_status_t SetGuestBellTrapOp(async_dispatcher_t* async,
                                         async_guest_bell_trap_t* trap,
                                         zx_handle_t guest,
                                         zx_vaddr_t addr,
@@ -64,9 +68,9 @@ class BASE_EXPORT AsyncDispatcher : public async_t {
 
   THREAD_CHECKER(thread_checker_);
 
-  ScopedZxHandle port_;
-  ScopedZxHandle timer_;
-  ScopedZxHandle stop_event_;
+  zx::port port_;
+  zx::timer timer_;
+  zx::event stop_event_;
 
   LinkedList<WaitState> wait_list_;
 

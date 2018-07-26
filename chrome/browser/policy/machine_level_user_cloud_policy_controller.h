@@ -34,9 +34,12 @@ class MachineLevelUserCloudPolicyController {
   enum class RegisterResult {
     kNoEnrollmentNeeded,  // The device won't be enrolled without an enrollment
                           // token.
-    kEnrollmentSuccess,   // The device has been enrolled successfully.
-    kQuitDueToFailure,  // The enrollment has failed or aborted, user choose to
-                        // quit Chrome.
+    kEnrollmentSuccessBeforeDialogDisplayed,  // The enrollment process is
+                                              // finished before dialog
+                                              // displayed.
+    kEnrollmentSuccess,  // The device has been enrolled successfully
+    kQuitDueToFailure,   // The enrollment has failed or aborted, user choose to
+                         // quit Chrome.
     kRestartDueToFailure,  // The enrollment has failed, user choose to restart
   };
 
@@ -66,6 +69,9 @@ class MachineLevelUserCloudPolicyController {
 
   void AddObserver(Observer* observer);
   void RemoveObserver(Observer* observer);
+
+  // Returns whether the enterprise startup dialog is being diaplayed.
+  bool IsEnterpriseStartupDialogShowing();
 
  protected:
   void NotifyPolicyRegisterFinished(bool succeeded);

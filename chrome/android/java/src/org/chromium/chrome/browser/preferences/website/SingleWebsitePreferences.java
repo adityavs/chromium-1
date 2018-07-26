@@ -192,11 +192,11 @@ public class SingleWebsitePreferences extends PreferenceFragment
         // This loop looks expensive, but the amount of data is likely to be relatively small
         // because most sites have very few permissions.
         for (Website other : websites) {
-            if (merged.getContentSettingPermission(ContentSettingException.Type.ADS) == null
-                    && other.getContentSettingPermission(ContentSettingException.Type.ADS) != null
+            if (merged.getContentSettingException(ContentSettingException.Type.ADS) == null
+                    && other.getContentSettingException(ContentSettingException.Type.ADS) != null
                     && other.compareByAddressTo(merged) == 0) {
-                merged.setContentSettingPermission(ContentSettingException.Type.ADS,
-                        other.getContentSettingPermission(ContentSettingException.Type.ADS));
+                merged.setContentSettingException(ContentSettingException.Type.ADS,
+                        other.getContentSettingException(ContentSettingException.Type.ADS));
             }
             for (@PermissionInfo.Type int type = 0; type < PermissionInfo.Type.NUM_ENTRIES;
                     type++) {
@@ -230,10 +230,10 @@ public class SingleWebsitePreferences extends PreferenceFragment
                             || type == ContentSettingException.Type.COOKIE) {
                         continue;
                     }
-                    if (merged.getContentSettingPermission(type) == null
-                            && other.getContentSettingPermission(type) != null) {
-                        merged.setContentSettingPermission(
-                                type, other.getContentSettingPermission(type));
+                    if (merged.getContentSettingException(type) == null
+                            && other.getContentSettingException(type) != null) {
+                        merged.setContentSettingException(
+                                type, other.getContentSettingException(type));
                     }
                 }
             }
@@ -517,6 +517,9 @@ public class SingleWebsitePreferences extends PreferenceFragment
         if (showWarningFor(SiteSettingsCategory.Type.MICROPHONE)) {
             return SiteSettingsCategory.createFromType(SiteSettingsCategory.Type.MICROPHONE);
         }
+        if (showWarningFor(SiteSettingsCategory.Type.NOTIFICATIONS)) {
+            return SiteSettingsCategory.createFromType(SiteSettingsCategory.Type.NOTIFICATIONS);
+        }
         return null;
     }
 
@@ -528,11 +531,11 @@ public class SingleWebsitePreferences extends PreferenceFragment
             setting = mSite.getPermission(PermissionInfo.Type.CAMERA);
         } else if (type == SiteSettingsCategory.Type.MICROPHONE) {
             setting = mSite.getPermission(PermissionInfo.Type.MICROPHONE);
+        } else if (type == SiteSettingsCategory.Type.NOTIFICATIONS) {
+            setting = mSite.getPermission(PermissionInfo.Type.NOTIFICATION);
         }
 
-        if (setting == null) {
-            return false;
-        }
+        if (setting == null) return false;
 
         SiteSettingsCategory category = SiteSettingsCategory.createFromType(type);
         return category.showPermissionBlockedMessage(getActivity());
@@ -605,7 +608,8 @@ public class SingleWebsitePreferences extends PreferenceFragment
             preference.setIcon(category.getDisabledInAndroidIcon(getActivity()));
             preference.setEnabled(false);
         } else {
-            preference.setIcon(ContentSettingsResources.getTintedIcon(contentType, getResources()));
+            preference.setIcon(PreferenceUtils.getTintedIcon(
+                    getActivity(), ContentSettingsResources.getIcon(contentType)));
         }
     }
 
@@ -624,8 +628,10 @@ public class SingleWebsitePreferences extends PreferenceFragment
         // In order to always show the sound permission, set it up with the default value if it
         // doesn't have a current value.
         if (currentValue == null) {
-            currentValue = PrefServiceBridge.getInstance().isSoundEnabled() ? ContentSetting.ALLOW
-                                                                            : ContentSetting.BLOCK;
+            currentValue = PrefServiceBridge.getInstance().isCategoryEnabled(
+                                   ContentSettingsType.CONTENT_SETTINGS_TYPE_SOUND)
+                    ? ContentSetting.ALLOW
+                    : ContentSetting.BLOCK;
         }
         setUpListPreference(preference, currentValue);
     }
@@ -661,10 +667,10 @@ public class SingleWebsitePreferences extends PreferenceFragment
         // However, if the blocking is activated, we still want to show the permission, even if it
         // is in the default state.
         if (permission == null) {
-            ContentSetting defaultPermission = PrefServiceBridge.getInstance().adsEnabled()
+            permission = PrefServiceBridge.getInstance().isCategoryEnabled(
+                                 ContentSettingsType.CONTENT_SETTINGS_TYPE_ADS)
                     ? ContentSetting.ALLOW
                     : ContentSetting.BLOCK;
-            permission = defaultPermission;
         }
         setUpListPreference(preference, permission);
 

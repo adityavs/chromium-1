@@ -9,8 +9,25 @@
 
 #import "ui/base/cocoa/command_dispatcher.h"
 #include "ui/views/views_export.h"
+#include "ui/views/widget/util_mac.h"
 
 @protocol WindowTouchBarDelegate;
+
+// Weak lets Chrome launch even if a future macOS doesn't have the below classes
+
+WEAK_IMPORT_ATTRIBUTE
+@interface NSNextStepFrame : NSView
+@end
+
+@class NSThemeFrame;
+
+VIEWS_EXPORT
+@interface NativeWidgetMacNSWindowBorderlessFrame : NSNextStepFrame
+@end
+
+VIEWS_EXPORT
+@interface NativeWidgetMacNSWindowTitledFrame : NSThemeFrame
+@end
 
 // The NSWindow used by BridgedNativeWidget. Provides hooks into AppKit that
 // can only be accomplished by overriding methods.

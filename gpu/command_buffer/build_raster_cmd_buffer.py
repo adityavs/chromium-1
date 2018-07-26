@@ -121,10 +121,20 @@ _NAMED_TYPE_INFO = {
       'viz::ResourceFormat::ALPHA_8',
       'viz::ResourceFormat::LUMINANCE_8',
       'viz::ResourceFormat::RGB_565',
+      'viz::ResourceFormat::BGR_565',
       'viz::ResourceFormat::RED_8',
+      'viz::ResourceFormat::RG_88',
       'viz::ResourceFormat::LUMINANCE_F16',
       'viz::ResourceFormat::RGBA_F16',
       'viz::ResourceFormat::R16_EXT',
+      'viz::ResourceFormat::RGBX_8888',
+      'viz::ResourceFormat::BGRX_8888',
+      'viz::ResourceFormat::RGBX_1010102',
+      'viz::ResourceFormat::BGRX_1010102',
+      'viz::ResourceFormat::YVU_420',
+      'viz::ResourceFormat::YUV_420_BIPLANAR',
+      'viz::ResourceFormat::UYVY_422',
+
     ],
     'invalid': [
       'viz::ResourceFormat::ETC1',
@@ -325,6 +335,18 @@ _FUNCTION_INFO = {
     'unit_test': False,
     'extension': 'CHROMIUM_trace_marker',
   },
+  'SetActiveURLCHROMIUM': {
+    'type': 'Custom',
+    'impl_func': False,
+    'client_test': False,
+    'cmd_args': 'GLuint url_bucket_id',
+  },
+  'ResetActiveURLCHROMIUM': {
+    'impl_func': False,
+    'client_test': False,
+    'decoder_func': 'DoResetActiveURLCHROMIUM',
+    'unit_test': False,
+  },
   'InsertFenceSyncCHROMIUM': {
     'type': 'Custom',
     'internal': True,
@@ -375,6 +397,8 @@ _FUNCTION_INFO = {
   },
   'BeginRasterCHROMIUM': {
     'decoder_func': 'DoBeginRasterCHROMIUM',
+    'type': 'PUT',
+    'count': 16,  # GL_MAILBOX_SIZE_CHROMIUM
     'internal': True,
     'impl_func': False,
     'unit_test': False,

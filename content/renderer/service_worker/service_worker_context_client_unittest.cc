@@ -14,7 +14,6 @@
 #include "base/time/tick_clock.h"
 #include "base/time/time.h"
 #include "content/child/thread_safe_sender.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/renderer/service_worker/embedded_worker_instance_client_impl.h"
 #include "content/renderer/service_worker/service_worker_timeout_timer.h"
 #include "content/renderer/service_worker/web_service_worker_impl.h"
@@ -25,18 +24,19 @@
 #include "services/network/public/cpp/resource_request.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/common/message_port/message_port_channel.h"
+#include "third_party/blink/public/common/service_worker/service_worker_utils.h"
 #include "third_party/blink/public/mojom/service_worker/service_worker_registration.mojom.h"
 #include "third_party/blink/public/platform/modules/background_fetch/web_background_fetch_settled_fetch.h"
 #include "third_party/blink/public/platform/modules/notifications/web_notification_data.h"
 #include "third_party/blink/public/platform/modules/payments/web_payment_request_event_data.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_clients_info.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_error.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_request.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_clients_info.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_error.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_request.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_data_consumer_handle.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url_response.h"
-#include "third_party/blink/public/web/modules/serviceworker/web_service_worker_context_proxy.h"
+#include "third_party/blink/public/web/modules/service_worker/web_service_worker_context_proxy.h"
 
 namespace content {
 
@@ -45,7 +45,7 @@ namespace {
 // Pipes connected to the context client.
 struct ContextClientPipes {
   // From the browser to ServiceWorkerContextClient.
-  mojom::ServiceWorkerEventDispatcherPtr event_dispatcher;
+  mojom::ServiceWorkerPtr service_worker;
   mojom::ControllerServiceWorkerPtr controller;
   blink::mojom::ServiceWorkerRegistrationObjectAssociatedPtr registration;
 
@@ -245,11 +245,12 @@ class ServiceWorkerContextClientTest : public testing::Test {
     ServiceWorkerContextClient::ResetThreadSpecificInstanceForTesting();
     // Unregister this thread from worker threads.
     WorkerThreadRegistry::Instance()->WillStopCurrentWorkerThread();
+    task_runner_->RunUntilIdle();
   }
 
   void EnableServicification() {
     feature_list_.InitWithFeatures({network::features::kNetworkService}, {});
-    ASSERT_TRUE(ServiceWorkerUtils::IsServicificationEnabled());
+    ASSERT_TRUE(blink::ServiceWorkerUtils::IsServicificationEnabled());
   }
 
   // Creates an empty struct to initialize ServiceWorkerProviderContext.
@@ -264,8 +265,7 @@ class ServiceWorkerContextClientTest : public testing::Test {
   std::unique_ptr<ServiceWorkerContextClient> CreateContextClient(
       ContextClientPipes* out_pipes,
       blink::WebServiceWorkerContextProxy* proxy) {
-    auto event_dispatcher_request =
-        mojo::MakeRequest(&out_pipes->event_dispatcher);
+    auto service_worker_request = mojo::MakeRequest(&out_pipes->service_worker);
     auto controller_request = mojo::MakeRequest(&out_pipes->controller);
     mojom::EmbeddedWorkerInstanceHostAssociatedPtr embedded_worker_host_ptr;
     out_pipes->embedded_worker_host_request =
@@ -276,7 +276,8 @@ class ServiceWorkerContextClientTest : public testing::Test {
         std::make_unique<ServiceWorkerContextClient>(
             1 /* embedded_worker_id */, 1 /* service_worker_version_id */,
             kScope, kScript, false /* is_script_streaming */,
-            std::move(event_dispatcher_request), std::move(controller_request),
+            RendererPreferences(), std::move(service_worker_request),
+            std::move(controller_request),
             embedded_worker_host_ptr.PassInterface(), CreateProviderInfo(),
             nullptr /* embedded_worker_client */,
             mojom::EmbeddedWorkerStartTiming::New(),
@@ -296,7 +297,7 @@ class ServiceWorkerContextClientTest : public testing::Test {
     out_pipes->registration_host_request =
         mojo::MakeRequest(&registration_info->host_ptr_info);
     registration_info->request = mojo::MakeRequest(&out_pipes->registration);
-    out_pipes->event_dispatcher->InitializeGlobalScope(
+    out_pipes->service_worker->InitializeGlobalScope(
         std::move(service_worker_host), std::move(registration_info));
     task_runner()->RunUntilIdle();
     return context_client;
@@ -324,7 +325,7 @@ TEST_F(ServiceWorkerContextClientTest, Ping) {
       CreateContextClient(&pipes, &mock_proxy);
 
   bool is_called = false;
-  pipes.event_dispatcher->Ping(CreateCallbackWithCalledFlag(&is_called));
+  pipes.service_worker->Ping(CreateCallbackWithCalledFlag(&is_called));
   task_runner()->RunUntilIdle();
   EXPECT_TRUE(is_called);
 }
@@ -346,7 +347,7 @@ TEST_F(ServiceWorkerContextClientTest, DispatchFetchEvent) {
   fetch_callback_request = mojo::MakeRequest(&fetch_callback_ptr);
   auto params = blink::mojom::DispatchFetchEventParams::New();
   params->request = *request;
-  pipes.event_dispatcher->DispatchFetchEvent(
+  pipes.service_worker->DispatchFetchEvent(
       std::move(params), std::move(fetch_callback_ptr),
       base::BindOnce(
           [](blink::mojom::ServiceWorkerEventStatus, base::Time) {}));
@@ -488,7 +489,7 @@ TEST_F(ServiceWorkerContextClientTest,
   }
   EXPECT_TRUE(mock_proxy.fetch_events().empty());
 
-  // Another event dispatched to mojom::ServiceWorkerEventDispatcher wakes up
+  // Another event dispatched to mojom::ServiceWorker wakes up
   // the context client.
   {
     mojom::ServiceWorkerFetchResponseCallbackPtr fetch_callback_ptr;
@@ -497,7 +498,7 @@ TEST_F(ServiceWorkerContextClientTest,
     request->url = expected_url_2;
     auto params = blink::mojom::DispatchFetchEventParams::New();
     params->request = *request;
-    pipes.event_dispatcher->DispatchFetchEvent(
+    pipes.service_worker->DispatchFetchEvent(
         std::move(params), std::move(fetch_callback_ptr),
         base::BindOnce(
             [](blink::mojom::ServiceWorkerEventStatus, base::Time) {}));

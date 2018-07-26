@@ -89,7 +89,6 @@ LayerImpl::LayerImpl(LayerTreeImpl* tree_impl, int id)
 }
 
 LayerImpl::~LayerImpl() {
-  DCHECK_EQ(DRAW_MODE_NONE, current_draw_mode_);
   layer_tree_impl_->UnregisterLayer(this);
   layer_tree_impl_->RemoveFromElementLayerList(element_id_);
   TRACE_EVENT_OBJECT_DELETED_WITH_ID(
@@ -167,15 +166,17 @@ void LayerImpl::PopulateScaledSharedQuadState(viz::SharedQuadState* state,
 
 bool LayerImpl::WillDraw(DrawMode draw_mode,
                          viz::ClientResourceProvider* resource_provider) {
-  // WillDraw/DidDraw must be matched.
-  DCHECK_NE(DRAW_MODE_NONE, draw_mode);
-  DCHECK_EQ(DRAW_MODE_NONE, current_draw_mode_);
+  if (visible_layer_rect().IsEmpty() ||
+      draw_properties().occlusion_in_content_space.IsOccluded(
+          visible_layer_rect())) {
+    return false;
+  }
+
   current_draw_mode_ = draw_mode;
   return true;
 }
 
 void LayerImpl::DidDraw(viz::ClientResourceProvider* resource_provider) {
-  DCHECK_NE(DRAW_MODE_NONE, current_draw_mode_);
   current_draw_mode_ = DRAW_MODE_NONE;
 }
 
@@ -312,6 +313,7 @@ void LayerImpl::PushPropertiesTo(LayerImpl* layer) {
       hit_testable_without_draws_content_;
   layer->non_fast_scrollable_region_ = non_fast_scrollable_region_;
   layer->touch_action_region_ = touch_action_region_;
+  layer->wheel_event_handler_region_ = wheel_event_handler_region_;
   layer->background_color_ = background_color_;
   layer->safe_opaque_background_color_ = safe_opaque_background_color_;
   layer->position_ = position_;
@@ -409,6 +411,11 @@ std::unique_ptr<base::DictionaryValue> LayerImpl::LayerAsJson() {
     std::unique_ptr<base::Value> region =
         touch_action_region_.region().AsValue();
     result->Set("TouchRegion", std::move(region));
+  }
+
+  if (!wheel_event_handler_region_.IsEmpty()) {
+    std::unique_ptr<base::Value> region = wheel_event_handler_region_.AsValue();
+    result->Set("WheelRegion", std::move(region));
   }
 
   return result;
@@ -741,6 +748,11 @@ void LayerImpl::AsValueInto(base::trace_event::TracedValue* state) const {
   if (!touch_action_region_.region().IsEmpty()) {
     state->BeginArray("touch_action_region_region");
     touch_action_region_.region().AsValueInto(state);
+    state->EndArray();
+  }
+  if (!wheel_event_handler_region_.IsEmpty()) {
+    state->BeginArray("wheel_event_handler_region");
+    wheel_event_handler_region_.AsValueInto(state);
     state->EndArray();
   }
   if (!non_fast_scrollable_region_.IsEmpty()) {

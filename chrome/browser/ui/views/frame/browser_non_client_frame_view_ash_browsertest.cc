@@ -54,8 +54,11 @@
 #include "chrome/browser/ui/views/frame/immersive_mode_controller.h"
 #include "chrome/browser/ui/views/frame/immersive_mode_controller_ash.h"
 #include "chrome/browser/ui/views/location_bar/content_setting_image_view.h"
+#include "chrome/browser/ui/views/location_bar/zoom_bubble_view.h"
+#include "chrome/browser/ui/views/page_action/page_action_icon_container_view.h"
 #include "chrome/browser/ui/views/profiles/profile_indicator_icon.h"
 #include "chrome/browser/ui/views/tabs/tab.h"
+#include "chrome/browser/ui/views/tabs/tab_strip.h"
 #include "chrome/browser/ui/views/toolbar/app_menu.h"
 #include "chrome/browser/ui/views/toolbar/extension_toolbar_menu_view.h"
 #include "chrome/common/chrome_features.h"
@@ -221,7 +224,6 @@ IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest,
   // buttons should be visible.
   ToggleFullscreenModeAndWait(browser());
   EXPECT_TRUE(frame_view->ShouldPaint());
-  EXPECT_TRUE(frame_view->caption_button_container_->visible());
 }
 
 IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest, ImmersiveFullscreen) {
@@ -246,7 +248,8 @@ IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest, ImmersiveFullscreen) {
 
   // Frame paints by default.
   EXPECT_TRUE(frame_view->ShouldPaint());
-  EXPECT_LT(0, frame_view->frame_header_->GetHeaderHeightForPainting());
+  EXPECT_LT(
+      0, frame_view->GetBoundsForTabStrip(browser_view->tabstrip()).bottom());
 
   // Enter both browser fullscreen and tab fullscreen. Entering browser
   // fullscreen should enable immersive fullscreen.
@@ -260,14 +263,14 @@ IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest, ImmersiveFullscreen) {
           ImmersiveModeController::ANIMATE_REVEAL_NO));
   EXPECT_TRUE(immersive_mode_controller->IsRevealed());
   EXPECT_TRUE(frame_view->ShouldPaint());
-  EXPECT_TRUE(frame_view->caption_button_container_->visible());
 
   // End the reveal. When in both immersive browser fullscreen and tab
   // fullscreen.
   revealed_lock.reset();
   EXPECT_FALSE(immersive_mode_controller->IsRevealed());
   EXPECT_FALSE(frame_view->ShouldPaint());
-  EXPECT_EQ(0, frame_view->frame_header_->GetHeaderHeightForPainting());
+  EXPECT_EQ(
+      0, frame_view->GetBoundsForTabStrip(browser_view->tabstrip()).bottom());
 
   // Repeat test but without tab fullscreen.
   ExitFullscreenModeForTabAndWait(browser(), web_contents);
@@ -277,22 +280,23 @@ IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest, ImmersiveFullscreen) {
       ImmersiveModeController::ANIMATE_REVEAL_NO));
   EXPECT_TRUE(immersive_mode_controller->IsRevealed());
   EXPECT_TRUE(frame_view->ShouldPaint());
-  EXPECT_TRUE(frame_view->caption_button_container_->visible());
-  EXPECT_LT(0, frame_view->frame_header_->GetHeaderHeightForPainting());
+  EXPECT_LT(
+      0, frame_view->GetBoundsForTabStrip(browser_view->tabstrip()).bottom());
 
   // Ending the reveal. Immersive browser should have the same behavior as full
   // screen, i.e., having an origin of (0,0).
   revealed_lock.reset();
   EXPECT_FALSE(frame_view->ShouldPaint());
-  EXPECT_EQ(0, frame_view->frame_header_->GetHeaderHeightForPainting());
+  EXPECT_EQ(
+      0, frame_view->GetBoundsForTabStrip(browser_view->tabstrip()).bottom());
 
   // Exiting immersive fullscreen should make the caption buttons and the frame
   // visible again.
   ExitFullscreenModeAndWait(browser_view);
   EXPECT_FALSE(immersive_mode_controller->IsEnabled());
   EXPECT_TRUE(frame_view->ShouldPaint());
-  EXPECT_TRUE(frame_view->caption_button_container_->visible());
-  EXPECT_LT(0, frame_view->frame_header_->GetHeaderHeightForPainting());
+  EXPECT_LT(
+      0, frame_view->GetBoundsForTabStrip(browser_view->tabstrip()).bottom());
 }
 
 // Tests that Avatar icon should show on the top left corner of the teleported
@@ -383,6 +387,8 @@ IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest,
 
 // Tests that FrameCaptionButtonContainer has been relaid out in response to
 // tablet mode being toggled.
+// TODO(estade): Implement this behavior in OopAsh (test by checking the
+// window's caption button bounds).
 IN_PROC_BROWSER_TEST_P(BrowserNonClientFrameViewAshTest,
                        ToggleTabletModeRelayout) {
   BrowserView* browser_view = BrowserView::GetBrowserViewForBrowser(browser());
@@ -809,6 +815,12 @@ class HostedAppNonClientFrameViewAshTest
     return hosted_app_button_container_->active_icon_color_;
   }
 
+  PageActionIconView* GetPageActionIcon(PageActionIconType type) {
+    return browser_view_->toolbar_button_provider()
+        ->GetPageActionIconContainerView()
+        ->GetPageActionIconView(type);
+  }
+
   ContentSettingImageView* GrantGeolocationPermission() {
     content::RenderFrameHost* frame =
         app_browser_->tab_strip_model()->GetActiveWebContents()->GetMainFrame();
@@ -860,20 +872,59 @@ IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest, FocusableViews) {
 
 // Tests that a web app's theme color is set.
 IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest, ThemeColor) {
-  EXPECT_EQ(GetThemeColor(), frame_header_->active_frame_color_for_testing());
-  EXPECT_EQ(GetThemeColor(), frame_header_->inactive_frame_color_for_testing());
+  aura::Window* window = browser_view_->GetWidget()->GetNativeWindow();
+  EXPECT_EQ(GetThemeColor(),window->GetProperty(ash::kFrameActiveColorKey));
+  EXPECT_EQ(GetThemeColor(), window->GetProperty(ash::kFrameInactiveColorKey));
   EXPECT_EQ(SK_ColorWHITE, GetActiveIconColor(hosted_app_button_container_));
 }
 
-// Make sure that for hosted apps, the height of the frame header and its
-// contents don't exceed the height of the caption buttons.
+// Make sure that for hosted apps, the height of the frame doesn't exceed the
+// height of the caption buttons.
 IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest, FrameSize) {
-  EXPECT_EQ(frame_header_->GetHeaderHeight(),
+  const int inset = GetFrameViewAsh(browser_view_)->GetTopInset(false);
+  EXPECT_EQ(inset,
             GetAshLayoutSize(ash::AshLayoutSize::kNonBrowserCaption).height());
-  EXPECT_LE(app_menu_button_->size().height(),
-            frame_header_->GetHeaderHeight());
-  EXPECT_LE(hosted_app_button_container_->size().height(),
-            frame_header_->GetHeaderHeight());
+  EXPECT_GE(inset, app_menu_button_->size().height());
+  EXPECT_GE(inset, hosted_app_button_container_->size().height());
+}
+
+// Test that the HostedAppButtonContainer is the designated toolbar button
+// provider in this window configuration.
+IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest,
+                       ToolbarButtonProvider) {
+  EXPECT_EQ(browser_view_->toolbar_button_provider(),
+            hosted_app_button_container_);
+}
+
+// Test that the zoom icon appears in the title bar for hosted app windows.
+IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest, ZoomIcon) {
+  content::WebContents* web_contents =
+      app_browser_->tab_strip_model()->GetActiveWebContents();
+  zoom::ZoomController* zoom_controller =
+      zoom::ZoomController::FromWebContents(web_contents);
+  PageActionIconView* zoom_icon = GetPageActionIcon(PageActionIconType::kZoom);
+
+  EXPECT_TRUE(zoom_icon);
+  EXPECT_FALSE(zoom_icon->visible());
+  EXPECT_FALSE(ZoomBubbleView::GetZoomBubble());
+
+  zoom_controller->SetZoomLevel(content::ZoomFactorToZoomLevel(1.5));
+  base::RunLoop().RunUntilIdle();
+
+  EXPECT_TRUE(zoom_icon->visible());
+  EXPECT_TRUE(ZoomBubbleView::GetZoomBubble());
+}
+
+// Test that the find icon appears in the title bar for hosted app windows.
+IN_PROC_BROWSER_TEST_P(HostedAppNonClientFrameViewAshTest, FindIcon) {
+  PageActionIconView* find_icon = GetPageActionIcon(PageActionIconType::kFind);
+
+  EXPECT_TRUE(find_icon);
+  EXPECT_FALSE(find_icon->visible());
+
+  chrome::Find(app_browser_);
+
+  EXPECT_TRUE(find_icon->visible());
 }
 
 // Tests that the focus toolbar command focuses the app menu button in web app

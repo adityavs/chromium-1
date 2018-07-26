@@ -16,6 +16,7 @@
 #include "components/viz/common/features.h"
 #include "components/viz/common/frame_sinks/copy_output_request.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
+#include "components/viz/common/surfaces/parent_local_surface_id_allocator.h"
 #include "components/viz/host/host_frame_sink_manager.h"
 #include "components/viz/service/frame_sinks/compositor_frame_sink_support.h"
 #include "components/viz/service/surfaces/surface.h"
@@ -72,7 +73,6 @@ RenderWidgetHostViewChildFrame::RenderWidgetHostViewChildFrame(
       frame_connector_(nullptr),
       enable_viz_(
           base::FeatureList::IsEnabled(features::kVizDisplayCompositor)),
-      scroll_bubbling_state_(NO_ACTIVE_GESTURE_SCROLL),
       weak_factory_(this) {
   if (!features::IsAshInBrowserProcess()) {
     // In Mus the RenderFrameProxy will eventually assign a viz::FrameSinkId
@@ -517,59 +517,26 @@ void RenderWidgetHostViewChildFrame::GestureEventAck(
       ack_result == INPUT_EVENT_ACK_STATE_NO_CONSUMER_EXISTS ||
       ack_result == INPUT_EVENT_ACK_STATE_CONSUMED_SHOULD_BUBBLE;
 
-  if (wheel_scroll_latching_enabled()) {
-    if ((event.GetType() == blink::WebInputEvent::kGestureScrollBegin) &&
-        should_bubble) {
-      DCHECK(!is_scroll_sequence_bubbling_);
-      is_scroll_sequence_bubbling_ = true;
-    } else if (event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-               event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
-      is_scroll_sequence_bubbling_ = false;
-    }
+  if ((event.GetType() == blink::WebInputEvent::kGestureScrollBegin) &&
+      should_bubble) {
+    DCHECK(!is_scroll_sequence_bubbling_);
+    is_scroll_sequence_bubbling_ = true;
+  } else if (event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
+             event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
+    is_scroll_sequence_bubbling_ = false;
+  }
 
-    // GestureScrollBegin is a blocking event; It is forwarded for bubbling if
-    // its ack is not consumed. For the rest of the scroll events
-    // (GestureScrollUpdate, GestureScrollEnd, GestureFlingStart) the
-    // frame_connector_ decides to forward them for bubbling if the
-    // GestureScrollBegin event is forwarded.
-    if ((event.GetType() == blink::WebInputEvent::kGestureScrollBegin &&
-         should_bubble) ||
-        event.GetType() == blink::WebInputEvent::kGestureScrollUpdate ||
-        event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-        event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
-      frame_connector_->BubbleScrollEvent(event);
-    }
-  } else {
-    // Consumption of the first GestureScrollUpdate determines whether to
-    // bubble the sequence of GestureScrollUpdates.
-    // If the child consumed some scroll, then stopped consuming once it could
-    // no longer scroll, we don't want to bubble those unconsumed GSUs as we
-    // want the user to start a new gesture in order to scroll the parent.
-    // Unfortunately, this is only effective for touch scrolling as wheel
-    // scrolling wraps GSUs in GSB/GSE pairs.
-    if (event.GetType() == blink::WebInputEvent::kGestureScrollBegin) {
-      DCHECK_EQ(NO_ACTIVE_GESTURE_SCROLL, scroll_bubbling_state_);
-      scroll_bubbling_state_ = AWAITING_FIRST_UPDATE;
-    } else if (scroll_bubbling_state_ == AWAITING_FIRST_UPDATE &&
-               event.GetType() == blink::WebInputEvent::kGestureScrollUpdate) {
-      scroll_bubbling_state_ = (should_bubble ? BUBBLE : SCROLL_CHILD);
-    } else if (event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-               event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
-      scroll_bubbling_state_ = NO_ACTIVE_GESTURE_SCROLL;
-    }
-
-    // GestureScrollBegin is consumed by the target frame and not forwarded,
-    // because we don't know whether we will need to bubble scroll until we
-    // receive a GestureScrollUpdate ACK. GestureScrollUpdates are forwarded
-    // for bubbling if the first GSU has unused scroll extent,
-    // while GestureScrollEnd is always forwarded and handled according to
-    // current scroll state in the RenderWidgetHostInputEventRouter.
-    if ((event.GetType() == blink::WebInputEvent::kGestureScrollUpdate &&
-         scroll_bubbling_state_ == BUBBLE) ||
-        event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-        event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
-      frame_connector_->BubbleScrollEvent(event);
-    }
+  // GestureScrollBegin is a blocking event; It is forwarded for bubbling if
+  // its ack is not consumed. For the rest of the scroll events
+  // (GestureScrollUpdate, GestureScrollEnd, GestureFlingStart) the
+  // frame_connector_ decides to forward them for bubbling if the
+  // GestureScrollBegin event is forwarded.
+  if ((event.GetType() == blink::WebInputEvent::kGestureScrollBegin &&
+       should_bubble) ||
+      event.GetType() == blink::WebInputEvent::kGestureScrollUpdate ||
+      event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
+      event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
+    frame_connector_->BubbleScrollEvent(event);
   }
 }
 
@@ -638,13 +605,13 @@ void RenderWidgetHostViewChildFrame::SendSurfaceInfoToEmbedder() {
     return;
   if (!last_activated_surface_info_.is_valid())
     return;
-  SendSurfaceInfoToEmbedderImpl(last_activated_surface_info_);
+  FirstSurfaceActivation(last_activated_surface_info_);
 }
 
-void RenderWidgetHostViewChildFrame::SendSurfaceInfoToEmbedderImpl(
+void RenderWidgetHostViewChildFrame::FirstSurfaceActivation(
     const viz::SurfaceInfo& surface_info) {
   if (frame_connector_)
-    frame_connector_->SetChildFrameSurface(surface_info);
+    frame_connector_->FirstSurfaceActivation(surface_info);
 }
 
 void RenderWidgetHostViewChildFrame::SubmitCompositorFrame(
@@ -673,11 +640,12 @@ void RenderWidgetHostViewChildFrame::ProcessFrameSwappedCallbacks() {
     std::move(callback).Run();
 }
 
-gfx::Vector2d RenderWidgetHostViewChildFrame::GetOffsetFromRootSurface() {
+void RenderWidgetHostViewChildFrame::TransformPointToRootSurface(
+    gfx::PointF* point) {
   // This function is called by RenderWidgetHostInputEventRouter only for
   // root-views.
   NOTREACHED();
-  return gfx::Vector2d();
+  return;
 }
 
 gfx::Rect RenderWidgetHostViewChildFrame::GetBoundsInRootWindow() {
@@ -726,14 +694,15 @@ bool RenderWidgetHostViewChildFrame::IsMouseLocked() {
   return host()->delegate()->HasMouseLock(host());
 }
 
-viz::FrameSinkId RenderWidgetHostViewChildFrame::GetFrameSinkId() {
+const viz::FrameSinkId& RenderWidgetHostViewChildFrame::GetFrameSinkId() const {
   return frame_sink_id_;
 }
 
-viz::LocalSurfaceId RenderWidgetHostViewChildFrame::GetLocalSurfaceId() const {
+const viz::LocalSurfaceId& RenderWidgetHostViewChildFrame::GetLocalSurfaceId()
+    const {
   if (frame_connector_)
     return frame_connector_->local_surface_id();
-  return viz::LocalSurfaceId();
+  return viz::ParentLocalSurfaceIdAllocator::InvalidLocalSurfaceId();
 }
 
 void RenderWidgetHostViewChildFrame::PreProcessTouchEvent(
@@ -944,7 +913,7 @@ void RenderWidgetHostViewChildFrame::OnFirstSurfaceActivation(
     const viz::SurfaceInfo& surface_info) {
   last_activated_surface_info_ = surface_info;
   has_frame_ = true;
-  SendSurfaceInfoToEmbedderImpl(surface_info);
+  FirstSurfaceActivation(surface_info);
   ProcessFrameSwappedCallbacks();
 }
 
@@ -1027,7 +996,7 @@ InputEventAckState RenderWidgetHostViewChildFrame::FilterInputEvent(
     }
   }
 
-  if (wheel_scroll_latching_enabled() && is_scroll_sequence_bubbling_ &&
+  if (is_scroll_sequence_bubbling_ &&
       (input_event.GetType() == blink::WebInputEvent::kGestureScrollUpdate) &&
       frame_connector_) {
     // If we're bubbling, then to preserve latching behaviour, the child should
@@ -1039,20 +1008,6 @@ InputEventAckState RenderWidgetHostViewChildFrame::FilterInputEvent(
     // know that it will not attempt to consume the rest of the scroll
     // sequence.
     return INPUT_EVENT_ACK_STATE_NO_CONSUMER_EXISTS;
-  }
-
-  // Allow the root RWHV a chance to consume the child's GestureScrollUpdates
-  // in case the root needs to prevent the child from scrolling. For example,
-  // if the root has started an overscroll gesture, it needs to process the
-  // scroll events that would normally be processed by the child.
-  // TODO(mcnee): With scroll-latching enabled, the child would not scroll
-  // in this case. Remove this once scroll-latching lands. crbug.com/751782
-  if (!wheel_scroll_latching_enabled() && frame_connector_ &&
-      input_event.GetType() == blink::WebInputEvent::kGestureScrollUpdate) {
-    const blink::WebGestureEvent& gesture_event =
-        static_cast<const blink::WebGestureEvent&>(input_event);
-    return frame_connector_->GetRootRenderWidgetHostView()
-        ->FilterChildGestureEvent(gesture_event);
   }
 
   return INPUT_EVENT_ACK_STATE_NOT_CONSUMED;

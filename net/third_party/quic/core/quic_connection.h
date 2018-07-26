@@ -31,7 +31,6 @@
 #include "net/third_party/quic/core/quic_alarm_factory.h"
 #include "net/third_party/quic/core/quic_blocked_writer_interface.h"
 #include "net/third_party/quic/core/quic_connection_stats.h"
-#include "net/third_party/quic/core/quic_debug_info_provider_interface.h"
 #include "net/third_party/quic/core/quic_framer.h"
 #include "net/third_party/quic/core/quic_one_block_arena.h"
 #include "net/third_party/quic/core/quic_packet_creator.h"
@@ -308,8 +307,7 @@ class QUIC_EXPORT_PRIVATE QuicConnectionHelperInterface {
 };
 
 class QUIC_EXPORT_PRIVATE QuicConnection
-    : public QuicDebugInfoProviderInterface,
-      public QuicFramerVisitorInterface,
+    : public QuicFramerVisitorInterface,
       public QuicBlockedWriterInterface,
       public QuicPacketGenerator::DelegateInterface,
       public QuicSentPacketManager::NetworkChangeVisitor {
@@ -339,6 +337,8 @@ class QUIC_EXPORT_PRIVATE QuicConnection
                  bool owns_writer,
                  Perspective perspective,
                  const ParsedQuicVersionVector& supported_versions);
+  QuicConnection(const QuicConnection&) = delete;
+  QuicConnection& operator=(const QuicConnection&) = delete;
   ~QuicConnection() override;
 
   // Sets connection parameters from the supplied |config|.
@@ -453,9 +453,6 @@ class QUIC_EXPORT_PRIVATE QuicConnection
     return framer_.supported_versions();
   }
 
-  // From QuicConnectionDebugInfoProviderInterface
-  QuicString DebugStringForAckProcessing() const override;
-
   // From QuicFramerVisitorInterface
   void OnError(QuicFramer* framer) override;
   bool OnProtocolVersionMismatch(ParsedQuicVersion received_version) override;
@@ -468,7 +465,6 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   void OnDecryptedPacket(EncryptionLevel level) override;
   bool OnPacketHeader(const QuicPacketHeader& header) override;
   bool OnStreamFrame(const QuicStreamFrame& frame) override;
-  bool OnAckFrame(const QuicAckFrame& frame) override;
   bool OnAckFrameStart(QuicPacketNumber largest_acked,
                        QuicTime::Delta ack_delay_time) override;
   bool OnAckRange(QuicPacketNumber start,
@@ -506,6 +502,7 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   void PopulateStopWaitingFrame(QuicStopWaitingFrame* stop_waiting) override;
 
   // QuicPacketCreator::DelegateInterface
+  char* GetPacketBuffer() override;
   void OnSerializedPacket(SerializedPacket* packet) override;
 
   // QuicSentPacketManager::NetworkChangeVisitor
@@ -664,9 +661,10 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   bool CanWrite(HasRetransmittableData retransmittable);
 
   // When the flusher is out of scope, only the outermost flusher will cause a
-  // flush of the connection.  In addition, this flusher can be configured to
-  // ensure that an ACK frame is included in the first packet created, if
-  // there's new ack information to be sent.
+  // flush of the connection and set the retransmission alarm if there is one
+  // pending.  In addition, this flusher can be configured to ensure that an ACK
+  // frame is included in the first packet created, if there's new ack
+  // information to be sent.
   class QUIC_EXPORT_PRIVATE ScopedPacketFlusher {
    public:
     // Setting |include_ack| to true ensures that an ACK frame is
@@ -678,29 +676,9 @@ class QUIC_EXPORT_PRIVATE QuicConnection
     bool ShouldSendAck(AckBundling ack_mode) const;
 
     QuicConnection* connection_;
-    // If true, flush connection when this flusher goes out of scope.
-    bool flush_on_delete_;
-    // If true, set retransmission alarm if there is one pending when this
-    // flusher goes out of scope.
-    // TODO(fayang): Consider to combine flush_on_delete_ and
-    // set_retransmission_alarm_on_delete_if_pending_ when deprecating
-    // quic_reloadable_flag_quic_deprecate_scoped_scheduler2.
-    bool set_retransmission_alarm_on_delete_if_pending_;
-  };
-
-  // Delays setting the retransmission alarm until the scope is exited.
-  // When nested, only the outermost scheduler will set the alarm, and inner
-  // ones have no effect.
-  class QUIC_EXPORT_PRIVATE ScopedRetransmissionScheduler {
-   public:
-    explicit ScopedRetransmissionScheduler(QuicConnection* connection);
-    ~ScopedRetransmissionScheduler();
-
-   private:
-    QuicConnection* connection_;
-    // Set to the connection's delay_setting_retransmission_alarm_ value in the
-    // constructor and when true, causes this class to do nothing.
-    const bool already_delayed_;
+    // If true, when this flusher goes out of scope, flush connection and set
+    // retransmission alarm if there is one pending.
+    bool flush_and_set_pending_retransmission_alarm_on_delete_;
   };
 
   QuicPacketWriter* writer() { return writer_; }
@@ -791,8 +769,6 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   }
 
   bool IsPathDegrading() const { return is_path_degrading_; }
-
-  bool deprecate_scheduler() const { return deprecate_scheduler_; }
 
  protected:
   // Calls cancel() on all the alarms owned by this connection.
@@ -898,6 +874,9 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // writer is write blocked.
   bool WritePacket(SerializedPacket* packet);
 
+  // Flush packets buffered in the writer, if any.
+  void FlushPackets();
+
   // Make sure an ack we got from our peer is sane.
   // Returns nullptr for valid acks or an error string if it was invalid.
   const char* ValidateAckFrame(const QuicAckFrame& incoming_ack);
@@ -926,6 +905,9 @@ class QUIC_EXPORT_PRIVATE QuicConnection
 
   // Writes as many pending retransmissions as possible.
   void WritePendingRetransmissions();
+
+  // Writes new data if congestion control allows.
+  void WriteNewData();
 
   // Queues |packet| in the hopes that it can be decrypted in the
   // future, when a new key is installed.
@@ -998,6 +980,9 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // |send_stop_waiting| indicates whether a stop waiting needs to be sent.
   // |acked_new_packet| is true if a previously-unacked packet was acked.
   void PostProcessAfterAckFrame(bool send_stop_waiting, bool acked_new_packet);
+
+  // Updates the release time into the future.
+  void UpdateReleaseTimeIntoFuture();
 
   QuicFramer framer_;
 
@@ -1106,9 +1091,6 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // When true, close the QUIC connection after 5 RTOs.  Due to the min rto of
   // 200ms, this is over 5 seconds.
   bool close_connection_after_five_rtos_;
-  // When true, close the QUIC connection when there are no open streams after
-  // 3 consecutive RTOs.
-  bool close_connection_after_three_rtos_;
 
   QuicReceivedPacketManager received_packet_manager_;
 
@@ -1117,6 +1099,8 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // How many retransmittable packets have arrived without sending an ack.
   QuicPacketCount num_retransmittable_packets_received_since_last_ack_sent_;
   // Whether there were missing packets in the last sent ack.
+  // TODO(ianswett): Deprecate with
+  // quic_reloadable_flag_quic_ack_reordered_packets.
   bool last_ack_had_missing_packets_;
   // How many consecutive packets have arrived without sending an ack.
   QuicPacketCount num_packets_received_since_last_ack_sent_;
@@ -1134,9 +1118,6 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // was received.
   bool fast_ack_after_quiescence_;
 
-  // Indicates the retransmit alarm is going to be set by the
-  // ScopedRetransmitAlarmDelayer
-  bool delay_setting_retransmission_alarm_;
   // Indicates the retransmission alarm needs to be set.
   bool pending_retransmission_alarm_;
 
@@ -1304,20 +1285,18 @@ class QUIC_EXPORT_PRIVATE QuicConnection
   // True if the writer supports release timestamp.
   const bool supports_release_time_;
 
-  // Latched value of FLAGS_quic_pace_time_into_future_ms. Only used when
-  // supports_release_time_ is true.
-  const QuicTime::Delta pace_time_into_future_;
-
-  // Latched value of quic_reloadable_flag_quic_deprecate_scoped_scheduler2.
-  // TODO(fayang): Remove ScopedRetransmissionScheduler when deprecating
-  // quic_reloadable_flag_quic_deprecate_scoped_scheduler2.
-  const bool deprecate_scheduler_;
+  // Time this connection can release packets into the future.
+  QuicTime::Delta release_time_into_future_;
 
   // Latched value of
   // gfe2_reloadable_flag_quic_add_to_blocked_list_if_writer_blocked.
   const bool add_to_blocked_list_if_writer_blocked_;
 
-  DISALLOW_COPY_AND_ASSIGN(QuicConnection);
+  // Latched value of quic_reloadable_flag_quic_ack_reordered_packets.
+  const bool ack_reordered_packets_;
+
+  // Latched value of quic_reloadable_flag_quic_retransmissions_app_limited.
+  const bool retransmissions_app_limited_;
 };
 
 }  // namespace quic

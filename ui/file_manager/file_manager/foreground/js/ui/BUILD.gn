@@ -29,6 +29,7 @@ js_type_check("closure_compile") {
     ":files_confirm_dialog",
     ":files_menu",
     ":gear_menu",
+    ":install_linux_package_dialog",
     ":list_container",
     ":location_line",
     ":multi_profile_share_dialog",
@@ -207,6 +208,7 @@ js_library("file_manager_ui") {
     ":files_alert_dialog",
     ":files_confirm_dialog",
     ":gear_menu",
+    ":install_linux_package_dialog",
     ":list_container",
     ":location_line",
     ":multi_profile_share_dialog",
@@ -285,6 +287,12 @@ js_library("files_menu") {
   ]
 }
 
+js_library("install_linux_package_dialog") {
+  deps = [
+    ":file_manager_dialog_base",
+  ]
+}
+
 js_library("gear_menu") {
   deps = [
     "../../../common/js:util",
@@ -302,6 +310,7 @@ js_library("list_container") {
 js_library("location_line") {
   deps = [
     "..:volume_manager_wrapper",
+    "../../../common/js:files_app_entry_types",
     "../../../common/js:metrics",
     "../../../common/js:util",
     "../../../common/js:volume_manager_common",

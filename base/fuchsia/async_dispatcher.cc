@@ -7,6 +7,8 @@
 #include <lib/async/default.h>
 #include <lib/async/task.h>
 #include <lib/async/wait.h>
+#include <lib/zx/handle.h>
+#include <lib/zx/time.h>
 #include <zircon/syscalls.h>
 
 #include "base/fuchsia/fuchsia_logging.h"
@@ -65,21 +67,19 @@ class AsyncDispatcher::TaskState : public LinkNode<TaskState> {
 };
 
 AsyncDispatcher::AsyncDispatcher() : ops_storage_({}) {
-  zx_status_t status = zx_port_create(0u, port_.receive());
+  zx_status_t status = zx::port::create(0u, &port_);
   ZX_DCHECK(status == ZX_OK, status);
 
-  status = zx_timer_create(0u, ZX_CLOCK_MONOTONIC, timer_.receive());
+  status = zx::timer::create(0u, ZX_CLOCK_MONOTONIC, &timer_);
   ZX_DCHECK(status == ZX_OK, status);
-  status =
-      zx_object_wait_async(timer_.get(), port_.get(), key_from_ptr(&timer_),
-                           ZX_TIMER_SIGNALED, ZX_WAIT_ASYNC_REPEATING);
+  status = timer_.wait_async(port_, key_from_ptr(&timer_), ZX_TIMER_SIGNALED,
+                             ZX_WAIT_ASYNC_REPEATING);
   ZX_DCHECK(status == ZX_OK, status);
 
-  status = zx_event_create(0, stop_event_.receive());
+  status = zx::event::create(0, &stop_event_);
   ZX_DCHECK(status == ZX_OK, status);
-  status = zx_object_wait_async(stop_event_.get(), port_.get(),
-                                key_from_ptr(&stop_event_), ZX_EVENT_SIGNALED,
-                                ZX_WAIT_ASYNC_REPEATING);
+  status = stop_event_.wait_async(port_, key_from_ptr(&stop_event_),
+                                  ZX_EVENT_SIGNALED, ZX_WAIT_ASYNC_REPEATING);
   ZX_DCHECK(status == ZX_OK, status);
 
   ops_storage_.v1.now = NowOp;
@@ -91,13 +91,13 @@ AsyncDispatcher::AsyncDispatcher() : ops_storage_({}) {
   ops_storage_.v1.set_guest_bell_trap = SetGuestBellTrapOp;
   ops = &ops_storage_;
 
-  DCHECK(!async_get_default());
-  async_set_default(this);
+  DCHECK(!async_get_default_dispatcher());
+  async_set_default_dispatcher(this);
 }
 
 AsyncDispatcher::~AsyncDispatcher() {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
-  DCHECK_EQ(async_get_default(), this);
+  DCHECK_EQ(async_get_default_dispatcher(), this);
 
   // Some waits and tasks may be canceled while the dispatcher is being
   // destroyed, so pop-from-head until none remain.
@@ -116,14 +116,14 @@ AsyncDispatcher::~AsyncDispatcher() {
     task->handler(this, task, ZX_ERR_CANCELED);
   }
 
-  async_set_default(nullptr);
+  async_set_default_dispatcher(nullptr);
 }
 
 zx_status_t AsyncDispatcher::DispatchOrWaitUntil(zx_time_t deadline) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   zx_port_packet_t packet = {};
-  zx_status_t status = zx_port_wait(port_.get(), deadline, &packet);
+  zx_status_t status = port_.wait(zx::time(deadline), &packet);
   if (status != ZX_OK)
     return status;
 
@@ -165,34 +165,38 @@ void AsyncDispatcher::Stop() {
   ZX_DCHECK(status == ZX_OK, status);
 }
 
-zx_time_t AsyncDispatcher::NowOp(async_t* async) {
+zx_time_t AsyncDispatcher::NowOp(async_dispatcher_t* async) {
   DCHECK(async);
   return zx_clock_get(ZX_CLOCK_MONOTONIC);
 }
 
-zx_status_t AsyncDispatcher::BeginWaitOp(async_t* async, async_wait_t* wait) {
+zx_status_t AsyncDispatcher::BeginWaitOp(async_dispatcher_t* async,
+                                         async_wait_t* wait) {
   return static_cast<AsyncDispatcher*>(async)->BeginWait(wait);
 }
 
-zx_status_t AsyncDispatcher::CancelWaitOp(async_t* async, async_wait_t* wait) {
+zx_status_t AsyncDispatcher::CancelWaitOp(async_dispatcher_t* async,
+                                          async_wait_t* wait) {
   return static_cast<AsyncDispatcher*>(async)->CancelWait(wait);
 }
 
-zx_status_t AsyncDispatcher::PostTaskOp(async_t* async, async_task_t* task) {
+zx_status_t AsyncDispatcher::PostTaskOp(async_dispatcher_t* async,
+                                        async_task_t* task) {
   return static_cast<AsyncDispatcher*>(async)->PostTask(task);
 }
 
-zx_status_t AsyncDispatcher::CancelTaskOp(async_t* async, async_task_t* task) {
+zx_status_t AsyncDispatcher::CancelTaskOp(async_dispatcher_t* async,
+                                          async_task_t* task) {
   return static_cast<AsyncDispatcher*>(async)->CancelTask(task);
 }
 
-zx_status_t AsyncDispatcher::QueuePacketOp(async_t* async,
+zx_status_t AsyncDispatcher::QueuePacketOp(async_dispatcher_t* async,
                                            async_receiver_t* receiver,
                                            const zx_packet_user_t* data) {
   return ZX_ERR_NOT_SUPPORTED;
 }
 
-zx_status_t AsyncDispatcher::SetGuestBellTrapOp(async_t* async,
+zx_status_t AsyncDispatcher::SetGuestBellTrapOp(async_dispatcher_t* async,
                                                 async_guest_bell_trap_t* trap,
                                                 zx_handle_t guest,
                                                 zx_vaddr_t addr,
@@ -206,9 +210,10 @@ zx_status_t AsyncDispatcher::BeginWait(async_wait_t* wait) {
   static_assert(sizeof(AsyncDispatcher::WaitState) <= sizeof(async_state_t),
                 "WaitState is too big");
   WaitState* state = new (&wait->state) WaitState(this);
-  zx_status_t status = zx_object_wait_async(wait->object, port_.get(),
-                                            reinterpret_cast<uintptr_t>(wait),
-                                            wait->trigger, ZX_WAIT_ASYNC_ONCE);
+  zx_status_t status =
+      zx::unowned_handle(wait->object)
+          ->wait_async(port_, reinterpret_cast<uintptr_t>(wait), wait->trigger,
+                       ZX_WAIT_ASYNC_ONCE);
 
   if (status != ZX_OK)
     state->~WaitState();
@@ -220,7 +225,7 @@ zx_status_t AsyncDispatcher::CancelWait(async_wait_t* wait) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
 
   zx_status_t status =
-      zx_port_cancel(port_.get(), wait->object, (uintptr_t)wait);
+      port_.cancel(wait->object, reinterpret_cast<uintptr_t>(wait));
   if (status == ZX_OK) {
     WaitState* state = reinterpret_cast<WaitState*>(&(wait->state));
     state->~WaitState();
@@ -314,7 +319,7 @@ void AsyncDispatcher::RestartTimerLocked() {
   if (task_list_.empty())
     return;
   zx_time_t deadline = task_list_.head()->value()->task()->deadline;
-  zx_status_t status = zx_timer_set(timer_.get(), deadline, 0);
+  zx_status_t status = timer_.set(zx::time(deadline), zx::duration());
   ZX_DCHECK(status == ZX_OK, status);
 }
 

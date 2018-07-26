@@ -5,7 +5,7 @@
 #include "third_party/blink/renderer/core/fetch/request.h"
 
 #include "third_party/blink/public/common/blob/blob_utils.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_request.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_request.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/dictionary.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
@@ -29,7 +29,6 @@
 #include "third_party/blink/renderer/core/loader/threadable_loader.h"
 #include "third_party/blink/renderer/core/url/url_search_params.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
-#include "third_party/blink/renderer/platform/bindings/v8_private_property.h"
 #include "third_party/blink/renderer/platform/blob/blob_data.h"
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"
 #include "third_party/blink/renderer/platform/loader/fetch/fetch_utils.h"
@@ -62,7 +61,8 @@ FetchRequestData* CreateCopyOfFetchRequestDataForFetch(
   }
   // FIXME: Set ForceOriginHeaderFlag.
   request->SetSameOriginDataURLFlag(true);
-  request->SetReferrer(original->GetReferrer());
+  request->SetReferrerString(original->ReferrerString());
+  request->SetReferrerPolicy(original->GetReferrerPolicy());
   request->SetMode(original->Mode());
   request->SetCredentials(original->Credentials());
   request->SetCacheMode(original->CacheMode());
@@ -273,7 +273,7 @@ Request* Request::CreateRequestWithRequestOrString(
     request->SetIsHistoryNavigation(false);
 
     // "Set |request|’s referrer to "client"."
-    request->SetReferrerString(FetchRequestData::ClientReferrerString());
+    request->SetReferrerString(AtomicString(Referrer::ClientReferrerString()));
 
     // "Set |request|’s referrer policy to the empty string."
     request->SetReferrerPolicy(kReferrerPolicyDefault);
@@ -314,7 +314,8 @@ Request* Request::CreateRequestWithRequestOrString(
         //
         //     parsedReferrer’s origin is not same origin with origin"
         //
-        request->SetReferrerString(FetchRequestData::ClientReferrerString());
+        request->SetReferrerString(
+            AtomicString(Referrer::ClientReferrerString()));
       } else {
         // "Set |request|'s referrer to |parsedReferrer|."
         request->SetReferrerString(AtomicString(parsed_referrer.GetString()));
@@ -451,11 +452,8 @@ Request* Request::CreateRequestWithRequestOrString(
   }
 
   // "If |init|'s signal member is present, then set |signal| to it."
-  v8::Local<v8::Value> init_signal =
-      init.hasSignal() ? init.signal().V8Value() : v8::Local<v8::Value>();
-  if (!init_signal.IsEmpty()) {
-    signal = V8AbortSignal::ToImplWithTypeCheck(script_state->GetIsolate(),
-                                                init_signal);
+  if (init.hasSignal()) {
+    signal = init.signal();
   }
 
   // "Let |r| be a new Request object associated with |request| and a new
@@ -539,10 +537,8 @@ Request* Request::CreateRequestWithRequestOrString(
   }
 
   // "Set |r|'s request's body to |temporaryBody|.
-  if (temporary_body) {
+  if (temporary_body)
     r->request_->SetBuffer(temporary_body);
-    r->RefreshBody(script_state);
-  }
 
   // "Set |r|'s MIME type to the result of extracting a MIME type from |r|'s
   // request's header list."
@@ -557,7 +553,6 @@ Request* Request::CreateRequestWithRequestOrString(
     // "Set |input|'s request's body to a new body whose stream is
     // |dummyStream|."
     input_request->request_->SetBuffer(dummy_stream);
-    input_request->RefreshBody(script_state);
     // "Let |reader| be the result of getting reader from |dummyStream|."
     // "Read all bytes from |dummyStream| with |reader|."
     input_request->BodyBuffer()->CloseAndLockAndDisturb(exception_state);
@@ -644,7 +639,6 @@ Request::Request(ScriptState* script_state,
       request_(request),
       headers_(headers),
       signal_(signal) {
-  RefreshBody(script_state);
 }
 
 Request::Request(ScriptState* script_state, FetchRequestData* request)
@@ -727,9 +721,8 @@ String Request::referrer() const {
   // "The referrer attribute's getter must return the empty string if
   // request's referrer is no referrer, "about:client" if request's referrer
   // is client and request's referrer, serialized, otherwise."
-  DCHECK_EQ(FetchRequestData::NoReferrerString(), AtomicString());
-  DCHECK_EQ(FetchRequestData::ClientReferrerString(),
-            AtomicString("about:client"));
+  DCHECK_EQ(Referrer::NoReferrer(), String());
+  DCHECK_EQ(Referrer::ClientReferrerString(), "about:client");
   return request_->ReferrerString();
 }
 
@@ -856,7 +849,6 @@ Request* Request::clone(ScriptState* script_state,
   FetchRequestData* request = request_->Clone(script_state, exception_state);
   if (exception_state.HadException())
     return nullptr;
-  RefreshBody(script_state);
   Headers* headers = Headers::Create(request->HeaderList());
   headers->SetGuard(headers_->GetGuard());
   auto* signal = new AbortSignal(ExecutionContext::From(script_state));
@@ -870,7 +862,6 @@ FetchRequestData* Request::PassRequestData(ScriptState* script_state,
   FetchRequestData* data = request_->Pass(script_state, exception_state);
   if (exception_state.HadException())
     return nullptr;
-  RefreshBody(script_state);
   // |data|'s buffer('s js wrapper) has no retainer, but it's OK because
   // the only caller is the fetch function and it uses the body buffer
   // immediately.
@@ -920,21 +911,6 @@ String Request::ContentType() const {
   String result;
   request_->HeaderList()->Get(HTTPNames::Content_Type, result);
   return result;
-}
-
-void Request::RefreshBody(ScriptState* script_state) {
-  v8::Local<v8::Value> request = ToV8(this, script_state);
-  if (request.IsEmpty()) {
-    // |toV8| can return an empty handle when the worker is terminating.
-    // We don't want the renderer to crash in such cases.
-    // TODO(yhirano): Delete this block after the graceful shutdown
-    // mechanism is introduced.
-    return;
-  }
-  DCHECK(request->IsObject());
-  v8::Local<v8::Value> body_buffer = ToV8(this->BodyBuffer(), script_state);
-  V8PrivateProperty::GetInternalBodyBuffer(script_state->GetIsolate())
-      .Set(request.As<v8::Object>(), body_buffer);
 }
 
 void Request::Trace(blink::Visitor* visitor) {

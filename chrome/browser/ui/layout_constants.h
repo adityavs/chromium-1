@@ -34,6 +34,9 @@ enum LayoutConstant {
   // The size of the app menu button in a hosted app browser window.
   HOSTED_APP_MENU_BUTTON_SIZE,
 
+  // The size of page action icons in a hosted app title bar.
+  HOSTED_APP_PAGE_ACTION_ICON_SIZE,
+
   // The vertical padding (additional to TOOLBAR_ELEMENT_PADDING) above and
   // below location bar bubbles.
   LOCATION_BAR_BUBBLE_VERTICAL_PADDING,
@@ -83,6 +86,13 @@ enum LayoutConstant {
   // subsequent tab when tabs are stacked.
   TAB_STACK_DISTANCE,
 
+  // In refresh, tabs are drawn with an extension into the toolbar's
+  // space to prevent a gap from appearing between the toolbar and the
+  // bottom of tabs on some non-integral scales.
+  // TODO(tbergquist): Remove this after pixel canvas or any deeper fix to
+  // non-pixel-aligned drawing goes in.  See https://crbug.com/765723.
+  TABSTRIP_TOOLBAR_OVERLAP,
+
   // Additional horizontal padding between the elements in the toolbar.
   TOOLBAR_ELEMENT_PADDING,
 
@@ -106,14 +116,6 @@ enum LayoutInset {
   TOOLBAR_ACTION_VIEW,
 };
 
-enum LayoutSize {
-  // The visible size of the new tab button; does not include any Fitts' Law
-  // extensions. Note that in touch-optimized UI mode, the new tab button's
-  // width is larger when the browser is in incognito mode. The height remains
-  // the same whether incognito or not.
-  NEW_TAB_BUTTON,
-};
-
 int GetLayoutConstant(LayoutConstant constant);
 #if defined(OS_MACOSX)
 // Use this function instead of GetLayoutConstant() for Cocoa browser.
@@ -123,6 +125,5 @@ int GetCocoaLayoutConstant(LayoutConstant constant);
 #endif
 
 gfx::Insets GetLayoutInsets(LayoutInset inset);
-gfx::Size GetLayoutSize(LayoutSize size, bool is_incognito);
 
 #endif  // CHROME_BROWSER_UI_LAYOUT_CONSTANTS_H_

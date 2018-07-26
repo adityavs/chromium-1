@@ -49,9 +49,9 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_scroll_into_view_params.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline.h"
 #include "third_party/blink/renderer/core/css/pseudo_style_request.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -136,7 +136,6 @@ PaintLayerScrollableArea::PaintLayerScrollableArea(PaintLayer& layer)
       needs_relayout_(false),
       had_horizontal_scrollbar_before_relayout_(false),
       had_vertical_scrollbar_before_relayout_(false),
-      has_paint_layer_scroll_child_(false),
       scroll_origin_changed_(false),
       scrollbar_manager_(*this),
       scroll_corner_(nullptr),
@@ -222,16 +221,6 @@ void PaintLayerScrollableArea::Dispose() {
   if (SmoothScrollSequencer* sequencer = GetSmoothScrollSequencer())
     sequencer->DidDisposeScrollableArea(*this);
 
-  {
-    // Here using the stale compositing data is in fact what we want to do
-    // because the graphics layer which hasn't been removed yet may be used in
-    // the meantime to try to deliver scroll related updates.
-    DisableCompositingQueryAsserts disabler;
-    GraphicsLayer* graphics_layer = LayerForScrolling();
-    if (graphics_layer)
-      graphics_layer->ScrollableAreaDisposed();
-  }
-
   layer_ = nullptr;
 }
 
@@ -243,6 +232,10 @@ void PaintLayerScrollableArea::Trace(blink::Visitor* visitor) {
   visitor->Trace(scrollbar_manager_);
   visitor->Trace(scroll_anchor_);
   ScrollableArea::Trace(visitor);
+}
+
+bool PaintLayerScrollableArea::IsThrottled() const {
+  return GetLayoutBox()->GetFrame()->ShouldThrottleRendering();
 }
 
 PlatformChromeClient* PaintLayerScrollableArea::GetChromeClient() const {
@@ -1347,9 +1340,10 @@ static inline const LayoutObject& ScrollbarStyleSource(
         return layout_box;
     }
 
-    // Try the <body> element first as a scrollbar source.
+    // Try the <body> element first as a scrollbar source, but only if the body
+    // can scroll.
     Element* body = doc.body();
-    if (body && body->GetLayoutObject() &&
+    if (body && body->GetLayoutObject() && body->GetLayoutObject()->IsBox() &&
         body->GetLayoutObject()->Style()->HasPseudoStyle(kPseudoIdScrollbar))
       return *body->GetLayoutObject();
 
@@ -1374,7 +1368,6 @@ int PaintLayerScrollableArea::HypotheticalScrollbarThickness(
 
   const LayoutObject& style_source = ScrollbarStyleSource(*GetLayoutBox());
   bool has_custom_scrollbar_style =
-      style_source.IsBox() &&
       style_source.StyleRef().HasPseudoStyle(kPseudoIdScrollbar);
   if (has_custom_scrollbar_style) {
     return LayoutScrollbar::HypotheticalScrollbarThickness(
@@ -1419,8 +1412,10 @@ bool PaintLayerScrollableArea::NeedsScrollbarReconstruction() const {
     if (needs_custom) {
       DCHECK(scrollbar->IsCustomScrollbar());
       // We have a custom scrollbar with a stale m_owner.
-      if (ToLayoutScrollbar(scrollbar)->StyleSource() != style_source)
+      if (ToLayoutScrollbar(scrollbar)->StyleSource()->GetLayoutObject() !=
+          style_source) {
         return true;
+      }
 
       // Should use custom scrollbar and nothing should change.
       continue;
@@ -1626,7 +1621,7 @@ int PaintLayerScrollableArea::HorizontalScrollbarHeight(
   return HorizontalScrollbar()->ScrollbarThickness();
 }
 
-void PaintLayerScrollableArea::SnapAfterScrollbarDragging(
+void PaintLayerScrollableArea::SnapAfterScrollbarScrolling(
     ScrollbarOrientation orientation) {
   SnapCoordinator* snap_coordinator =
       GetLayoutBox()->GetDocument().GetSnapCoordinator();
@@ -1790,8 +1785,8 @@ bool PaintLayerScrollableArea::IsPointInResizeControl(
   if (!GetLayoutBox()->CanResize())
     return false;
 
-  IntPoint local_point = RoundedIntPoint(
-      GetLayoutBox()->AbsoluteToLocal(absolute_point, kUseTransforms));
+  IntPoint local_point = RoundedIntPoint(GetLayoutBox()->AbsoluteToLocal(
+      FloatPoint(absolute_point), kUseTransforms));
   IntRect local_bounds(IntPoint(), Layer()->PixelSnappedSize());
   return ResizerCornerRect(local_bounds, resizer_hit_test_type)
       .Contains(local_point);
@@ -1919,8 +1914,8 @@ IntSize PaintLayerScrollableArea::OffsetFromResizeCorner(
   if (GetLayoutBox()->ShouldPlaceBlockDirectionScrollbarOnLogicalLeft())
     element_size.SetWidth(0);
   IntPoint resizer_point = IntPoint(element_size);
-  IntPoint local_point = RoundedIntPoint(
-      GetLayoutBox()->AbsoluteToLocal(absolute_point, kUseTransforms));
+  IntPoint local_point = RoundedIntPoint(GetLayoutBox()->AbsoluteToLocal(
+      FloatPoint(absolute_point), kUseTransforms));
   return local_point - resizer_point;
 }
 
@@ -2396,7 +2391,6 @@ Scrollbar* PaintLayerScrollableArea::ScrollbarManager::CreateScrollbar(
   const LayoutObject& style_source =
       ScrollbarStyleSource(*ScrollableArea()->GetLayoutBox());
   bool has_custom_scrollbar_style =
-      style_source.IsBox() &&
       style_source.StyleRef().HasPseudoStyle(kPseudoIdScrollbar);
   if (has_custom_scrollbar_style) {
     DCHECK(style_source.GetNode() && style_source.GetNode()->IsElementNode());

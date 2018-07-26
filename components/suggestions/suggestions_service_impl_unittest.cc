@@ -85,9 +85,8 @@ class MockSyncService : public syncer::FakeSyncService {
  public:
   MockSyncService() {}
   ~MockSyncService() override {}
-  MOCK_CONST_METHOD0(CanSyncStart, bool());
-  MOCK_CONST_METHOD0(IsSyncActive, bool());
-  MOCK_CONST_METHOD0(ConfigurationDone, bool());
+  MOCK_CONST_METHOD0(GetDisableReasons, int());
+  MOCK_CONST_METHOD0(GetState, State());
   MOCK_CONST_METHOD0(IsLocalSyncEnabled, bool());
   MOCK_CONST_METHOD0(IsUsingSecondaryPassphrase, bool());
   MOCK_CONST_METHOD0(GetPreferredDataTypes, syncer::ModelTypeSet());
@@ -153,15 +152,12 @@ class SuggestionsServiceTest : public testing::Test {
   ~SuggestionsServiceTest() override {}
 
   void SetUp() override {
-    EXPECT_CALL(*sync_service(), CanSyncStart())
+    EXPECT_CALL(*sync_service(), GetDisableReasons())
         .Times(AnyNumber())
-        .WillRepeatedly(Return(true));
-    EXPECT_CALL(*sync_service(), IsSyncActive())
+        .WillRepeatedly(Return(syncer::SyncService::DISABLE_REASON_NONE));
+    EXPECT_CALL(*sync_service(), GetState())
         .Times(AnyNumber())
-        .WillRepeatedly(Return(true));
-    EXPECT_CALL(*sync_service(), ConfigurationDone())
-        .Times(AnyNumber())
-        .WillRepeatedly(Return(true));
+        .WillRepeatedly(Return(syncer::SyncService::State::ACTIVE));
     EXPECT_CALL(*sync_service(), IsLocalSyncEnabled())
         .Times(AnyNumber())
         .WillRepeatedly(Return(false));
@@ -344,7 +340,8 @@ TEST_F(SuggestionsServiceTest, IgnoresUninterestingSyncChange) {
 // This should *not* result in an automatic fetch.
 TEST_F(SuggestionsServiceTest, DoesNotFetchOnStartup) {
   // The sync service starts out inactive.
-  EXPECT_CALL(*sync_service(), IsSyncActive()).WillRepeatedly(Return(false));
+  EXPECT_CALL(*sync_service(), GetState())
+      .WillRepeatedly(Return(syncer::SyncService::State::INITIALIZING));
   static_cast<SyncServiceObserver*>(suggestions_service())
       ->OnStateChanged(sync_service());
 
@@ -352,7 +349,8 @@ TEST_F(SuggestionsServiceTest, DoesNotFetchOnStartup) {
   ASSERT_FALSE(suggestions_service()->HasPendingRequestForTesting());
 
   // Sync getting enabled should not result in a fetch.
-  EXPECT_CALL(*sync_service(), IsSyncActive()).WillRepeatedly(Return(true));
+  EXPECT_CALL(*sync_service(), GetState())
+      .WillRepeatedly(Return(syncer::SyncService::State::ACTIVE));
   static_cast<SyncServiceObserver*>(suggestions_service())
       ->OnStateChanged(sync_service());
 
@@ -385,7 +383,8 @@ TEST_F(SuggestionsServiceTest, BuildUrlWithDefaultMinZeroParamForFewFeature) {
 }
 
 TEST_F(SuggestionsServiceTest, FetchSuggestionsDataSyncNotInitializedEnabled) {
-  EXPECT_CALL(*sync_service(), IsSyncActive()).WillRepeatedly(Return(false));
+  EXPECT_CALL(*sync_service(), GetState())
+      .WillRepeatedly(Return(syncer::SyncService::State::INITIALIZING));
   static_cast<SyncServiceObserver*>(suggestions_service())
       ->OnStateChanged(sync_service());
 
@@ -408,7 +407,11 @@ TEST_F(SuggestionsServiceTest, FetchSuggestionsDataSyncNotInitializedEnabled) {
 }
 
 TEST_F(SuggestionsServiceTest, FetchSuggestionsDataSyncDisabled) {
-  EXPECT_CALL(*sync_service(), CanSyncStart()).WillRepeatedly(Return(false));
+  EXPECT_CALL(*sync_service(), GetDisableReasons())
+      .Times(AnyNumber())
+      .WillRepeatedly(Return(syncer::SyncService::DISABLE_REASON_USER_CHOICE));
+  EXPECT_CALL(*sync_service(), GetState())
+      .WillRepeatedly(Return(syncer::SyncService::State::DISABLED));
 
   base::MockCallback<SuggestionsService::ResponseCallback> callback;
   auto subscription = suggestions_service()->AddCallback(callback.Get());

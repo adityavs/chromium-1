@@ -11,7 +11,9 @@
 #include "base/run_loop.h"
 #include "base/test/scoped_feature_list.h"
 #include "chrome/browser/extensions/extension_apitest.h"
+#include "chrome/browser/ui/browser.h"
 #include "chrome/test/base/ui_test_utils.h"
+#include "components/app_modal/javascript_app_modal_dialog.h"
 #include "components/guest_view/browser/test_guest_view_manager.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/common/content_features.h"
@@ -26,6 +28,7 @@
 #include "extensions/test/result_catcher.h"
 #include "net/test/embedded_test_server/embedded_test_server.h"
 #include "net/test/embedded_test_server/http_request.h"
+#include "services/network/public/cpp/features.h"
 
 using extensions::ExtensionsAPIClient;
 using extensions::MimeHandlerViewGuest;
@@ -160,6 +163,17 @@ IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, Iframe) {
 }
 
 IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, Abort) {
+  if (base::FeatureList::IsEnabled(network::features::kNetworkService)) {
+    // With the network service, abortStream isn't needed since we pass a Mojo
+    // pipe to the renderer. If the plugin chooses to cancel the main request
+    // (e.g. to make range requests instead), we are always guaranteed that the
+    // Mojo pipe will be broken which will cancel the request. This is different
+    // than without the network service, since stream URLs need to be explicitly
+    // closed if they weren't yet opened to avoid leaks.
+    // TODO(jam): once the network service is the only path, delete the
+    // abortStream mimeHandlerPrivate method and supporting code.
+    return;
+  }
   RunTest("testAbort.csv");
 }
 
@@ -217,4 +231,47 @@ IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, BackgroundPage) {
   extensions::ProcessManager::SetEventPageIdleTimeForTesting(1);
   extensions::ProcessManager::SetEventPageSuspendingTimeForTesting(1);
   RunTest("testBackgroundPage.csv");
+}
+
+IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, TargetBlankAnchor) {
+  RunTest("testTargetBlankAnchor.csv");
+  ASSERT_EQ(2, browser()->tab_strip_model()->count());
+  content::WaitForLoadStop(browser()->tab_strip_model()->GetWebContentsAt(1));
+  EXPECT_EQ(
+      GURL("about:blank"),
+      browser()->tab_strip_model()->GetWebContentsAt(1)->GetLastCommittedURL());
+}
+
+IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, BeforeUnload_NoDialog) {
+  ASSERT_NO_FATAL_FAILURE(RunTest("testBeforeUnloadNoDialog.csv"));
+  auto* web_contents = browser()->tab_strip_model()->GetWebContentsAt(0);
+  content::PrepContentsForBeforeUnloadTest(web_contents);
+
+  // Wait for a round trip to the outer renderer to ensure any beforeunload
+  // toggle IPC has had time to reach the browser.
+  ExecuteScriptAndGetValue(web_contents->GetMainFrame(), "");
+
+  // Try to navigate away from the page. If the beforeunload listener is
+  // triggered and a dialog is shown, this navigation will never complete,
+  // causing the test to timeout and fail.
+  ui_test_utils::NavigateToURL(browser(), GURL("about:blank"));
+}
+
+IN_PROC_BROWSER_TEST_P(MimeHandlerViewTest, BeforeUnload_ShowDialog) {
+  ASSERT_NO_FATAL_FAILURE(RunTest("testBeforeUnloadShowDialog.csv"));
+  auto* web_contents = browser()->tab_strip_model()->GetWebContentsAt(0);
+  content::PrepContentsForBeforeUnloadTest(web_contents);
+
+  // Wait for a round trip to the outer renderer to ensure the beforeunload
+  // toggle IPC has had time to reach the browser.
+  ExecuteScriptAndGetValue(web_contents->GetMainFrame(), "");
+
+  web_contents->GetController().LoadURL(GURL("about:blank"), {},
+                                        ui::PAGE_TRANSITION_TYPED, "");
+
+  app_modal::JavaScriptAppModalDialog* before_unload_dialog =
+      ui_test_utils::WaitForAppModalDialog();
+  EXPECT_TRUE(before_unload_dialog->is_before_unload_dialog());
+  EXPECT_FALSE(before_unload_dialog->is_reload());
+  before_unload_dialog->OnAccept(base::string16(), false);
 }

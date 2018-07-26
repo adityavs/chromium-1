@@ -20,12 +20,12 @@ std::unique_ptr<CompositorAnimation> CompositorAnimation::Create() {
 
 std::unique_ptr<CompositorAnimation>
 CompositorAnimation::CreateWorkletAnimation(
+    cc::WorkletAnimationId worklet_animation_id,
     const String& name,
     std::unique_ptr<CompositorScrollTimeline> scroll_timeline,
     std::unique_ptr<cc::AnimationOptions> options) {
   return std::make_unique<CompositorAnimation>(cc::WorkletAnimation::Create(
-      cc::AnimationIdProvider::NextAnimationId(),
-      std::string(name.Ascii().data(), name.length()),
+      worklet_animation_id, std::string(name.Ascii().data(), name.length()),
       std::move(scroll_timeline), std::move(options)));
 }
 
@@ -68,16 +68,17 @@ void CompositorAnimation::AddKeyframeModel(
   animation_->AddKeyframeModel(keyframe_model->ReleaseCcKeyframeModel());
 }
 
-void CompositorAnimation::RemoveKeyframeModels() {
-  animation_->RemoveKeyframeModels();
+void CompositorAnimation::RemoveKeyframeModel(int keyframe_model_id) {
+  animation_->RemoveKeyframeModel(keyframe_model_id);
 }
 
-void CompositorAnimation::PauseKeyframeEffect(double time_offset) {
-  animation_->PauseKeyframeEffect(time_offset);
+void CompositorAnimation::PauseKeyframeModel(int keyframe_model_id,
+                                             double time_offset) {
+  animation_->PauseKeyframeModel(keyframe_model_id, time_offset);
 }
 
-void CompositorAnimation::AbortKeyframeEffect() {
-  animation_->AbortKeyframeEffect();
+void CompositorAnimation::AbortKeyframeModel(int keyframe_model_id) {
+  animation_->AbortKeyframeModel(keyframe_model_id);
 }
 
 void CompositorAnimation::UpdateScrollTimelineId(

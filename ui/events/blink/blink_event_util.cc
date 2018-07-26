@@ -1128,13 +1128,11 @@ blink::WebInputEvent::Modifiers DomCodeToWebInputEventModifiers(DomCode code) {
   return static_cast<blink::WebInputEvent::Modifiers>(0);
 }
 
-bool IsGestureScrollOrFlingOrPinch(WebInputEvent::Type type) {
+bool IsGestureScrollOrPinch(WebInputEvent::Type type) {
   switch (type) {
     case blink::WebGestureEvent::kGestureScrollBegin:
     case blink::WebGestureEvent::kGestureScrollUpdate:
     case blink::WebGestureEvent::kGestureScrollEnd:
-    case blink::WebGestureEvent::kGestureFlingStart:
-    case blink::WebGestureEvent::kGestureFlingCancel:
     case blink::WebGestureEvent::kGesturePinchBegin:
     case blink::WebGestureEvent::kGesturePinchUpdate:
     case blink::WebGestureEvent::kGesturePinchEnd:
@@ -1244,7 +1242,7 @@ std::unique_ptr<WebGestureEvent> CreateWebGestureEventFromGestureEventAndroid(
     web_event->data.fling_start.velocity_y = event.velocity_y();
     web_event->data.fling_start.target_viewport = event.target_viewport();
   } else if (event_type == WebInputEvent::kGestureFlingCancel) {
-    web_event->data.fling_cancel.prevent_boosting = true;
+    web_event->data.fling_cancel.prevent_boosting = event.prevent_boosting();
     if (event.synthetic_scroll())
       web_event->data.fling_cancel.target_viewport = true;
   } else if (event_type == WebInputEvent::kGestureDoubleTap) {

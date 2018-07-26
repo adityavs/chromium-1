@@ -126,9 +126,6 @@ const char kArtifactsDir[] = "artifacts-dir";
 // Possible values: parallel|postpone. Default: parallel.
 const char kAshWebUIInit[] = "ash-webui-init";
 
-// Determines which Google Privacy CA to use for attestation.
-const char kAttestationServer[] = "attestation-server";
-
 // If this flag is set, it indicates that this device is a "Cellular First"
 // device. Cellular First devices use cellular telephone data networks as
 // their primary means of connecting to the internet.
@@ -165,9 +162,6 @@ const char kCrosRegionsModeOverride[] = "override";
 
 // Optional value for Data Saver prompt on cellular networks.
 const char kDataSaverPromptDemoMode[] = "demo";
-
-// Forces the stub implementation of dbus clients.
-const char kDbusStub[] = "dbus-stub";
 
 // Indicates that the wallpaper images specified by
 // kAshDefaultWallpaper{Large,Small} are OEM-specific (i.e. they are not
@@ -313,9 +307,6 @@ const char kEnableCaptivePortalRandomUrl[] = "enable-captive-portal-random-url";
 // Enables the Cast Receiver.
 const char kEnableCastReceiver[] = "enable-cast-receiver";
 
-// Enables native ChromeVox support for Arc.
-const char kEnableChromeVoxArcSupport[] = "enable-chromevox-arc-support";
-
 // Enables consumer kiosk mode for Chrome OS.
 const char kEnableConsumerKiosk[] = "enable-consumer-kiosk";
 
@@ -345,6 +336,14 @@ const char kEnableFirstRunUITransitions[] = "enable-first-run-ui-transitions";
 // Enables notifications about captive portals in session.
 const char kEnableNetworkPortalNotification[] =
     "enable-network-portal-notification";
+
+// Enables offline demo mode. Offline demo mode is a part of demo mode feature
+// and it requires |kEnableDemoMode| flag to be enabled to take effect.
+const char kEnableOfflineDemoMode[] = "enable-offline-demo-mode";
+
+// Enables Recommend Apps screen in OOBE.
+const char kEnableOobeRecommendAppsScreen[] =
+    "enable-oobe-recommend-apps-screen";
 
 // Enables suggestions while typing on a physical keyboard.
 const char kEnablePhysicalKeyboardAutocorrect[] =
@@ -425,6 +424,10 @@ const char kFakeDriveFsLauncherSocketPath[] =
 // Passed to Chrome the first time that it's run after the system boots.
 // Not passed on restart after sign out.
 const char kFirstExecAfterBoot[] = "first-exec-after-boot";
+
+// Forces developer tools availability, no matter what values the enterprise
+// policies DeveloperToolsDisabled and DeveloperToolsAvailability are set to.
+const char kForceDevToolsAvailable[] = "force-devtools-available";
 
 // Forces first-run UI to be shown for every login.
 const char kForceFirstRunUI[] = "force-first-run-ui";
@@ -545,36 +548,22 @@ const char kRlzPingDelay[] = "rlz-ping-delay";
 // App window previews when hovering over the shelf.
 const char kShelfHoverPreviews[] = "shelf-hover-previews";
 
-// Overrides network stub behavior. By default, ethernet, wifi and vpn are
-// enabled, and transitions occur instantaneously. Multiple options can be
-// comma separated (no spaces). Note: all options are in the format 'foo=x'.
-// Values are case sensitive and based on Shill names in service_constants.h.
-// See FakeShillManagerClient::SetInitialNetworkState for implementation.
-// Examples:
-//  'clear=1' - Clears all default configurations
-//  'wifi=on' - A wifi network is initially connected ('1' also works)
-//  'wifi=off' - Wifi networks are all initially disconnected ('0' also works)
-//  'wifi=disabled' - Wifi is initially disabled
-//  'wifi=none' - Wifi is unavailable
-//  'wifi=portal' - Wifi connection will be in Portal state
-//  'cellular=1' - Cellular is initially connected
-//  'cellular=LTE' - Cellular is initially connected, technology is LTE
-//  'interactive=3' - Interactive mode, connect/scan/etc requests take 3 secs
-const char kShillStub[] = "shill-stub";
+// Resdesigned shelf UI.
+const char kShelfNewUi[] = "shelf-new-ui";
 
 // If true, files in Android internal storage will be shown in Files app.
 const char kShowAndroidFilesInFilesApp[] = "show-android-files-in-files-app";
 
-// If true, Files app navigation is displayed with a new UI. Items are
-// re-ordered and "Downloads" is displayed inside section "My Files".
-const char kFilesAppNewStyleNavigation[] = "new-files-app-navigation";
+// If true, files in Android internal storage will be hidden in Files app.
+const char kHideAndroidFilesInFilesApp[] = "hide-android-files-in-files-app";
+
+// If true, Files app navigation is NOT displayed with "My Files". Items are NOT
+// re-ordered and "Downloads" is NOT displayed inside section "My Files".
+const char kFilesAppDisableMyFilesNavigation[] = "disable-my-files-navigation";
 
 // If true, the developer tool overlay will be shown for the login/lock screen.
 // This makes it easier to test layout logic.
 const char kShowLoginDevOverlay[] = "show-login-dev-overlay";
-
-// Sends test messages on first call to RequestUpdate (stub only).
-const char kSmsTestMessages[] = "sms-test-messages";
 
 // Indicates that a stub implementation of CrosSettings that stores settings in
 // memory without signing should be used, treating current user as the owner.
@@ -582,10 +571,6 @@ const char kSmsTestMessages[] = "sms-test-messages";
 // settings are handled by OwnerSettingsServiceChromeOS.
 // This option is for testing the chromeos build of chrome on the desktop only.
 const char kStubCrosSettings[] = "stub-cros-settings";
-
-// Indicates that the system is running in dev mode. The dev mode probing is
-// done by session manager.
-const char kSystemDevMode[] = "system-developer-mode";
 
 // Enables testing for encryption migration UI.
 const char kTestEncryptionMigrationUI[] = "test-encryption-migration-ui";
@@ -749,6 +734,10 @@ bool ShouldHideActiveAppsFromShelf() {
 
 bool ShouldShowShelfHoverPreviews() {
   return base::CommandLine::ForCurrentProcess()->HasSwitch(kShelfHoverPreviews);
+}
+
+bool ShouldUseShelfNewUi() {
+  return base::CommandLine::ForCurrentProcess()->HasSwitch(kShelfNewUi);
 }
 
 bool IsInstantTetheringBackgroundAdvertisingSupported() {

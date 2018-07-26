@@ -87,8 +87,27 @@
       =1 {&lt;1 line not shown&gt;}
       other {&lt;$1 lines not shown&gt;}}
   </message>
+  <!-- TODO(devlin): Unify this with IDS_SETTINGS_EDIT. -->
+  <message name="IDS_MD_EXTENSIONS_HOST_PERMISSIONS_EDIT" desc="The label of the button used to edit an extension's access to a given website.">
+    Edit
+  </message>
   <message name="IDS_MD_EXTENSIONS_ITEM_ERRORS" desc="The label of the button to bring the user to the page showing an extension's errors.">
     Errors
+  </message>
+  <message name="IDS_MD_EXTENSIONS_ITEM_HOST_PERMISSIONS_HEADING" desc="The heading above the details of which websites an extension is allowed to run on.">
+    Allow this extension to read and change all your data on websites you visit:
+  </message>
+  <message name="IDS_MD_EXTENSIONS_HOST_ACCESS_ON_CLICK" desc="The text for the option to only allow an extension to read and change data when the user clicks on the extension.">
+    On click
+  </message>
+  <message name="IDS_MD_EXTENSIONS_HOST_ACCESS_ON_SPECIFIC_SITES" desc="The text for the option to allow an extension to read and change data on a select set of sites.">
+    On specific sites
+  </message>
+  <message name="IDS_MD_EXTENSIONS_HOST_ACCESS_ON_ALL_SITES" desc="The text for the option to allow an extension to read and change data on all websites.">
+    On all sites
+  </message>
+  <message name="IDS_EXTENSIONS_ITEM_ALLOWED_HOSTS" desc="The heading above the section listing any sites the extension is allowed to run on.">
+    Allowed sites
   </message>
   <message name="IDS_MD_EXTENSIONS_ACCESSIBILITY_ERROR_LINE" desc="Accessibility message to indicate what line an error is on. The line of code will be read to the user. The place holder will be a number.">
     Error on line <ph name="ERROR_LINE">$1</ph>
@@ -161,9 +180,6 @@
   </message>
   <message name="IDS_MD_EXTENSIONS_ITEM_PERMISSIONS_EMPTY" desc="The text to indicate that an extension does not have any special permissions.">
     This extension requires no special permissions
-  </message>
-  <message name="IDS_MD_EXTENSIONS_ITEM_REMOVE" desc="The label of the button to remove an extension.">
-    Remove
   </message>
   <message name="IDS_MD_EXTENSIONS_ITEM_REMOVE_EXTENSION" desc="The label on the button to remove an extension.">
     Remove extension
@@ -248,6 +264,18 @@
   </message>
   <message name="IDS_MD_EXTENSIONS_APPS_TITLE" desc="The text displayed in the sidebar to go to the apps section of the page.">
     Chrome Apps
+  </message>
+  <message name="IDS_MD_EXTENSIONS_REMOVE" desc="The generic label for a button to remove an entry.">
+    Remove
+  </message>
+  <message name="IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_TITLE" desc="The title of the dialog used to allow a user to add a new site that an extension is allowed to run on.">
+    Add a site
+  </message>
+  <message name="IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_INPUT_ERROR" desc="The error message shown to the user when they entered an invalid site address into the input field.">
+    Not a valid web address
+  </message>
+  <message name="IDS_MD_EXTENSIONS_RUNTIME_HOSTS_DIALOG_INPUT_LABEL" desc="The label for the input field where a user enters a new site for an extension to run on.">
+    Site
   </message>
   <message name="IDS_MD_EXTENSIONS_SIDEBAR_EXTENSIONS" desc="The text displayed in the sidebar to go to the extensions section of the page.">
     Extensions

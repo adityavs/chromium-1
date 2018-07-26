@@ -106,8 +106,6 @@ class TestQuicVisitor : public QuicFramerVisitorInterface {
 
   bool OnStreamFrame(const QuicStreamFrame& frame) override { return true; }
 
-  bool OnAckFrame(const QuicAckFrame& frame) override { return true; }
-
   bool OnAckFrameStart(QuicPacketNumber largest_acked,
                        QuicTime::Delta ack_delay_time) override {
     return true;
@@ -269,10 +267,14 @@ class QuicIetfFramerTest : public QuicTestWithParam<ParsedQuicVersion> {
     EXPECT_TRUE(QuicFramerPeer::AppendIetfAckFrameAndTypeByte(
         &framer_, transmit_frame, &writer));
 
-    // Better have something in the packet buffer.
-    EXPECT_NE(0u, writer.length());
+    size_t expected_frame_length = QuicFramerPeer::ComputeFrameLength(
+        &framer_, QuicFrame(&transmit_frame), false,
+        static_cast<QuicPacketNumberLength>(123456u));
+
+    // Encoded length should match what ComputeFrameLength returns
+    EXPECT_EQ(expected_frame_length, writer.length());
     // and what is in the buffer should be the expected size.
-    EXPECT_EQ(expected_size, writer.length());
+    EXPECT_EQ(expected_size, writer.length()) << "Frame is " << transmit_frame;
     // Now set up a reader to read in the frame.
     QuicDataReader reader(packet_buffer, writer.length(), NETWORK_BYTE_ORDER);
 
@@ -297,24 +299,6 @@ class QuicIetfFramerTest : public QuicTestWithParam<ParsedQuicVersion> {
     // framing and upshift on deframing results in clearing the 3
     // low-order bits ... The masking basically does the same thing,
     // so the compare works properly.
-    if (!framer_.use_incremental_ack_processing()) {
-      // incremental ack processing does not set these in the
-      // QuicAckFrame so test them only if we are not doing
-      // incremental ack.
-      EXPECT_EQ(transmit_frame.ack_delay_time.ToMicroseconds() & ~0x7,
-                receive_frame.ack_delay_time.ToMicroseconds() & ~0x7);
-      EXPECT_EQ(transmit_frame.packets.NumIntervals(),
-                receive_frame.packets.NumIntervals());
-      // now go through the two sets of intervals....
-      auto xmit_itr = transmit_frame.packets.begin();  // first range
-      auto recv_itr = receive_frame.packets.begin();   // first range
-      while (xmit_itr != transmit_frame.packets.end()) {
-        EXPECT_EQ(xmit_itr->max(), recv_itr->max());
-        EXPECT_EQ(xmit_itr->min(), recv_itr->min());
-        xmit_itr++;
-        recv_itr++;
-      }
-    }
     return true;
   }
 
@@ -666,6 +650,15 @@ struct ack_frame ack_frame_variants[] = {
   { 100000000, {{1, 2}, {3, 4}, {5, 6}, {7, 8}, {9, 10}, {11, 12}}},
   { 0, {{1, 65}} },
   { 9223372036854775807, {{1, 11}, {74, 138}} },
+  // This ack is for packets 60 & 125. There are 64 packets in the gap.
+  // The encoded value is gap_size - 1, or 63. Crosses a VarInt62 encoding
+  // boundary...
+  { 1, {{60, 61}, {125, 126}} },
+  { 2, {{ 1, 65}, {129, 130}} },
+  { 3, {{ 1, 65}, {129, 195}} },
+  { 4, {{ 1, 65}, {129, 194}} },
+  { 5, {{ 1, 65}, {129, 193}} },
+  { 6, {{ 1, 65}, {129, 192}} },
 };
 // clang-format on
 
@@ -727,16 +720,6 @@ TEST_F(QuicIetfFramerTest, AckFrameNoRanges) {
 
   // Now check that the received frame matches the sent frame.
   EXPECT_EQ(transmit_frame.largest_acked, receive_frame.largest_acked);
-
-  if (!framer_.use_incremental_ack_processing()) {
-    // Transmit QuicAckFrame had no explicit ranges -- which means no
-    // intervals are in the frame.
-    EXPECT_EQ(0u, transmit_frame.packets.NumIntervals());
-    // However, the actual serialization generates a FirstAckBlock and,
-    // therefore, when we deserialize, we should get a single interval
-    // in the Receive QuicAckFrame.
-    EXPECT_EQ(1u, receive_frame.packets.NumIntervals());
-  }
 }
 
 TEST_F(QuicIetfFramerTest, PathChallengeFrame) {

@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">‏بومی سازی استفاده شده است، اما default_locale در اظهارنامه مشخص نشده است.</translation>
 <translation id="2576842806987913196">‏یک فایل CRX در حال حاضر با این نام وجود دارد.</translation>
 <translation id="2753617847762399167">مسیر غیرمجاز (مطلق یا نسبی با «..»): «<ph name="IMAGE_PATH" />»</translation>
-<translation id="27822970480436970">این برنامهٔ افزودنی قادر به تغییر درخواست شبکه به دلیل تغییری متداخل با یک برنامهٔ افزودنی دیگر نیست.</translation>
 <translation id="2785530881066938471">‏بارگیری فایل "<ph name="RELATIVE_PATH" />" برای اسکریپت محتوا ممکن نیست. رمزگذاری آن UTF-8 نیست.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (شناسه افزونه «<ph name="EXTENSION_ID" />») توسط سرپرست مسدود شده است. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">بسته نصب نشد: "<ph name="ERROR_CODE" />"</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529">محصول نامشخص <ph name="PRODUCT_ID" /> از <ph name="VENDOR_NAME" /></translation>
 <translation id="7068383018033524534">فایل مانیفست نامعتبر است</translation>
 <translation id="7217838517480956708">سرپرست این دستگاه نصب <ph name="EXTENSION_NAME" /> را لازم کرده است. آن را نمی‌توان تغییر داد یا حذف کرد.</translation>
+<translation id="7939686037314084444">افزونه درست بارگیری نشد. شاید نتواند درخواست‌های شبکه را رهگیری کند.</translation>
 <translation id="7972881773422714442">گزینه‌ها: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">رو به کاربر</translation>
 <translation id="8047248493720652249">این برنامه افزودنی نتوانست نام‌گذاری بارگیری «<ph name="ATTEMPTED_FILENAME" />» را انجام دهد زیرا یک برنامه افزودنی دیگر (<ph name="EXTENSION_NAME" />) نام فایل دیگری «<ph name="ACTUAL_FILENAME" />» را تعیین کرد.</translation>

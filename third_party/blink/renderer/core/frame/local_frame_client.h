@@ -45,6 +45,7 @@
 #include "third_party/blink/public/platform/web_worker_fetch_context.h"
 #include "third_party/blink/public/web/web_global_object_reuse_policy.h"
 #include "third_party/blink/public/web/web_history_commit_type.h"
+#include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_triggering_event_info.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -106,6 +107,10 @@ class WebSpellCheckPanelHostClient;
 struct WebScrollIntoViewParams;
 class WebTextCheckClient;
 
+// Whether to follow cross origin redirects when downloading, or treating
+// the download as a navigation instead.
+enum class DownloadCrossOriginRedirects { kFollow, kNavigate };
+
 class CORE_EXPORT LocalFrameClient : public FrameClient {
  public:
   ~LocalFrameClient() override = default;
@@ -164,7 +169,8 @@ class CORE_EXPORT LocalFrameClient : public FrameClient {
 
   virtual void ForwardResourceTimingToParent(const WebResourceTimingInfo&) = 0;
 
-  virtual void DownloadURL(const ResourceRequest&) = 0;
+  virtual void DownloadURL(const ResourceRequest&,
+                           DownloadCrossOriginRedirects) = 0;
   virtual void LoadErrorPage(int reason) = 0;
 
   virtual bool NavigateBackForward(int offset) const = 0;
@@ -230,7 +236,9 @@ class CORE_EXPORT LocalFrameClient : public FrameClient {
       const ResourceRequest&,
       const SubstituteData&,
       ClientRedirectPolicy,
-      const base::UnguessableToken& devtools_navigation_token) = 0;
+      const base::UnguessableToken& devtools_navigation_token,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+      const WebNavigationTimings& navigation_timings) = 0;
 
   virtual String UserAgent() = 0;
 

@@ -52,10 +52,8 @@
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/platform/web_data_consumer_handle.h"
-#include "third_party/blink/public/platform/web_gamepad_listener.h"
 #include "third_party/blink/public/platform/web_gesture_device.h"
 #include "third_party/blink/public/platform/web_localized_string.h"
-#include "third_party/blink/public/platform/web_platform_event_type.h"
 #include "third_party/blink/public/platform/web_rtc_api_name.h"
 #include "third_party/blink/public/platform/web_size.h"
 #include "third_party/blink/public/platform/web_speech_synthesizer.h"
@@ -66,10 +64,6 @@
 
 namespace base {
 class SingleThreadTaskRunner;
-}
-
-namespace device {
-class Gamepads;
 }
 
 namespace gpu {
@@ -87,6 +81,10 @@ template <class T>
 class Local;
 }
 
+namespace webrtc {
+struct RtpCapabilities;
+}
+
 namespace blink {
 
 class InterfaceProvider;
@@ -97,9 +95,7 @@ class WebCanvasCaptureHandler;
 class WebCookieJar;
 class WebCrypto;
 class WebDatabaseObserver;
-class WebPlatformEventListener;
 class WebFileSystem;
-class WebGestureCurve;
 class WebGraphicsContext3DProvider;
 class WebIDBFactory;
 class WebImageCaptureFrameGrabber;
@@ -119,11 +115,9 @@ class WebRTCPeerConnectionHandler;
 class WebRTCPeerConnectionHandlerClient;
 class WebSandboxSupport;
 class WebSecurityOrigin;
-class WebSocketHandshakeThrottle;
 class WebSpeechSynthesizer;
 class WebSpeechSynthesizerClient;
 class WebStorageNamespace;
-struct WebFloatPoint;
 class WebThemeEngine;
 class WebThread;
 struct WebThreadCreationParams;
@@ -266,10 +260,6 @@ class BLINK_PLATFORM_EXPORT Platform {
 
   // Must return non-null.
   virtual WebIDBFactory* IdbFactory() { return nullptr; }
-
-  // Gamepad -------------------------------------------------------------
-
-  virtual void SampleGamepads(device::Gamepads& into) {}
 
   // History -------------------------------------------------------------
 
@@ -492,8 +482,10 @@ class BLINK_PLATFORM_EXPORT Platform {
   enum ContextType {
     kWebGL1ContextType,  // WebGL 1.0 context, use only for WebGL canvases
     kWebGL2ContextType,  // WebGL 2.0 context, use only for WebGL canvases
-    kGLES2ContextType,   // GLES 2.0 context, default, good for using skia
-    kGLES3ContextType,   // GLES 3.0 context
+    kWebGL2ComputeContextType,  // WebGL 2.0 Compute context, use only for WebGL
+                                // canvases
+    kGLES2ContextType,  // GLES 2.0 context, default, good for using skia
+    kGLES3ContextType,  // GLES 3.0 context
   };
   struct ContextAttributes {
     bool fail_if_major_performance_caveat = false;
@@ -544,15 +536,12 @@ class BLINK_PLATFORM_EXPORT Platform {
     return nullptr;
   }
 
-  virtual bool IsThreadedCompositingEnabled() { return false; }
-  virtual bool IsThreadedAnimationEnabled() { return true; }
-
-  // Creates a new fling animation curve instance for device |device_source|
-  // with |velocity| and already scrolled |cumulative_scroll| pixels.
-  virtual std::unique_ptr<WebGestureCurve> CreateFlingAnimationCurve(
-      WebGestureDevice device_source,
-      const WebFloatPoint& velocity,
-      const WebSize& cumulative_scroll);
+  // When true, animations will run on a compositor thread independently from
+  // the blink main thread.
+  // This is true when there exists a renderer compositor in this process. But
+  // for unit tests, a single-threaded compositor may be used so it may remain
+  // false.
+  virtual bool IsThreadedAnimationEnabled() { return false; }
 
   // Whether the compositor is using gpu and expects gpu resources as inputs,
   // or software based resources.
@@ -601,16 +590,14 @@ class BLINK_PLATFORM_EXPORT Platform {
   virtual std::unique_ptr<WebImageCaptureFrameGrabber>
   CreateImageCaptureFrameGrabber();
 
+  // Returns the most optimistic view of the capabilities of the system for
+  // sending or receiving media of the given kind ("audio" or "video").
+  virtual std::unique_ptr<webrtc::RtpCapabilities> GetRtpSenderCapabilities(
+      const WebString& kind);
+  virtual std::unique_ptr<webrtc::RtpCapabilities> GetRtpReceiverCapabilities(
+      const WebString& kind);
+
   virtual void UpdateWebRTCAPICount(WebRTCAPIName api_name) {}
-
-  // WebSocket ----------------------------------------------------------
-
-  // If this method returns non-null the returned object will be used to
-  // determine if/when a new WebSocket connection can be exposed to Javascript.
-  // TODO(nhiroki): Remove this once the off-main-thread WebSocket is enabled by
-  // default (https://crbug.com/825740).
-  virtual std::unique_ptr<WebSocketHandshakeThrottle>
-  CreateWebSocketHandshakeThrottle();
 
   // WebWorker ----------------------------------------------------------
 
@@ -632,18 +619,6 @@ class BLINK_PLATFORM_EXPORT Platform {
   virtual InterfaceProvider* GetInterfaceProvider();
 
   virtual const char* GetBrowserServiceName() const { return ""; }
-
-  // Platform events -----------------------------------------------------
-  // Device Orientation, Device Motion, Battery, Gamepad.
-
-  // Request the platform to start listening to the events of the specified
-  // type and notify the given listener (if not null) when there is an update.
-  virtual void StartListening(WebPlatformEventType type,
-                              WebPlatformEventListener* listener) {}
-
-  // Request the platform to stop listening to the specified event and no
-  // longer notify the listener, if any.
-  virtual void StopListening(WebPlatformEventType type) {}
 
   // This method converts from the supplied DOM code enum to the
   // embedder's DOM code value for the key pressed. |dom_code| values are

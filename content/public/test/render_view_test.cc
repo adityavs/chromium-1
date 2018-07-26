@@ -27,6 +27,7 @@
 #include "content/public/common/content_switches.h"
 #include "content/public/common/previews_state.h"
 #include "content/public/common/renderer_preferences.h"
+#include "content/public/common/use_zoom_for_dsf_policy.h"
 #include "content/public/renderer/content_renderer_client.h"
 #include "content/public/renderer/render_view_visitor.h"
 #include "content/public/test/frame_load_waiter.h"
@@ -91,7 +92,9 @@ class CloseMessageSendingRenderViewVisitor : public RenderViewVisitor {
     // releasing the internal reference counts and destroying the internal
     // state.
     ViewMsg_Close msg(render_view->GetRoutingID());
-    static_cast<RenderViewImpl*>(render_view)->OnMessageReceived(msg);
+    RenderWidget* render_widget =
+        static_cast<RenderViewImpl*>(render_view)->GetWidget();
+    render_widget->OnMessageReceived(msg);
     return true;
   }
 
@@ -260,9 +263,9 @@ void RenderViewTest::SetUp() {
 
   test_io_thread_ =
       std::make_unique<base::TestIOThread>(base::TestIOThread::kAutoStart);
-  ipc_support_ = std::make_unique<mojo::edk::ScopedIPCSupport>(
+  ipc_support_ = std::make_unique<mojo::core::ScopedIPCSupport>(
       test_io_thread_->task_runner(),
-      mojo::edk::ScopedIPCSupport::ShutdownPolicy::FAST);
+      mojo::core::ScopedIPCSupport::ShutdownPolicy::FAST);
 
   // Subclasses can set render_thread_ with their own implementation before
   // calling RenderViewTest::SetUp().
@@ -326,7 +329,7 @@ void RenderViewTest::SetUp() {
         "en-US", nullptr, ui::ResourceBundle::DO_NOT_LOAD_COMMON_RESOURCES);
   }
 
-  compositor_deps_ = std::make_unique<FakeCompositorDependencies>();
+  compositor_deps_ = CreateCompositorDependencies();
   mock_process_ = std::make_unique<MockRenderProcess>();
 
   mojom::CreateViewParamsPtr view_params = mojom::CreateViewParams::New();
@@ -335,8 +338,8 @@ void RenderViewTest::SetUp() {
   view_params->renderer_preferences = RendererPreferences();
   view_params->web_preferences = WebPreferences();
   view_params->view_id = render_thread_->GetNextRoutingID();
-  // For now these two must be equal. See: https://crbug.com/545684.
-  view_params->main_frame_widget_routing_id = view_params->view_id;
+  view_params->main_frame_widget_routing_id =
+      render_thread_->GetNextRoutingID();
   view_params->main_frame_routing_id = render_thread_->GetNextRoutingID();
   render_thread_->PassInitialInterfaceProviderRequestForFrame(
       view_params->main_frame_routing_id,
@@ -664,7 +667,7 @@ void RenderViewTest::OnSameDocumentNavigation(blink::WebLocalFrame* frame,
 
 blink::WebWidget* RenderViewTest::GetWebWidget() {
   RenderViewImpl* impl = static_cast<RenderViewImpl*>(view_);
-  return impl->GetWebWidget();
+  return impl->GetWidget()->GetWebWidget();
 }
 
 ContentClient* RenderViewTest::CreateContentClient() {
@@ -685,6 +688,11 @@ std::unique_ptr<VisualProperties> RenderViewTest::InitialVisualProperties() {
   initial_visual_properties->new_size = gfx::Size(400, 300);
   initial_visual_properties->visible_viewport_size = gfx::Size(400, 300);
   return initial_visual_properties;
+}
+
+std::unique_ptr<CompositorDependencies>
+RenderViewTest::CreateCompositorDependencies() {
+  return std::make_unique<FakeCompositorDependencies>();
 }
 
 void RenderViewTest::GoToOffset(int offset,

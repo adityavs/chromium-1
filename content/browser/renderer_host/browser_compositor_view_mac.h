@@ -20,11 +20,10 @@
 
 namespace ui {
 class AcceleratedWidgetMacNSView;
+class RecyclableCompositorMac;
 }
 
 namespace content {
-
-class RecyclableCompositorMac;
 
 class BrowserCompositorMacClient {
  public:
@@ -33,7 +32,9 @@ class BrowserCompositorMacClient {
   virtual void OnFrameTokenChanged(uint32_t frame_token) = 0;
   virtual void DidReceiveFirstFrameAfterNavigation() = 0;
   virtual void DestroyCompositorForShutdown() = 0;
-  virtual bool SynchronizeVisualProperties() = 0;
+  virtual bool SynchronizeVisualProperties(
+      const base::Optional<viz::LocalSurfaceId>&
+          child_allocated_local_surface_id) = 0;
 };
 
 // This class owns a DelegatedFrameHost, and will dynamically attach and
@@ -51,7 +52,6 @@ class CONTENT_EXPORT BrowserCompositorMac : public DelegatedFrameHostClient,
       ui::AcceleratedWidgetMacNSView* accelerated_widget_mac_ns_view,
       BrowserCompositorMacClient* client,
       bool render_widget_host_is_hidden,
-      bool ns_view_attached_to_window,
       const display::Display& initial_display,
       const viz::FrameSinkId& frame_sink_id);
   ~BrowserCompositorMac() override;
@@ -105,6 +105,9 @@ class CONTENT_EXPORT BrowserCompositorMac : public DelegatedFrameHostClient,
   // hidden (e.g, because it is occluded by another window).
   void SetNSViewAttachedToWindow(bool attached);
 
+  // Specify if the ui::Layer should be visible or not.
+  void SetViewVisible(bool visible);
+
   // Sets or clears the parent ui::Layer and updates state to reflect that
   // we are now using the ui::Compositor from |parent_ui_layer| (if non-nullptr)
   // or one from |recyclable_compositor_| (if a compositor is needed).
@@ -117,8 +120,10 @@ class CONTENT_EXPORT BrowserCompositorMac : public DelegatedFrameHostClient,
   viz::ScopedSurfaceIdAllocator GetScopedRendererSurfaceIdAllocator(
       base::OnceCallback<void()> allocation_task);
   const viz::LocalSurfaceId& GetRendererLocalSurfaceId();
+  const viz::LocalSurfaceId& AllocateNewRendererLocalSurfaceId();
   bool UpdateRendererLocalSurfaceIdFromChild(
       const viz::LocalSurfaceId& child_allocated_local_surface_id);
+  void TransformPointToRootSurface(gfx::PointF* point);
 
   // Indicate that the recyclable compositor should be destroyed, and no future
   // compositors should be recycled.
@@ -203,7 +208,7 @@ class CONTENT_EXPORT BrowserCompositorMac : public DelegatedFrameHostClient,
 
   BrowserCompositorMacClient* client_ = nullptr;
   ui::AcceleratedWidgetMacNSView* accelerated_widget_mac_ns_view_ = nullptr;
-  std::unique_ptr<RecyclableCompositorMac> recyclable_compositor_;
+  std::unique_ptr<ui::RecyclableCompositorMac> recyclable_compositor_;
 
   std::unique_ptr<DelegatedFrameHost> delegated_frame_host_;
   std::unique_ptr<ui::Layer> root_layer_;

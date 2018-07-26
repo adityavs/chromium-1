@@ -8,11 +8,11 @@
 #include <memory>
 
 #include "base/macros.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "third_party/blink/public/platform/scheduler/single_thread_idle_task_runner.h"
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/public/platform/web_thread_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
 #include "third_party/blink/renderer/platform/scheduler/common/thread_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/public/thread_scheduler.h"
 #include "third_party/blink/renderer/platform/scheduler/util/tracing_helper.h"
@@ -43,9 +43,7 @@ class PLATFORM_EXPORT NonMainThreadSchedulerImpl : public ThreadSchedulerImpl {
   virtual void OnTaskCompleted(
       NonMainThreadTaskQueue* worker_task_queue,
       const base::sequence_manager::TaskQueue::Task& task,
-      base::TimeTicks start,
-      base::TimeTicks end,
-      base::Optional<base::TimeDelta> thread_time) = 0;
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing) = 0;
 
   // ThreadSchedulerImpl:
   scoped_refptr<base::SingleThreadTaskRunner> ControlTaskRunner() override;
@@ -85,7 +83,7 @@ class PLATFORM_EXPORT NonMainThreadSchedulerImpl : public ThreadSchedulerImpl {
   //
   // virtual void Shutdown();
 
-  scoped_refptr<NonMainThreadTaskQueue> CreateTaskRunner();
+  scoped_refptr<NonMainThreadTaskQueue> CreateTaskRunner(const char* name);
 
  protected:
   static void RunIdleTask(WebThread::IdleTask task, base::TimeTicks deadline);

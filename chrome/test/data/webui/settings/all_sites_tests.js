@@ -87,11 +87,11 @@ suite('AllSites', function() {
   test('All sites list populated', function() {
     setUpCategory(prefsVarious);
     testElement.populateList_();
-    return browserProxy.whenCalled('getAllSites').then(function() {
+    return browserProxy.whenCalled('getAllSites').then(() => {
       // Use resolver to ensure that the list container is populated.
       const resolver = new PromiseResolver();
       testElement.async(resolver.resolve);
-      return resolver.promise.then(function() {
+      return resolver.promise.then(() => {
         assertEquals(3, testElement.siteGroupList.length);
 
         // Flush to be sure list container is populated.
@@ -103,4 +103,56 @@ suite('AllSites', function() {
     });
   });
 
+  test('search query filters list', function() {
+    const SEARCH_QUERY = 'foo';
+    setUpCategory(prefsVarious);
+    testElement.populateList_();
+    return browserProxy.whenCalled('getAllSites')
+        .then(() => {
+          // Flush to be sure list container is populated.
+          Polymer.dom.flush();
+          const siteEntries =
+              testElement.$.listContainer.querySelectorAll('site-entry');
+          assertEquals(3, siteEntries.length);
+
+          testElement.searchQuery_ = SEARCH_QUERY;
+        })
+        .then(() => {
+          Polymer.dom.flush();
+          const siteEntries =
+              testElement.$.listContainer.querySelectorAll('site-entry');
+          const hiddenSiteEntries = Polymer.dom(testElement.root)
+                                        .querySelectorAll('site-entry[hidden]');
+          assertEquals(1, siteEntries.length - hiddenSiteEntries.length);
+
+          for (let i = 0; i < siteEntries; ++i) {
+            const entry = siteEntries[i];
+            if (!hiddenSiteEntries.includes(entry)) {
+              assertTrue(entry.siteGroup.origins.some((origin) => {
+                return origin.includes(SEARCH_QUERY);
+              }));
+            }
+          }
+        });
+  });
+
+  test('can be sorted by name', function() {
+    setUpCategory(prefsVarious);
+    testElement.populateList_();
+    return browserProxy.whenCalled('getAllSites').then(() => {
+      Polymer.dom.flush();
+      const siteEntries =
+          testElement.$.listContainer.querySelectorAll('site-entry');
+
+      // TODO(https://crbug.com/835712): When there is more than one sort
+      // method, check that the all sites list can be sorted by name from an
+      // existing all sites list that is out of order. Currently this is not
+      // possible as the all sites list will always initially be sorted by the
+      // default sort method, and the default sort method is by name.
+      assertEquals(3, siteEntries.length);
+      assertEquals('bar.com', siteEntries[0].$.displayName.innerText.trim());
+      assertEquals('foo.com', siteEntries[1].$.displayName.innerText.trim());
+      assertEquals('google.com', siteEntries[2].$.displayName.innerText.trim());
+    });
+  });
 });

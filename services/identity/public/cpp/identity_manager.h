@@ -8,10 +8,10 @@
 #include "base/observer_list.h"
 #include "components/signin/core/browser/account_info.h"
 #include "components/signin/core/browser/account_tracker_service.h"
+#include "components/signin/core/browser/gaia_cookie_manager_service.h"
 #include "components/signin/core/browser/profile_oauth2_token_service.h"
 #include "components/signin/core/browser/signin_manager_base.h"
 #include "services/identity/public/cpp/access_token_fetcher.h"
-#include "services/identity/public/cpp/primary_account_access_token_fetcher.h"
 
 #if !defined(OS_CHROMEOS)
 #include "components/signin/core/browser/signin_manager.h"
@@ -30,7 +30,7 @@ class UserSessionManager;
 
 // Necessary to declare this class as a friend.
 namespace file_manager {
-class MultiProfileFileManagerBrowserTest;
+class MultiProfileFilesAppBrowserTest;
 }
 
 // Necessary to declare these classes as friends.
@@ -47,7 +47,8 @@ class IdentityManager : public SigninManagerBase::Observer,
                         public SigninManager::DiagnosticsClient,
 #endif
                         public ProfileOAuth2TokenService::DiagnosticsClient,
-                        public OAuth2TokenService::DiagnosticsObserver {
+                        public OAuth2TokenService::DiagnosticsObserver,
+                        public GaiaCookieManagerService::Observer {
  public:
   class Observer {
    public:
@@ -87,6 +88,11 @@ class IdentityManager : public SigninManagerBase::Observer,
     // is problematic for your use case, please contact blundell@chromium.org.
     virtual void OnRefreshTokenRemovedForAccount(
         const AccountInfo& account_info) {}
+
+    // Called whenever the list of Gaia accounts in the cookie jar has changed.
+    // |accounts| is ordered by the order of the accounts in the cookie.
+    virtual void OnAccountsInCookieUpdated(
+        const std::vector<AccountInfo>& accounts) {}
   };
 
   // Observer interface for classes that want to monitor status of various
@@ -108,31 +114,48 @@ class IdentityManager : public SigninManagerBase::Observer,
 
   IdentityManager(SigninManagerBase* signin_manager,
                   ProfileOAuth2TokenService* token_service,
-                  AccountTrackerService* account_tracker_service);
+                  AccountTrackerService* account_tracker_service,
+                  GaiaCookieManagerService* gaia_cookie_manager_service);
   ~IdentityManager() override;
 
   // Provides access to the latest cached information of the user's primary
   // account.
-  AccountInfo GetPrimaryAccountInfo();
+  AccountInfo GetPrimaryAccountInfo() const;
 
   // Returns whether the primary account is available, according to the latest
   // cached information. Simple convenience wrapper over checking whether the
   // primary account info has a valid account ID.
-  bool HasPrimaryAccount();
+  bool HasPrimaryAccount() const;
 
   // Provides access to the latest cached information of all accounts that have
   // refresh tokens.
   // NOTE: The accounts should not be assumed to be in any particular order; in
   // particular, they are not guaranteed to be in the order in which the
   // refresh tokens were added.
-  std::vector<AccountInfo> GetAccountsWithRefreshTokens();
+  std::vector<AccountInfo> GetAccountsWithRefreshTokens() const;
+
+  // Provides access to the latest cached information of all accounts that are
+  // present in the Gaia cookie in the cookie jar, ordered by their order in
+  // the cookie. If the cached state is known to be stale by the underlying
+  // implementation, a call to this method will trigger an internal update and
+  // subsequent invocation of
+  // IdentityManager::Observer::OnAccountsInCookieJarChanged().
+  // |source| is supplied as the source of any network requests that are made as
+  // part of an internal update.
+  // NOTE: The information of whether the cached state is known to be stale by
+  // the underlying implementation is not currently exposed. The design for
+  // exposing it if necessary is tracked by https://crbug.com/859882. If the
+  // lack of this exposure is a blocker for you in using this API, contact
+  // blundell@chromium.org.
+  std::vector<AccountInfo> GetAccountsInCookieJar(
+      const std::string& source) const;
 
   // Returns true if a refresh token exists for |account_id|.
-  bool HasAccountWithRefreshToken(const std::string& account_id);
+  bool HasAccountWithRefreshToken(const std::string& account_id) const;
 
   // Returns true if (a) the primary account exists, and (b) a refresh token
   // exists for the primary account.
-  bool HasPrimaryAccountWithRefreshToken();
+  bool HasPrimaryAccountWithRefreshToken() const;
 
   // Creates an AccessTokenFetcher given the passed-in information.
   std::unique_ptr<AccessTokenFetcher> CreateAccessTokenFetcherForAccount(
@@ -140,14 +163,6 @@ class IdentityManager : public SigninManagerBase::Observer,
       const std::string& oauth_consumer_name,
       const OAuth2TokenService::ScopeSet& scopes,
       AccessTokenFetcher::TokenCallback callback);
-
-  // Creates a PrimaryAccountAccessTokenFetcher given the passed-in information.
-  std::unique_ptr<PrimaryAccountAccessTokenFetcher>
-  CreateAccessTokenFetcherForPrimaryAccount(
-      const std::string& oauth_consumer_name,
-      const OAuth2TokenService::ScopeSet& scopes,
-      AccessTokenFetcher::TokenCallback callback,
-      PrimaryAccountAccessTokenFetcher::Mode mode);
 
   // If an entry exists in the Identity Service's cache corresponding to the
   // given information, removes that entry; in this case, the next access token
@@ -170,7 +185,7 @@ class IdentityManager : public SigninManagerBase::Observer,
                                        const std::string& email);
   friend MultiProfileDownloadNotificationTest;
   friend ProfileSyncServiceHarness;
-  friend file_manager::MultiProfileFileManagerBrowserTest;
+  friend file_manager::MultiProfileFilesAppBrowserTest;
 
   // These clients needs to call SetPrimaryAccountSynchronously().
   friend ArcSupportHostTest;
@@ -215,6 +230,12 @@ class IdentityManager : public SigninManagerBase::Observer,
   void WillFireGoogleSignedOut(const AccountInfo& account_info) override;
 #endif
 
+  // GaiaCookieManagerService::Observer:
+  void OnGaiaAccountsInCookieUpdated(
+      const std::vector<gaia::ListedAccount>& accounts,
+      const std::vector<gaia::ListedAccount>& signed_out_accounts,
+      const GoogleServiceAuthError& error) override;
+
   // OAuth2TokenService::DiagnosticsObserver:
   void OnAccessTokenRequested(
       const std::string& account_id,
@@ -228,9 +249,17 @@ class IdentityManager : public SigninManagerBase::Observer,
   SigninManagerBase* signin_manager_;
   ProfileOAuth2TokenService* token_service_;
   AccountTrackerService* account_tracker_service_;
+  GaiaCookieManagerService* gaia_cookie_manager_service_;
 
   // The latest (cached) value of the primary account.
+#if defined(OS_CHROMEOS)
+  // On ChromeOS the primary account's email address needs to be modified from
+  // within  GetPrimaryAccountInfo(). TODO(842670): Remove this field being
+  // mutable if possible as part of solving the larger issue.
+  mutable AccountInfo primary_account_info_;
+#else
   AccountInfo primary_account_info_;
+#endif
 
   // The latest (cached) value of the accounts with refresh tokens.
   using AccountIDToAccountInfoMap = std::map<std::string, AccountInfo>;

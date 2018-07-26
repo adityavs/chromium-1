@@ -85,8 +85,19 @@ const char kProactiveTabFreezeAndDiscardFeatureName[] =
     "ProactiveTabFreezeAndDiscard";
 
 // Field-trial parameter names for proactive tab discarding.
-const char kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscard[] =
+const char kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardParam[] =
     "ShouldProactivelyDiscard";
+const char kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeParam[] =
+    "ShouldPeriodicallyUnfreeze";
+
+// NOTE: This parameter is disabled by default and shouldn't be enabled until
+// the privacy review for the UKM associated with it has been approved, see
+//  https://docs.google.com/a/google.com/document/d/1BNQ5nLOtPuwP7oxr9r-XKNKr5iObXEiA_69WXAvuYAo/edit?disco=AAAABzM-vE0
+//
+// TODO(sebmarchand): Remove this comment once the UKM has been approved.
+const char
+    kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceParam
+        [] = "ShouldProtectTabsSharingBrowsingInstance";
 const char kProactiveTabFreezeAndDiscard_LowLoadedTabCountParam[] =
     "LowLoadedTabCount";
 const char kProactiveTabFreezeAndDiscard_ModerateLoadedTabsPerGbRamParam[] =
@@ -99,7 +110,11 @@ const char kProactiveTabFreezeAndDiscard_ModerateOccludedTimeoutParam[] =
     "ModerateOccludedTimeoutSeconds";
 const char kProactiveTabFreezeAndDiscard_HighOccludedTimeoutParam[] =
     "HighOccludedTimeoutSeconds";
-const char kProactiveTabFreezeAndDiscard_FreezeTimeout[] = "FreezeTimeout";
+const char kProactiveTabFreezeAndDiscard_FreezeTimeoutParam[] = "FreezeTimeout";
+const char kProactiveTabFreezeAndDiscard_UnfreezeTimeoutParam[] =
+    "UnfreezeTimeout";
+const char kProactiveTabFreezeAndDiscard_RefreezeTimeoutParam[] =
+    "RefreezeTimeout";
 
 // Field-trial parameter names for the site characteristics database.
 const char kSiteCharacteristicsDb_FaviconUpdateObservationWindow[] =
@@ -110,6 +125,10 @@ const char kSiteCharacteristicsDb_AudioUsageObservationWindow[] =
     "AudioUsageObservationWindow";
 const char kSiteCharacteristicsDb_NotificationsUsageObservationWindow[] =
     "NotificationsUsageObservationWindow";
+const char kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod[] =
+    "TitleOrFaviconChangeGracePeriod";
+const char kSiteCharacteristicsDb_AudioUsageGracePeriod[] =
+    "AudioUsageGracePeriod";
 
 const char kInfiniteSessionRestore_MinSimultaneousTabLoads[] =
     "MinSimultaneousTabLoads";
@@ -129,6 +148,18 @@ const char kInfiniteSessionRestore_MinSiteEngagementToRestore[] =
 // Default values for ProactiveTabFreezeAndDiscardParams.
 const bool kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardDefault =
     false;
+const bool kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeDefault =
+    false;
+
+// NOTE: This parameter is disabled by default and shouldn't be enabled until
+// the privacy review for the UKM associated with it has been approved, see
+//  https://docs.google.com/a/google.com/document/d/1BNQ5nLOtPuwP7oxr9r-XKNKr5iObXEiA_69WXAvuYAo/edit?disco=AAAABzM-vE0
+//
+// TODO(sebmarchand): Remove this comment once the UKM has been approved.
+const bool
+    kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceDefault =
+        false;
+
 // 50% of people cap out at 4 tabs, so for them proactive discarding won't even
 // be invoked. See Tabs.MaxTabsInADay.
 // TODO(chrisha): This should eventually be informed by the number of tabs
@@ -153,8 +184,12 @@ const base::TimeDelta
         base::TimeDelta::FromHours(1);
 const base::TimeDelta kProactiveTabFreezeAndDiscard_HighOccludedTimeoutDefault =
     base::TimeDelta::FromMinutes(10);
-const base::TimeDelta kProactiveTabFreezeAndDiscard_FreezeTimeout_Default =
+const base::TimeDelta kProactiveTabFreezeAndDiscard_FreezeTimeoutDefault =
     base::TimeDelta::FromMinutes(10);
+const base::TimeDelta kProactiveTabFreezeAndDiscard_UnfreezeTimeoutDefault =
+    base::TimeDelta::FromMinutes(15);
+const base::TimeDelta kProactiveTabFreezeAndDiscard_RefreezeTimeoutDefault =
+    base::TimeDelta::FromSeconds(10);
 
 // Default values for SiteCharacteristicsDatabaseParams.
 //
@@ -172,6 +207,14 @@ const base::TimeDelta
 const base::TimeDelta
     kSiteCharacteristicsDb_NotificationsUsageObservationWindow_Default =
         base::TimeDelta::FromHours(2);
+
+// TODO(sebmarchand): Get some real-world data and choose an appropriate value
+// here.
+const base::TimeDelta
+    kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod_Default =
+        base::TimeDelta::FromSeconds(20);
+const base::TimeDelta kSiteCharacteristicsDb_AudioUsageGracePeriod_Default =
+    base::TimeDelta::FromSeconds(10);
 
 // Default values for infinite session restore feature. Many of these are taken
 // from thin air, but others are motivated by existing metrics.
@@ -211,8 +254,19 @@ ProactiveTabFreezeAndDiscardParams GetProactiveTabFreezeAndDiscardParams(
 
   params.should_proactively_discard = base::GetFieldTrialParamByFeatureAsBool(
       features::kProactiveTabFreezeAndDiscard,
-      kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscard,
+      kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardParam,
       kProactiveTabFreezeAndDiscard_ShouldProactivelyDiscardDefault);
+
+  params.should_periodically_unfreeze = base::GetFieldTrialParamByFeatureAsBool(
+      features::kProactiveTabFreezeAndDiscard,
+      kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeParam,
+      kProactiveTabFreezeAndDiscard_ShouldPeriodicallyUnfreezeDefault);
+
+  params.should_protect_tabs_sharing_browsing_instance =
+      base::GetFieldTrialParamByFeatureAsBool(
+          features::kProactiveTabFreezeAndDiscard,
+          kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceParam,
+          kProactiveTabFreezeAndDiscard_ShouldProtectTabsSharingBrowsingInstanceDefault);
 
   params.low_loaded_tab_count = base::GetFieldTrialParamByFeatureAsInt(
       features::kProactiveTabFreezeAndDiscard,
@@ -252,8 +306,20 @@ ProactiveTabFreezeAndDiscardParams GetProactiveTabFreezeAndDiscardParams(
   params.freeze_timeout =
       base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
           features::kProactiveTabFreezeAndDiscard,
-          kProactiveTabFreezeAndDiscard_FreezeTimeout,
-          kProactiveTabFreezeAndDiscard_FreezeTimeout_Default.InSeconds()));
+          kProactiveTabFreezeAndDiscard_FreezeTimeoutParam,
+          kProactiveTabFreezeAndDiscard_FreezeTimeoutDefault.InSeconds()));
+
+  params.unfreeze_timeout =
+      base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
+          features::kProactiveTabFreezeAndDiscard,
+          kProactiveTabFreezeAndDiscard_UnfreezeTimeoutParam,
+          kProactiveTabFreezeAndDiscard_UnfreezeTimeoutDefault.InSeconds()));
+
+  params.refreeze_timeout =
+      base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
+          features::kProactiveTabFreezeAndDiscard,
+          kProactiveTabFreezeAndDiscard_RefreezeTimeoutParam,
+          kProactiveTabFreezeAndDiscard_RefreezeTimeoutDefault.InSeconds()));
 
   return params;
 }
@@ -263,6 +329,12 @@ GetStaticProactiveTabFreezeAndDiscardParams() {
   static base::NoDestructor<ProactiveTabFreezeAndDiscardParams> params(
       GetProactiveTabFreezeAndDiscardParams());
   return *params;
+}
+
+ProactiveTabFreezeAndDiscardParams*
+GetMutableStaticProactiveTabFreezeAndDiscardParamsForTesting() {
+  return const_cast<ProactiveTabFreezeAndDiscardParams*>(
+      &GetStaticProactiveTabFreezeAndDiscardParams());
 }
 
 base::TimeDelta GetTabLoadTimeout(const base::TimeDelta& default_timeout) {
@@ -306,6 +378,19 @@ SiteCharacteristicsDatabaseParams GetSiteCharacteristicsDatabaseParams() {
           kSiteCharacteristicsDb_NotificationsUsageObservationWindow,
           kSiteCharacteristicsDb_NotificationsUsageObservationWindow_Default
               .InSeconds()));
+
+  params.title_or_favicon_change_grace_period =
+      base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
+          features::kSiteCharacteristicsDatabase,
+          kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod,
+          kSiteCharacteristicsDb_TitleOrFaviconChangeGracePeriod_Default
+              .InSeconds()));
+
+  params.audio_usage_grace_period =
+      base::TimeDelta::FromSeconds(base::GetFieldTrialParamByFeatureAsInt(
+          features::kSiteCharacteristicsDatabase,
+          kSiteCharacteristicsDb_AudioUsageGracePeriod,
+          kSiteCharacteristicsDb_AudioUsageGracePeriod_Default.InSeconds()));
 
   return params;
 }

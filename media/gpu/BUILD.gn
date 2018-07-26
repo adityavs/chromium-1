@@ -149,9 +149,6 @@ component("gpu") {
 
   if (is_android) {
     sources += [
-      "android/android_image_reader_abi.h",
-      "android/android_image_reader_compat.cc",
-      "android/android_image_reader_compat.h",
       "android/android_video_decode_accelerator.cc",
       "android/android_video_decode_accelerator.h",
       "android/android_video_encode_accelerator.cc",
@@ -176,10 +173,6 @@ component("gpu") {
       "android/codec_image_group.h",
       "android/codec_wrapper.cc",
       "android/codec_wrapper.h",
-      "android/content_video_view_overlay.cc",
-      "android/content_video_view_overlay.h",
-      "android/content_video_view_overlay_allocator.cc",
-      "android/content_video_view_overlay_allocator.h",
       "android/device_info.cc",
       "android/device_info.h",
       "android/image_reader_gl_owner.cc",
@@ -197,8 +190,6 @@ component("gpu") {
       "android/texture_owner.h",
       "android/texture_pool.cc",
       "android/texture_pool.h",
-      "android/texture_wrapper.cc",
-      "android/texture_wrapper.h",
       "android/video_frame_factory.h",
       "android/video_frame_factory_impl.cc",
       "android/video_frame_factory_impl.h",
@@ -396,6 +387,7 @@ if (is_win || is_android || use_v4l2_codec || use_vaapi) {
         "video_decode_accelerator_unittest.cc",
       ]
       deps += [
+        "//mojo/core/embedder",
         "//ui/display",
         "//ui/display/types",
         "//ui/platform_window",
@@ -435,14 +427,12 @@ source_set("android_video_decode_accelerator_unittests") {
   if (is_android) {
     testonly = true
     sources = [
-      "android/android_image_reader_compat_unittest.cc",
       "android/android_video_decode_accelerator_unittest.cc",
       "android/android_video_surface_chooser_impl_unittest.cc",
       "android/avda_codec_allocator_unittest.cc",
       "android/codec_image_group_unittest.cc",
       "android/codec_image_unittest.cc",
       "android/codec_wrapper_unittest.cc",
-      "android/content_video_view_overlay_allocator_unittest.cc",
       "android/fake_codec_allocator.cc",
       "android/fake_codec_allocator.h",
       "android/image_reader_gl_owner_unittest.cc",
@@ -556,6 +546,12 @@ if (use_v4l2_codec || use_vaapi) {
     sources = [
       "jpeg_decode_accelerator_unittest.cc",
       "test/video_accelerator_unittest_helpers.h",
+    ]
+    data = [
+      "//media/test/data/peach_pi-1280x720.jpg",
+      "//media/test/data/peach_pi-40x23.jpg",
+      "//media/test/data/peach_pi-41x22.jpg",
+      "//media/test/data/peach_pi-41x23.jpg",
     ]
     if (use_x11) {
       deps += [ "//ui/gfx/x" ]

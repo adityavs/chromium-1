@@ -83,33 +83,56 @@ mojom::VRDisplayInfoPtr CreateVRDisplayInfo(unsigned int id,
 
 }  // namespace
 
-OculusDevice::OculusDevice(ovrSession session, ovrGraphicsLuid luid)
+OculusDevice::OculusDevice()
     : VRDeviceBase(VRDeviceId::OCULUS_DEVICE_ID),
-      session_(session),
       main_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()),
       exclusive_controller_binding_(this),
       weak_ptr_factory_(this) {
+  StartOvrSession();
+  if (!session_) {
+    return;
+  }
+
   SetVRDisplayInfo(CreateVRDisplayInfo(GetId(), session_));
 
-  render_loop_ = std::make_unique<OculusRenderLoop>(session_, luid);
+  render_loop_ = std::make_unique<OculusRenderLoop>(
+      base::BindRepeating(&OculusDevice::OnPresentationEnded,
+                          weak_ptr_factory_.GetWeakPtr()),
+      base::BindRepeating(&OculusDevice::OnControllerUpdated,
+                          weak_ptr_factory_.GetWeakPtr()));
 }
 
-OculusDevice::~OculusDevice() {}
+OculusDevice::~OculusDevice() {
+  StopOvrSession();
+
+  device::GamepadDataFetcherManager::GetInstance()->RemoveSourceFactory(
+      device::GAMEPAD_SOURCE_OCULUS);
+  data_fetcher_ = nullptr;
+}
 
 void OculusDevice::RequestSession(
     mojom::XRDeviceRuntimeSessionOptionsPtr options,
     mojom::XRRuntime::RequestSessionCallback callback) {
+  if (!options->immersive) {
+    ReturnNonImmersiveSession(std::move(callback));
+    return;
+  }
+
+  StopOvrSession();
+
   if (!render_loop_->IsRunning())
     render_loop_->Start();
 
   if (!render_loop_->IsRunning()) {
     std::move(callback).Run(nullptr, nullptr);
+    StartOvrSession();
     return;
   }
 
   auto on_request_present_result =
       base::BindOnce(&OculusDevice::OnRequestSessionResult,
                      weak_ptr_factory_.GetWeakPtr(), std::move(callback));
+
   render_loop_->task_runner()->PostTask(
       FROM_HERE, base::BindOnce(&OculusRenderLoop::RequestSession,
                                 render_loop_->GetWeakPtr(), std::move(options),
@@ -119,20 +142,16 @@ void OculusDevice::RequestSession(
 void OculusDevice::OnRequestSessionResult(
     mojom::XRRuntime::RequestSessionCallback callback,
     bool result,
-    mojom::VRSubmitFrameClientRequest request,
-    mojom::VRPresentationProviderPtrInfo provider_info,
-    mojom::VRDisplayFrameTransportOptionsPtr transport_options) {
+    mojom::XRSessionPtr session) {
   if (!result) {
     std::move(callback).Run(nullptr, nullptr);
+
+    // Start magic window again.
+    StartOvrSession();
     return;
   }
 
   OnStartPresenting();
-
-  auto connection = mojom::XRPresentationConnection::New();
-  connection->client_request = std::move(request);
-  connection->provider = std::move(provider_info);
-  connection->transport_options = std::move(transport_options);
 
   mojom::XRSessionControllerPtr session_controller;
   exclusive_controller_binding_.Bind(mojo::MakeRequest(&session_controller));
@@ -143,7 +162,24 @@ void OculusDevice::OnRequestSessionResult(
       base::BindOnce(&OculusDevice::OnPresentingControllerMojoConnectionError,
                      base::Unretained(this)));
 
-  std::move(callback).Run(std::move(connection), std::move(session_controller));
+  std::move(callback).Run(std::move(session), std::move(session_controller));
+
+  if (!oculus_gamepad_factory_) {
+    oculus_gamepad_factory_ =
+        new OculusGamepadDataFetcher::Factory(GetId(), this);
+    GamepadDataFetcherManager::GetInstance()->AddFactory(
+        oculus_gamepad_factory_);
+  }
+}
+
+void OculusDevice::OnControllerUpdated(ovrInputState input,
+                                       ovrInputState remote,
+                                       ovrTrackingState tracking,
+                                       bool has_touch,
+                                       bool has_remote) {
+  if (data_fetcher_)
+    data_fetcher_->UpdateGamepadData(
+        {input, remote, tracking, has_touch, has_remote});
 }
 
 // XRSessionController
@@ -160,13 +196,50 @@ void OculusDevice::OnPresentingControllerMojoConnectionError() {
   exclusive_controller_binding_.Close();
 }
 
+void OculusDevice::OnPresentationEnded() {
+  StartOvrSession();
+}
+
+void OculusDevice::StartOvrSession() {
+  ovrInitParams initParams = {ovrInit_RequestVersion | ovrInit_Invisible,
+                              OVR_MINOR_VERSION, NULL, 0, 0};
+  ovrResult result = ovr_Initialize(&initParams);
+  if (OVR_FAILURE(result)) {
+    return;
+  }
+
+  ovrGraphicsLuid luid;
+  result = ovr_Create(&session_, &luid);
+  if (OVR_FAILURE(result)) {
+    return;
+  }
+}
+
+void OculusDevice::StopOvrSession() {
+  if (session_) {
+    // Shut down our current session so the presentation session can begin.
+    ovr_Destroy(session_);
+    session_ = nullptr;
+    ovr_Shutdown();
+  }
+}
+
 void OculusDevice::OnMagicWindowFrameDataRequest(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
+  if (!session_) {
+    std::move(callback).Run(nullptr);
+    return;
+  }
+
   ovrTrackingState state = ovr_GetTrackingState(session_, 0, false);
 
   mojom::XRFrameDataPtr frame_data = mojom::XRFrameData::New();
   frame_data->pose = mojo::ConvertTo<mojom::VRPosePtr>(state.HeadPose.ThePose);
   std::move(callback).Run(std::move(frame_data));
+}
+
+void OculusDevice::RegisterDataFetcher(OculusGamepadDataFetcher* data_fetcher) {
+  data_fetcher_ = data_fetcher;
 }
 
 }  // namespace device

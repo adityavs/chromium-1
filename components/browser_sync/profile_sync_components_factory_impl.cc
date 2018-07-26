@@ -13,6 +13,9 @@
 #include "components/autofill/core/browser/autofill_wallet_data_type_controller.h"
 #include "components/autofill/core/browser/webdata/autocomplete_sync_bridge.h"
 #include "components/autofill/core/browser/webdata/autofill_profile_data_type_controller.h"
+#include "components/autofill/core/browser/webdata/autofill_profile_sync_bridge.h"
+#include "components/autofill/core/browser/webdata/autofill_wallet_metadata_sync_bridge.h"
+#include "components/autofill/core/browser/webdata/autofill_wallet_sync_bridge.h"
 #include "components/autofill/core/browser/webdata/autofill_webdata_service.h"
 #include "components/autofill/core/browser/webdata/web_data_model_type_controller.h"
 #include "components/browser_sync/browser_sync_switches.h"
@@ -58,14 +61,42 @@ namespace browser_sync {
 
 namespace {
 
-// This helper function only wraps
-// autofill::AutocompleteSyncBridge::FromWebDataService(). This way, it
-// simplifies life for the compiler which cannot directly cast
+// These helper functions only wrap the factory functions of the bridges. This
+// way, it simplifies life for the compiler which cannot directly cast
 // "WeakPtr<ModelTypeSyncBridge> (AutofillWebDataService*)" to
 // "WeakPtr<ModelTypeControllerDelegate> (AutofillWebDataService*)".
-base::WeakPtr<syncer::ModelTypeControllerDelegate> DelegateFromDataService(
-    autofill::AutofillWebDataService* service) {
+base::WeakPtr<syncer::ModelTypeControllerDelegate>
+AutocompleteDelegateFromDataService(autofill::AutofillWebDataService* service) {
+  // TODO(jkrcal): Deal with the (probably rare) race condition when we call
+  // bridges' FromWebDataService() before calling
+  // CreateForWebDataServiceAndBackend() in WebDataServiceWrapper. This TODO
+  // also applies to all analogous functions below and to analogous code in
+  // SyncClient::GetControllerDelegateForModelType().
   return autofill::AutocompleteSyncBridge::FromWebDataService(service)
+      ->change_processor()
+      ->GetControllerDelegateOnUIThread();
+}
+
+base::WeakPtr<syncer::ModelTypeControllerDelegate>
+AutofillProfileDelegateFromDataService(
+    autofill::AutofillWebDataService* service) {
+  return autofill::AutofillProfileSyncBridge::FromWebDataService(service)
+      ->change_processor()
+      ->GetControllerDelegateOnUIThread();
+}
+
+base::WeakPtr<syncer::ModelTypeControllerDelegate>
+AutofillWalletDelegateFromDataService(
+    autofill::AutofillWebDataService* service) {
+  return autofill::AutofillWalletSyncBridge::FromWebDataService(service)
+      ->change_processor()
+      ->GetControllerDelegateOnUIThread();
+}
+
+base::WeakPtr<syncer::ModelTypeControllerDelegate>
+AutofillWalletMetadataDelegateFromDataService(
+    autofill::AutofillWebDataService* service) {
+  return autofill::AutofillWalletMetadataSyncBridge::FromWebDataService(service)
       ->change_processor()
       ->GetControllerDelegateOnUIThread();
 }
@@ -115,32 +146,61 @@ ProfileSyncComponentsFactoryImpl::CreateCommonDataTypeControllers(
       controllers.push_back(
           std::make_unique<autofill::WebDataModelTypeController>(
               syncer::AUTOFILL, sync_client_, db_thread_, web_data_service_,
-              base::BindRepeating(&DelegateFromDataService)));
+              base::BindRepeating(&AutocompleteDelegateFromDataService)));
     }
 
     // Autofill sync is enabled by default.  Register unless explicitly
     // disabled.
     if (!disabled_types.Has(syncer::AUTOFILL_PROFILE)) {
-      controllers.push_back(std::make_unique<AutofillProfileDataTypeController>(
-          db_thread_, error_callback, sync_client_, web_data_service_));
+      if (FeatureList::IsEnabled(switches::kSyncUSSAutofillProfile)) {
+        controllers.push_back(
+            std::make_unique<autofill::WebDataModelTypeController>(
+                syncer::AUTOFILL_PROFILE, sync_client_, db_thread_,
+                web_data_service_,
+                base::BindRepeating(&AutofillProfileDelegateFromDataService)));
+      } else {
+        controllers.push_back(
+            std::make_unique<AutofillProfileDataTypeController>(
+                db_thread_, error_callback, sync_client_, web_data_service_));
+      }
     }
 
     // Wallet data sync is enabled by default, but behind a syncer experiment
     // enforced by the datatype controller. Register unless explicitly disabled.
     bool wallet_disabled = disabled_types.Has(syncer::AUTOFILL_WALLET_DATA);
     if (!wallet_disabled) {
-      controllers.push_back(std::make_unique<AutofillWalletDataTypeController>(
-          syncer::AUTOFILL_WALLET_DATA, db_thread_, error_callback,
-          sync_client_, web_data_service_));
+      if (base::FeatureList::IsEnabled(switches::kSyncUSSAutofillWalletData)) {
+        controllers.push_back(
+            std::make_unique<autofill::WebDataModelTypeController>(
+                syncer::AUTOFILL_WALLET_DATA, sync_client_, db_thread_,
+                web_data_service_,
+                base::BindRepeating(&AutofillWalletDelegateFromDataService)));
+      } else {
+        controllers.push_back(
+            std::make_unique<AutofillWalletDataTypeController>(
+                syncer::AUTOFILL_WALLET_DATA, db_thread_, error_callback,
+                sync_client_, web_data_service_));
+      }
     }
 
     // Wallet metadata sync depends on Wallet data sync. Register if Wallet data
     // is syncing and metadata sync is not explicitly disabled.
     if (!wallet_disabled &&
         !disabled_types.Has(syncer::AUTOFILL_WALLET_METADATA)) {
-      controllers.push_back(std::make_unique<AutofillWalletDataTypeController>(
-          syncer::AUTOFILL_WALLET_METADATA, db_thread_, error_callback,
-          sync_client_, web_data_service_));
+      if (base::FeatureList::IsEnabled(
+              switches::kSyncUSSAutofillWalletMetadata)) {
+        controllers.push_back(
+            std::make_unique<autofill::WebDataModelTypeController>(
+                syncer::AUTOFILL_WALLET_METADATA, sync_client_, db_thread_,
+                web_data_service_,
+                base::BindRepeating(
+                    &AutofillWalletMetadataDelegateFromDataService)));
+      } else {
+        controllers.push_back(
+            std::make_unique<AutofillWalletDataTypeController>(
+                syncer::AUTOFILL_WALLET_METADATA, db_thread_, error_callback,
+                sync_client_, web_data_service_));
+      }
     }
   }
 
@@ -226,13 +286,6 @@ ProfileSyncComponentsFactoryImpl::CreateCommonDataTypeControllers(
     controllers.push_back(std::make_unique<AsyncDirectoryTypeController>(
         syncer::PRIORITY_PREFERENCES, error_callback, sync_client_,
         syncer::GROUP_UI, ui_thread_));
-  }
-
-  // Article sync is disabled by default.  Register only if explicitly enabled.
-  if (dom_distiller::IsEnableSyncArticlesSet()) {
-    controllers.push_back(std::make_unique<AsyncDirectoryTypeController>(
-        syncer::ARTICLES, error_callback, sync_client_, syncer::GROUP_UI,
-        ui_thread_));
   }
 
 #if defined(OS_CHROMEOS)

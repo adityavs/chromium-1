@@ -61,33 +61,25 @@ void VrGLThread::SetInputConnection(VrInputConnection* input_connection) {
 }
 
 void VrGLThread::Init() {
-  bool keyboard_enabled =
-      !ui_initial_state_.web_vr_autopresentation_expected;
-  if (keyboard_enabled) {
-    keyboard_delegate_ = GvrKeyboardDelegate::Create();
-    text_input_delegate_ = std::make_unique<TextInputDelegate>();
-  }
-  auto* keyboard_delegate =
-      !keyboard_delegate_ ? nullptr : keyboard_delegate_.get();
-  if (!keyboard_delegate)
+  keyboard_delegate_ = GvrKeyboardDelegate::Create();
+  text_input_delegate_ = std::make_unique<TextInputDelegate>();
+  if (!keyboard_delegate_.get())
     ui_initial_state_.needs_keyboard_update = true;
 
   audio_delegate_ = std::make_unique<SoundsManagerAudioDelegate>();
 
-  auto ui = std::make_unique<Ui>(this, this, keyboard_delegate,
+  auto ui = std::make_unique<Ui>(this, this, keyboard_delegate_.get(),
                                  text_input_delegate_.get(),
                                  audio_delegate_.get(), ui_initial_state_);
-  if (keyboard_enabled) {
-    text_input_delegate_->SetRequestFocusCallback(
-        base::BindRepeating(&Ui::RequestFocus, base::Unretained(ui.get())));
-    text_input_delegate_->SetRequestUnfocusCallback(
-        base::BindRepeating(&Ui::RequestUnfocus, base::Unretained(ui.get())));
-    if (keyboard_delegate) {
-      keyboard_delegate_->SetUiInterface(ui.get());
-      text_input_delegate_->SetUpdateInputCallback(
-          base::BindRepeating(&GvrKeyboardDelegate::UpdateInput,
-                              base::Unretained(keyboard_delegate_.get())));
-    }
+  text_input_delegate_->SetRequestFocusCallback(base::BindRepeating(
+      &UiInterface::RequestFocus, base::Unretained(ui.get())));
+  text_input_delegate_->SetRequestUnfocusCallback(base::BindRepeating(
+      &UiInterface::RequestUnfocus, base::Unretained(ui.get())));
+  if (keyboard_delegate_.get()) {
+    keyboard_delegate_->SetUiInterface(ui.get());
+    text_input_delegate_->SetUpdateInputCallback(
+        base::BindRepeating(&GvrKeyboardDelegate::UpdateInput,
+                            base::Unretained(keyboard_delegate_.get())));
   }
 
   vr_shell_gl_ = std::make_unique<VrShellGl>(
@@ -139,17 +131,11 @@ void VrGLThread::GvrDelegateReady(gvr::ViewerType viewer_type) {
       base::BindOnce(&VrShell::GvrDelegateReady, weak_vr_shell_, viewer_type));
 }
 
-void VrGLThread::SendRequestPresentReply(
-    bool success,
-    device::mojom::VRSubmitFrameClientRequest request,
-    device::mojom::VRPresentationProviderPtr provider,
-    device::mojom::VRDisplayFrameTransportOptionsPtr transport_options) {
+void VrGLThread::SendRequestPresentReply(device::mojom::XRSessionPtr session) {
   DCHECK(OnGlThread());
   main_thread_task_runner_->PostTask(
-      FROM_HERE,
-      base::BindOnce(&VrShell::SendRequestPresentReply, weak_vr_shell_, success,
-                     std::move(request), provider.PassInterface(),
-                     std::move(transport_options)));
+      FROM_HERE, base::BindOnce(&VrShell::SendRequestPresentReply,
+                                weak_vr_shell_, std::move(session)));
 }
 
 void VrGLThread::UpdateGamepadData(device::GvrGamepadData pad) {
@@ -159,9 +145,8 @@ void VrGLThread::UpdateGamepadData(device::GvrGamepadData pad) {
       base::BindOnce(&VrShell::UpdateGamepadData, weak_vr_shell_, pad));
 }
 
-void VrGLThread::ForwardEventToContent(
-    std::unique_ptr<blink::WebInputEvent> event,
-    int content_id) {
+void VrGLThread::ForwardEventToContent(std::unique_ptr<InputEvent> event,
+                                       int content_id) {
   DCHECK(OnGlThread());
   main_thread_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&VrShell::ProcessContentGesture, weak_vr_shell_,
@@ -192,8 +177,7 @@ void VrGLThread::RequestWebInputText(TextStateUpdateCallback callback) {
   input_connection_->RequestTextState(std::move(callback));
 }
 
-void VrGLThread::ForwardEventToPlatformUi(
-    std::unique_ptr<blink::WebInputEvent> event) {
+void VrGLThread::ForwardEventToPlatformUi(std::unique_ptr<InputEvent> event) {
   DCHECK(OnGlThread());
   main_thread_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&VrShell::ProcessDialogGesture, weak_vr_shell_,
@@ -320,12 +304,6 @@ void VrGLThread::OpenFeedback() {
   DCHECK(OnGlThread());
   main_thread_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&VrShell::OpenFeedback, weak_vr_shell_));
-}
-
-void VrGLThread::ExitCct() {
-  DCHECK(OnGlThread());
-  main_thread_task_runner_->PostTask(
-      FROM_HERE, base::BindOnce(&VrShell::ExitCct, weak_vr_shell_));
 }
 
 void VrGLThread::CloseHostedDialog() {

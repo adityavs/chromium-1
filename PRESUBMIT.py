@@ -593,7 +593,6 @@ _LONG_PATH_ERROR = (
 
 _JAVA_MULTIPLE_DEFINITION_EXCLUDED_PATHS = [
     r".*[\\\/]BuildHooksAndroidImpl\.java",
-    r".*[\\\/]ClassRegisterImpl\.java",
     r".*[\\\/]LicenseContentProvider\.java",
     r".*[\\\/]PlatformServiceBridgeImpl.java",
 ]
@@ -659,6 +658,7 @@ _KNOWN_ROBOTS = set(
               'fuchsia-sdk', 'nacl', 'pdfium', 'perfetto', 'skia',
               'src-internal', 'webrtc')
   ) | set('%s@appspot.gserviceaccount.com' % s for s in ('findit-for-me',)
+  ) | set('%s@developer.gserviceaccount.com' % s for s in ('3su6n15k.default',)
   ) | set('%s@chops-service-accounts.iam.gserviceaccount.com' % s
           for s in ('v8-ci-autoroll-builder',))
 
@@ -1864,6 +1864,7 @@ def _GetOwnersFilesToCheckForIpcOwners(input_api):
   # matching the above patterns, which trigger false positives.
   exclude_paths = [
       'third_party/crashpad/*',
+      'third_party/third_party/blink/renderer/platform/bindings/*',
       'third_party/win_build_output/*',
   ]
 

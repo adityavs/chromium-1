@@ -458,7 +458,7 @@ TEST_F(WorkspaceLayoutManagerTest, WindowShouldBeOnScreenWhenAdded) {
   // TODO: fix. This test verifies that when a window is added the bounds are
   // adjusted. CreateTestWindow() for mus adds, then sets the bounds (this comes
   // from NativeWidgetAura), which means this test now fails for aura-mus.
-  if (Shell::GetAshConfig() == Config::MASH)
+  if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
     return;
 
   // Normal window bounds shouldn't be changed.
@@ -1443,15 +1443,15 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, SpokenFeedbackFullscreenBackground) {
   window->SetProperty(kBackdropWindowMode, BackdropWindowMode::kEnabled);
   EXPECT_TRUE(test_helper.GetBackdropWindow());
 
-  ui::test::EventGenerator& generator = GetEventGenerator();
+  ui::test::EventGenerator* generator = GetEventGenerator();
 
-  generator.MoveMouseTo(300, 300);
-  generator.ClickLeftButton();
+  generator->MoveMouseTo(300, 300);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 
-  generator.MoveMouseRelativeTo(window.get(), 10, 10);
-  generator.ClickLeftButton();
+  generator->MoveMouseRelativeTo(window.get(), 10, 10);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 
@@ -1459,13 +1459,13 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, SpokenFeedbackFullscreenBackground) {
   controller->SetSpokenFeedbackEnabled(true, A11Y_NOTIFICATION_NONE);
   EXPECT_TRUE(controller->IsSpokenFeedbackEnabled());
 
-  generator.MoveMouseTo(300, 300);
-  generator.ClickLeftButton();
+  generator->MoveMouseTo(300, 300);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(chromeos::SOUND_VOLUME_ADJUST, client.GetPlayedEarconAndReset());
 
-  generator.MoveMouseRelativeTo(window.get(), 10, 10);
-  generator.ClickLeftButton();
+  generator->MoveMouseRelativeTo(window.get(), 10, 10);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 
@@ -1473,13 +1473,13 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, SpokenFeedbackFullscreenBackground) {
   controller->SetSpokenFeedbackEnabled(false, A11Y_NOTIFICATION_NONE);
   EXPECT_FALSE(controller->IsSpokenFeedbackEnabled());
 
-  generator.MoveMouseTo(300, 300);
-  generator.ClickLeftButton();
+  generator->MoveMouseTo(300, 300);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 
-  generator.MoveMouseTo(70, 70);
-  generator.ClickLeftButton();
+  generator->MoveMouseTo(70, 70);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 }
@@ -1622,14 +1622,14 @@ TEST_F(WorkspaceLayoutManagerBackdropTest, SpokenFeedbackForArc) {
   EXPECT_TRUE(test_helper.GetBackdropWindow());
 
   // Make sure that clicking the backdrop window will play sound.
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.MoveMouseTo(300, 300);
-  generator.ClickLeftButton();
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->MoveMouseTo(300, 300);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(chromeos::SOUND_VOLUME_ADJUST, client.GetPlayedEarconAndReset());
 
-  generator.MoveMouseTo(70, 70);
-  generator.ClickLeftButton();
+  generator->MoveMouseTo(70, 70);
+  generator->ClickLeftButton();
   controller->FlushMojoForTest();
   EXPECT_EQ(kNoSoundKey, client.GetPlayedEarconAndReset());
 }
@@ -1805,7 +1805,7 @@ TEST_F(WorkspaceLayoutManagerKeyboardTest,
 
   // Open keyboard in non-sticky mode.
   kb_controller->ShowKeyboard(false);
-  kb_controller->ui()->GetContentsWindow()->SetBounds(
+  kb_controller->ui()->GetKeyboardWindow()->SetBounds(
       keyboard::KeyboardBoundsFromRootBounds(
           Shell::GetPrimaryRootWindow()->bounds(), 100));
 
@@ -1817,10 +1817,10 @@ TEST_F(WorkspaceLayoutManagerKeyboardTest,
 
   // Open keyboard in sticky mode.
   kb_controller->ShowKeyboard(true);
-  kb_controller->NotifyContentsLoaded();
+  kb_controller->NotifyKeyboardWindowLoaded();
 
   int shift =
-      work_area.height() - kb_controller->GetContentsWindow()->bounds().y();
+      work_area.height() - kb_controller->GetKeyboardWindow()->bounds().y();
   gfx::Rect changed_window_bounds(orig_window_bounds);
   changed_window_bounds.Offset(0, -shift);
   // Window should be shifted up.

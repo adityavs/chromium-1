@@ -20,6 +20,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chromeos/crostini/crostini_manager.h"
+#include "chrome/browser/chromeos/crostini/crostini_package_installer_service.h"
 #include "chrome/browser/chromeos/crostini/crostini_util.h"
 #include "chrome/browser/chromeos/drive/file_system_util.h"
 #include "chrome/browser/chromeos/extensions/file_manager/private_api_util.h"
@@ -358,8 +359,6 @@ bool FileManagerPrivateRequestWebStoreAccessTokenFunction::RunAsync() {
 
   ProfileOAuth2TokenService* oauth_service =
       ProfileOAuth2TokenServiceFactory::GetForProfile(GetProfile());
-  net::URLRequestContextGetter* url_request_context_getter =
-      g_browser_process->system_request_context();
 
   if (!oauth_service) {
     drive::EventLogger* logger = file_manager::util::GetLogger(GetProfile());
@@ -376,7 +375,6 @@ bool FileManagerPrivateRequestWebStoreAccessTokenFunction::RunAsync() {
       SigninManagerFactory::GetForProfile(GetProfile());
   auth_service_ = std::make_unique<google_apis::AuthService>(
       oauth_service, signin_manager->GetAuthenticatedAccountId(),
-      url_request_context_getter,
       g_browser_process->system_network_context_manager()
           ->GetSharedURLLoaderFactory(),
       scopes);
@@ -767,6 +765,56 @@ void FileManagerPrivateMountCrostiniContainerFunction::OnMountEvent(
   file_manager::VolumeManager::Get(browser_context())
       ->AddSshfsCrostiniVolume(mount_path);
   Respond(NoArguments());
+}
+
+ExtensionFunction::ResponseAction
+FileManagerPrivateInternalInstallLinuxPackageFunction::Run() {
+  using extensions::api::file_manager_private_internal::InstallLinuxPackage::
+      Params;
+  const std::unique_ptr<Params> params(Params::Create(*args_));
+  EXTENSION_FUNCTION_VALIDATE(params);
+
+  Profile* profile = Profile::FromBrowserContext(browser_context());
+  const scoped_refptr<storage::FileSystemContext> file_system_context =
+      file_manager::util::GetFileSystemContextForRenderFrameHost(
+          profile, render_frame_host());
+
+  std::string url =
+      file_manager::util::ConvertFileSystemURLToPathInsideCrostini(
+          profile, file_system_context->CrackURL(GURL(params->url)));
+  crostini::CrostiniPackageInstallerService::GetForProfile(profile)
+      ->InstallLinuxPackage(
+          kCrostiniDefaultVmName, kCrostiniDefaultContainerName, url,
+          base::BindOnce(
+              &FileManagerPrivateInternalInstallLinuxPackageFunction::
+                  OnInstallLinuxPackage,
+              this));
+  return RespondLater();
+}
+
+void FileManagerPrivateInternalInstallLinuxPackageFunction::
+    OnInstallLinuxPackage(crostini::ConciergeClientResult result,
+                          const std::string& failure_reason) {
+  extensions::api::file_manager_private::InstallLinuxPackageResponse response;
+  switch (result) {
+    case crostini::ConciergeClientResult::SUCCESS:
+      response = extensions::api::file_manager_private::
+          INSTALL_LINUX_PACKAGE_RESPONSE_STARTED;
+      break;
+    case crostini::ConciergeClientResult::INSTALL_LINUX_PACKAGE_FAILED:
+      response = extensions::api::file_manager_private::
+          INSTALL_LINUX_PACKAGE_RESPONSE_FAILED;
+      break;
+    case crostini::ConciergeClientResult::INSTALL_LINUX_PACKAGE_ALREADY_ACTIVE:
+      response = extensions::api::file_manager_private::
+          INSTALL_LINUX_PACKAGE_RESPONSE_INSTALL_ALREADY_ACTIVE;
+      break;
+    default:
+      NOTREACHED();
+  }
+  Respond(ArgumentList(
+      extensions::api::file_manager_private_internal::InstallLinuxPackage::
+          Results::Create(response, failure_reason)));
 }
 
 FileManagerPrivateInternalGetCustomActionsFunction::

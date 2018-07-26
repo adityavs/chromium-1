@@ -37,7 +37,7 @@ scoped_refptr<TokenWebData> TestSigninClient::GetDatabase() {
 bool TestSigninClient::CanRevokeCredentials() { return true; }
 
 std::string TestSigninClient::GetSigninScopedDeviceId() {
-  return std::string();
+  return "DeviceID";
 }
 
 void TestSigninClient::OnSignedOut() {}
@@ -77,13 +77,6 @@ void TestSigninClient::LoadTokenDatabase() {
                        base::ThreadTaskRunnerHandle::Get(),
                        WebDataServiceBase::ProfileErrorCallback());
   database_->Init();
-}
-
-std::unique_ptr<SigninClient::CookieChangeSubscription>
-TestSigninClient::AddCookieChangeCallback(const GURL& url,
-                                          const std::string& name,
-                                          net::CookieChangeCallback callback) {
-  return std::make_unique<SigninClient::CookieChangeSubscription>();
 }
 
 void TestSigninClient::SetNetworkCallsDelayed(bool value) {
@@ -127,8 +120,9 @@ void TestSigninClient::DelayNetworkCall(const base::Closure& callback) {
 std::unique_ptr<GaiaAuthFetcher> TestSigninClient::CreateGaiaAuthFetcher(
     GaiaAuthConsumer* consumer,
     const std::string& source,
-    net::URLRequestContextGetter* getter) {
-  return std::make_unique<GaiaAuthFetcher>(consumer, source, getter);
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+  return std::make_unique<GaiaAuthFetcher>(consumer, source,
+                                           url_loader_factory);
 }
 
 void TestSigninClient::PreGaiaLogout(base::OnceClosure callback) {

@@ -9,14 +9,13 @@ mojom("interfaces") {
   sources = [
     "accessibility_manager.mojom",
     "event_injector.mojom",
-    "event_matcher.mojom",
     "gpu.mojom",
+    "remoting_event_injector.mojom",
     "screen_provider.mojom",
     "user_activity_monitor.mojom",
     "video_detector.mojom",
     "window_manager.mojom",
     "window_manager_constants.mojom",
-    "window_manager_window_tree_factory.mojom",
     "window_server_test.mojom",
     "window_tree.mojom",
     "window_tree_constants.mojom",
@@ -52,6 +51,23 @@ mojom("interfaces") {
     sources += [ "arc.mojom" ]
     public_deps += [ "//components/arc/common:media" ]
   }
+}
+
+mojom("test_interfaces") {
+  testonly = true
+
+  sources = [
+    "test_event_injector.mojom",
+  ]
+
+  import_dirs = [
+    get_path_info("../../../..", "abspath"),
+    "//mojo/services",
+  ]
+
+  public_deps = [
+    "//ui/events/mojo:interfaces",
+  ]
 }
 
 mojom("constants") {

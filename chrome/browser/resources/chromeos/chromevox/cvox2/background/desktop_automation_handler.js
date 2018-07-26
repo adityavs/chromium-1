@@ -63,6 +63,8 @@ DesktopAutomationHandler = function(node) {
   this.addListener_(EventType.CHILDREN_CHANGED, this.onChildrenChanged);
   this.addListener_(
       EventType.DOCUMENT_SELECTION_CHANGED, this.onDocumentSelectionChanged);
+  this.addListener_(
+      EventType.DOCUMENT_TITLE_CHANGED, this.onDocumentTitleChanged);
   this.addListener_(EventType.EXPANDED_CHANGED, this.onEventIfInRange);
   this.addListener_(EventType.FOCUS, this.onFocus);
   this.addListener_(EventType.HOVER, this.onHover);
@@ -247,6 +249,10 @@ DesktopAutomationHandler.prototype = {
     if (ChromeVoxState.instance.currentRange &&
         target == ChromeVoxState.instance.currentRange.start.node)
       return;
+
+    if (!this.createTextEditHandlerIfNeeded_(target))
+      this.textEditHandler_ = null;
+
     Output.forceModeForNextSpeechUtterance(cvox.QueueMode.FLUSH);
     this.onEventDefault(
         new CustomAutomationEvent(evt.type, target, evt.eventFrom));
@@ -308,6 +314,13 @@ DesktopAutomationHandler.prototype = {
   onChildrenChanged: function(evt) {
     var curRange = ChromeVoxState.instance.currentRange;
 
+    // views::TextField blinks by making its cursor view alternate between
+    // visible and not visible. This results in a children changed event on its
+    // parent (the text field itself). In general, text field feedback should be
+    // given within text field specific events.
+    if (evt.target.role == RoleType.TEXT_FIELD)
+      return;
+
     // Always refresh the braille contents.
     if (curRange && curRange.equals(cursors.Range.fromNode(evt.target))) {
       new Output()
@@ -328,17 +341,22 @@ DesktopAutomationHandler.prototype = {
 
     // Editable selection.
     if (anchor.state[StateType.EDITABLE]) {
-      // Ignore selection changes we triggered.
-      if (evt.eventFrom == 'action' &&
-          !DesktopAutomationHandler.announceActions)
-        return;
-
       anchor = AutomationUtil.getEditableRoot(anchor) || anchor;
       this.onEditableChanged_(
           new CustomAutomationEvent(evt.type, anchor, evt.eventFrom));
     }
 
     // Non-editable selections are handled in |Background|.
+  },
+
+  /**
+   * @param {!AutomationEvent} evt
+   */
+  onDocumentTitleChanged: function(evt) {
+    var t = evt.target;
+    var output = new Output();
+    output.format('$name', t);
+    output.go();
   },
 
   /**

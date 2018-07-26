@@ -33,7 +33,7 @@ class TestConfirmQuitBubbleController : public ConfirmQuitBubbleController {
  public:
   TestConfirmQuitBubbleController(
       std::unique_ptr<ConfirmQuitBubbleBase> bubble,
-      std::unique_ptr<base::Timer> hide_timer,
+      std::unique_ptr<base::OneShotTimer> hide_timer,
       std::unique_ptr<gfx::SlideAnimation> animation)
       : ConfirmQuitBubbleController(std::move(bubble),
                                     std::move(hide_timer),
@@ -73,8 +73,7 @@ class ConfirmQuitBubbleControllerTest : public testing::Test {
   void SetUp() override {
     std::unique_ptr<TestConfirmQuitBubble> bubble =
         std::make_unique<TestConfirmQuitBubble>();
-    std::unique_ptr<base::MockTimer> timer =
-        std::make_unique<base::MockTimer>(false, false);
+    auto timer = std::make_unique<base::MockOneShotTimer>();
     bubble_ = bubble.get();
     timer_ = timer.get();
     controller_.reset(new TestConfirmQuitBubbleController(
@@ -112,7 +111,9 @@ class ConfirmQuitBubbleControllerTest : public testing::Test {
   TestConfirmQuitBubble* bubble_;
 
   // Owned by |controller_|.
-  base::MockTimer* timer_;
+  base::MockOneShotTimer* timer_;
+
+  bool quit_called_ = false;
 };
 
 // Pressing and holding the shortcut should quit.

@@ -50,6 +50,7 @@
 #include "third_party/blink/renderer/platform/geometry/float_quad.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/graphics/compositing_reasons.h"
+#include "third_party/blink/renderer/platform/graphics/image_orientation.h"
 #include "third_party/blink/renderer/platform/graphics/paint/display_item_client.h"
 #include "third_party/blink/renderer/platform/graphics/paint_invalidation_reason.h"
 #include "third_party/blink/renderer/platform/graphics/touch_action_rect.h"
@@ -72,7 +73,6 @@ class LayoutMultiColumnSpannerPlaceholder;
 class LayoutView;
 class LocalFrameView;
 class NGPhysicalBoxFragment;
-class ObjectPaintProperties;
 class PaintLayer;
 class PseudoStyleRequest;
 
@@ -1140,9 +1140,7 @@ class CORE_EXPORT LayoutObject : public ImageResourceObserver,
     bitfields_.SetCanContainFixedPositionObjects(can_contain_fixed_position);
   }
 
-  // paintOffset is the offset from the origin of the GraphicsContext at which
-  // to paint the current object.
-  virtual void Paint(const PaintInfo&, const LayoutPoint& paint_offset) const;
+  virtual void Paint(const PaintInfo&) const;
 
   virtual bool RecalcOverflowAfterStyleChange();
 

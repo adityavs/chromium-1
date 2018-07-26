@@ -22,10 +22,12 @@
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/public/web/commit_result.mojom-shared.h"
 #include "third_party/blink/public/web/selection_menu_behavior.mojom-shared.h"
+#include "third_party/blink/public/web/web_document_loader.h"
 #include "third_party/blink/public/web/web_frame.h"
 #include "third_party/blink/public/web/web_frame_load_type.h"
 #include "third_party/blink/public/web/web_history_item.h"
 #include "third_party/blink/public/web/web_ime_text_span.h"
+#include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_text_direction.h"
 #include "v8/include/v8.h"
 
@@ -37,7 +39,6 @@ class WebAssociatedURLLoader;
 class WebAutofillClient;
 class WebContentSettingsClient;
 class WebData;
-class WebDocumentLoader;
 class WebDocument;
 class WebDoubleSize;
 class WebDOMEvent;
@@ -214,7 +215,9 @@ class WebLocalFrame : public WebFrame {
       WebFrameLoadType,
       const WebHistoryItem&,
       bool is_client_redirect,
-      const base::UnguessableToken& devtools_navigation_token) = 0;
+      const base::UnguessableToken& devtools_navigation_token,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+      const WebNavigationTimings& navigation_timings) = 0;
 
   // Commits a same-document navigation in the frame. For history navigations, a
   // valid WebHistoryItem should be provided. Returns CommitResult::Ok if the
@@ -247,11 +250,13 @@ class WebLocalFrame : public WebFrame {
       const WebString& mime_type,
       const WebString& text_encoding,
       const WebURL& base_url,
-      const WebURL& unreachable_url = WebURL(),
-      bool replace = false,
-      WebFrameLoadType = WebFrameLoadType::kStandard,
-      const WebHistoryItem& = WebHistoryItem(),
-      bool is_client_redirect = false) = 0;
+      const WebURL& unreachable_url,
+      bool replace,
+      WebFrameLoadType,
+      const WebHistoryItem&,
+      bool is_client_redirect,
+      std::unique_ptr<WebDocumentLoader::ExtraData> navigation_data,
+      const WebNavigationTimings& navigation_timings) = 0;
 
   // Returns the document loader that is currently loading.  May be null.
   virtual WebDocumentLoader* GetProvisionalDocumentLoader() const = 0;
@@ -682,6 +687,26 @@ class WebLocalFrame : public WebFrame {
   virtual void SetTickmarks(const WebVector<WebRect>&) = 0;
 
   virtual WebPlugin* GetWebPluginForFind() = 0;
+
+  // Notifies how many matches have been found in this frame so far, for a
+  // given identifier.  |final_update| specifies whether this is the last
+  // update for this frame.
+  virtual void ReportFindInPageMatchCount(int identifier,
+                                          int count,
+                                          bool final_update) = 0;
+
+  // Notifies what tick-mark rect is currently selected.   The given
+  // identifier lets the client know which request this message belongs
+  // to, so that it can choose to ignore the message if it has moved on
+  // to other things.  The selection rect is expected to have coordinates
+  // relative to the top left corner of the web page area and represent
+  // where on the screen the selection rect is currently located.
+  // |final_update| specifies whether this is the last update for this
+  // frame.
+  virtual void ReportFindInPageSelection(int identifier,
+                                         int active_match_ordinal,
+                                         const WebRect& selection,
+                                         bool final_update) = 0;
 
   // Context menu -----------------------------------------------------------
 

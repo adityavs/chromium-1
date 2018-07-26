@@ -25,10 +25,17 @@ namespace blink {
 class CanvasContextCreationAttributesCore;
 class CanvasResourceProvider;
 class ImageBitmap;
+#if defined(SUPPORT_WEBGL2_COMPUTE_CONTEXT)
+class
+    OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrWebGL2ComputeRenderingContext;
+typedef OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrWebGL2ComputeRenderingContext
+    OffscreenRenderingContext;
+#else
 class
     OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContext;
 typedef OffscreenCanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContext
     OffscreenRenderingContext;
+#endif
 
 class CORE_EXPORT OffscreenCanvas final
     : public EventTargetWithInlineData,
@@ -61,13 +68,9 @@ class CORE_EXPORT OffscreenCanvas final
   const IntSize& Size() const override { return size_; }
   void SetSize(const IntSize&);
 
-  void SetPlaceholderCanvasId(DOMNodeId canvas_id) {
-    placeholder_canvas_id_ = canvas_id;
-  }
+  void SetPlaceholderCanvasId(DOMNodeId canvas_id);
   DOMNodeId PlaceholderCanvasId() const { return placeholder_canvas_id_; }
-  bool HasPlaceholderCanvas() {
-    return placeholder_canvas_id_ != kInvalidDOMNodeId;
-  }
+  bool HasPlaceholderCanvas() const;
   bool IsNeutered() const override { return is_neutered_; }
   void SetNeutered();
   CanvasRenderingContext* GetCanvasRenderingContext(
@@ -99,17 +102,23 @@ class CORE_EXPORT OffscreenCanvas final
   void FinalizeFrame() override {}
   void DetachContext() override { context_ = nullptr; }
   CanvasRenderingContext* RenderingContext() const override { return context_; }
-  void PushFrame(scoped_refptr<StaticBitmapImage> image,
+  void PushFrameIfNeeded();
+  void PushFrame(scoped_refptr<CanvasResource> frame,
                  const SkIRect& damage_rect) override;
   void DidDraw(const FloatRect&) override;
   void DidDraw() override;
-  void Commit(scoped_refptr<StaticBitmapImage> bitmap_image,
+  void Commit(scoped_refptr<CanvasResource> bitmap_image,
               const SkIRect& damage_rect) override;
+  bool ShouldAccelerate2dContext() const override;
+  unsigned GetMSAASampleCountFor2dContext() const override { return 0; }
+  CanvasResourceDispatcher* GetOrCreateResourceDispatcher() override;
 
   // Partial CanvasResourceHost implementation
   void NotifyGpuContextLost() override {}
   void SetNeedsCompositingUpdate() override {}
-  void UpdateMemoryUsage() override { /*TODO(crbug.com/842693): implement*/
+  void UpdateMemoryUsage() override {}  // TODO(crbug.com/842693): implement
+  SkFilterQuality FilterQuality() const override {
+    return kLow_SkFilterQuality;  // TODO(crbug.com/856654)
   }
 
   // EventTarget implementation
@@ -156,8 +165,6 @@ class CORE_EXPORT OffscreenCanvas final
   bool IsWebGL2Enabled() const override { return true; }
   bool IsWebGLBlocked() const override { return false; }
 
-  void RegisterContextToDispatch(CanvasRenderingContext*) override;
-
   FontSelector* GetFontSelector() override;
 
   void Trace(blink::Visitor*) override;
@@ -165,7 +172,6 @@ class CORE_EXPORT OffscreenCanvas final
  private:
   friend class OffscreenCanvasTest;
   explicit OffscreenCanvas(const IntSize&);
-  CanvasResourceDispatcher* GetOrCreateFrameDispatcher();
   using ContextFactoryVector =
       Vector<std::unique_ptr<CanvasRenderingContextFactory>>;
   static ContextFactoryVector& RenderingContextFactories();
@@ -187,6 +193,7 @@ class CORE_EXPORT OffscreenCanvas final
   SkIRect current_frame_damage_rect_;
 
   bool needs_matrix_clip_restore_ = false;
+  bool needs_push_frame_ = false;
 
   // cc::FrameSinkId is broken into two integer components as this can be used
   // in transfer of OffscreenCanvas across threads

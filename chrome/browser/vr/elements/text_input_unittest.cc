@@ -22,7 +22,6 @@
 #include "chrome/browser/vr/ui_scene_constants.h"
 #include "chrome/browser/vr/ui_scene_creator.h"
 #include "testing/gmock/include/gmock/gmock.h"
-#include "third_party/blink/public/platform/web_gesture_event.h"
 #include "ui/gfx/render_text.h"
 
 using ::testing::_;
@@ -39,7 +38,7 @@ class TextInputSceneTest : public UiTest {
  public:
   void SetUp() override {
     UiTest::SetUp();
-    CreateScene(kNotInCct, kNotInWebVr);
+    CreateScene(kNotInWebVr);
 
     // Make test text input.
     text_input_delegate_ =
@@ -303,6 +302,41 @@ TEST(TextInputTest, CursorPositionUpdatesOnClicks) {
   element->OnButtonDown(gfx::PointF(0.5, 0.5), base::TimeTicks());
   element->OnButtonUp(gfx::PointF(0.5, 0.5), base::TimeTicks());
   EXPECT_EQ(element->edited_text().current.SelectionSize(), 0u);
+}
+
+TEST(TextInputTest, TextSelectionUpdatesOnTouchMove) {
+  auto element = std::make_unique<TextInput>(
+      kFontHeightMeters, TextInput::OnInputEditedCallback());
+  element->SetSize(1.0, 0);
+
+  EditedText info(TextInputInfo(
+      base::UTF8ToUTF16("this is a long text with the cursor at the beginning"),
+      0, 0));
+  element->UpdateInput(info);
+  element->get_text_element()->PrepareToDrawForTest();
+  EXPECT_EQ(element->edited_text().current.SelectionSize(), 0u);
+
+  // Click on the left edge of the field.
+  element->OnButtonDown(gfx::PointF(0.0, 0.5), base::TimeTicks());
+  EXPECT_EQ(element->edited_text().current.selection_start, 0);
+  EXPECT_EQ(element->edited_text().current.selection_end, 0);
+
+  element->OnTouchMove(gfx::PointF(0.5, 0.5), base::TimeTicks());
+  EXPECT_EQ(element->edited_text().current.selection_start, 0);
+  auto end1 = element->edited_text().current.selection_end;
+  EXPECT_GT(end1, 0);
+
+  // Move to the right edge of the field.
+  element->OnTouchMove(gfx::PointF(1.0, 0.5), base::TimeTicks());
+  EXPECT_EQ(element->edited_text().current.selection_start, 0);
+  auto end2 = element->edited_text().current.selection_end;
+  EXPECT_GT(end2, end1);
+
+  // Move past the right edge of the field and release.
+  element->OnTouchMove(gfx::PointF(2.0, 0.5), base::TimeTicks());
+  element->OnButtonUp(gfx::PointF(2.0, 0.5), base::TimeTicks());
+  auto end3 = element->edited_text().current.selection_end;
+  EXPECT_GT(end3, end2);
 }
 
 }  // namespace vr

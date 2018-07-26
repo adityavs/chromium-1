@@ -54,7 +54,6 @@
 #include "content/browser/loader/stream_resource_handler.h"
 #include "content/browser/loader/throttling_resource_handler.h"
 #include "content/browser/loader/upload_data_stream_builder.h"
-#include "content/browser/loader/wake_lock_resource_throttle.h"
 #include "content/browser/resource_context_impl.h"
 #include "content/browser/service_worker/service_worker_context_wrapper.h"
 #include "content/browser/service_worker/service_worker_navigation_handle_core.h"
@@ -318,8 +317,6 @@ ResourceDispatcherHostImpl::ResourceDispatcherHostImpl(
           max_num_in_flight_requests_ * kMaxRequestsPerProcessRatio)),
       max_outstanding_requests_cost_per_process_(
           kMaxOutstandingRequestsCostPerProcess),
-      largest_outstanding_request_count_seen_(0),
-      largest_outstanding_request_per_process_count_seen_(0),
       delegate_(nullptr),
       loader_delegate_(nullptr),
       allow_cross_origin_auth_prompt_(false),
@@ -601,13 +598,6 @@ void ResourceDispatcherHostImpl::DidReceiveResponse(
     network::ResourceResponse* response) {
   ResourceRequestInfoImpl* info = loader->GetRequestInfo();
   net::URLRequest* request = loader->request();
-  if (request->was_fetched_via_proxy() &&
-      request->was_fetched_via_spdy() &&
-      request->url().SchemeIs(url::kHttpScheme)) {
-    scheduler_->OnReceivedSpdyProxiedHttpResponse(
-        info->GetChildID(), info->GetRouteID());
-  }
-
   if (delegate_)
     delegate_->OnResponseStarted(request, info->GetContext(), response);
 }
@@ -615,39 +605,9 @@ void ResourceDispatcherHostImpl::DidReceiveResponse(
 void ResourceDispatcherHostImpl::DidFinishLoading(ResourceLoader* loader) {
   ResourceRequestInfoImpl* info = loader->GetRequestInfo();
 
-  base::TimeDelta request_loading_time(base::TimeTicks::Now() -
-                                       loader->request()->creation_time());
-
   // Record final result of all resource loads.
   if (info->GetResourceType() == RESOURCE_TYPE_MAIN_FRAME) {
-    // This enumeration has "3" appended to its name to distinguish it from
-    // older versions.
-    base::UmaHistogramSparse("Net.ErrorCodesForMainFrame3",
-                             -loader->request()->status().error());
-    if (loader->request()->status().error() == net::OK) {
-      UMA_HISTOGRAM_LONG_TIMES("Net.RequestTime2Success.MainFrame",
-                               request_loading_time);
-    }
-    if (loader->request()->status().error() == net::ERR_ABORTED) {
-      UMA_HISTOGRAM_CUSTOM_COUNTS("Net.ErrAborted.SentBytes",
-                                  loader->request()->GetTotalSentBytes(), 1,
-                                  50000000, 50);
-      UMA_HISTOGRAM_CUSTOM_COUNTS("Net.ErrAborted.ReceivedBytes",
-                                  loader->request()->GetTotalReceivedBytes(), 1,
-                                  50000000, 50);
-    }
-
     if (loader->request()->url().SchemeIsCryptographic()) {
-      if (loader->request()->url().host_piece() == "www.google.com") {
-        base::UmaHistogramSparse("Net.ErrorCodesForHTTPSGoogleMainFrame2",
-                                 -loader->request()->status().error());
-      }
-
-      if (net::IsTLS13ExperimentHost(loader->request()->url().host_piece())) {
-        base::UmaHistogramSparse("Net.ErrorCodesForTLS13ExperimentMainFrame",
-                                 -loader->request()->status().error());
-      }
-
       int num_valid_scts = std::count_if(
           loader->request()->ssl_info().signed_certificate_timestamps.begin(),
           loader->request()->ssl_info().signed_certificate_timestamps.end(),
@@ -655,18 +615,6 @@ void ResourceDispatcherHostImpl::DidFinishLoading(ResourceLoader* loader) {
       UMA_HISTOGRAM_COUNTS_100(
           "Net.CertificateTransparency.MainFrameValidSCTCount", num_valid_scts);
     }
-  } else {
-    if (loader->request()->status().error() == net::OK) {
-      UMA_HISTOGRAM_LONG_TIMES("Net.RequestTime2Success.Subresource",
-                               request_loading_time);
-    }
-    if (info->GetResourceType() == RESOURCE_TYPE_IMAGE) {
-      base::UmaHistogramSparse("Net.ErrorCodesForImages",
-                               -loader->request()->status().error());
-    }
-    // This enumeration has "2" appended to distinguish it from older versions.
-    base::UmaHistogramSparse("Net.ErrorCodesForSubresources2",
-                             -loader->request()->status().error());
   }
 
   if (delegate_)
@@ -1195,12 +1143,6 @@ ResourceDispatcherHostImpl::AddStandardHandlers(
                                 &throttles);
   }
 
-  if (request->has_upload()) {
-    // Request wake lock while uploading data.
-    throttles.push_back(
-        std::make_unique<WakeLockResourceThrottle>(request->url().host()));
-  }
-
   // The Clear-Site-Data throttle.
   std::unique_ptr<ResourceThrottle> clear_site_data_throttle =
       ClearSiteDataThrottle::MaybeCreateThrottleForRequest(request);
@@ -1491,21 +1433,6 @@ ResourceDispatcherHostImpl::IncrementOutstandingRequestsCount(
   DCHECK_GE(stats.num_requests, 0);
   UpdateOutstandingRequestsStats(*info, stats);
 
-  if (num_in_flight_requests_ > largest_outstanding_request_count_seen_) {
-    largest_outstanding_request_count_seen_ = num_in_flight_requests_;
-    UMA_HISTOGRAM_COUNTS_1M(
-        "Net.ResourceDispatcherHost.OutstandingRequests.Total",
-        largest_outstanding_request_count_seen_);
-  }
-
-  if (stats.num_requests >
-      largest_outstanding_request_per_process_count_seen_) {
-    largest_outstanding_request_per_process_count_seen_ = stats.num_requests;
-    UMA_HISTOGRAM_COUNTS_1M(
-        "Net.ResourceDispatcherHost.OutstandingRequests.PerProcess",
-        largest_outstanding_request_per_process_count_seen_);
-  }
-
   return stats;
 }
 
@@ -1540,10 +1467,6 @@ void ResourceDispatcherHostImpl::BeginNavigationRequest(
     AppCacheNavigationHandleCore* appcache_handle_core,
     uint32_t url_loader_options,
     const GlobalRequestID& global_request_id) {
-  // PlzNavigate: BeginNavigationRequest currently should only be used for the
-  // browser-side navigations project.
-  CHECK(IsBrowserSideNavigationEnabled());
-
   DCHECK(url_loader_client.is_bound());
   DCHECK(url_loader_request.is_pending());
 

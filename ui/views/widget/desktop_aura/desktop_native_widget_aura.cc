@@ -737,7 +737,6 @@ void DesktopNativeWidgetAura::Close() {
     return;
 
   content_window_->SuppressPaint();
-  content_window_->Hide();
 
   desktop_window_tree_host_->Close();
 }
@@ -870,7 +869,7 @@ void DesktopNativeWidgetAura::SetOpacity(float opacity) {
     desktop_window_tree_host_->SetOpacity(opacity);
 }
 
-void DesktopNativeWidgetAura::SetAspectRatio(const gfx::Size& aspect_ratio) {
+void DesktopNativeWidgetAura::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
   if (content_window_)
     desktop_window_tree_host_->SetAspectRatio(aspect_ratio);
 }

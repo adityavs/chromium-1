@@ -257,6 +257,7 @@ void RasterImplementationGLES::TexStorage2D(GLuint texture_id,
                          viz::TextureStorageFormat(texture->format), width,
                          height);
   } else {
+    DCHECK(GLSupportsFormat(texture->format));
     gl_->TexImage2D(texture->target, 0, viz::GLInternalFormat(texture->format),
                     width, height, 0, viz::GLDataFormat(texture->format),
                     viz::GLDataType(texture->format), nullptr);
@@ -302,12 +303,12 @@ void RasterImplementationGLES::UnpremultiplyAndDitherCopyCHROMIUM(
 }
 
 void RasterImplementationGLES::BeginRasterCHROMIUM(
-    GLuint texture_id,
     GLuint sk_color,
     GLuint msaa_sample_count,
     GLboolean can_use_lcd_text,
     GLint color_type,
-    const cc::RasterColorSpace& raster_color_space) {
+    const cc::RasterColorSpace& raster_color_space,
+    const GLbyte* mailbox) {
   NOTREACHED();
 }
 

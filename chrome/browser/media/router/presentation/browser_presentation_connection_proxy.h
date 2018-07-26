@@ -10,8 +10,8 @@
 #include "chrome/browser/media/router/route_message_observer.h"
 #include "chrome/common/media_router/media_route.h"
 #include "content/public/browser/presentation_service_delegate.h"
-#include "content/public/common/presentation_connection_message.h"
 #include "mojo/public/cpp/bindings/binding.h"
+#include "third_party/blink/public/mojom/presentation/presentation.mojom.h"
 
 namespace media_router {
 
@@ -57,7 +57,7 @@ class BrowserPresentationConnectionProxy
   ~BrowserPresentationConnectionProxy() override;
 
   // blink::mojom::PresentationConnection implementation
-  void OnMessage(content::PresentationConnectionMessage message,
+  void OnMessage(blink::mojom::PresentationConnectionMessagePtr message,
                  OnMessageCallback on_message_callback) override;
 
   // Underlying media route is always connected. Media route class does not
@@ -71,8 +71,7 @@ class BrowserPresentationConnectionProxy
 
   // RouteMessageObserver implementation.
   void OnMessagesReceived(
-      const std::vector<content::PresentationConnectionMessage>& messages)
-      override;
+      std::vector<mojom::RouteMessagePtr> messages) override;
 
  private:
   // |router_| not owned by this class.

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <sstream>
 #include <utility>
 
 #include "base/base64url.h"
@@ -22,10 +23,12 @@
 #include "chromeos/components/proximity_auth/remote_status_update.h"
 #include "components/cryptauth/cryptauth_enrollment_manager.h"
 #include "components/cryptauth/proto/cryptauth_api.pb.h"
+#include "components/cryptauth/proto/enum_util.h"
 #include "components/cryptauth/remote_device_loader.h"
 #include "components/cryptauth/remote_device_ref.h"
 #include "components/cryptauth/secure_context.h"
 #include "components/cryptauth/secure_message_delegate_impl.h"
+#include "components/cryptauth/software_feature_state.h"
 #include "components/prefs/pref_service.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/web_ui.h"
@@ -34,6 +37,16 @@
 namespace proximity_auth {
 
 namespace {
+
+constexpr const cryptauth::SoftwareFeature kAllSoftareFeatures[] = {
+    cryptauth::SoftwareFeature::BETTER_TOGETHER_HOST,
+    cryptauth::SoftwareFeature::BETTER_TOGETHER_CLIENT,
+    cryptauth::SoftwareFeature::EASY_UNLOCK_HOST,
+    cryptauth::SoftwareFeature::EASY_UNLOCK_CLIENT,
+    cryptauth::SoftwareFeature::MAGIC_TETHER_HOST,
+    cryptauth::SoftwareFeature::MAGIC_TETHER_CLIENT,
+    cryptauth::SoftwareFeature::SMS_CONNECT_HOST,
+    cryptauth::SoftwareFeature::SMS_CONNECT_CLIENT};
 
 // Keys in the JSON representation of a log message.
 const char kLogMessageTextKey[] = "text";
@@ -76,6 +89,7 @@ const char kExternalDeviceMobileHotspot[] = "hasMobileHotspot";
 const char kExternalDeviceIsArcPlusPlusEnrollment[] = "isArcPlusPlusEnrollment";
 const char kExternalDeviceIsPixelPhone[] = "isPixelPhone";
 const char kExternalDeviceConnectionStatus[] = "connectionStatus";
+const char kExternalDeviceFeatureStates[] = "featureStates";
 const char kExternalDeviceRemoteState[] = "remoteState";
 
 // The possible values of the |kExternalDeviceConnectionStatus| field.
@@ -101,6 +115,30 @@ std::unique_ptr<base::DictionaryValue> CreateSyncStateDictionary(
   sync_state->SetBoolean(kSyncStateOperationInProgress,
                          is_enrollment_in_progress);
   return sync_state;
+}
+
+std::string GenerateFeaturesString(const cryptauth::RemoteDeviceRef& device) {
+  std::stringstream ss;
+  ss << "{";
+
+  bool logged_feature = false;
+  for (const auto& software_feature : kAllSoftareFeatures) {
+    cryptauth::SoftwareFeatureState state =
+        device.GetSoftwareFeatureState(software_feature);
+
+    // Only log features with values.
+    if (state == cryptauth::SoftwareFeatureState::kNotSupported)
+      continue;
+
+    logged_feature = true;
+    ss << software_feature << ": " << state << ", ";
+  }
+
+  if (logged_feature)
+    ss.seekp(-2, ss.cur);  // Remove last ", " from the stream.
+
+  ss << "}";
+  return ss.str();
 }
 
 }  // namespace
@@ -431,9 +469,12 @@ void ProximityAuthWebUIHandler::ToggleConnection(const base::ListValue* args) {
 }
 
 void ProximityAuthWebUIHandler::OnCryptAuthClientError(
-    const std::string& error_message) {
-  PA_LOG(WARNING) << "CryptAuth request failed: " << error_message;
-  base::Value error_string(error_message);
+    cryptauth::NetworkRequestError error) {
+  PA_LOG(WARNING) << "CryptAuth request failed: " << error;
+
+  std::stringstream ss;
+  ss << error;
+  base::Value error_string(ss.str());
   web_ui()->CallJavascriptFunctionUnsafe("CryptAuthInterface.onError",
                                          error_string);
 }
@@ -616,9 +657,16 @@ ProximityAuthWebUIHandler::ExternalDeviceInfoToDictionary(
                         device_info.friendly_device_name());
   dictionary->SetString(kExternalDeviceBluetoothAddress,
                         device_info.bluetooth_address());
-  dictionary->SetBoolean(kExternalDeviceUnlockKey, device_info.unlock_key());
-  dictionary->SetBoolean(kExternalDeviceMobileHotspot,
-                         device_info.mobile_hotspot_supported());
+  dictionary->SetBoolean(
+      kExternalDeviceUnlockKey,
+      base::ContainsValue(device_info.enabled_software_features(),
+                          cryptauth::SoftwareFeatureEnumToString(
+                              cryptauth::SoftwareFeature::EASY_UNLOCK_HOST)));
+  dictionary->SetBoolean(
+      kExternalDeviceMobileHotspot,
+      base::ContainsValue(device_info.supported_software_features(),
+                          cryptauth::SoftwareFeatureEnumToString(
+                              cryptauth::SoftwareFeature::MAGIC_TETHER_HOST)));
   dictionary->SetBoolean(kExternalDeviceIsArcPlusPlusEnrollment,
                          device_info.arc_plus_plus());
   dictionary->SetBoolean(kExternalDeviceIsPixelPhone,
@@ -691,11 +739,18 @@ ProximityAuthWebUIHandler::RemoteDeviceToDictionary(
   dictionary->SetString(kExternalDevicePublicKeyTruncated,
                         remote_device.GetTruncatedDeviceIdForLogs());
   dictionary->SetString(kExternalDeviceFriendlyName, remote_device.name());
-  dictionary->SetBoolean(kExternalDeviceUnlockKey, remote_device.unlock_key());
+  dictionary->SetBoolean(kExternalDeviceUnlockKey,
+                         remote_device.GetSoftwareFeatureState(
+                             cryptauth::SoftwareFeature::EASY_UNLOCK_HOST) ==
+                             cryptauth::SoftwareFeatureState::kEnabled);
   dictionary->SetBoolean(kExternalDeviceMobileHotspot,
-                         remote_device.supports_mobile_hotspot());
+                         remote_device.GetSoftwareFeatureState(
+                             cryptauth::SoftwareFeature::MAGIC_TETHER_HOST) ==
+                             cryptauth::SoftwareFeatureState::kSupported);
   dictionary->SetString(kExternalDeviceConnectionStatus,
                         kExternalDeviceDisconnected);
+  dictionary->SetString(kExternalDeviceFeatureStates,
+                        GenerateFeaturesString(remote_device));
 
   // TODO(crbug.com/852836): Add kExternalDeviceIsArcPlusPlusEnrollment and
   // kExternalDeviceIsPixelPhone values to the dictionary once RemoteDevice
@@ -803,25 +858,27 @@ void ProximityAuthWebUIHandler::OnForceSyncNow(bool success) {
 
 void ProximityAuthWebUIHandler::OnSetSoftwareFeatureState(
     const std::string public_key,
-    const base::Optional<std::string>& error_code) {
+    chromeos::device_sync::mojom::NetworkRequestResult result_code) {
   std::string device_id =
       cryptauth::RemoteDeviceRef::GenerateDeviceId(public_key);
 
-  if (error_code) {
-    PA_LOG(ERROR) << "Failed to set SoftwareFeature state for device: "
-                  << device_id << ", error code: " << *error_code;
-  } else {
+  if (result_code ==
+      chromeos::device_sync::mojom::NetworkRequestResult::kSuccess) {
     PA_LOG(INFO) << "Successfully set SoftwareFeature state for device: "
                  << device_id;
+  } else {
+    PA_LOG(ERROR) << "Failed to set SoftwareFeature state for device: "
+                  << device_id << ", error code: " << result_code;
   }
 }
 
 void ProximityAuthWebUIHandler::OnFindEligibleDevices(
-    const base::Optional<std::string>& error_code,
+    chromeos::device_sync::mojom::NetworkRequestResult result_code,
     cryptauth::RemoteDeviceRefList eligible_devices,
     cryptauth::RemoteDeviceRefList ineligible_devices) {
-  if (error_code) {
-    PA_LOG(ERROR) << "Failed to find eligible devices: " << *error_code;
+  if (result_code !=
+      chromeos::device_sync::mojom::NetworkRequestResult::kSuccess) {
+    PA_LOG(ERROR) << "Failed to find eligible devices: " << result_code;
     return;
   }
 

@@ -21,12 +21,14 @@
 #include "base/task_runner_util.h"
 #include "base/task_scheduler/post_task.h"
 #include "base/time/time.h"
+#include "base/win/registry.h"
 #include "chrome/browser/conflicts/module_blacklist_cache_util_win.h"
 #include "chrome/browser/conflicts/module_database_win.h"
 #include "chrome/browser/conflicts/module_info_util_win.h"
 #include "chrome/browser/conflicts/module_list_filter_win.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_paths.h"
+#include "chrome/install_static/install_util.h"
 
 #if !defined(OFFICIAL_BUILD)
 #include "base/base_paths.h"
@@ -44,6 +46,15 @@ static constexpr size_t kMaxModuleCount = 5000u;
 // deleted.
 static constexpr base::TimeDelta kMaxEntryAge = base::TimeDelta::FromDays(180);
 
+// This enum is used for UMA. Therefore, the values should never change.
+enum class BlacklistStatus {
+  // A module was marked as blacklisted during the current browser execution.
+  kNewlyBlacklisted = 0,
+  // A module was blocked when it tried to load into the process.
+  kBlocked = 1,
+  kMaxValue = kBlocked,
+};
+
 // Updates the module blacklist cache asynchronously on a background sequence
 // and return a CacheUpdateResult value.
 ModuleBlacklistCacheUpdater::CacheUpdateResult UpdateModuleBlacklistCache(
@@ -55,6 +66,17 @@ ModuleBlacklistCacheUpdater::CacheUpdateResult UpdateModuleBlacklistCache(
     size_t max_module_count,
     uint32_t min_time_date_stamp) {
   DCHECK(module_list_filter);
+
+  // Emit some UMA metrics about the update.
+  for (size_t i = 0; i < newly_blacklisted_modules.size(); ++i) {
+    UMA_HISTOGRAM_ENUMERATION("ModuleBlacklistCache.BlacklistStatus",
+                              BlacklistStatus::kNewlyBlacklisted);
+  }
+  for (size_t i = 0; i < blocked_modules.size(); ++i) {
+    UMA_HISTOGRAM_ENUMERATION("ModuleBlacklistCache.BlacklistStatus",
+                              BlacklistStatus::kBlocked);
+  }
+
   ModuleBlacklistCacheUpdater::CacheUpdateResult result;
 
   // Read the existing cache.
@@ -82,7 +104,47 @@ ModuleBlacklistCacheUpdater::CacheUpdateResult UpdateModuleBlacklistCache(
                                 blacklisted_modules, &result.new_md5_digest);
   UMA_HISTOGRAM_BOOLEAN("ModuleBlacklistCache.WriteResult", write_result);
 
+  if (write_result) {
+    // Write the path of the cache into the registry so that chrome_elf can find
+    // it on its own.
+    base::string16 cache_path_registry_key =
+        install_static::GetRegistryPath().append(
+            third_party_dlls::kThirdPartyRegKeyName);
+    base::win::RegKey registry_key(
+        HKEY_CURRENT_USER, cache_path_registry_key.c_str(), KEY_SET_VALUE);
+
+    bool cache_path_updated = SUCCEEDED(
+        registry_key.WriteValue(third_party_dlls::kBlFilePathRegValue,
+                                module_blacklist_cache_path.value().c_str()));
+    UMA_HISTOGRAM_BOOLEAN("ModuleBlacklistCache.BlacklistPathUpdated",
+                          cache_path_updated);
+  }
+
   return result;
+}
+
+// Inserts a module into |modules|. Also does the type conversion.
+void InsertPackedListModule(
+    ModuleInfoKey module_key,
+    std::vector<third_party_dlls::PackedListModule>* modules) {
+  DCHECK(modules);
+
+  // Do the insertion.
+  modules->emplace_back();
+  third_party_dlls::PackedListModule& module = modules->back();
+
+  // Hash the basename.
+  const std::string module_basename = base::UTF16ToUTF8(
+      base::i18n::ToLower(module_key.module_path.BaseName().value()));
+  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_basename.data()),
+                      module_basename.length(), module.basename_hash);
+
+  // Hash the code id.
+  const std::string module_code_id = GenerateCodeId(module_key);
+  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_code_id.data()),
+                      module_code_id.length(), module.code_id_hash);
+
+  module.time_date_stamp = CalculateTimeDateStamp(base::Time::Now());
 }
 
 }  // namespace
@@ -102,16 +164,6 @@ ModuleBlacklistCacheUpdater::ModuleBlacklistCacheUpdater(
       background_sequence_(base::CreateSequencedTaskRunnerWithTraits(
           {base::MayBlock(), base::TaskPriority::BACKGROUND,
            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN})),
-      // The use of base::Unretained() is safe here because the callback can
-      // only be invoked while |module_load_attempt_log_listener_| is alive.
-      module_load_attempt_log_listener_(
-          base::BindRepeating(&ModuleBlacklistCacheUpdater::OnNewModulesBlocked,
-                              base::Unretained(this))),
-      timer_(FROM_HERE,
-             kUpdateTimerDuration,
-             base::Bind(&ModuleBlacklistCacheUpdater::OnTimerExpired,
-                        base::Unretained(this)),
-             false /* is_repeating */),
       weak_ptr_factory_(this) {
   DCHECK(module_list_filter_);
   module_database_event_source_->AddObserver(this);
@@ -132,24 +184,12 @@ bool ModuleBlacklistCacheUpdater::IsThirdPartyModuleBlockingEnabled() {
 
 // static
 base::FilePath ModuleBlacklistCacheUpdater::GetModuleBlacklistCachePath() {
-  // Subdir relative to UserDataDirectory.
-  constexpr base::FilePath::CharType kFileSubdir[] =
-      FILE_PATH_LITERAL("ThirdPartyModuleList")
-#if defined(_WIN64)
-          FILE_PATH_LITERAL("64");
-#else
-          FILE_PATH_LITERAL("32");
-#endif
-
-  // Packed module data cache file.
-  constexpr base::FilePath::CharType kBlFileName[] =
-      FILE_PATH_LITERAL("bldata");
-
   base::FilePath user_data_dir;
   if (!base::PathService::Get(chrome::DIR_USER_DATA, &user_data_dir))
     return base::FilePath();
 
-  return user_data_dir.Append(kFileSubdir).Append(kBlFileName);
+  return user_data_dir.Append(kModuleListComponentRelativePath)
+      .Append(L"bldata");
 }
 
 // static
@@ -164,14 +204,27 @@ void ModuleBlacklistCacheUpdater::OnNewModuleFound(
     const ModuleInfoData& module_data) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  // Only consider loaded modules that are not IMEs. Shell extensions are still
-  // blocked.
-  static constexpr uint32_t kModuleTypesBitmask =
-      ModuleInfoData::kTypeLoadedModule | ModuleInfoData::kTypeIme;
-  if ((module_data.module_types & kModuleTypesBitmask) !=
-      ModuleInfoData::kTypeLoadedModule) {
+  // The module id is always positive.
+  if (module_key.module_id + 1 > module_blocking_decisions_.size())
+    module_blocking_decisions_.resize(module_key.module_id + 1);
+
+  if (module_data.module_properties & ModuleInfoData::kPropertyBlocked) {
+    InsertPackedListModule(module_key, &blocked_modules_);
+
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kBlocked;
     return;
   }
+
+  // Only consider loaded modules.
+  if ((module_data.module_properties & ModuleInfoData::kPropertyLoadedModule) ==
+      0) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kNotLoaded;
+    return;
+  }
+
+  // First check if this module is a part of Chrome.
 
   // Explicitly whitelist modules whose signing cert's Subject field matches the
   // one in the current executable. No attempt is made to check the validity of
@@ -179,13 +232,8 @@ void ModuleBlacklistCacheUpdater::OnNewModuleFound(
   if (exe_certificate_info_.type != CertificateType::NO_CERTIFICATE &&
       exe_certificate_info_.subject ==
           module_data.inspection_result->certificate_info.subject) {
-    return;
-  }
-
-  // Never block a module seemingly signed by Microsoft. Again, no attempt is
-  // made to check the validity of the certificate.
-  if (IsMicrosoftModule(
-          module_data.inspection_result->certificate_info.subject)) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kAllowedSameCertificate;
     return;
   }
 
@@ -195,37 +243,71 @@ void ModuleBlacklistCacheUpdater::OnNewModuleFound(
   base::FilePath exe_path;
   if (base::PathService::Get(base::DIR_EXE, &exe_path) &&
       exe_path.DirName().IsParent(module_key.module_path)) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kAllowedSameDirectory;
     return;
   }
 #endif
 
-  // Skip modules whitelisted by the Module List component.
-  if (module_list_filter_->IsWhitelisted(module_key, module_data))
+  // Second, check if the module is seemingly signed by Microsoft. Again, no
+  // attempt is made to check the validity of the certificate.
+  if (IsMicrosoftModule(
+          module_data.inspection_result->certificate_info.subject)) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kAllowedMicrosoft;
     return;
+  }
+
+  // Skip modules whitelisted by the Module List component.
+  if (module_list_filter_->IsWhitelisted(module_key, module_data)) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kAllowedWhitelisted;
+    return;
+  }
+
+  // It is preferable to mark a whitelisted IME as allowed because it is
+  // whitelisted, not because it's a shell extension. Thus, check for the module
+  // type after. Note that shell extensions are blocked.
+  if (module_data.module_properties & ModuleInfoData::kPropertyIme) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kAllowedIME;
+    return;
+  }
 
   // Some blacklisted modules are allowed to load.
   std::unique_ptr<chrome::conflicts::BlacklistAction> blacklist_action =
       module_list_filter_->IsBlacklisted(module_key, module_data);
-  if (blacklist_action && blacklist_action->allow_load())
+  if (blacklist_action && blacklist_action->allow_load()) {
+    module_blocking_decisions_[module_key.module_id] =
+        ModuleBlockingDecision::kTolerated;
     return;
+  }
+
+  // Now it has been determined that the module should be blocked.
+  module_blocking_decisions_[module_key.module_id] =
+      ModuleBlockingDecision::kBlacklisted;
 
   // Insert the blacklisted module.
-  newly_blacklisted_modules_.emplace_back();
-  third_party_dlls::PackedListModule& module =
-      newly_blacklisted_modules_.back();
+  InsertPackedListModule(module_key, &newly_blacklisted_modules_);
 
-  // Hash the basename.
-  const std::string module_basename = base::UTF16ToUTF8(
-      base::i18n::ToLower(module_key.module_path.BaseName().value()));
-  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_basename.data()),
-                      module_basename.length(), module.basename_hash);
+  // Signal the module database that this module will be added to the cache.
+  // Note that observers that care about this information should register to
+  // the Module Database's observer interface after the ModuleBlacklistCache
+  // instance.
+  // The Module Database can be null during tests.
+  auto* module_database = ModuleDatabase::GetInstance();
+  if (module_database) {
+    module_database->OnModuleAddedToBlacklist(
+        module_key.module_path, module_key.module_size,
+        module_key.module_time_date_stamp);
+  }
+}
 
-  // Hash the code id.
-  const std::string module_code_id = GenerateCodeId(module_key);
-  base::SHA1HashBytes(reinterpret_cast<const uint8_t*>(module_code_id.data()),
-                      module_code_id.length(), module.code_id_hash);
-
-  module.time_date_stamp = CalculateTimeDateStamp(base::Time::Now());
+void ModuleBlacklistCacheUpdater::OnKnownModuleLoaded(
+    const ModuleInfoKey& module_key,
+    const ModuleInfoData& module_data) {
+  // Analyze the module again.
+  OnNewModuleFound(module_key, module_data);
 }
 
 void ModuleBlacklistCacheUpdater::OnModuleDatabaseIdle() {
@@ -234,16 +316,13 @@ void ModuleBlacklistCacheUpdater::OnModuleDatabaseIdle() {
   StartModuleBlacklistCacheUpdate();
 }
 
-void ModuleBlacklistCacheUpdater::OnNewModulesBlocked(
-    std::vector<third_party_dlls::PackedListModule>&& blocked_modules) {
-  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  blocked_modules_.insert(blocked_modules_.begin(),
-                          std::make_move_iterator(blocked_modules.begin()),
-                          std::make_move_iterator(blocked_modules.end()));
-
-  // Start the timer.
-  timer_.Reset();
+ModuleBlacklistCacheUpdater::ModuleBlockingDecision
+ModuleBlacklistCacheUpdater::GetModuleBlockingDecision(
+    ModuleInfoKey module_key) const {
+  DCHECK(module_blocking_decisions_.size() > module_key.module_id);
+  DCHECK_NE(module_blocking_decisions_[module_key.module_id],
+            ModuleBlockingDecision::kUnknown);
+  return module_blocking_decisions_[module_key.module_id];
 }
 
 void ModuleBlacklistCacheUpdater::OnTimerExpired() {
@@ -254,8 +333,6 @@ void ModuleBlacklistCacheUpdater::OnTimerExpired() {
 
 void ModuleBlacklistCacheUpdater::StartModuleBlacklistCacheUpdate() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
-
-  timer_.Stop();
 
   base::FilePath cache_file_path = GetModuleBlacklistCachePath();
   if (cache_file_path.empty())

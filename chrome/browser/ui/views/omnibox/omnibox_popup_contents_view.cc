@@ -45,6 +45,10 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/window/non_client_view.h"
 
+#if defined(USE_AURA)
+#include "ui/wm/core/window_util.h"
+#endif  // defined(USE_AURA)
+
 namespace {
 
 // Cache the shadow images so that potentially expensive shadow drawing isn't
@@ -194,6 +198,12 @@ class OmniboxPopupContentsView::AutocompletePopupWidget
       animator_->SetTargetBounds(bounds);
     else
       SetBounds(bounds);
+
+#if defined(USE_AURA)
+    // TODO(malaykeshav): Remove this manual snap when we start snapping each
+    // window to its parent window. See https://crbug.com/863268 for more info.
+    wm::SnapWindowToPixelBoundary(GetNativeWindow());
+#endif  // defined(USE_AURA)
   }
 
   void ShowAnimated() {
@@ -226,6 +236,7 @@ class OmniboxPopupContentsView::AutocompletePopupWidget
 
     auto scoped_settings = GetScopedAnimationSettings();
     GetLayer()->SetOpacity(0.0);
+    is_animating_closed_ = true;
 
     // Destroy the popup when done. The observer deletes itself on completion.
     scoped_settings->AddObserver(new ui::ClosureAnimationObserver(
@@ -238,6 +249,27 @@ class OmniboxPopupContentsView::AutocompletePopupWidget
     GetLayer()->GetAnimator()->AbortAllAnimations();
 
     ThemeCopyingWidget::OnNativeWidgetDestroying();
+  }
+
+  void OnMouseEvent(ui::MouseEvent* event) override {
+    // Ignore mouse events if the popup is closed or animating closed.
+    if (IsClosed() || is_animating_closed_) {
+      if (event->cancelable())
+        event->SetHandled();
+      return;
+    }
+
+    ThemeCopyingWidget::OnMouseEvent(event);
+  }
+
+  void OnGestureEvent(ui::GestureEvent* event) override {
+    // Ignore gesture events if the popup is closed or animating closed.
+    // However, just like the base class, we do not capture the event, so
+    // multiple widgets may get tap events at the same time.
+    if (IsClosed() || is_animating_closed_)
+      return;
+
+    ThemeCopyingWidget::OnGestureEvent(event);
   }
 
  private:
@@ -256,6 +288,9 @@ class OmniboxPopupContentsView::AutocompletePopupWidget
   }
 
   std::unique_ptr<WidgetShrinkAnimation> animator_;
+
+  // True if the popup is in the process of closing via animation.
+  bool is_animating_closed_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(AutocompletePopupWidget);
 };
@@ -308,23 +343,7 @@ void OmniboxPopupContentsView::OpenMatch(WindowOpenDisposition disposition) {
 gfx::Image OmniboxPopupContentsView::GetMatchIcon(
     const AutocompleteMatch& match,
     SkColor vector_icon_color) const {
-  gfx::Image icon = model_->GetMatchIcon(match, vector_icon_color);
-  if (icon.IsEmpty())
-    return icon;
-
-  const int icon_size = GetLayoutConstant(LOCATION_BAR_ICON_SIZE);
-  // In touch mode, icons are 20x20. FaviconCache and ExtensionIconManager both
-  // guarantee favicons and extension icons will be 16x16, so add extra padding
-  // around them to align them vertically with the other vector icons.
-  DCHECK_GE(icon_size, icon.Height());
-  DCHECK_GE(icon_size, icon.Width());
-  gfx::Insets padding_border((icon_size - icon.Height()) / 2,
-                             (icon_size - icon.Width()) / 2);
-  if (!padding_border.IsEmpty()) {
-    return gfx::Image(gfx::CanvasImageSource::CreatePadded(*icon.ToImageSkia(),
-                                                           padding_border));
-  }
-  return icon;
+  return model_->GetMatchIcon(match, vector_icon_color);
 }
 
 OmniboxTint OmniboxPopupContentsView::GetTint() const {

@@ -136,6 +136,7 @@
 #include "third_party/blink/renderer/bindings/core/v8/source_location.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_gc_controller.h"
+#include "third_party/blink/renderer/core/clipboard/clipboard_utilities.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/icon_url.h"
 #include "third_party/blink/renderer/core/dom/node.h"
@@ -225,7 +226,6 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
-#include "third_party/blink/renderer/platform/clipboard/clipboard_utilities.h"
 #include "third_party/blink/renderer/platform/fonts/font_cache.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
@@ -299,7 +299,7 @@ class ChromePrintContext : public PrintContext {
 
     // The page rect gets scaled and translated, so specify the entire
     // print content area here as the recording rect.
-    IntRect bounds(0, 0, printed_page_height_, printed_page_width_);
+    FloatRect bounds(0, 0, printed_page_height_, printed_page_width_);
     PaintRecordBuilder builder(&canvas->getMetaData());
     builder.Context().SetPrinting(true);
     builder.Context().BeginRecording(bounds);
@@ -326,7 +326,7 @@ class ChromePrintContext : public PrintContext {
     const float page_width = page_size_in_pixels.Width();
     size_t num_pages = PageRects().size();
     int total_height = num_pages * (page_size_in_pixels.Height() + 1) - 1;
-    IntRect all_pages_rect(0, 0, page_width, total_height);
+    FloatRect all_pages_rect(0, 0, page_width, total_height);
 
     PaintRecordBuilder builder(&canvas->getMetaData());
     GraphicsContext& context = builder.Context();
@@ -938,7 +938,7 @@ void WebLocalFrameImpl::LoadHTMLString(const WebData& data,
   CommitDataNavigation(data, WebString::FromUTF8("text/html"),
                        WebString::FromUTF8("UTF-8"), base_url, unreachable_url,
                        replace, WebFrameLoadType::kStandard, WebHistoryItem(),
-                       false);
+                       false, nullptr, WebNavigationTimings());
 }
 
 void WebLocalFrameImpl::StopLoading() {
@@ -1046,9 +1046,10 @@ size_t WebLocalFrameImpl::CharacterIndexForPoint(
   if (!GetFrame())
     return kNotFound;
 
-  LayoutPoint point = GetFrame()->View()->ViewportToFrame(point_in_viewport);
-  HitTestResult result = GetFrame()->GetEventHandler().HitTestResultAtPoint(
-      point, HitTestRequest::kReadOnly | HitTestRequest::kActive);
+  HitTestLocation location(
+      GetFrame()->View()->ViewportToFrame(point_in_viewport));
+  HitTestResult result = GetFrame()->GetEventHandler().HitTestResultAtLocation(
+      location, HitTestRequest::kReadOnly | HitTestRequest::kActive);
   return GetFrame()->Selection().CharacterIndexForPoint(
       result.RoundedPointInInnerNodeFrame());
 }
@@ -1966,10 +1967,10 @@ HitTestResult WebLocalFrameImpl::HitTestResultForVisualViewportPos(
   IntPoint root_frame_point(
       GetFrame()->GetPage()->GetVisualViewport().ViewportToRootFrame(
           pos_in_viewport));
-  IntPoint doc_point(
+  HitTestLocation location(
       GetFrame()->View()->ConvertFromRootFrame(root_frame_point));
-  HitTestResult result = GetFrame()->GetEventHandler().HitTestResultAtPoint(
-      doc_point, HitTestRequest::kReadOnly | HitTestRequest::kActive);
+  HitTestResult result = GetFrame()->GetEventHandler().HitTestResultAtLocation(
+      location, HitTestRequest::kReadOnly | HitTestRequest::kActive);
   result.SetToShadowHostIfInRestrictedShadowRoot();
   return result;
 }
@@ -2024,7 +2025,9 @@ void WebLocalFrameImpl::CommitNavigation(
     WebFrameLoadType web_frame_load_type,
     const WebHistoryItem& item,
     bool is_client_redirect,
-    const base::UnguessableToken& devtools_navigation_token) {
+    const base::UnguessableToken& devtools_navigation_token,
+    std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+    const WebNavigationTimings& navigation_timings) {
   DCHECK(GetFrame());
   DCHECK(!request.IsNull());
   DCHECK(!request.Url().ProtocolIs("javascript"));
@@ -2040,7 +2043,8 @@ void WebLocalFrameImpl::CommitNavigation(
     frame_request.SetClientRedirect(ClientRedirectPolicy::kClientRedirect);
   HistoryItem* history_item = item;
   GetFrame()->Loader().CommitNavigation(frame_request, web_frame_load_type,
-                                        history_item);
+                                        history_item, std::move(extra_data),
+                                        navigation_timings);
 }
 
 blink::mojom::CommitResult WebLocalFrameImpl::CommitSameDocumentNavigation(
@@ -2106,7 +2110,9 @@ void WebLocalFrameImpl::CommitDataNavigation(
     bool replace,
     WebFrameLoadType web_frame_load_type,
     const WebHistoryItem& item,
-    bool is_client_redirect) {
+    bool is_client_redirect,
+    std::unique_ptr<WebDocumentLoader::ExtraData> navigation_data,
+    const WebNavigationTimings& navigation_timings) {
   DCHECK(GetFrame());
 
   // If we are loading substitute data to replace an existing load, then
@@ -2142,8 +2148,9 @@ void WebLocalFrameImpl::CommitDataNavigation(
   if (is_client_redirect)
     frame_request.SetClientRedirect(ClientRedirectPolicy::kClientRedirect);
 
-  GetFrame()->Loader().CommitNavigation(frame_request, web_frame_load_type,
-                                        history_item);
+  GetFrame()->Loader().CommitNavigation(
+      frame_request, web_frame_load_type, history_item,
+      std::move(navigation_data), navigation_timings);
 }
 
 WebLocalFrame::FallbackContentResult

@@ -66,12 +66,15 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
  public:
   WindowTree(WindowService* window_service,
              ClientSpecificId client_id,
-             mojom::WindowTreeClient* client);
+             mojom::WindowTreeClient* client,
+             const std::string& client_name);
   ~WindowTree() override;
 
   // See class description for details on Init variants.
   void InitForEmbed(aura::Window* root, mojom::WindowTreePtr window_tree_ptr);
   void InitFromFactory();
+
+  ClientSpecificId client_id() const { return client_id_; }
 
   // Notifies the client than an event has been received.
   void SendEventToClient(aura::Window* window, const ui::Event& event);
@@ -95,6 +98,14 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
 
   WindowService* window_service() { return window_service_; }
 
+  ClientWindowId ClientWindowIdForWindow(aura::Window* window);
+
+  const std::string& client_name() const { return client_name_; }
+
+  // Returns true if at a compositor frame sink has been created for at least
+  // one of the roots.
+  bool HasAtLeastOneRootWithCompositorFrameSink();
+
  private:
   friend class ClientRoot;
   // TODO(sky): WindowTree should be refactored such that it is not
@@ -102,7 +113,7 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
   friend class FocusHandler;
   friend class WindowTreeTestHelper;
 
-  struct InFlightKeyEvent;
+  struct InFlightEvent;
 
   using ClientRoots = std::vector<std::unique_ptr<ClientRoot>>;
 
@@ -255,6 +266,13 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
   bool AddWindowImpl(const ClientWindowId& parent_id,
                      const ClientWindowId& child_id);
   bool RemoveWindowFromParentImpl(const ClientWindowId& client_window_id);
+  bool AddTransientWindowImpl(const ClientWindowId& parent_window_id,
+                              const ClientWindowId& transient_window_id);
+  bool RemoveTransientWindowFromParentImpl(const ClientWindowId& transient_id);
+  bool SetModalTypeImpl(const ClientWindowId& client_window_id,
+                        ui::ModalType type);
+  bool SetChildModalParentImpl(const ClientWindowId& child_id,
+                               const ClientWindowId& parent_id);
   bool SetWindowVisibilityImpl(const ClientWindowId& window_id, bool visible);
   bool SetWindowPropertyImpl(const ClientWindowId& window_id,
                              const std::string& name,
@@ -387,8 +405,6 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
   void StackAbove(uint32_t change_id, Id above_id, Id below_id) override;
   void StackAtTop(uint32_t change_id, Id window_id) override;
   void PerformWmAction(Id window_id, const std::string& action) override;
-  void GetWindowManagerClient(
-      ::ui::mojom::WindowManagerClientAssociatedRequest internal) override;
   void GetCursorLocationMemory(
       GetCursorLocationMemoryCallback callback) override;
   void PerformWindowMove(uint32_t change_id,
@@ -410,6 +426,11 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
   WindowService* window_service_;
 
   const ClientSpecificId client_id_;
+
+  // Identity of the remote client. This is only valid for clients connecting
+  // directly to the WindowService. Clients that were embedded do not connect
+  // directly to the WindowService, in which case |client_name_| is empty.
+  const std::string client_name_;
 
   ConnectionType connection_type_ = ConnectionType::kEmbedding;
 
@@ -460,8 +481,8 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTree
       base::flat_map<base::UnguessableToken, ClientSpecificId>;
   ScheduledEmbedsForExistingClient scheduled_embeds_for_existing_client_;
 
-  // Events that an ack is expected from the client are added here.
-  std::queue<std::unique_ptr<InFlightKeyEvent>> in_flight_key_events_;
+  // Used to track events sent to the client.
+  std::queue<std::unique_ptr<InFlightEvent>> in_flight_events_;
 
   // Set while a window move loop is in progress.
   aura::Window* window_moving_ = nullptr;

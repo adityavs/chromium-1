@@ -12,7 +12,6 @@ _VALID_SWARMING_DIMENSIONS = {
     'gpu', 'device_ids', 'os', 'pool', 'perf_tests', 'perf_tests_with_args',
     'device_os', 'device_type', 'device_os_flavor', 'id'}
 _VALID_PERF_POOLS = {
-    'Chrome-perf', 'Chrome-perf-fyi',
     'chrome.tests.perf', 'chrome.tests.perf-webview',
     'chrome.tests.perf-fyi', 'chrome.tests.perf-webview-fyi'}
 
@@ -40,11 +39,24 @@ def _ParseShardMapFileName(args):
   return options.shard_file
 
 
+def _ParseBrowserFlags(args):
+  parser = argparse.ArgumentParser()
+  parser.add_argument('--browser')
+  parser.add_argument('--webview-embedder-apk')
+  options, _ = parser.parse_known_args(args)
+  return options
+
+
 _SHARD_MAP_DIR = os.path.join(os.path.dirname(__file__), 'shard_maps')
 
 
 def _ValidateShardingData(builder_name, test_config):
+  num_shards = test_config['swarming'].get('shards', 1)
+  if num_shards == 1:
+    return
   shard_file_name = _ParseShardMapFileName(test_config['args'])
+  if not shard_file_name:
+    raise ValueError('Must specify the shard map for case num shard >= 2')
   shard_file_path = os.path.join(_SHARD_MAP_DIR, shard_file_name)
   if not os.path.exists(shard_file_path):
     raise ValueError(
@@ -56,7 +68,6 @@ def _ValidateShardingData(builder_name, test_config):
 
   shard_map_data.pop('extra_infos', None)
   shard_keys = set(shard_map_data.keys())
-  num_shards = test_config['swarming']['shards']
   expected_shard_keys = set([str(i) for i in xrange(num_shards)])
   if shard_keys != expected_shard_keys:
     raise ValueError(
@@ -65,14 +76,38 @@ def _ValidateShardingData(builder_name, test_config):
             repr(shard_file_name), num_shards, repr(builder_name)))
 
 
+def _ValidateBrowserType(builder_name, test_config):
+  browser_options = _ParseBrowserFlags(test_config['args'])
+  if 'WebView' in builder_name or 'webview' in builder_name:
+    if browser_options.browser != 'android-webview':
+      raise ValueError("%s must use 'android-webview' browser type" %
+                       builder_name)
+    if not browser_options.webview_embedder_apk:
+      raise ValueError('%s must set --webview-embedder-apk flag' % builder_name)
+  elif 'Android' in builder_name or 'android' in builder_name:
+    if browser_options.browser != 'android-chromium':
+      raise ValueError("%s must use 'android-chromium' browser" %
+                       builder_name)
+  elif builder_name in ('win-10-perf', 'Win 7 Nvidia GPU Perf'):
+    if browser_options.browser != 'release_x64':
+      raise ValueError("%s must use 'release_x64' browser type" %
+                       builder_name)
+  else:  # The rest must be desktop/laptop builders
+    if browser_options.browser != 'release':
+      raise ValueError("%s must use 'release' browser type" %
+                       builder_name)
+
+
 def ValidateTestingBuilder(builder_name, builder_data):
   isolated_scripts = builder_data['isolated_scripts']
   for test_config in isolated_scripts:
     _ValidateSwarmingDimension(
         builder_name,
         swarming_dimensions=test_config['swarming'].get('dimension_sets', {}))
-    if test_config['isolate_name'] == 'performance_test_suite':
+    if (test_config['isolate_name'] in
+        ('performance_test_suite', 'performance_webview_test_suite')):
       _ValidateShardingData(builder_name, test_config)
+      _ValidateBrowserType(builder_name, test_config)
 
 
 def _IsBuilderName(name):

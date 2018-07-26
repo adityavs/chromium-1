@@ -8,17 +8,21 @@
 #include "base/memory/memory_pressure_listener.h"
 #include "base/run_loop.h"
 #include "base/test/metrics/histogram_tester.h"
+#include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/devtools/devtools_window_testing.h"
 #include "chrome/browser/media/webrtc/media_capture_devices_dispatcher.h"
 #include "chrome/browser/media/webrtc/media_stream_capture_indicator.h"
+#include "chrome/browser/resource_coordinator/local_site_characteristics_data_unittest_utils.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
 #include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/resource_coordinator/tab_manager_features.h"
 #include "chrome/browser/resource_coordinator/tab_manager_web_contents_data.h"
 #include "chrome/browser/resource_coordinator/time.h"
+#include "chrome/browser/resource_coordinator/utils.h"
 #include "chrome/browser/ui/browser.h"
 #include "chrome/browser/ui/browser_commands.h"
 #include "chrome/browser/ui/browser_list.h"
@@ -95,8 +99,10 @@ class ExpectStateTransitionObserver : public LifecycleUnitObserver {
 
  private:
   // LifecycleUnitObserver:
-  void OnLifecycleUnitStateChanged(LifecycleUnit* lifecycle_unit,
-                                   LifecycleUnitState last_state) override {
+  void OnLifecycleUnitStateChanged(
+      LifecycleUnit* lifecycle_unit,
+      LifecycleUnitState last_state,
+      LifecycleUnitStateChangeReason reason) override {
     EXPECT_EQ(lifecycle_unit, lifecycle_unit_);
     if (lifecycle_unit_->GetState() == expected_state_) {
       run_loop_.Quit();
@@ -124,6 +130,8 @@ class TabManagerTest : public InProcessBrowserTest {
     // Start with a non-null TimeTicks, as there is no discard protection for
     // a tab with a null focused timestamp.
     test_clock_.Advance(kShortDelay);
+    scoped_feature_list_.InitAndEnableFeature(
+        features::kSiteCharacteristicsDatabase);
   }
 
   void SetUpCommandLine(base::CommandLine* command_line) override {
@@ -144,8 +152,10 @@ class TabManagerTest : public InProcessBrowserTest {
     OpenURLParams open1(first_url, content::Referrer(),
                         WindowOpenDisposition::CURRENT_TAB,
                         ui::PAGE_TRANSITION_TYPED, false);
-    browser()->OpenURL(open1);
+    content::WebContents* web_contents = browser()->OpenURL(open1);
     load1.Wait();
+    if (URLShouldBeStoredInLocalDatabase(first_url))
+      testing::ExpireLocalDBObservationWindows(web_contents);
 
     content::WindowedNotificationObserver load2(
         content::NOTIFICATION_LOAD_COMPLETED_MAIN_FRAME,
@@ -153,8 +163,12 @@ class TabManagerTest : public InProcessBrowserTest {
     OpenURLParams open2(second_url, content::Referrer(),
                         WindowOpenDisposition::NEW_BACKGROUND_TAB,
                         ui::PAGE_TRANSITION_TYPED, false);
-    browser()->OpenURL(open2);
+    web_contents = browser()->OpenURL(open2);
     load2.Wait();
+    // Expire all the observation windows to prevent the discarding and freezing
+    // interventions to fail because of a lack of observations.
+    if (URLShouldBeStoredInLocalDatabase(second_url))
+      testing::ExpireLocalDBObservationWindows(web_contents);
 
     ASSERT_EQ(2, tsm()->count());
   }
@@ -280,6 +294,7 @@ class TabManagerTest : public InProcessBrowserTest {
 
   base::SimpleTestTickClock test_clock_;
   ScopedSetTickClockForTesting scoped_set_tick_clock_for_testing_;
+  base::test::ScopedFeatureList scoped_feature_list_;
 };
 
 class TabManagerTestWithTwoTabs : public TabManagerTest {
@@ -590,6 +605,42 @@ IN_PROC_BROWSER_TEST_F(TabManagerTest, ProtectVideoTabs) {
   video_stream_ui.reset();
 
   // Should be able to discard the background tab now.
+  EXPECT_TRUE(tab_manager()->DiscardTabImpl(DiscardReason::kProactive));
+}
+
+// Makes sure that tabs using DevTools are protected from discarding.
+IN_PROC_BROWSER_TEST_F(TabManagerTest, ProtectDevToolsTabsFromDiscarding) {
+  // Get two tabs open, the second one being the foreground tab.
+  GURL test_page(ui_test_utils::GetTestUrl(
+      base::FilePath(), base::FilePath(FILE_PATH_LITERAL("simple.html"))));
+  ui_test_utils::NavigateToURL(browser(), test_page);
+  // Open a DevTools window for the first.
+  DevToolsWindow* devtool = DevToolsWindowTesting::OpenDevToolsWindowSync(
+      GetWebContentsAt(0), true /* is_docked */);
+  EXPECT_TRUE(devtool);
+
+  GURL url2(chrome::kChromeUIAboutURL);
+  ui_test_utils::NavigateToURLWithDisposition(
+      browser(), GURL(chrome::kChromeUIAboutURL),
+      WindowOpenDisposition::NEW_FOREGROUND_TAB,
+      ui_test_utils::BROWSER_TEST_WAIT_FOR_NAVIGATION);
+
+  // No discarding should be possible as the only background tab is currently
+  // using DevTools.
+  EXPECT_FALSE(tab_manager()->DiscardTabImpl(DiscardReason::kProactive));
+
+  // Close the DevTools window and repeat the test, this time use a non-docked
+  // window.
+  DevToolsWindowTesting::CloseDevToolsWindowSync(devtool);
+  devtool = DevToolsWindowTesting::OpenDevToolsWindowSync(
+      GetWebContentsAt(0), false /* is_docked */);
+  EXPECT_TRUE(devtool);
+  EXPECT_FALSE(tab_manager()->DiscardTabImpl(DiscardReason::kProactive));
+
+  // TODO(sebmarchand): Also ensure that the tab can't be frozen.
+
+  // Close the DevTools window, ensure that the tab can be discarded.
+  DevToolsWindowTesting::CloseDevToolsWindowSync(devtool);
   EXPECT_TRUE(tab_manager()->DiscardTabImpl(DiscardReason::kProactive));
 }
 
@@ -945,27 +996,38 @@ IN_PROC_BROWSER_TEST_F(TabManagerTest, TabFreezeAndMakeVisible) {
 IN_PROC_BROWSER_TEST_F(TabManagerTest, TabFreezeAndUnfreeze) {
   TestTransitionFromActiveToFrozen();
 
-  // Unfreeze the tab. It should transition to the ACTIVE state.
+  // Unfreeze the tab. It should immediately transition to the PENDING_FREEZE
+  // state. Then, it shuold transition to the ACTIVE state once the "onresume"
+  // callback has run.
   EXPECT_TRUE(GetLifecycleUnitAt(1)->Unfreeze());
-  EXPECT_EQ(LifecycleUnitState::ACTIVE, GetLifecycleUnitAt(1)->GetState());
+  EXPECT_EQ(LifecycleUnitState::PENDING_UNFREEZE,
+            GetLifecycleUnitAt(1)->GetState());
+  {
+    ExpectStateTransitionObserver expect_state_transition(
+        GetLifecycleUnitAt(1), LifecycleUnitState::ACTIVE);
+    expect_state_transition.Wait();
+  }
 }
 
-// Flaky on Mac/Linux and ChromeOS. https://crbug.com/855874
-#if defined(OS_POSIX) || defined(OS_CHROMEOS)
-#define MAYBE_TabPendingFreezeAndUnfreeze DISABLED_TabPendingFreezeAndUnfreeze
-#else
-#define MAYBE_TabPendingFreezeAndUnfreeze TabPendingFreezeAndUnfreeze
-#endif
 // Verifies the following state transitions for a tab:
 // - Initial state: ACTIVE
 // - Freeze(): ACTIVE->PENDING_FREEZE
-// - Unfreeze(): PENDING_FREEZE->ACTIVE
-IN_PROC_BROWSER_TEST_F(TabManagerTest, MAYBE_TabPendingFreezeAndUnfreeze) {
+// - Unfreeze(): Disallowed. Transition to PENDING_FREEZE->FROZEN should happen
+//     once the freeze happens in renderer.
+IN_PROC_BROWSER_TEST_F(TabManagerTest, TabPendingFreezeAndUnfreeze) {
   TestTransitionFromActiveToPendingFreeze();
 
-  // Unfreeze the tab. It should transition to the ACTIVE state.
-  EXPECT_TRUE(GetLifecycleUnitAt(1)->Unfreeze());
-  EXPECT_EQ(LifecycleUnitState::ACTIVE, GetLifecycleUnitAt(1)->GetState());
+  // Unfreezing a PENDING_FREEZE tab is not allowed. The tab must be fully
+  // frozen before it is unfrozen.
+  EXPECT_FALSE(GetLifecycleUnitAt(1)->Unfreeze());
+  EXPECT_EQ(LifecycleUnitState::PENDING_FREEZE,
+            GetLifecycleUnitAt(1)->GetState());
+
+  {
+    ExpectStateTransitionObserver expect_state_transition(
+        GetLifecycleUnitAt(1), LifecycleUnitState::FROZEN);
+    expect_state_transition.Wait();
+  }
 }
 
 // Verifies the following state transitions for a tab:
@@ -1048,6 +1110,58 @@ IN_PROC_BROWSER_TEST_F(TabManagerTestWithTwoTabs,
   ExpectStateTransitionObserver expect_state_transition(
       GetLifecycleUnitAt(1), LifecycleUnitState::ACTIVE);
   expect_state_transition.AllowState(LifecycleUnitState::FROZEN);
+  expect_state_transition.Wait();
+}
+
+// Verifies the following state transitions for a tab:
+// - Initial state: ACTIVE
+// - Discard(kProactive): ACTIVE->PENDING_DISCARD
+// - Freeze happens in renderer: PENDING_DISCARD->DISCARDED
+// - Focus: DISCARDED->ACTIVE
+IN_PROC_BROWSER_TEST_F(TabManagerTestWithTwoTabs,
+                       TabProactiveDiscardAndFocusToReload) {
+  // Proactively discard the background tab.
+  EXPECT_EQ(LifecycleUnitState::ACTIVE, GetLifecycleUnitAt(1)->GetState());
+  EXPECT_TRUE(GetLifecycleUnitAt(1)->Discard(DiscardReason::kProactive));
+  EXPECT_EQ(LifecycleUnitState::PENDING_DISCARD,
+            GetLifecycleUnitAt(1)->GetState());
+
+  // After the freeze happens in the renderer, the tab is discarded.
+  {
+    ExpectStateTransitionObserver expect_state_transition(
+        GetLifecycleUnitAt(1), LifecycleUnitState::DISCARDED);
+    expect_state_transition.Wait();
+  }
+
+  // When the tab is focused and made visible, it transitions to ACTIVE.
+  tsm()->ActivateTabAt(1, true);
+  GetWebContentsAt(1)->WasShown();
+  EXPECT_EQ(LifecycleUnitState::ACTIVE, GetLifecycleUnitAt(1)->GetState());
+}
+
+// Verifies the following state transitions for a tab:
+// - Initial state: ACTIVE
+// - Discard(kProactive): ACTIVE->PENDING_DISCARD
+// - Freeze(): Disallowed
+// - Freeze happens in renderer: PENDING_DISCARD->DISCARDED
+IN_PROC_BROWSER_TEST_F(TabManagerTestWithTwoTabs,
+                       TabFreezeDisallowedWhenProactivelyDiscarding) {
+  // Proactively discard the background tab.
+  EXPECT_EQ(LifecycleUnitState::ACTIVE, GetLifecycleUnitAt(1)->GetState());
+  EXPECT_TRUE(GetLifecycleUnitAt(1)->Discard(DiscardReason::kProactive));
+  EXPECT_EQ(LifecycleUnitState::PENDING_DISCARD,
+            GetLifecycleUnitAt(1)->GetState());
+
+  // Freezing the tab should be disallowed.
+  DecisionDetails decision_details;
+  EXPECT_FALSE(GetLifecycleUnitAt(1)->CanFreeze(&decision_details));
+  EXPECT_FALSE(GetLifecycleUnitAt(1)->Freeze());
+  EXPECT_EQ(LifecycleUnitState::PENDING_DISCARD,
+            GetLifecycleUnitAt(1)->GetState());
+
+  // The tab should eventually transition to DISCARDED.
+  ExpectStateTransitionObserver expect_state_transition(
+      GetLifecycleUnitAt(1), LifecycleUnitState::DISCARDED);
   expect_state_transition.Wait();
 }
 

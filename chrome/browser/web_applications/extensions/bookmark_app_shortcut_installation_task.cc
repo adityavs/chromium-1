@@ -1,0 +1,66 @@
+// Copyright 2018 The Chromium Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+#include "chrome/browser/web_applications/extensions/bookmark_app_shortcut_installation_task.h"
+
+#include <utility>
+#include <vector>
+
+#include "base/bind.h"
+#include "base/callback.h"
+#include "chrome/browser/web_applications/extensions/bookmark_app_data_retriever.h"
+#include "chrome/common/web_application_info.h"
+#include "content/public/browser/browser_thread.h"
+
+namespace extensions {
+
+BookmarkAppShortcutInstallationTask::BookmarkAppShortcutInstallationTask() =
+    default;
+
+BookmarkAppShortcutInstallationTask::~BookmarkAppShortcutInstallationTask() =
+    default;
+
+void BookmarkAppShortcutInstallationTask::InstallFromWebContents(
+    content::WebContents* web_contents,
+    ResultCallback callback) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+
+  data_retriever().GetWebApplicationInfo(
+      web_contents,
+      base::BindOnce(
+          &BookmarkAppShortcutInstallationTask::OnGetWebApplicationInfo,
+          weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+}
+
+void BookmarkAppShortcutInstallationTask::OnGetWebApplicationInfo(
+    ResultCallback result_callback,
+    base::Optional<WebApplicationInfo> web_app_info) {
+  DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
+  if (!web_app_info) {
+    std::move(result_callback).Run(Result::kGetWebApplicationInfoFailed);
+    return;
+  }
+
+  // TODO(crbug.com/864904): Retrieve the Manifest before downloading icons.
+
+  std::vector<GURL> icon_urls;
+  for (const auto& icon : web_app_info->icons) {
+    icon_urls.push_back(icon.url);
+  }
+
+  data_retriever().GetIcons(
+      web_app_info->app_url, icon_urls,
+      base::BindOnce(&BookmarkAppShortcutInstallationTask::OnGetIcons,
+                     weak_ptr_factory_.GetWeakPtr(),
+                     std::move(result_callback)));
+}
+
+void BookmarkAppShortcutInstallationTask::OnGetIcons(
+    ResultCallback result_callback,
+    std::vector<WebApplicationInfo::IconInfo> icons) {
+  // TODO(crbug.com/864904): Continue the installation process.
+  std::move(result_callback).Run(Result::kSuccess);
+}
+
+}  // namespace extensions

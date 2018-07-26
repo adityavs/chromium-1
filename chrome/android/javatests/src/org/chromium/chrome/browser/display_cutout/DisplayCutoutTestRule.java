@@ -13,6 +13,7 @@ import org.junit.Assert;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
+import org.chromium.base.ThreadUtils;
 import org.chromium.base.annotations.UsedByReflection;
 import org.chromium.chrome.browser.ChromeActivity;
 import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
@@ -23,6 +24,7 @@ import org.chromium.content.browser.test.util.Criteria;
 import org.chromium.content.browser.test.util.CriteriaHelper;
 import org.chromium.content.browser.test.util.DOMUtils;
 import org.chromium.content.browser.test.util.JavaScriptUtils;
+import org.chromium.content_public.browser.WebContentsObserver;
 import org.chromium.net.test.EmbeddedTestServer;
 
 import java.util.concurrent.TimeoutException;
@@ -30,8 +32,10 @@ import java.util.concurrent.TimeoutException;
 /**
  * Custom test rule for simulating a Display Cutout. This allows us to test display cutout
  * functionality without having a test device with a cutout.
+ *
+ * @param <T> The type of {@link ChromeActivity} to use for the test.
  */
-public class DisplayCutoutTestRule extends ChromeActivityTestRule<ChromeActivity> {
+public class DisplayCutoutTestRule<T extends ChromeActivity> extends ChromeActivityTestRule<T> {
     /** These are the two test safe areas with and without the test cutout. */
     public static final Rect TEST_SAFE_AREA_WITH_CUTOUT = new Rect(10, 20, 30, 40);
     public static final Rect TEST_SAFE_AREA_WITHOUT_CUTOUT = new Rect(0, 0, 0, 0);
@@ -139,8 +143,8 @@ public class DisplayCutoutTestRule extends ChromeActivityTestRule<ChromeActivity
     /** The {@link Tab} we are running the test in. */
     private Tab mTab;
 
-    public DisplayCutoutTestRule() {
-        super(ChromeActivity.class);
+    public DisplayCutoutTestRule(Class<T> activityClass) {
+        super(activityClass);
     }
 
     @Override
@@ -148,29 +152,35 @@ public class DisplayCutoutTestRule extends ChromeActivityTestRule<ChromeActivity
         return super.apply(new Statement() {
             @Override
             public void evaluate() throws Throwable {
+                startMainActivityOnBlankPage();
+
                 setUp();
+                loadUrl(getTestURL());
+
                 base.evaluate();
                 tearDown();
             }
         }, description);
     }
 
-    private void setUp() throws Exception {
-        startMainActivityOnBlankPage();
-        mTestServer = EmbeddedTestServer.createAndStartServer(
-                InstrumentationRegistry.getInstrumentation().getContext());
+    protected String getTestURL() throws Exception {
+        if (mTestServer == null) {
+            mTestServer = EmbeddedTestServer.createAndStartServer(
+                    InstrumentationRegistry.getInstrumentation().getContext());
+        }
+        return mTestServer.getURL(DEFAULT_TEST_PAGE);
+    }
 
+    protected void setUp() throws Exception {
         mTab = getActivity().getActivityTab();
         mTestController = new TestDisplayCutoutController(mTab);
         mTab.setDisplayCutoutController(mTestController);
 
         FullscreenTabObserver observer = new FullscreenTabObserver();
         mTab.addObserver(observer);
-
-        loadUrl(mTestServer.getURL(DEFAULT_TEST_PAGE));
     }
 
-    private void tearDown() throws Exception {
+    protected void tearDown() throws Exception {
         mTestServer.stopAndDestroyServer();
     }
 
@@ -242,6 +252,11 @@ public class DisplayCutoutTestRule extends ChromeActivityTestRule<ChromeActivity
     public void setViewportFit(String value) throws InterruptedException, TimeoutException {
         JavaScriptUtils.executeJavaScriptAndWaitForResult(
                 mTab.getWebContents(), "setViewportFit('" + value + "')");
+    }
+
+    /** Set the viewport-fit value using internal APIs. */
+    public void setViewportFitInternal(@WebContentsObserver.ViewportFitType int value) {
+        ThreadUtils.runOnUiThreadBlocking(() -> mTestController.setViewportFit(value));
     }
 
     /** Get the safe area using JS and parse the JSON result to a Rect. */

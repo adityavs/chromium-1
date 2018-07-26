@@ -18,8 +18,8 @@ TestSyncService::TestSyncService() : data_types_(syncer::ModelTypeSet::All()) {}
 
 TestSyncService::~TestSyncService() {}
 
-bool TestSyncService::CanSyncStart() const {
-  return can_sync_start_;
+int TestSyncService::GetDisableReasons() const {
+  return disable_reasons_;
 }
 
 syncer::ModelTypeSet TestSyncService::GetPreferredDataTypes() const {
@@ -30,20 +30,12 @@ syncer::ModelTypeSet TestSyncService::GetActiveDataTypes() const {
   return data_types_;
 }
 
-bool TestSyncService::IsEngineInitialized() const {
-  return is_engine_initialized_;
+bool TestSyncService::IsFirstSetupComplete() const {
+  return true;
 }
 
 bool TestSyncService::IsUsingSecondaryPassphrase() const {
   return is_using_secondary_passphrase_;
-}
-
-bool TestSyncService::IsSyncActive() const {
-  return is_sync_active_;
-}
-
-bool TestSyncService::ConfigurationDone() const {
-  return configuration_done_;
 }
 
 const GoogleServiceAuthError& TestSyncService::GetAuthError() const {

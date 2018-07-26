@@ -390,11 +390,10 @@ void ScrollableArea::MouseCapturedScrollbar() {
     fade_overlay_scrollbars_timer_->Stop();
 }
 
-void ScrollableArea::MouseReleasedScrollbar(ScrollbarOrientation orientation) {
+void ScrollableArea::MouseReleasedScrollbar() {
   scrollbar_captured_ = false;
   // This will kick off the fade out timer.
   ShowOverlayScrollbars();
-  SnapAfterScrollbarDragging(orientation);
 }
 
 void ScrollableArea::ContentAreaDidShow() const {
@@ -613,9 +612,9 @@ void ScrollableArea::ShowOverlayScrollbars() {
   SetScrollbarsHiddenIfOverlay(false);
   needs_show_scrollbar_layers_ = true;
 
-  const double time_until_disable =
-      GetPageScrollbarTheme().OverlayScrollbarFadeOutDelaySeconds() +
-      GetPageScrollbarTheme().OverlayScrollbarFadeOutDurationSeconds();
+  const TimeDelta time_until_disable =
+      GetPageScrollbarTheme().OverlayScrollbarFadeOutDelay() +
+      GetPageScrollbarTheme().OverlayScrollbarFadeOutDuration();
 
   // If the overlay scrollbars don't fade out, don't do anything. This is the
   // case for the mock overlays used in tests and on Mac, where the fade-out is
@@ -623,7 +622,7 @@ void ScrollableArea::ShowOverlayScrollbars() {
   // We also don't fade out overlay scrollbar for popup since we don't create
   // compositor for popup and thus they don't appear on hover so users without
   // a wheel can't scroll if they fade out.
-  if (!time_until_disable || GetChromeClient()->IsPopup())
+  if (time_until_disable.is_zero() || GetChromeClient()->IsPopup())
     return;
 
   if (!fade_overlay_scrollbars_timer_) {
@@ -708,6 +707,18 @@ IntSize ScrollableArea::ExcludeScrollbars(const IntSize& size) const {
 void ScrollableArea::DidScroll(const FloatPoint& position) {
   ScrollOffset new_offset(ScrollPositionToOffset(position));
   SetScrollOffset(new_offset, kCompositorScroll);
+}
+
+CompositorElementId ScrollableArea::GetScrollbarElementId(
+    ScrollbarOrientation orientation) {
+  CompositorElementId scrollable_element_id = GetCompositorElementId();
+  DCHECK(scrollable_element_id);
+  CompositorElementIdNamespace element_id_namespace =
+      orientation == kHorizontalScrollbar
+          ? CompositorElementIdNamespace::kHorizontalScrollbar
+          : CompositorElementIdNamespace::kVerticalScrollbar;
+  return CompositorElementIdFromUniqueObjectId(
+      scrollable_element_id.GetInternalValue(), element_id_namespace);
 }
 
 void ScrollableArea::Trace(blink::Visitor* visitor) {

@@ -120,6 +120,7 @@
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator_context.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
 #include "third_party/blink/renderer/core/paint/compositing/composited_layer_mapping.h"
+#include "third_party/blink/renderer/core/paint/compositing/graphics_layer_tree_as_text.h"
 #include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/paint_layer.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
@@ -224,7 +225,7 @@ static base::Optional<DocumentMarker::MarkerType> MarkerTypeFrom(
 static base::Optional<DocumentMarker::MarkerTypes> MarkerTypesFrom(
     const String& marker_type) {
   if (marker_type.IsEmpty() || DeprecatedEqualIgnoringCase(marker_type, "all"))
-    return DocumentMarker::AllMarkers();
+    return DocumentMarker::MarkerTypes::All();
   base::Optional<DocumentMarker::MarkerType> type = MarkerTypeFrom(marker_type);
   if (!type)
     return base::nullopt;
@@ -949,9 +950,8 @@ unsigned Internals::activeMarkerCountForNode(Node* node) {
   DCHECK(node);
 
   // Only TextMatch markers can be active.
-  DocumentMarker::MarkerType marker_type = DocumentMarker::kTextMatch;
-  DocumentMarkerVector markers =
-      node->GetDocument().Markers().MarkersFor(node, marker_type);
+  DocumentMarkerVector markers = node->GetDocument().Markers().MarkersFor(
+      node, DocumentMarker::MarkerTypes::TextMatch());
 
   unsigned active_marker_count = 0;
   for (const auto& marker : markers) {
@@ -1416,7 +1416,8 @@ String Internals::rangeAsText(const Range* range) {
 // FIXME: The next four functions are very similar - combine them once
 // bestClickableNode/bestContextMenuNode have been combined..
 
-void Internals::HitTestRect(HitTestResult& result,
+void Internals::HitTestRect(HitTestLocation& location,
+                            HitTestResult& result,
                             long x,
                             long y,
                             long width,
@@ -1426,10 +1427,11 @@ void Internals::HitTestRect(HitTestResult& result,
   EventHandler& event_handler = document->GetFrame()->GetEventHandler();
   LayoutPoint hit_test_point(
       document->GetFrame()->View()->ConvertFromRootFrame(LayoutPoint(x, y)));
-  result = event_handler.HitTestResultAtRect(
-      LayoutRect(hit_test_point, LayoutSize((int)width, (int)height)),
-      HitTestRequest::kReadOnly | HitTestRequest::kActive |
-          HitTestRequest::kListBased);
+  location = HitTestLocation(
+      (LayoutRect(hit_test_point, LayoutSize((int)width, (int)height))));
+  result = event_handler.HitTestResultAtLocation(
+      location, HitTestRequest::kReadOnly | HitTestRequest::kActive |
+                    HitTestRequest::kListBased);
 }
 
 DOMPoint* Internals::touchPositionAdjustedToBestClickableNode(
@@ -1446,14 +1448,15 @@ DOMPoint* Internals::touchPositionAdjustedToBestClickableNode(
     return nullptr;
   }
 
+  HitTestLocation location;
   HitTestResult result;
-  HitTestRect(result, x, y, width, height, document);
+  HitTestRect(location, result, x, y, width, height, document);
   Node* target_node = nullptr;
   IntPoint adjusted_point;
 
   EventHandler& event_handler = document->GetFrame()->GetEventHandler();
   bool found_node = event_handler.BestClickableNodeForHitTestResult(
-      result, adjusted_point, target_node);
+      location, result, adjusted_point, target_node);
   if (found_node)
     return DOMPoint::Create(adjusted_point.X(), adjusted_point.Y());
 
@@ -1474,12 +1477,13 @@ Node* Internals::touchNodeAdjustedToBestClickableNode(
     return nullptr;
   }
 
+  HitTestLocation location;
   HitTestResult result;
-  HitTestRect(result, x, y, width, height, document);
+  HitTestRect(location, result, x, y, width, height, document);
   Node* target_node = nullptr;
   IntPoint adjusted_point;
   document->GetFrame()->GetEventHandler().BestClickableNodeForHitTestResult(
-      result, adjusted_point, target_node);
+      location, result, adjusted_point, target_node);
   return target_node;
 }
 
@@ -1497,14 +1501,15 @@ DOMPoint* Internals::touchPositionAdjustedToBestContextMenuNode(
     return nullptr;
   }
 
+  HitTestLocation location;
   HitTestResult result;
-  HitTestRect(result, x, y, width, height, document);
+  HitTestRect(location, result, x, y, width, height, document);
   Node* target_node = nullptr;
   IntPoint adjusted_point;
 
   EventHandler& event_handler = document->GetFrame()->GetEventHandler();
   bool found_node = event_handler.BestContextMenuNodeForHitTestResult(
-      result, adjusted_point, target_node);
+      location, result, adjusted_point, target_node);
   if (found_node)
     return DOMPoint::Create(adjusted_point.X(), adjusted_point.Y());
 
@@ -1525,12 +1530,13 @@ Node* Internals::touchNodeAdjustedToBestContextMenuNode(
     return nullptr;
   }
 
+  HitTestLocation location;
   HitTestResult result;
-  HitTestRect(result, x, y, width, height, document);
+  HitTestRect(location, result, x, y, width, height, document);
   Node* target_node = nullptr;
   IntPoint adjusted_point;
   document->GetFrame()->GetEventHandler().BestContextMenuNodeForHitTestResult(
-      result, adjusted_point, target_node);
+      location, result, adjusted_point, target_node);
   return target_node;
 }
 
@@ -1997,8 +2003,9 @@ StaticNodeList* Internals::nodesFromRect(
 
   HeapVector<Member<Node>> matches;
   HitTestRequest request(hit_type);
-  HitTestResult result(request, rect);
-  frame->ContentLayoutObject()->HitTest(result);
+  HitTestLocation location(rect);
+  HitTestResult result(request, location);
+  frame->ContentLayoutObject()->HitTest(location, result);
   CopyToVector(result.ListBasedTestResult(), matches);
 
   return StaticNodeList::Adopt(matches);
@@ -2201,9 +2208,8 @@ String Internals::elementLayerTreeAsText(
     return String();
   }
 
-  return layer->GetCompositedLayerMapping()
-      ->MainGraphicsLayer()
-      ->GetLayerTreeAsTextForTesting(flags);
+  return GraphicsLayerTreeAsTextForTesting(
+      layer->GetCompositedLayerMapping()->MainGraphicsLayer(), flags);
 }
 
 String Internals::scrollingStateTreeAsText(Document*) const {
@@ -3268,6 +3274,12 @@ bool Internals::isAnimatedCSSPropertyUseCounted(Document* document,
   return UseCounter::IsCountedAnimatedCSS(*document, property_name);
 }
 
+void Internals::clearUseCounter(Document* document, uint32_t feature) {
+  if (feature >= static_cast<int32_t>(WebFeature::kNumberOfFeatures))
+    return;
+  UseCounter::ClearCountForTesting(*document, static_cast<WebFeature>(feature));
+}
+
 Vector<String> Internals::getCSSPropertyLonghands() const {
   Vector<String> result;
   for (int id = firstCSSProperty; id <= lastCSSProperty; ++id) {
@@ -3318,13 +3330,13 @@ ScriptPromise Internals::observeUseCounter(ScriptState* script_state,
     return promise;
   }
 
-  Page* page = document->GetPage();
-  if (!page) {
+  DocumentLoader* loader = document->Loader();
+  if (!loader) {
     resolver->Reject();
     return promise;
   }
 
-  page->GetUseCounter().AddObserver(new UseCounterObserverImpl(
+  loader->GetUseCounter().AddObserver(new UseCounterObserverImpl(
       resolver, static_cast<WebFeature>(use_counter_feature)));
   return promise;
 }

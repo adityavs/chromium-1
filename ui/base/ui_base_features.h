@@ -19,6 +19,7 @@ UI_BASE_EXPORT extern const base::Feature
     kEnableFullscreenHandwritingVirtualKeyboard;
 UI_BASE_EXPORT extern const base::Feature kEnableStylusVirtualKeyboard;
 UI_BASE_EXPORT extern const base::Feature kEnableVirtualKeyboardMdUi;
+UI_BASE_EXPORT extern const base::Feature kEnableVirtualKeyboardUkm;
 UI_BASE_EXPORT extern const base::Feature kExperimentalUi;
 UI_BASE_EXPORT extern const base::Feature kSecondaryUiMd;
 UI_BASE_EXPORT extern const base::Feature kSystemKeyboardLock;
@@ -46,12 +47,9 @@ UI_BASE_EXPORT bool IsUsingWMPointerForTouch();
 UI_BASE_EXPORT extern const base::Feature kDirectManipulationStylus;
 #endif  // defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
 
-// NOTE: this feature will either go away (and be replaced by kOopAsh), or
-// kOopAsh will go away in place of this.
+// Used to have ash (Chrome OS system UI) run in its own process.
+// TODO(jamescook): Make flag only available in Chrome OS.
 UI_BASE_EXPORT extern const base::Feature kMash;
-
-// Used to have ash run out of process. |kMash| is transitioning to this.
-UI_BASE_EXPORT extern const base::Feature kOopAsh;
 
 // Returns true if ash is in process (the default). A value of false means ash
 // is running in a separate process (and is hosting the UI Service and Viz).
@@ -70,6 +68,13 @@ UI_BASE_EXPORT extern const base::Feature kViewsBrowserWindows;
 UI_BASE_EXPORT bool IsViewsBrowserCocoa();
 #endif  //  BUILDFLAG(MAC_VIEWS_BROWSER)
 #endif  //  defined(OS_MACOSX)
+
+// Use mojo communication in the drm platform instead of paramtraits. Remove
+// this switch (and associated code) when the drm platform always uses mojo
+// communication.
+// TODO(rjkroege): Remove in http://crbug.com/806092.
+UI_BASE_EXPORT extern const base::Feature kEnableOzoneDrmMojo;
+UI_BASE_EXPORT bool IsOzoneDrmMojo();
 
 }  // namespace features
 

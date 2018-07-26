@@ -8,20 +8,15 @@
  * category.
  */
 Polymer({
-
   is: 'site-list',
 
-  behaviors: [SiteSettingsBehavior, WebUIListenerBehavior],
+  behaviors: [
+    SiteSettingsBehavior,
+    WebUIListenerBehavior,
+    ListPropertyUpdateBehavior,
+  ],
 
   properties: {
-    /** @private */
-    enableSiteSettings_: {
-      type: Boolean,
-      value: function() {
-        return loadTimeData.getBoolean('enableSiteSettings');
-      },
-    },
-
     /**
      * Some content types (like Location) do not allow the user to manually
      * edit the exception list from within Settings.
@@ -104,6 +99,9 @@ Polymer({
         SESSION_ONLY: 'SessionOnly',
       }
     },
+
+    /** @private */
+    lastFocused_: Object,
   },
 
   /**
@@ -189,30 +187,6 @@ Polymer({
   },
 
   /**
-   * @param {!SiteException} exception The content setting exception.
-   * @param {boolean} readOnlyList Whether the site exception list is read-only.
-   * @return {boolean}
-   * @private
-   */
-  shouldHideResetButton_: function(exception, readOnlyList) {
-    return exception.enforcement ==
-        chrome.settingsPrivate.Enforcement.ENFORCED ||
-        !(readOnlyList || !!exception.embeddingOrigin);
-  },
-
-  /**
-   * @param {!SiteException} exception The content setting exception.
-   * @param {boolean} readOnlyList Whether the site exception list is read-only.
-   * @return {boolean}
-   * @private
-   */
-  shouldHideActionMenu_: function(exception, readOnlyList) {
-    return exception.enforcement ==
-        chrome.settingsPrivate.Enforcement.ENFORCED ||
-        readOnlyList || !!exception.embeddingOrigin;
-  },
-
-  /**
    * A handler for the Add Site button.
    * @private
    */
@@ -233,53 +207,24 @@ Polymer({
    */
   populateList_: function() {
     this.browserProxy_.getExceptionList(this.category).then(exceptionList => {
-      this.processExceptions_([exceptionList]);
+      this.processExceptions_(exceptionList);
       this.closeActionMenu_();
     });
   },
 
   /**
    * Process the exception list returned from the native layer.
-   * @param {!Array<!Array<RawSiteException>>} data List of sites (exceptions)
-   *     to process.
+   * @param {!Array<RawSiteException>} exceptionList
    * @private
    */
-  processExceptions_: function(data) {
-    const sites = /** @type {!Array<RawSiteException>} */ ([]);
-    for (let i = 0; i < data.length; ++i) {
-      const exceptionList = data[i];
-      for (let k = 0; k < exceptionList.length; ++k) {
-        if (exceptionList[k].setting == settings.ContentSetting.DEFAULT ||
-            exceptionList[k].setting != this.categorySubtype) {
-          continue;
-        }
-
-        sites.push(exceptionList[k]);
-      }
-    }
-    this.sites = this.toSiteArray_(sites);
-  },
-
-  /**
-   * Converts a list of exceptions received from the C++ handler to
-   * full SiteException objects.
-   * @param {!Array<RawSiteException>} sites A list of sites to convert.
-   * @return {!Array<SiteException>} A list of full SiteExceptions.
-   * @private
-   */
-  toSiteArray_: function(sites) {
-    const results = /** @type {!Array<SiteException>} */ ([]);
-    let lastOrigin = '';
-    let lastEmbeddingOrigin = '';
-    for (let i = 0; i < sites.length; ++i) {
-      /** @type {!SiteException} */
-      const siteException = this.expandSiteException(sites[i]);
-
-      results.push(siteException);
-      lastOrigin = siteException.origin;
-      lastEmbeddingOrigin = siteException.embeddingOrigin;
-    }
-    return results;
+  processExceptions_: function(exceptionList) {
+    const sites =
+        exceptionList
+            .filter(
+                site => site.setting != settings.ContentSetting.DEFAULT &&
+                    site.setting == this.categorySubtype)
+            .map(site => this.expandSiteException(site));
+    this.updateList('sites', x => x.origin, sites);
   },
 
   /**
@@ -309,29 +254,6 @@ Polymer({
       return false;
 
     return this.showSessionOnlyAction_;
-  },
-
-  /**
-   * A handler for selecting a site (by clicking on the origin).
-   * @param {!{model: !{item: !SiteException}}} event
-   * @private
-   */
-  onOriginTap_: function(event) {
-    if (!this.enableSiteSettings_)
-      return;
-    settings.navigateTo(
-        settings.routes.SITE_SETTINGS_SITE_DETAILS,
-        new URLSearchParams('site=' + event.model.item.origin));
-  },
-
-  /**
-   * @param {?SiteException} site
-   * @private
-   */
-  resetPermissionForOrigin_: function(site) {
-    assert(site);
-    this.browserProxy.resetCategoryPermissionForPattern(
-        site.origin, site.embeddingOrigin, this.category, site.incognito);
   },
 
   /**
@@ -384,51 +306,20 @@ Polymer({
 
   /** @private */
   onResetTap_: function() {
-    this.resetPermissionForOrigin_(this.actionMenuSite_);
+    const site = this.actionMenuSite_;
+    assert(site);
+    this.browserProxy.resetCategoryPermissionForPattern(
+        site.origin, site.embeddingOrigin, this.category, site.incognito);
     this.closeActionMenu_();
   },
 
   /**
-   * Returns the appropriate site description to display. This can, for example,
-   * be blank, an 'embedded on <site>' or 'Current incognito session' (or a
-   * mix of the last two).
-   * @param {SiteException} item The site exception entry.
-   * @return {string} The site description.
-   */
-  computeSiteDescription_: function(item) {
-    let displayName = '';
-    if (item.embeddingOrigin) {
-      displayName = loadTimeData.getStringF(
-          'embeddedOnHost', this.sanitizePort(item.embeddingOrigin));
-    } else if (this.category == settings.ContentSettingsTypes.GEOLOCATION) {
-      displayName = loadTimeData.getString('embeddedOnAnyHost');
-    }
-
-    if (item.incognito) {
-      if (displayName.length > 0)
-        return loadTimeData.getStringF('embeddedIncognitoSite', displayName);
-      return loadTimeData.getString('incognitoSite');
-    }
-    return displayName;
-  },
-
-  /**
-   * @param {!{model: !{item: !SiteException}}} e
+   * @param {!Event} e
    * @private
    */
-  onResetButtonTap_: function(e) {
-    this.resetPermissionForOrigin_(e.model.item);
-  },
-
-  /**
-   * @param {!{model: !{item: !SiteException}}} e
-   * @private
-   */
-  onShowActionMenuTap_: function(e) {
-    this.activeDialogAnchor_ = /** @type {!HTMLElement} */ (
-        Polymer.dom(/** @type {!Event} */ (e)).localTarget);
-
-    this.actionMenuSite_ = e.model.item;
+  onShowActionMenu_: function(e) {
+    this.activeDialogAnchor_ = /** @type {!HTMLElement} */ (e.detail.anchor);
+    this.actionMenuSite_ = e.detail.model;
     /** @type {!CrActionMenuElement} */ (this.$$('cr-action-menu'))
         .showAt(this.activeDialogAnchor_);
   },

@@ -92,10 +92,6 @@ const CGFloat kSeparationSpaceBetweenSections = 9;
 // The UI displays relative time for up to this number of hours and then
 // switches to absolute values.
 const int kRelativeTimeMaxHours = 4;
-// Height for single line headers.
-const CGFloat kSingleLineSectionHeaderHeight = 44;
-// Height for double line headers.
-const CGFloat kDoubleLineSectionHeaderHeight = 56;
 // Section index for recently closed tabs.
 const int kRecentlyClosedTabsSectionIndex = 0;
 
@@ -104,10 +100,14 @@ const int kRecentlyClosedTabsSectionIndex = 0;
 @interface RecentTabsTableViewController ()<SigninPromoViewConsumer,
                                             SigninPresenter,
                                             SyncPresenter,
-                                            TextButtonItemDelegate,
                                             UIGestureRecognizerDelegate> {
   std::unique_ptr<synced_sessions::SyncedSessions> _syncedSessions;
 }
+// There is no need to update the table view when other view controllers
+// are obscuring the table view. Bookkeeping is based on |-viewWillAppear:|
+// and |-viewWillDisappear methods. Note that the |Did| methods are not reliably
+// called (e.g., edge case in multitasking).
+@property(nonatomic, assign) BOOL updatesTableView;
 // The service that manages the recently closed tabs
 @property(nonatomic, assign) sessions::TabRestoreService* tabRestoreService;
 // The sync state.
@@ -127,6 +127,7 @@ const int kRecentlyClosedTabsSectionIndex = 0;
 @synthesize loader = _loader;
 @synthesize sessionState = _sessionState;
 @synthesize signinPromoViewMediator = _signinPromoViewMediator;
+@synthesize updatesTableView = _updatesTableView;
 @synthesize tabRestoreService = _tabRestoreService;
 
 #pragma mark - Public Interface
@@ -147,15 +148,30 @@ const int kRecentlyClosedTabsSectionIndex = 0;
 
 - (void)viewDidLoad {
   [super viewDidLoad];
-  [self loadModel];
   self.view.accessibilityIdentifier =
       kRecentTabsTableViewControllerAccessibilityIdentifier;
   [self.tableView setDelegate:self];
   self.tableView.cellLayoutMarginsFollowReadableWidth = NO;
   self.tableView.estimatedRowHeight = kEstimatedRowHeight;
+  if (@available(iOS 11.0, *))
+    self.tableView.estimatedSectionHeaderHeight = kEstimatedRowHeight;
   self.tableView.rowHeight = UITableViewAutomaticDimension;
   self.tableView.sectionFooterHeight = 0.0;
   self.title = l10n_util::GetNSString(IDS_IOS_CONTENT_SUGGESTIONS_RECENT_TABS);
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+  [super viewWillAppear:animated];
+  self.updatesTableView = YES;
+  // The table view might get stale while hidden, so we need to forcibly refresh
+  // it here.
+  [self loadModel];
+  [self.tableView reloadData];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+  self.updatesTableView = NO;
+  [super viewWillDisappear:animated];
 }
 
 #pragma mark - TableViewModel
@@ -319,15 +335,16 @@ const int kRecentlyClosedTabsSectionIndex = 0;
   NSInteger sectionToDelete = kNumberOfSectionsBeforeSessions;
   while ([self.tableViewModel numberOfSections] >
          kNumberOfSectionsBeforeSessions) {
-    if ([self.tableViewModel
-            hasSectionForSectionIdentifier:sectionIdentifierToRemove]) {
-      [self.tableView
-            deleteSections:[NSIndexSet indexSetWithIndex:sectionToDelete]
-          withRowAnimation:UITableViewRowAnimationNone];
-      sectionToDelete++;
-      [self.tableViewModel
-          removeSectionWithIdentifier:sectionIdentifierToRemove];
-    }
+    // Without this DCHECK, |sectionIdentifierToRemove| can continue to
+    // increment indefinitely. It is a programmer error for the model not to
+    // have an expected session section.
+    DCHECK([self.tableViewModel
+        hasSectionForSectionIdentifier:sectionIdentifierToRemove]);
+    [self.tableView
+          deleteSections:[NSIndexSet indexSetWithIndex:sectionToDelete]
+        withRowAnimation:UITableViewRowAnimationNone];
+    sectionToDelete++;
+    [self.tableViewModel removeSectionWithIdentifier:sectionIdentifierToRemove];
     sectionIdentifierToRemove++;
   }
 }
@@ -426,7 +443,6 @@ const int kRecentlyClosedTabsSectionIndex = 0;
       l10n_util::GetNSString(IDS_IOS_OPEN_TABS_SYNC_IS_OFF_MOBILE);
   signinSyncOffItem.buttonText =
       l10n_util::GetNSString(IDS_IOS_OPEN_TABS_ENABLE_SYNC_MOBILE);
-  signinSyncOffItem.delegate = self;
   [self.tableViewModel addItem:signinSyncOffItem
        toSectionWithIdentifier:SectionIdentifierOtherDevices];
 }
@@ -521,36 +537,40 @@ const int kRecentlyClosedTabsSectionIndex = 0;
       ProfileSyncServiceFactory::GetForBrowserState(self.browserState);
   _syncedSessions.reset(new synced_sessions::SyncedSessions(syncService));
 
-  // Update the TableView and TableViewModel sections to match the new
-  // sessionState.
-  // Turn Off animations since UITableViewRowAnimationNone still animates.
-  [UIView setAnimationsEnabled:NO];
-  // If iOS11+ use performBatchUpdates: instead of begin/endUpdates.
-  if (@available(iOS 11, *)) {
-    if (newSessionState ==
-        SessionsSyncUserState::USER_SIGNED_IN_SYNC_ON_WITH_SESSIONS) {
-      [self.tableView performBatchUpdates:^{
-        [self updateSessionSections];
+  if (self.updatesTableView) {
+    // Update the TableView and TableViewModel sections to match the new
+    // sessionState.
+    // Turn Off animations since UITableViewRowAnimationNone still animates.
+    [UIView setAnimationsEnabled:NO];
+    // If iOS11+ use performBatchUpdates: instead of begin/endUpdates.
+    if (@available(iOS 11, *)) {
+      if (newSessionState ==
+          SessionsSyncUserState::USER_SIGNED_IN_SYNC_ON_WITH_SESSIONS) {
+        [self.tableView performBatchUpdates:^{
+          [self updateSessionSections];
+        }
+                                 completion:nil];
+      } else {
+        [self.tableView performBatchUpdates:^{
+          [self updateOtherDevicesSectionForState:newSessionState];
+        }
+                                 completion:nil];
       }
-                               completion:nil];
     } else {
-      [self.tableView performBatchUpdates:^{
+      [self.tableView beginUpdates];
+      if (newSessionState ==
+          SessionsSyncUserState::USER_SIGNED_IN_SYNC_ON_WITH_SESSIONS) {
+        [self updateSessionSections];
+      } else {
         [self updateOtherDevicesSectionForState:newSessionState];
       }
-                               completion:nil];
+      [self.tableView endUpdates];
     }
-  } else {
-    [self.tableView beginUpdates];
-    if (newSessionState ==
-        SessionsSyncUserState::USER_SIGNED_IN_SYNC_ON_WITH_SESSIONS) {
-      [self updateSessionSections];
-    } else {
-      [self updateOtherDevicesSectionForState:newSessionState];
-    }
-    [self.tableView endUpdates];
+    [UIView setAnimationsEnabled:YES];
   }
-  [UIView setAnimationsEnabled:YES];
 
+  // Table updates must happen before |sessionState| gets updated, since some
+  // table updates rely on knowing the previous state.
   self.sessionState = newSessionState;
   if (self.sessionState != SessionsSyncUserState::USER_SIGNED_OUT) {
     [self.signinPromoViewMediator signinPromoViewRemoved];
@@ -560,6 +580,9 @@ const int kRecentlyClosedTabsSectionIndex = 0;
 }
 
 - (void)refreshRecentlyClosedTabs {
+  if (!self.updatesTableView)
+    return;
+
   if (@available(iOS 11, *)) {
     [self.tableView performBatchUpdates:^{
       [self updateRecentlyClosedSection];
@@ -610,20 +633,17 @@ const int kRecentlyClosedTabsSectionIndex = 0;
   }
 }
 
-// TODO(crbug.com/850814): Use estimatedSectionHeaderHeight once we stop
-// supporting iOS10.
+// TODO(crbug.com/850814): Use only dynamic sizing once we stop supporting
+// iOS10.
 - (CGFloat)tableView:(UITableView*)tableView
     heightForHeaderInSection:(NSInteger)section {
   DCHECK_EQ(tableView, self.tableView);
-  NSInteger sectionIdentifier =
-      [self.tableViewModel sectionIdentifierForSection:section];
-  switch (sectionIdentifier) {
-    case SectionIdentifierRecentlyClosedTabs:
-    case SectionIdentifierOtherDevices:
-      return kSingleLineSectionHeaderHeight;
-    default:
-      // All remote session sections.
-      return kDoubleLineSectionHeaderHeight;
+  if (@available(iOS 11, *)) {
+    return UITableViewAutomaticDimension;
+  } else {
+    TableViewHeaderFooterItem* header =
+        [self.tableViewModel headerForSection:section];
+    return [header headerHeightForWidth:self.view.bounds.size.width];
   }
 }
 
@@ -658,6 +678,14 @@ const int kRecentlyClosedTabsSectionIndex = 0;
   // ItemTypeOtherDevicesNoSessions should not be selectable.
   if (itemTypeSelected == ItemTypeOtherDevicesNoSessions) {
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
+  }
+  // Set button action method for ItemTypeOtherDevicesSyncOff.
+  if (itemTypeSelected == ItemTypeOtherDevicesSyncOff) {
+    TableViewTextButtonCell* tableViewTextButtonCell =
+        base::mac::ObjCCastStrict<TableViewTextButtonCell>(cell);
+    [tableViewTextButtonCell.button addTarget:self
+                                       action:@selector(updateSyncState)
+                             forControlEvents:UIControlEventTouchUpInside];
   }
 
   return cell;
@@ -1000,6 +1028,7 @@ const int kRecentlyClosedTabsSectionIndex = 0;
     [self.loader webPageOrderedOpen:tab->virtual_url
                            referrer:web::Referrer()
                        inBackground:YES
+                        originPoint:CGPointZero
                            appendTo:kLastTab];
   }
   [self.presentationDelegate showActiveRegularTabFromRecentTabs];
@@ -1093,9 +1122,22 @@ const int kRecentlyClosedTabsSectionIndex = 0;
   [self.dispatcher showSyncPassphraseSettingsFromViewController:self];
 }
 
-#pragma mark - TextButtonItemDelegate
+#pragma mark - SigninPresenter
 
-- (void)performButtonAction {
+- (void)showSignin:(ShowSigninCommand*)command {
+  [self.dispatcher showSignin:command baseViewController:self];
+}
+
+#pragma mark - Accessibility
+
+- (BOOL)accessibilityPerformEscape {
+  [self.presentationDelegate showActiveRegularTabFromRecentTabs];
+  return YES;
+}
+
+#pragma mark - Private Helpers
+
+- (void)updateSyncState {
   SyncSetupService::SyncServiceState syncState =
       GetSyncStateForBrowserState(_browserState);
   if (ShouldShowSyncSignin(syncState)) {
@@ -1105,12 +1147,6 @@ const int kRecentlyClosedTabsSectionIndex = 0;
   } else if (ShouldShowSyncPassphraseSettings(syncState)) {
     [self showSyncPassphraseSettings];
   }
-}
-
-#pragma mark - SigninPresenter
-
-- (void)showSignin:(ShowSigninCommand*)command {
-  [self.dispatcher showSignin:command baseViewController:self];
 }
 
 @end

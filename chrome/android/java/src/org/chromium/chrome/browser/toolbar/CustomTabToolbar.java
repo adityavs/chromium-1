@@ -19,6 +19,7 @@ import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
+import android.support.annotation.Nullable;
 import android.support.v4.text.BidiFormatter;
 import android.support.v4.view.MarginLayoutParamsCompat;
 import android.text.SpannableString;
@@ -191,7 +192,7 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
             Activity activity = currentTab.getWindowAndroid().getActivity().get();
             if (activity == null) return;
             PageInfoController.show(activity, currentTab, getContentPublisher(),
-                    PageInfoController.OPENED_FROM_TOOLBAR);
+                    PageInfoController.OpenedFromSource.TOOLBAR);
         });
     }
 
@@ -265,28 +266,22 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
         return 0;
     }
 
-    @Override
-    public Tab getCurrentTab() {
+    /** @return The current active {@link Tab}. */
+    @Nullable
+    private Tab getCurrentTab() {
         return getToolbarDataProvider().getTab();
+    }
+
+    @Override
+    public View getViewForUrlBackFocus() {
+        Tab tab = getCurrentTab();
+        if (tab == null) return null;
+        return tab.getView();
     }
 
     @Override
     public boolean allowKeyboardLearning() {
         return !super.isIncognito();
-    }
-
-    @Override
-    public boolean shouldEmphasizeUrl() {
-        // If the toolbar shows the publisher URL, it applies its own formatting for emphasis.
-        Tab currentTab = getCurrentTab();
-        if (currentTab == null) return true;
-
-        return currentTab.getTrustedCdnPublisherUrl() == null;
-    }
-
-    @Override
-    public boolean shouldEmphasizeHttpsScheme() {
-        return !mToolbarDataProvider.isUsingBrandColor();
     }
 
     @Override
@@ -440,9 +435,7 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
             originEnd = displayText.length();
         }
 
-        if (mUrlBar.setUrl(UrlBarData.create(url, displayText, originStart, originEnd, url))) {
-            mUrlBar.emphasizeUrl();
-        }
+        mUrlBar.setUrl(UrlBarData.create(url, displayText, originStart, originEnd, url));
     }
 
     @Override
@@ -466,7 +459,9 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
         Resources resources = getResources();
         updateSecurityIcon();
         updateButtonsTint();
-        mUrlBar.setUseDarkTextColors(mUseDarkColors);
+        if (mUrlBar.setUseDarkTextColors(mUseDarkColors)) {
+            setUrlToPageUrl();
+        }
 
         int titleTextColor = mUseDarkColors
                 ? ApiCompatibilityUtils.getColor(resources, R.color.url_emphasis_default_text)
@@ -537,7 +532,11 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
             mAnimDelegate.showSecurityButton();
         }
 
-        mUrlBar.emphasizeUrl();
+        int contentDescriptionId = getToolbarDataProvider().getSecurityIconContentDescription();
+        String contentDescription = getContext().getString(contentDescriptionId);
+        mSecurityButton.setContentDescription(contentDescription);
+
+        setUrlToPageUrl();
         mUrlBar.invalidate();
     }
 
@@ -756,11 +755,6 @@ public class CustomTabToolbar extends ToolbarLayout implements LocationBar,
 
     @Override
     public void revertChanges() {}
-
-    @Override
-    public long getFirstUrlBarFocusTime() {
-        return 0;
-    }
 
     @Override
     public void hideSuggestions() {}

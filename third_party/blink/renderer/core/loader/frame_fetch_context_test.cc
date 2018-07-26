@@ -269,8 +269,7 @@ class FrameFetchContextSubresourceFilterTest : public FrameFetchContextTest {
     ResourceLoaderOptions options;
     return fetch_context->CanRequest(
         Resource::kImage, resource_request, input_url, options,
-        reporting_policy, FetchParameters::kUseDefaultOriginRestrictionForType,
-        ResourceRequest::RedirectStatus::kNoRedirect);
+        reporting_policy, ResourceRequest::RedirectStatus::kNoRedirect);
   }
 
   int filtered_load_callback_counter_;
@@ -632,7 +631,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorDeviceMemorySecureTransport) {
   ExpectHeader("https://www.example.com/1.gif", "Device-Memory", false, "");
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDeviceMemory);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(4096);
   ExpectHeader("https://www.example.com/1.gif", "Device-Memory", true, "4");
   ExpectHeader("https://www.example.com/1.gif", "DPR", false, "");
@@ -657,7 +656,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorDeviceMemoryHintsInsecureContext) {
   ExpectHeader("http://www.example.com/1.gif", "Device-Memory", false, "");
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDeviceMemory);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(4096);
   ExpectHeader("http://www.example.com/1.gif", "Device-Memory", false, "");
   ExpectHeader("http://www.example.com/1.gif", "DPR", false, "");
@@ -674,7 +673,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorDeviceMemoryHintsLocalContext) {
   ExpectHeader("http://localhost/1.gif", "Device-Memory", false, "");
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDeviceMemory);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(4096);
   ExpectHeader("http://localhost/1.gif", "Device-Memory", true, "4");
   ExpectHeader("http://localhost/1.gif", "DPR", false, "");
@@ -686,7 +685,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorDeviceMemoryHints) {
   ExpectHeader("https://www.example.com/1.gif", "Device-Memory", false, "");
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDeviceMemory);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(4096);
   ExpectHeader("https://www.example.com/1.gif", "Device-Memory", true, "4");
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(2048);
@@ -704,7 +703,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorDPRHints) {
   ExpectHeader("https://www.example.com/1.gif", "DPR", false, "");
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDpr);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ExpectHeader("https://www.example.com/1.gif", "DPR", true, "1");
   dummy_page_holder->GetPage().SetDeviceScaleFactorDeprecated(2.5);
   ExpectHeader("https://www.example.com/1.gif", "DPR", true, "2.5");
@@ -725,7 +724,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorResourceWidthHints) {
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(
       mojom::WebClientHintsType::kResourceWidth);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ExpectHeader("https://www.example.com/1.gif", "Width", true, "500", 500);
   ExpectHeader("https://www.example.com/1.gif", "Width", true, "667", 666.6666);
   ExpectHeader("https://www.example.com/1.gif", "DPR", false, "");
@@ -740,7 +739,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorViewportWidthHints) {
   ClientHintsPreferences preferences;
   preferences.SetShouldSendForTesting(
       mojom::WebClientHintsType::kViewportWidth);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ExpectHeader("https://www.example.com/1.gif", "Viewport-Width", true, "500");
   dummy_page_holder->GetFrameView().SetLayoutSizeFixedToFrameSize(false);
   dummy_page_holder->GetFrameView().SetLayoutSize(IntSize(800, 800));
@@ -770,7 +769,7 @@ TEST_F(FrameFetchContextHintsTest, MonitorAllHints) {
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kDownlink);
   preferences.SetShouldSendForTesting(mojom::WebClientHintsType::kEct);
   ApproximatedDeviceMemory::SetPhysicalMemoryMBForTesting(4096);
-  document->GetClientHintsPreferences().UpdateFrom(preferences);
+  document->GetFrame()->GetClientHintsPreferences().UpdateFrom(preferences);
   ExpectHeader("https://www.example.com/1.gif", "Device-Memory", true, "4");
   ExpectHeader("https://www.example.com/1.gif", "DPR", true, "1");
   ExpectHeader("https://www.example.com/1.gif", "Width", true, "400", 400);
@@ -1445,13 +1444,6 @@ TEST_F(FrameFetchContextTest, UpdateTimingInfoForIFrameNavigationWhenDetached) {
   // Should not crash.
 }
 
-TEST_F(FrameFetchContextTest, AddConsoleMessageWhenDetached) {
-  dummy_page_holder = nullptr;
-
-  fetch_context->AddWarningConsoleMessage("foobar", FetchContext::kJSSource);
-  // Should not crash.
-}
-
 TEST_F(FrameFetchContextTest, GetSecurityOriginWhenDetached) {
   scoped_refptr<SecurityOrigin> origin =
       SecurityOrigin::Create(KURL("https://www.example.com"));
@@ -1479,13 +1471,13 @@ TEST_F(FrameFetchContextTest, PopulateResourceRequestWhenDetached) {
   FetchParameters::ResourceWidth resource_width;
   ResourceLoaderOptions options;
 
-  document->GetClientHintsPreferences().SetShouldSendForTesting(
+  document->GetFrame()->GetClientHintsPreferences().SetShouldSendForTesting(
       mojom::WebClientHintsType::kDeviceMemory);
-  document->GetClientHintsPreferences().SetShouldSendForTesting(
+  document->GetFrame()->GetClientHintsPreferences().SetShouldSendForTesting(
       mojom::WebClientHintsType::kDpr);
-  document->GetClientHintsPreferences().SetShouldSendForTesting(
+  document->GetFrame()->GetClientHintsPreferences().SetShouldSendForTesting(
       mojom::WebClientHintsType::kResourceWidth);
-  document->GetClientHintsPreferences().SetShouldSendForTesting(
+  document->GetFrame()->GetClientHintsPreferences().SetShouldSendForTesting(
       mojom::WebClientHintsType::kViewportWidth);
 
   dummy_page_holder = nullptr;

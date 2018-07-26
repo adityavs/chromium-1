@@ -49,6 +49,41 @@ bool Is32BitAligned(offset_t offset) {
   return offset % 4 == 0;
 }
 
+// Returns a lower bound for the size of an item of type |type_item_code|.
+// - For fixed-length items (e.g., kTypeFieldIdItem) this is the exact size.
+// - For variant-length items (e.g., kTypeCodeItem), returns a value that is
+//   known to be less than the item length (e.g., header size).
+// - For items not handled by this function, returns 1 for sanity check.
+size_t GetItemBaseSize(uint16_t type_item_code) {
+  switch (type_item_code) {
+    case dex::kTypeStringIdItem:
+      return sizeof(dex::StringIdItem);
+    case dex::kTypeTypeIdItem:
+      return sizeof(dex::TypeIdItem);
+    case dex::kTypeProtoIdItem:
+      return sizeof(dex::ProtoIdItem);
+    case dex::kTypeFieldIdItem:
+      return sizeof(dex::FieldIdItem);
+    case dex::kTypeMethodIdItem:
+      return sizeof(dex::MethodIdItem);
+    case dex::kTypeClassDefItem:
+      return sizeof(dex::ClassDefItem);
+    // No need to handle dex::kTypeMapList.
+    case dex::kTypeTypeList:
+      return sizeof(uint32_t);  // Variable-length.
+    case dex::kTypeAnnotationSetRefList:
+      return sizeof(uint32_t);  // Variable-length.
+    case dex::kTypeAnnotationSetItem:
+      return sizeof(uint32_t);  // Variable-length.
+    case dex::kTypeCodeItem:
+      return sizeof(dex::CodeItem);  // Variable-length.
+    case dex::kTypeAnnotationsDirectoryItem:
+      return sizeof(dex::AnnotationsDirectoryItem);  // Variable-length.
+    default:
+      return 1U;  // Unhandled item. For sanity check assume size >= 1.
+  }
+}
+
 /******** CodeItemParser ********/
 
 // A parser to extract successive code items from a DEX image whose header has
@@ -127,6 +162,7 @@ class CodeItemParser {
       return kInvalidOffset;
     DCHECK(Is32BitAligned(code_item_offset));
 
+    // TODO(huangs): Fail if |code_item->insns_size == 0| (Constraint A1).
     // Skip instruction bytes.
     if (!source_.GetArray<uint16_t>(code_item->insns_size))
       return kInvalidOffset;
@@ -698,12 +734,17 @@ static void WriteTargetIndex(const dex::MapItem& target_map_item,
                              size_t target_item_size,
                              Reference ref,
                              MutableBufferView image) {
-  const size_t idx = (ref.target - target_map_item.offset) / target_item_size;
+  const size_t unsafe_idx =
+      (ref.target - target_map_item.offset) / target_item_size;
   // Verify that index is within bound.
-  DCHECK_LT(idx, target_map_item.size);
+  if (unsafe_idx >= target_map_item.size) {
+    LOG(ERROR) << "Target index out of bounds at: " << AsHex<8>(ref.location)
+               << ".";
+    return;
+  }
   // Verify that |ref.target| points to start of item.
-  DCHECK_EQ(ref.target, target_map_item.offset + idx * target_item_size);
-  image.write<INT>(ref.location, base::checked_cast<INT>(idx));
+  DCHECK_EQ(ref.target, target_map_item.offset + unsafe_idx * target_item_size);
+  image.write<INT>(ref.location, base::checked_cast<INT>(unsafe_idx));
 }
 
 // Buffer for ReadDexHeader() to optionally return results.
@@ -1368,12 +1409,17 @@ std::unique_ptr<ReferenceReader> DisassemblerDex::MakeReadCodeToRelCode32(
   auto mapper = base::BindRepeating(
       [](DisassemblerDex* dis, offset_t location) {
         // Address is relative to the current instruction, which begins 1 unit
-        // before |location|. This needs to be subtracted out.
-        int32_t unsafe_delta = dis->image_.read<int32_t>(location);
-        offset_t unsafe_target = static_cast<offset_t>(
-            location + (unsafe_delta - 1) * kInstrUnitSize);
+        // before |location|. This needs to be subtracted out. Use int64_t to
+        // avoid underflow and overflow.
+        int64_t unsafe_delta = dis->image_.read<int32_t>(location);
+        int64_t unsafe_target = location + (unsafe_delta - 1) * kInstrUnitSize;
+
         // TODO(huangs): Check that |unsafe_target| stays within code item.
-        return unsafe_target;
+        offset_t checked_unsafe_target =
+            static_cast<offset_t>(base::CheckedNumeric<offset_t>(unsafe_target)
+                                      .ValueOrDefault(kInvalidOffset));
+        return checked_unsafe_target < kOffsetBound ? checked_unsafe_target
+                                                    : kInvalidOffset;
       },
       base::Unretained(this));
   return std::make_unique<InstructionReferenceReader>(
@@ -1446,12 +1492,17 @@ std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteMethodId32(
 std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteRelCode8(
     MutableBufferView image) {
   auto writer = base::BindRepeating([](Reference ref, MutableBufferView image) {
-    ptrdiff_t byte_diff = static_cast<ptrdiff_t>(ref.target) - ref.location;
-    DCHECK_EQ(0, byte_diff % kInstrUnitSize);
+    ptrdiff_t unsafe_byte_diff =
+        static_cast<ptrdiff_t>(ref.target) - ref.location;
+    DCHECK_EQ(0, unsafe_byte_diff % kInstrUnitSize);
     // |delta| is relative to start of instruction, which is 1 unit before
     // |ref.location|. The subtraction above removed too much, so +1 to fix.
-    ptrdiff_t delta = (byte_diff / kInstrUnitSize) + 1;
-    image.write<int8_t>(ref.location, base::checked_cast<int8_t>(delta));
+    base::CheckedNumeric<int8_t> delta((unsafe_byte_diff / kInstrUnitSize) + 1);
+    if (!delta.IsValid()) {
+      LOG(ERROR) << "Invalid reference at: " << AsHex<8>(ref.location) << ".";
+      return;
+    }
+    image.write<int8_t>(ref.location, delta.ValueOrDie());
   });
   return std::make_unique<ReferenceWriterAdaptor>(image, std::move(writer));
 }
@@ -1459,12 +1510,18 @@ std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteRelCode8(
 std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteRelCode16(
     MutableBufferView image) {
   auto writer = base::BindRepeating([](Reference ref, MutableBufferView image) {
-    ptrdiff_t byte_diff = static_cast<ptrdiff_t>(ref.target) - ref.location;
-    DCHECK_EQ(0, byte_diff % kInstrUnitSize);
+    ptrdiff_t unsafe_byte_diff =
+        static_cast<ptrdiff_t>(ref.target) - ref.location;
+    DCHECK_EQ(0, unsafe_byte_diff % kInstrUnitSize);
     // |delta| is relative to start of instruction, which is 1 unit before
     // |ref.location|. The subtraction above removed too much, so +1 to fix.
-    ptrdiff_t delta = (byte_diff / kInstrUnitSize) + 1;
-    image.write<int16_t>(ref.location, base::checked_cast<int16_t>(delta));
+    base::CheckedNumeric<int16_t> delta((unsafe_byte_diff / kInstrUnitSize) +
+                                        1);
+    if (!delta.IsValid()) {
+      LOG(ERROR) << "Invalid reference at: " << AsHex<8>(ref.location) << ".";
+      return;
+    }
+    image.write<int16_t>(ref.location, delta.ValueOrDie());
   });
   return std::make_unique<ReferenceWriterAdaptor>(image, std::move(writer));
 }
@@ -1472,10 +1529,18 @@ std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteRelCode16(
 std::unique_ptr<ReferenceWriter> DisassemblerDex::MakeWriteRelCode32(
     MutableBufferView image) {
   auto writer = base::BindRepeating([](Reference ref, MutableBufferView image) {
-    ptrdiff_t byte_diff = static_cast<ptrdiff_t>(ref.target) - ref.location;
-    DCHECK_EQ(0, byte_diff % kInstrUnitSize);
-    ptrdiff_t delta = (byte_diff / kInstrUnitSize) + 1;
-    image.write<int32_t>(ref.location, base::checked_cast<int32_t>(delta));
+    ptrdiff_t unsafe_byte_diff =
+        static_cast<ptrdiff_t>(ref.target) - ref.location;
+    DCHECK_EQ(0, unsafe_byte_diff % kInstrUnitSize);
+    // |delta| is relative to start of instruction, which is 1 unit before
+    // |ref.location|. The subtraction above removed too much, so +1 to fix.
+    base::CheckedNumeric<int32_t> delta((unsafe_byte_diff / kInstrUnitSize) +
+                                        1);
+    if (!delta.IsValid()) {
+      LOG(ERROR) << "Invalid reference at: " << AsHex<8>(ref.location) << ".";
+      return;
+    }
+    image.write<int32_t>(ref.location, delta.ValueOrDie());
   });
   return std::make_unique<ReferenceWriterAdaptor>(image, std::move(writer));
 }
@@ -1520,6 +1585,10 @@ bool DisassemblerDex::ParseHeader() {
     return false;
 
   // Read and validate map list, ensuring that required item types are present.
+  // - GetItemBaseSize() should have an entry for each item.
+  // - dex::kTypeCodeItem is actually not required; it's possible to have a DEX
+  //   file with classes that have no code. However, this is unlikely to appear
+  //   in application, so for simplicity we require DEX files to have code.
   std::set<uint16_t> required_item_types = {
       dex::kTypeStringIdItem, dex::kTypeTypeIdItem,   dex::kTypeProtoIdItem,
       dex::kTypeFieldIdItem,  dex::kTypeMethodIdItem, dex::kTypeClassDefItem,
@@ -1527,9 +1596,10 @@ bool DisassemblerDex::ParseHeader() {
   };
   for (offset_t i = 0; i < list_size; ++i) {
     const dex::MapItem* item = &item_list[i];
-    // Sanity check to reject unreasonably large |item->size|.
-    // TODO(huangs): Implement a more stringent check.
-    if (!image_.covers({item->offset, item->size}))
+    // Reject unreasonably large |item->size|.
+    size_t item_size = GetItemBaseSize(item->type);
+    // Confusing name: |item->size| is actually the number of items.
+    if (!image_.covers_array(item->offset, item->size, item_size))
       return false;
     if (!map_item_map_.insert(std::make_pair(item->type, item)).second)
       return false;  // A given type must appear at most once.

@@ -1,10 +1,10 @@
 /* Copyright (c) 2008, Google Inc.
  * All rights reserved.
- *
+ * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
  * met:
- *
+ * 
  *     * Redistributions of source code must retain the above copyright
  * notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above
@@ -14,7 +14,7 @@
  *     * Neither the name of Google Inc. nor the names of its
  * contributors may be used to endorse or promote products derived from
  * this software without specific prior written permission.
- *
+ * 
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -56,6 +56,12 @@
 #define SEARCH_CAP (1024*1024)
 #define WEBSYM "SRV*c:\\websymbols*http://msdl.microsoft.com/download/symbols"
 
+void usage() {
+  fprintf(stderr, "usage: addr2line-pdb "
+          "[-f|--functions] [-C|--demangle] [-e|--exe filename]\n");
+  fprintf(stderr, "(Then list the hex addresses on stdin, one per line)\n");
+}
+
 int main(int argc, char *argv[]) {
   DWORD  error;
   HANDLE process;
@@ -83,10 +89,11 @@ int main(int argc, char *argv[]) {
       }
       filename = argv[i+1];
       i++;     /* to skip over filename too */
+    } else if (strcmp(argv[i], "--help") == 0) {
+      usage();
+      exit(0);
     } else {
-      fprintf(stderr, "usage: "
-              "addr2line-pdb [-f|--functions] [-C|--demangle] [-e filename]\n");
-      fprintf(stderr, "(Then list the hex addresses on stdin, one per line)\n");
+      usage();
       exit(1);
     }
   }
@@ -140,7 +147,6 @@ int main(int argc, char *argv[]) {
                     MAX_SYM_NAME*sizeof(TCHAR) +
                     sizeof(ULONG64) - 1)
                    / sizeof(ULONG64)];
-    memset(buffer, 0, sizeof(buffer));
     PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
     IMAGEHLP_LINE64 line;
     DWORD dummy;
@@ -153,8 +159,7 @@ int main(int argc, char *argv[]) {
     ULONG64 absaddr = reladdr + module_base;
 
     pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-    // The length of the name is not including the null-terminating character.
-    pSymbol->MaxNameLen = MAX_SYM_NAME - 1;
+    pSymbol->MaxNameLen = MAX_SYM_NAME;
     if (print_function_name) {
       if (SymFromAddr(process, (DWORD64)absaddr, NULL, pSymbol)) {
         printf("%s\n", pSymbol->Name);

@@ -20,6 +20,7 @@ struct VR_EXPORT TextInputInfo {
  public:
   TextInputInfo();
   explicit TextInputInfo(base::string16 t);
+  TextInputInfo(base::string16 t, int selection_start, int selection_end);
   TextInputInfo(base::string16 t,
                 int selection_start,
                 int selection_end,
@@ -68,6 +69,7 @@ struct VR_EXPORT EditedText {
  public:
   EditedText();
   EditedText(const EditedText& other);
+  explicit EditedText(const TextInputInfo& current);
   EditedText(const TextInputInfo& current, const TextInputInfo& previous);
   explicit EditedText(base::string16 t);
 

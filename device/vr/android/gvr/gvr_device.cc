@@ -179,32 +179,31 @@ GvrDevice::~GvrDevice() {
 void GvrDevice::RequestSession(
     mojom::XRDeviceRuntimeSessionOptionsPtr options,
     mojom::XRRuntime::RequestSessionCallback callback) {
+  if (!options->immersive) {
+    // TODO(https://crbug.com/695937): This should be NOTREACHED() once we no
+    // longer need the hacked GRV non-immersive mode.
+    ReturnNonImmersiveSession(std::move(callback));
+    return;
+  }
+
   GvrDelegateProvider* delegate_provider = GetGvrDelegateProvider();
   if (!delegate_provider) {
     std::move(callback).Run(nullptr, nullptr);
     return;
   }
 
-  if (options->exclusive) {
-    // StartWebXRPresentation is async as we may trigger a DON (Device ON) flow
-    // that pauses Chrome.
-    delegate_provider->StartWebXRPresentation(
-        GetVRDisplayInfo(), std::move(options),
-        base::BindOnce(&GvrDevice::OnRequestSessionResult,
-                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
-  } else {
-    // TODO(https://crbug.com/695937): This should be NOTREACHED() once
-    // orientation device handles non-exclusive VR sessions.
-    // TODO(https://crbug.com/842025): Handle this when RequestSession is called
-    // for non-exclusive sessions.
-    NOTREACHED();
-  }
+  // StartWebXRPresentation is async as we may trigger a DON (Device ON) flow
+  // that pauses Chrome.
+  delegate_provider->StartWebXRPresentation(
+      GetVRDisplayInfo(), std::move(options),
+      base::BindOnce(&GvrDevice::OnStartPresentResult,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
-void GvrDevice::OnRequestSessionResult(
+void GvrDevice::OnStartPresentResult(
     mojom::XRRuntime::RequestSessionCallback callback,
-    mojom::XRPresentationConnectionPtr connection) {
-  if (!connection) {
+    mojom::XRSessionPtr session) {
+  if (!session) {
     std::move(callback).Run(nullptr, nullptr);
     return;
   }
@@ -223,7 +222,7 @@ void GvrDevice::OnRequestSessionResult(
       base::BindOnce(&GvrDevice::OnPresentingControllerMojoConnectionError,
                      base::Unretained(this)));
 
-  std::move(callback).Run(std::move(connection), std::move(session_controller));
+  std::move(callback).Run(std::move(session), std::move(session_controller));
 }
 
 // XRSessionController
@@ -245,7 +244,7 @@ void GvrDevice::StopPresenting() {
 }
 
 void GvrDevice::OnMagicWindowFrameDataRequest(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   mojom::XRFrameDataPtr frame_data = mojom::XRFrameData::New();
   frame_data->pose =
       GvrDelegate::GetVRPosePtrWithNeckModel(gvr_api_.get(), nullptr);

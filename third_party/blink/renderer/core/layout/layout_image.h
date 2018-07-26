@@ -48,10 +48,6 @@ class SVGImage;
 // See LayoutImageResource that holds this image.
 class CORE_EXPORT LayoutImage : public LayoutReplaced {
  public:
-  // These are the paddings to use when displaying either alt text or an image.
-  static const unsigned short kPaddingWidth = 4;
-  static const unsigned short kPaddingHeight = 4;
-
   LayoutImage(Element*);
   ~LayoutImage() override;
 
@@ -106,7 +102,7 @@ class CORE_EXPORT LayoutImage : public LayoutReplaced {
                     CanDeferInvalidation,
                     const IntRect* = nullptr) override;
 
-  void Paint(const PaintInfo&, const LayoutPoint&) const final;
+  void Paint(const PaintInfo&) const final;
 
   bool IsOfType(LayoutObjectType type) const override {
     return type == kLayoutObjectLayoutImage || LayoutReplaced::IsOfType(type);
@@ -121,7 +117,8 @@ class CORE_EXPORT LayoutImage : public LayoutReplaced {
  private:
   bool IsImage() const override { return true; }
 
-  void PaintReplaced(const PaintInfo&, const LayoutPoint&) const override;
+  void PaintReplaced(const PaintInfo&,
+                     const LayoutPoint& paint_offset) const override;
 
   bool ForegroundIsKnownToBeOpaqueInRect(
       const LayoutRect& local_rect,

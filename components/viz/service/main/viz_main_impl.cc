@@ -40,7 +40,6 @@
 
 #if defined(USE_OZONE)
 #include "ui/ozone/public/ozone_platform.h"
-#include "ui/ozone/public/ozone_switches.h"
 #endif
 
 namespace {
@@ -137,10 +136,6 @@ VizMainImpl::VizMainImpl(Delegate* delegate,
     gpu_init_ = std::make_unique<gpu::GpuInit>();
     gpu_init_->set_sandbox_helper(this);
 
-#if defined(USE_OZONE)
-    command_line->AppendSwitch(switches::kEnableDrmMojo);
-#endif
-
     // TODO(crbug.com/609317): Use InitializeAndStartSandbox() when gpu-mus is
     // split into a separate process.
     gpu_init_->InitializeInProcess(command_line, gpu_preferences);
@@ -170,7 +165,8 @@ VizMainImpl::VizMainImpl(Delegate* delegate,
       gpu_init_->gpu_info(), gpu_init_->TakeWatchdogThread(), io_task_runner(),
       gpu_init_->gpu_feature_info(), gpu_init_->gpu_preferences(),
       gpu_init_->gpu_info_for_hardware_gpu(),
-      gpu_init_->gpu_feature_info_for_hardware_gpu(), std::move(exit_callback));
+      gpu_init_->gpu_feature_info_for_hardware_gpu(),
+      gpu_init_->vulkan_implementation(), std::move(exit_callback));
   if (dependencies_.create_display_compositor)
     gpu_service_->set_oopd_enabled();
 }
@@ -195,7 +191,7 @@ VizMainImpl::~VizMainImpl() {
                                   base::Unretained(this)));
     compositor_thread_->Stop();
     compositor_thread_.reset();
-    compositor_thread_task_runner_ = nullptr;
+    compositor_thread_task_runner_.reset();
   }
 
   if (ukm_recorder_)
@@ -297,11 +293,11 @@ void VizMainImpl::CreateFrameSinkManager(
 
 void VizMainImpl::CreateFrameSinkManagerInternal(
     mojom::FrameSinkManagerParamsPtr params) {
-  DCHECK(!gpu_command_service_);
+  DCHECK(!task_executor_);
   DCHECK(gpu_service_);
   DCHECK(gpu_thread_task_runner_->BelongsToCurrentThread());
 
-  gpu_command_service_ = base::MakeRefCounted<gpu::GpuInProcessThreadService>(
+  task_executor_ = base::MakeRefCounted<gpu::GpuInProcessThreadService>(
       gpu_thread_task_runner_, gpu_service_->sync_point_manager(),
       gpu_service_->mailbox_manager(), gpu_service_->share_group(),
       gpu_service_->gpu_feature_info(),
@@ -326,7 +322,7 @@ void VizMainImpl::CreateFrameSinkManagerOnCompositorThread(
       base::ThreadTaskRunnerHandle::Get());
 
   display_provider_ = std::make_unique<GpuDisplayProvider>(
-      params->restart_id, gpu_service_.get(), gpu_command_service_,
+      params->restart_id, gpu_service_.get(), task_executor_,
       gpu_service_->gpu_channel_manager(), server_shared_bitmap_manager_.get(),
       command_line->HasSwitch(switches::kHeadless),
       command_line->HasSwitch(switches::kRunAllCompositorStagesBeforeDraw));

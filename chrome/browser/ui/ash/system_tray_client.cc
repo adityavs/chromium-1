@@ -45,6 +45,7 @@
 #include "components/arc/arc_service_manager.h"
 #include "components/arc/common/net.mojom.h"
 #include "components/arc/connection_holder.h"
+#include "components/arc/metrics/arc_metrics_constants.h"
 #include "components/session_manager/core/session_manager.h"
 #include "components/user_manager/user_manager.h"
 #include "content/public/common/service_manager_connection.h"
@@ -105,7 +106,7 @@ const chromeos::NetworkState* GetNetworkState(const std::string& network_id) {
 bool IsArcVpn(const std::string& network_id) {
   const chromeos::NetworkState* network_state = GetNetworkState(network_id);
   return network_state && network_state->type() == shill::kTypeVPN &&
-         network_state->vpn_provider_type() == shill::kProviderArcVpn;
+         network_state->GetVpnProviderType() == shill::kProviderArcVpn;
 }
 
 }  // namespace
@@ -374,7 +375,8 @@ void SystemTrayClient::ShowArcVpnCreate(const std::string& app_id) {
   if (!profile)
     return;
 
-  arc::LaunchApp(profile, app_id, ui::EF_NONE);
+  arc::LaunchApp(profile, app_id, ui::EF_NONE,
+                 arc::UserInteractionType::APP_STARTED_FROM_SETTINGS);
 }
 
 void SystemTrayClient::ShowNetworkSettings(const std::string& network_id) {
@@ -452,7 +454,7 @@ void SystemTrayClient::HandleUpdateAvailable() {
                                            : ash::mojom::UpdateType::FLASH;
 
   system_tray_->ShowUpdateIcon(severity, detector->is_factory_reset_required(),
-                               update_type);
+                               detector->is_rollback(), update_type);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

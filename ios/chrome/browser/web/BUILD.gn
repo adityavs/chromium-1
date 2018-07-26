@@ -109,7 +109,6 @@ source_set("unit_tests") {
     "//ios/chrome/browser/browser_state:test_support",
     "//ios/chrome/browser/snapshots",
     "//ios/chrome/test:test_support",
-    "//ios/testing:ios_test_support",
     "//ios/web",
     "//ios/web/public/test",
     "//ios/web/public/test/fakes",
@@ -124,7 +123,7 @@ source_set("unit_tests") {
 js_compile_bundle("chrome_bundle_all_frames") {
   closure_entry_point = "__crWeb.chromeBundleAllFrames"
   sources = [
-    "//components/autofill/ios/fill/resources/form.js",
+    "//components/autofill/ios/form_util/resources/form.js",
     "resources/accessibility.js",
     "resources/chrome_bundle_all_frames.js",
   ]
@@ -134,7 +133,7 @@ js_compile_bundle("chrome_bundle_main_frame") {
   closure_entry_point = "__crWeb.chromeBundleMainFrame"
   sources = [
     "//components/autofill/ios/browser/resources/autofill_controller.js",
-    "//components/autofill/ios/fill/resources/fill.js",
+    "//components/autofill/ios/form_util/resources/fill.js",
     "//ios/chrome/browser/passwords/resources/password_controller.js",
     "resources/chrome_bundle_main_frame.js",
     "resources/print.js",
@@ -316,7 +315,6 @@ source_set("eg_tests") {
     "//ios/chrome/test/app:test_support",
     "//ios/chrome/test/earl_grey:test_support",
     "//ios/testing:embedded_test_server_support",
-    "//ios/testing:ios_test_support",
     "//ios/testing/earl_grey:earl_grey_support",
     "//ios/third_party/earl_grey:earl_grey+link",
     "//ios/third_party/material_components_ios",

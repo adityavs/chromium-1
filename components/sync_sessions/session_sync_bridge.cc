@@ -13,6 +13,8 @@
 #include "base/bind.h"
 #include "base/bind_helpers.h"
 #include "base/location.h"
+#include "base/sequenced_task_runner.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/time/time.h"
 #include "components/sync/base/hash_util.h"
 #include "components/sync/base/time.h"
@@ -117,7 +119,8 @@ SessionSyncBridge::SessionSyncBridge(
           local_device_info_provider,
           store_factory,
           base::BindRepeating(&FaviconCache::UpdateMappingsFromForeignTab,
-                              base::Unretained(&favicon_cache_)))) {
+                              base::Unretained(&favicon_cache_)))),
+      weak_ptr_factory_(this) {
   DCHECK(sessions_client_);
   DCHECK(local_session_event_router_);
   DCHECK(foreign_sessions_updated_callback_);
@@ -133,9 +136,9 @@ void SessionSyncBridge::ScheduleGarbageCollection() {
   if (!syncing_) {
     return;
   }
-  base::ThreadTaskRunnerHandle::Get()->PostTask(
+  base::SequencedTaskRunnerHandle::Get()->PostTask(
       FROM_HERE, base::BindOnce(&SessionSyncBridge::DoGarbageCollection,
-                                base::AsWeakPtr(this)));
+                                weak_ptr_factory_.GetWeakPtr()));
 }
 
 FaviconCache* SessionSyncBridge::GetFaviconCache() {
@@ -313,9 +316,9 @@ SessionSyncBridge::CreateLocalSessionWriteBatch() {
     syncing_->local_data_out_of_sync = false;
     // We use PostTask() to avoid interferring with the ongoing handling of
     // local changes that triggered this function.
-    base::ThreadTaskRunnerHandle::Get()->PostTask(
+    base::SequencedTaskRunnerHandle::Get()->PostTask(
         FROM_HERE, base::BindOnce(&SessionSyncBridge::ResubmitLocalSession,
-                                  base::AsWeakPtr(this)));
+                                  weak_ptr_factory_.GetWeakPtr()));
   }
 
   return std::make_unique<LocalSessionWriteBatch>(
@@ -342,7 +345,7 @@ void SessionSyncBridge::OnSyncStarting(
   DCHECK(!syncing_);
 
   session_store_factory_.Run(base::BindOnce(
-      &SessionSyncBridge::OnStoreInitialized, base::AsWeakPtr(this)));
+      &SessionSyncBridge::OnStoreInitialized, weak_ptr_factory_.GetWeakPtr()));
 }
 
 void SessionSyncBridge::OnStoreInitialized(
@@ -447,8 +450,8 @@ std::unique_ptr<SessionStore::WriteBatch>
 SessionSyncBridge::CreateSessionStoreWriteBatch() {
   DCHECK(syncing_);
 
-  return syncing_->store->CreateWriteBatch(
-      base::BindOnce(&SessionSyncBridge::ReportError, base::AsWeakPtr(this)));
+  return syncing_->store->CreateWriteBatch(base::BindOnce(
+      &SessionSyncBridge::ReportError, weak_ptr_factory_.GetWeakPtr()));
 }
 
 void SessionSyncBridge::ResubmitLocalSession() {

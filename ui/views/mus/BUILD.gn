@@ -122,7 +122,7 @@ jumbo_static_library("test_support") {
     ":mus",
     "//base",
     "//base/test:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//services/catalog:lib",
     "//services/service_manager/background:lib",
     "//services/service_manager/public/cpp",
@@ -203,7 +203,7 @@ test("views_mus_unittests") {
   data_deps = [
     ":views_mus_tests_catalog_copy",
     "//services/ui/ime/test_ime_driver",
-    "//services/ui/test_wm",
+    "//services/ui/test_ws",
   ]
 
   if (is_win) {
@@ -248,7 +248,8 @@ test("views_mus_interactive_ui_tests") {
     ":mus",
     ":test_support",
     "//base",
-    "//mojo/edk",
+    "//mojo/core/embedder",
+    "//services/ui/public/interfaces:test_interfaces",
     "//testing/gmock",
     "//testing/gtest",
     "//ui/aura",
@@ -269,7 +270,7 @@ test("views_mus_interactive_ui_tests") {
 
   data_deps = [
     ":views_mus_tests_catalog_copy",
-    "//services/ui/test_wm",
+    "//services/ui/test_ws",
   ]
 
   if (is_win) {
@@ -305,8 +306,7 @@ catalog("views_mus_tests_catalog") {
   ]
 
   standalone_services = [
-    "//services/ui:manifest",
-    "//services/ui/test_wm:manifest",
+    "//services/ui/test_ws:manifest",
     "//services/ui/ime/test_ime_driver:manifest",
   ]
 }

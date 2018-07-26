@@ -272,13 +272,16 @@ static void UpdateLayerTouchActionRects(GraphicsLayer& layer) {
 
     const auto& chunk_state = chunk.properties.GetPropertyTreeState();
     for (auto touch_action_rect : hit_test_data->touch_action_rects) {
-      auto rect = FloatClipRect(PixelSnappedIntRect(touch_action_rect.rect));
+      auto rect =
+          FloatClipRect(FloatRect(PixelSnappedIntRect(touch_action_rect.rect)));
       if (!GeometryMapper::LocalToAncestorVisualRect(chunk_state, layer_state,
                                                      rect)) {
         continue;
       }
+      LayoutRect layout_rect = LayoutRect(rect.Rect());
+      layout_rect.Move(-layer.OffsetFromLayoutObject());
       touch_action_rects_in_layer_space.emplace_back(TouchActionRect(
-          LayoutRect(rect.Rect()), touch_action_rect.whitelisted_touch_action));
+          layout_rect, touch_action_rect.whitelisted_touch_action));
     }
   }
   layer.CcLayer()->SetTouchActionRegion(
@@ -365,15 +368,13 @@ CreateScrollbarLayer(Scrollbar& scrollbar, float device_scale_factor) {
   if (theme.UsesOverlayScrollbars() && theme.UsesNinePatchThumbResource()) {
     auto scrollbar_layer = cc::PaintedOverlayScrollbarLayer::Create(
         std::move(scrollbar_delegate), /*scroll_element_id=*/cc::ElementId());
-    scrollbar_layer->SetElementId(
-        CompositorElementIdFromUniqueObjectId(NewUniqueObjectId()));
+    scrollbar_layer->SetElementId(scrollbar.GetElementId());
     layer_group->scrollbar_layer = scrollbar_layer.get();
     layer_group->layer = std::move(scrollbar_layer);
   } else {
     auto scrollbar_layer = cc::PaintedScrollbarLayer::Create(
         std::move(scrollbar_delegate), /*scroll_element_id=*/cc::ElementId());
-    scrollbar_layer->SetElementId(
-        CompositorElementIdFromUniqueObjectId(NewUniqueObjectId()));
+    scrollbar_layer->SetElementId(scrollbar.GetElementId());
     layer_group->scrollbar_layer = scrollbar_layer.get();
     layer_group->layer = std::move(scrollbar_layer);
   }
@@ -388,14 +389,14 @@ ScrollingCoordinator::CreateSolidColorScrollbarLayer(
     ScrollbarOrientation orientation,
     int thumb_thickness,
     int track_start,
-    bool is_left_side_vertical_scrollbar) {
+    bool is_left_side_vertical_scrollbar,
+    cc::ElementId element_id) {
   cc::ScrollbarOrientation cc_orientation =
       orientation == kHorizontalScrollbar ? cc::HORIZONTAL : cc::VERTICAL;
   auto scrollbar_layer = cc::SolidColorScrollbarLayer::Create(
       cc_orientation, thumb_thickness, track_start,
       is_left_side_vertical_scrollbar, cc::ElementId());
-  scrollbar_layer->SetElementId(
-      CompositorElementIdFromUniqueObjectId(NewUniqueObjectId()));
+  scrollbar_layer->SetElementId(element_id);
 
   auto layer_group = std::make_unique<ScrollbarLayerGroup>();
   layer_group->scrollbar_layer = scrollbar_layer.get();
@@ -486,7 +487,8 @@ void ScrollingCoordinator::ScrollableAreaScrollbarLayerDidChange(
         group = CreateSolidColorScrollbarLayer(
             orientation, scrollbar.GetTheme().ThumbThickness(scrollbar),
             scrollbar.GetTheme().TrackPosition(scrollbar),
-            scrollable_area->ShouldPlaceVerticalScrollbarOnLeft());
+            scrollable_area->ShouldPlaceVerticalScrollbarOnLeft(),
+            scrollable_area->GetScrollbarElementId(orientation));
       } else {
         group = CreateScrollbarLayer(scrollbar,
                                      page_->DeviceScaleFactorDeprecated());
@@ -514,7 +516,7 @@ void ScrollingCoordinator::ScrollableAreaScrollbarLayerDidChange(
 bool ScrollingCoordinator::UpdateCompositedScrollOffset(
     ScrollableArea* scrollable_area) {
   GraphicsLayer* scroll_layer = scrollable_area->LayerForScrolling();
-  if (!scroll_layer || scroll_layer->GetScrollableArea() != scrollable_area)
+  if (!scroll_layer)
     return false;
 
   cc::Layer* cc_layer =
@@ -531,10 +533,6 @@ bool ScrollingCoordinator::ScrollableAreaScrollLayerDidChange(
     ScrollableArea* scrollable_area) {
   if (!page_ || !page_->MainFrame())
     return false;
-
-  GraphicsLayer* scroll_layer = scrollable_area->LayerForScrolling();
-  if (scroll_layer)
-    scroll_layer->SetScrollableArea(scrollable_area);
 
   UpdateUserInputScrollable(scrollable_area);
 
@@ -957,29 +955,26 @@ void ScrollingCoordinator::WillDestroyLayer(PaintLayer* layer) {
 void ScrollingCoordinator::SetShouldUpdateScrollLayerPositionOnMainThread(
     LocalFrame* frame,
     MainThreadScrollingReasons main_thread_scrolling_reasons) {
-  GraphicsLayer* visual_viewport_layer =
-      frame->GetPage()->GetVisualViewport().ScrollLayer();
+  VisualViewport& visual_viewport = frame->GetPage()->GetVisualViewport();
+  GraphicsLayer* visual_viewport_layer = visual_viewport.ScrollLayer();
   cc::Layer* visual_viewport_scroll_layer =
       GraphicsLayerToCcLayer(visual_viewport_layer);
-  GraphicsLayer* layer = frame->View()->LayoutViewport()->LayerForScrolling();
+  ScrollableArea* scrollable_area = frame->View()->LayoutViewport();
+  GraphicsLayer* layer = scrollable_area->LayerForScrolling();
   if (cc::Layer* scroll_layer = GraphicsLayerToCcLayer(layer)) {
     if (main_thread_scrolling_reasons) {
-      ScrollableArea* scrollable_area = layer->GetScrollableArea();
-      if (scrollable_area) {
-        if (ScrollAnimatorBase* scroll_animator =
-                scrollable_area->ExistingScrollAnimator()) {
-          DCHECK(RuntimeEnabledFeatures::SlimmingPaintV2Enabled() ||
-                 frame->GetDocument()->Lifecycle().GetState() >=
-                     DocumentLifecycle::kCompositingClean);
-          scroll_animator->TakeOverCompositorAnimation();
-        }
+      if (ScrollAnimatorBase* scroll_animator =
+              scrollable_area->ExistingScrollAnimator()) {
+        DCHECK(RuntimeEnabledFeatures::SlimmingPaintV2Enabled() ||
+               frame->GetDocument()->Lifecycle().GetState() >=
+                   DocumentLifecycle::kCompositingClean);
+        scroll_animator->TakeOverCompositorAnimation();
       }
       scroll_layer->AddMainThreadScrollingReasons(
           main_thread_scrolling_reasons);
       if (visual_viewport_scroll_layer) {
         if (ScrollAnimatorBase* scroll_animator =
-                visual_viewport_layer->GetScrollableArea()
-                    ->ExistingScrollAnimator()) {
+                visual_viewport.ExistingScrollAnimator()) {
           DCHECK(RuntimeEnabledFeatures::SlimmingPaintV2Enabled() ||
                  frame->GetDocument()->Lifecycle().GetState() >=
                      DocumentLifecycle::kCompositingClean);
@@ -1006,13 +1001,11 @@ void ScrollingCoordinator::SetShouldUpdateScrollLayerPositionOnMainThread(
 void ScrollingCoordinator::LayerTreeViewInitialized(
     WebLayerTreeView& layer_tree_view,
     LocalFrameView* view) {
-  if (Platform::Current()->IsThreadedAnimationEnabled() &&
-      layer_tree_view.CompositorAnimationHost()) {
+  if (Platform::Current()->IsThreadedAnimationEnabled()) {
     std::unique_ptr<CompositorAnimationTimeline> timeline =
         CompositorAnimationTimeline::Create();
-    std::unique_ptr<CompositorAnimationHost> host =
-        std::make_unique<CompositorAnimationHost>(
-            layer_tree_view.CompositorAnimationHost());
+    auto host = std::make_unique<CompositorAnimationHost>(
+        layer_tree_view.CompositorAnimationHost());
     if (view && view->GetFrame().LocalFrameRoot() != page_->MainFrame()) {
       view->GetScrollingContext()->SetAnimationHost(std::move(host));
       view->GetScrollingContext()->SetAnimationTimeline(std::move(timeline));

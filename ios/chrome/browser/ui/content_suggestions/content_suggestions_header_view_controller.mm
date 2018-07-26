@@ -135,10 +135,7 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
         if (IsSplitToolbarMode()) {
           [self.toolbarDelegate setScrollProgressForTabletOmnibox:1];
         }
-
-        // Update the doodle top margin to the new -doodleTopMargin value.
-        self.doodleTopMarginConstraint.constant =
-            content_suggestions::doodleTopMargin(YES);
+        [self updateConstraints];
       };
 
   [coordinator animateAlongsideTransition:transition completion:nil];
@@ -157,14 +154,17 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
 - (void)updateFakeOmniboxForOffset:(CGFloat)offset
                        screenWidth:(CGFloat)screenWidth
                     safeAreaInsets:(UIEdgeInsets)safeAreaInsets {
-  if (!IsSplitToolbarMode(self) && IsUIRefreshPhase1Enabled()) {
+  if (self.isShowing && IsUIRefreshPhase1Enabled()) {
     CGFloat progress =
         self.logoIsShowing
             ? [self.headerView searchFieldProgressForOffset:offset
                                              safeAreaInsets:safeAreaInsets]
             : 1;
-    if (self.isShowing) {
+    if (!IsSplitToolbarMode()) {
       [self.toolbarDelegate setScrollProgressForTabletOmnibox:progress];
+    } else {
+      // Ensure omnibox is reset when not a regular tablet.
+      [self.toolbarDelegate setScrollProgressForTabletOmnibox:1];
     }
   }
 
@@ -196,6 +196,12 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
 
 - (void)layoutHeader {
   [self.headerView layoutIfNeeded];
+}
+
+// Update the doodle top margin to the new -doodleTopMargin value.
+- (void)updateConstraints {
+  self.doodleTopMarginConstraint.constant =
+      content_suggestions::doodleTopMargin(YES);
 }
 
 - (CGFloat)pinnedOffsetY {
@@ -354,18 +360,7 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
 - (void)addFakeTapView {
   UIButton* fakeTapButton = [[UIButton alloc] init];
   fakeTapButton.translatesAutoresizingMaskIntoConstraints = NO;
-  [self.headerView addSubview:fakeTapButton];
-  id<LayoutGuideProvider> layoutGuide =
-      SafeAreaLayoutGuideForView(self.headerView);
-  [NSLayoutConstraint activateConstraints:@[
-    [fakeTapButton.leadingAnchor
-        constraintEqualToAnchor:self.headerView.leadingAnchor],
-    [fakeTapButton.topAnchor constraintEqualToAnchor:layoutGuide.topAnchor],
-    [fakeTapButton.heightAnchor
-        constraintEqualToConstant:ntp_header::ToolbarHeight()],
-    [fakeTapButton.trailingAnchor
-        constraintEqualToAnchor:self.headerView.trailingAnchor]
-  ]];
+  [self.headerView addToolbarView:fakeTapButton];
   [fakeTapButton addTarget:self
                     action:@selector(fakeOmniboxTapped:)
           forControlEvents:UIControlEventTouchUpInside];
@@ -391,7 +386,11 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
 }
 
 - (void)fakeOmniboxTapped:(id)sender {
-  [self.dispatcher focusFakebox];
+  if (IsUIRefreshPhase1Enabled()) {
+    [self shiftTilesUp];
+  } else {
+    [self.dispatcher focusFakebox];
+  }
 }
 
 // If Google is not the default search engine, hide the logo, doodle and
@@ -451,6 +450,9 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
 
 - (void)shiftTilesUp {
   void (^completionBlock)() = ^{
+    if (IsUIRefreshPhase1Enabled()) {
+      [self.dispatcher focusFakebox];
+    }
     if ((IsUIRefreshPhase1Enabled() && IsSplitToolbarMode()) ||
         (!IsUIRefreshPhase1Enabled() &&
          !content_suggestions::IsRegularXRegularSizeClass(self.view))) {
@@ -505,7 +507,9 @@ const UIEdgeInsets kSearchBoxStretchInsets = {3, 3, 3, 3};
     return;
 
   self.omniboxFocused = YES;
-  [self shiftTilesUp];
+
+  if (!IsUIRefreshPhase1Enabled() || ![self.delegate isScrolledToTop])
+    [self shiftTilesUp];
 }
 
 - (void)locationBarResignsFirstResponder {

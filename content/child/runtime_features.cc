@@ -18,6 +18,7 @@
 #include "media/base/media_switches.h"
 #include "services/device/public/cpp/device_features.h"
 #include "services/network/public/cpp/features.h"
+#include "third_party/blink/public/common/features.h"
 #include "third_party/blink/public/platform/web_runtime_features.h"
 #include "ui/gfx/switches.h"
 #include "ui/gl/gl_switches.h"
@@ -105,6 +106,9 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   if (base::FeatureList::IsEnabled(features::kBlinkHeapIncrementalMarking))
     WebRuntimeFeatures::EnableBlinkHeapIncrementalMarking(true);
 
+  if (base::FeatureList::IsEnabled(features::kBloatedRendererDetection))
+    WebRuntimeFeatures::EnableBloatedRendererDetection(true);
+
   if (command_line.HasSwitch(switches::kDisableDatabases))
     WebRuntimeFeatures::EnableDatabase(false);
 
@@ -137,6 +141,12 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   if (!command_line.HasSwitch(switches::kDisableAcceleratedJpegDecoding))
     WebRuntimeFeatures::EnableDecodeToYUV(true);
 
+#if defined(SUPPORT_WEBGL2_COMPUTE_CONTEXT)
+  if (command_line.HasSwitch(switches::kEnableWebGL2ComputeContext)) {
+    WebRuntimeFeatures::EnableWebGL2ComputeContext(true);
+  }
+#endif
+
   if (command_line.HasSwitch(switches::kEnableWebGLDraftExtensions))
     WebRuntimeFeatures::EnableWebGLDraftExtensions(true);
 
@@ -152,8 +162,13 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
       !command_line.HasSwitch(switches::kDisable2dCanvasImageChromium) &&
       !command_line.HasSwitch(switches::kDisableGpu) &&
       base::FeatureList::IsEnabled(features::kCanvas2DImageChromium);
+#elif defined(OS_CHROMEOS)
+  const bool enable_canvas_2d_image_chromium =
+      !command_line.HasSwitch(switches::kDisable2dCanvasImageChromium) &&
+      !command_line.HasSwitch(switches::kDisableGpu) &&
+      base::FeatureList::IsEnabled(features::kCanvas2DImageChromium);
 #else
-  bool enable_canvas_2d_image_chromium = false;
+  constexpr bool enable_canvas_2d_image_chromium = false;
 #endif
   WebRuntimeFeatures::EnableCanvas2dImageChromium(
       enable_canvas_2d_image_chromium);
@@ -271,9 +286,6 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   WebRuntimeFeatures::EnableTimerThrottlingForHiddenFrames(
       base::FeatureList::IsEnabled(features::kTimerThrottlingForHiddenFrames));
 
-  WebRuntimeFeatures::EnableTouchpadAndWheelScrollLatching(
-      base::FeatureList::IsEnabled(features::kTouchpadAndWheelScrollLatching));
-
   if (base::FeatureList::IsEnabled(
           features::kSendBeaconThrowForBlobWithNonSimpleType))
     WebRuntimeFeatures::EnableSendBeaconThrowForBlobWithNonSimpleType(true);
@@ -315,11 +327,11 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   if (base::FeatureList::IsEnabled(features::kCSSFragmentIdentifiers))
     WebRuntimeFeatures::EnableCSSFragmentIdentifiers(true);
 
-  if (base::FeatureList::IsEnabled(features::kGenericSensor)) {
-    WebRuntimeFeatures::EnableGenericSensor(true);
-    if (base::FeatureList::IsEnabled(features::kGenericSensorExtraClasses))
-      WebRuntimeFeatures::EnableGenericSensorExtraClasses(true);
-  }
+  if (!base::FeatureList::IsEnabled(features::kGenericSensor))
+    WebRuntimeFeatures::EnableGenericSensor(false);
+
+  if (base::FeatureList::IsEnabled(features::kGenericSensorExtraClasses))
+    WebRuntimeFeatures::EnableGenericSensorExtraClasses(true);
 
   if (base::FeatureList::IsEnabled(network::features::kOutOfBlinkCORS))
     WebRuntimeFeatures::EnableOutOfBlinkCORS(true);
@@ -366,6 +378,9 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   if (base::FeatureList::IsEnabled(features::kLayeredAPI))
     WebRuntimeFeatures::EnableLayeredAPI(true);
 
+  if (base::FeatureList::IsEnabled(blink::features::kLayoutNG))
+    WebRuntimeFeatures::EnableLayoutNG(true);
+
   WebRuntimeFeatures::EnableLazyInitializeMediaControls(
       base::FeatureList::IsEnabled(features::kLazyInitializeMediaControls));
 
@@ -391,6 +406,9 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   WebRuntimeFeatures::EnableWorkStealingInScriptRunner(
       base::FeatureList::IsEnabled(features::kWorkStealingInScriptRunner));
 
+  WebRuntimeFeatures::EnableScheduledScriptStreaming(
+      base::FeatureList::IsEnabled(features::kScheduledScriptStreaming));
+
   WebRuntimeFeatures::EnableFeatureFromString(
       "FeaturePolicyForPermissions",
       base::FeatureList::IsEnabled(features::kUseFeaturePolicyForPermissions));
@@ -405,9 +423,6 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
 
   if (base::FeatureList::IsEnabled(features::kStopInBackground))
     WebRuntimeFeatures::EnableStopInBackground(true);
-
-  if (base::FeatureList::IsEnabled(features::kStopLoadingInBackground))
-    WebRuntimeFeatures::EnableStopLoadingInBackground(true);
 
   if (base::FeatureList::IsEnabled(features::kStopNonTimersInBackground))
     WebRuntimeFeatures::EnableStopNonTimersInBackground(true);
@@ -428,8 +443,8 @@ void SetRuntimeFeaturesDefaultsAndUpdateFromArgs(
   if (base::FeatureList::IsEnabled(features::kSignedHTTPExchange))
     WebRuntimeFeatures::EnablePreloadImageSrcSetEnabled(true);
 
-  WebRuntimeFeatures::EnableOffMainThreadWebSocket(
-      base::FeatureList::IsEnabled(features::kOffMainThreadWebSocket));
+  WebRuntimeFeatures::EnableNestedWorkers(
+      base::FeatureList::IsEnabled(blink::features::kNestedWorkers));
 
   if (base::FeatureList::IsEnabled(
           features::kExperimentalProductivityFeatures)) {

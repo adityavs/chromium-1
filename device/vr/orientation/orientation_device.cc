@@ -141,14 +141,14 @@ void VROrientationDevice::HandleSensorError() {
 void VROrientationDevice::RequestSession(
     mojom::XRDeviceRuntimeSessionOptionsPtr options,
     mojom::XRRuntime::RequestSessionCallback callback) {
-  DCHECK(!options->exclusive);
+  DCHECK(!options->immersive);
   // TODO(offenwanger): Perform a check to see if sensors are available when
-  // RequestSession is called for non-exclusive sessions.
-  std::move(callback).Run(nullptr, nullptr);
+  // RequestSession is called for non-immersive sessions.
+  ReturnNonImmersiveSession(std::move(callback));
 }
 
 void VROrientationDevice::OnMagicWindowFrameDataRequest(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   mojom::VRPosePtr pose = mojom::VRPose::New();
   pose->orientation.emplace(4);
 

@@ -47,10 +47,11 @@ std::unique_ptr<VerifiedContents> GetVerifiedContents(
     bool delete_invalid_file) {
   base::AssertBlockingAllowed();
   DCHECK(GetExtensionFileTaskRunner()->RunsTasksInCurrentSequence());
-  auto verified_contents = std::make_unique<VerifiedContents>(key.verifier_key);
   base::FilePath verified_contents_path =
       file_util::GetVerifiedContentsPath(key.extension_root);
-  if (!verified_contents->InitFrom(verified_contents_path)) {
+  std::unique_ptr<VerifiedContents> verified_contents =
+      VerifiedContents::Create(key.verifier_key, verified_contents_path);
+  if (!verified_contents) {
     if (delete_invalid_file &&
         !base::DeleteFile(verified_contents_path, false)) {
       LOG(WARNING) << "Failed to delete " << verified_contents_path.value();
@@ -219,6 +220,7 @@ void ContentHash::DidFetchVerifiedContents(
     return;
   }
 
+  RecordFetchResult(true);
   scoped_refptr<ContentHash> hash =
       new ContentHash(key, std::move(verified_contents), nullptr);
   const bool did_fetch_verified_contents = true;
@@ -232,11 +234,17 @@ void ContentHash::DispatchFetchFailure(
     const ExtensionKey& key,
     CreatedCallback created_callback,
     const IsCancelledCallback& is_cancelled) {
+  RecordFetchResult(false);
   // NOTE: bare new because ContentHash constructor is private.
   scoped_refptr<ContentHash> content_hash =
       new ContentHash(key, nullptr, nullptr);
   std::move(created_callback)
       .Run(content_hash, is_cancelled && is_cancelled.Run());
+}
+
+// static
+void ContentHash::RecordFetchResult(bool success) {
+  UMA_HISTOGRAM_BOOLEAN("Extensions.ContentVerification.FetchResult", success);
 }
 
 bool ContentHash::CreateHashes(const base::FilePath& hashes_file,

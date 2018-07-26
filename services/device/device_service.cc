@@ -24,6 +24,7 @@
 #include "services/device/serial/serial_io_handler_impl.h"
 #include "services/device/time_zone_monitor/time_zone_monitor.h"
 #include "services/device/wake_lock/wake_lock_provider.h"
+#include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "ui/gfx/native_widget_types.h"
 
 #if defined(OS_ANDROID)
@@ -47,35 +48,33 @@ namespace device {
 std::unique_ptr<service_manager::Service> CreateDeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    const GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key,
     bool use_gms_core_location_provider,
     const WakeLockContextCallback& wake_lock_context_callback,
     const CustomLocationProviderCallback& custom_location_provider_callback,
     const base::android::JavaRef<jobject>& java_nfc_delegate) {
   GeolocationProviderImpl::SetGeolocationConfiguration(
-      geolocation_request_context_producer, geolocation_api_key,
+      url_loader_factory, geolocation_api_key,
       custom_location_provider_callback, use_gms_core_location_provider);
   return std::make_unique<DeviceService>(
       std::move(file_task_runner), std::move(io_task_runner),
-      std::move(geolocation_request_context_producer), geolocation_api_key,
+      std::move(url_loader_factory), geolocation_api_key,
       wake_lock_context_callback, java_nfc_delegate);
 }
 #else
 std::unique_ptr<service_manager::Service> CreateDeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    const GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key,
     const CustomLocationProviderCallback& custom_location_provider_callback) {
   GeolocationProviderImpl::SetGeolocationConfiguration(
-      geolocation_request_context_producer, geolocation_api_key,
+      url_loader_factory, geolocation_api_key,
       custom_location_provider_callback);
   return std::make_unique<DeviceService>(
       std::move(file_task_runner), std::move(io_task_runner),
-      std::move(geolocation_request_context_producer), geolocation_api_key);
+      std::move(url_loader_factory), geolocation_api_key);
 }
 #endif
 
@@ -83,15 +82,13 @@ std::unique_ptr<service_manager::Service> CreateDeviceService(
 DeviceService::DeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    const GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key,
     const WakeLockContextCallback& wake_lock_context_callback,
     const base::android::JavaRef<jobject>& java_nfc_delegate)
     : file_task_runner_(std::move(file_task_runner)),
       io_task_runner_(std::move(io_task_runner)),
-      geolocation_request_context_producer_(
-          geolocation_request_context_producer),
+      url_loader_factory_(std::move(url_loader_factory)),
       geolocation_api_key_(geolocation_api_key),
       wake_lock_context_callback_(wake_lock_context_callback),
       java_interface_provider_initialized_(false) {
@@ -101,26 +98,15 @@ DeviceService::DeviceService(
 DeviceService::DeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    const GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key)
     : file_task_runner_(std::move(file_task_runner)),
       io_task_runner_(std::move(io_task_runner)),
-      geolocation_request_context_producer_(
-          geolocation_request_context_producer),
-      geolocation_api_key_(geolocation_api_key) {
-  base::MessageLoopCurrent::Get()->AddDestructionObserver(this);
-}
+      url_loader_factory_(std::move(url_loader_factory)),
+      geolocation_api_key_(geolocation_api_key) {}
 #endif
 
 DeviceService::~DeviceService() {
-  if (base::MessageLoopCurrent::Get()) {
-    base::MessageLoopCurrent::Get()->RemoveDestructionObserver(this);
-    ShutDown();
-  }
-}
-
-void DeviceService::ShutDown() {
 #if !defined(OS_ANDROID)
   device::BatteryStatusService::GetInstance()->Shutdown();
 #endif
@@ -129,17 +115,6 @@ void DeviceService::ShutDown() {
     io_task_runner_->DeleteSoon(
         FROM_HERE, std::move(public_ip_address_geolocation_provider_));
   }
-}
-
-// On embedder shutdown, the Device Service needs to shut down certain parts of
-// its state to avoid DCHECKs going off (see. https://crbug.com/794105 for
-// details). However, when used in the context of the browser the Device Service
-// is not guaranteed to have its destructor run, as the sequence on which it
-// runs is stopped before the task posted to run the Device Service destructor
-// is run. Hence, observe destruction of that sequence in order to clean up the
-// necessary state.
-void DeviceService::WillDestroyCurrentMessageLoop() {
-  ShutDown();
 }
 
 void DeviceService::OnStart() {
@@ -287,7 +262,7 @@ void DeviceService::BindPublicIpAddressGeolocationProviderRequest(
   if (!public_ip_address_geolocation_provider_) {
     public_ip_address_geolocation_provider_ =
         std::make_unique<PublicIpAddressGeolocationProvider>(
-            geolocation_request_context_producer_, geolocation_api_key_);
+            url_loader_factory_, geolocation_api_key_);
   }
 
   public_ip_address_geolocation_provider_->Bind(std::move(request));

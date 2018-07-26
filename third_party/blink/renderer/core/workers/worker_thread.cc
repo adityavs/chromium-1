@@ -146,14 +146,15 @@ void WorkerThread::EvaluateClassicScript(
 
 void WorkerThread::ImportModuleScript(
     const KURL& script_url,
-    const FetchClientSettingsObjectSnapshot& outside_settings_object,
+    FetchClientSettingsObjectSnapshot* outside_settings_object,
     network::mojom::FetchCredentialsMode credentials_mode) {
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   PostCrossThreadTask(
       *GetTaskRunner(TaskType::kInternalWorker), FROM_HERE,
       CrossThreadBind(&WorkerThread::ImportModuleScriptOnWorkerThread,
                       CrossThreadUnretained(this), script_url,
-                      outside_settings_object, credentials_mode));
+                      WTF::Passed(outside_settings_object->CopyData()),
+                      credentials_mode));
 }
 
 void WorkerThread::TerminateChildThreadsOnWorkerThread() {
@@ -502,13 +503,16 @@ void WorkerThread::EvaluateClassicScriptOnWorkerThread(
 
 void WorkerThread::ImportModuleScriptOnWorkerThread(
     const KURL& script_url,
-    const FetchClientSettingsObjectSnapshot& outside_settings_object,
+    std::unique_ptr<CrossThreadFetchClientSettingsObjectData>
+        outside_settings_object,
     network::mojom::FetchCredentialsMode credentials_mode) {
   // Worklets have a different code path to import module scripts.
   // TODO(nhiroki): Consider excluding this code path from WorkerThread like
   // Worklets.
   ToWorkerGlobalScope(GlobalScope())
-      ->ImportModuleScript(script_url, outside_settings_object,
+      ->ImportModuleScript(script_url,
+                           new FetchClientSettingsObjectSnapshot(
+                               std::move(outside_settings_object)),
                            credentials_mode);
 }
 
@@ -523,24 +527,13 @@ void WorkerThread::PrepareForShutdownOnWorkerThread() {
       SetExitCode(ExitCode::kGracefullyTerminated);
   }
 
-  inspector_task_runner_->Dispose();
   GetWorkerReportingProxy().WillDestroyWorkerGlobalScope();
+
   probe::AllAsyncTasksCanceled(GlobalScope());
-
   GlobalScope()->NotifyContextDestroyed();
-  if (worker_inspector_controller_) {
-    worker_inspector_controller_->Dispose();
-    worker_inspector_controller_.Clear();
-  }
   worker_scheduler_->Dispose();
-  GlobalScope()->Dispose();
-  global_scope_ = nullptr;
 
-  if (WorkerThreadDebugger* debugger = WorkerThreadDebugger::From(GetIsolate()))
-    debugger->WorkerThreadDestroyed(this);
-
-  console_message_storage_.Clear();
-  loading_context_.Clear();
+  // No V8 microtasks should get executed after shutdown is requested.
   GetWorkerBackingThread().BackingThread().RemoveTaskObserver(this);
 }
 
@@ -553,6 +546,21 @@ void WorkerThread::PerformShutdownOnWorkerThread() {
     DCHECK_EQ(ThreadState::kReadyToShutdown, thread_state_);
   }
 #endif
+
+  inspector_task_runner_->Dispose();
+  if (worker_inspector_controller_) {
+    worker_inspector_controller_->Dispose();
+    worker_inspector_controller_.Clear();
+  }
+
+  GlobalScope()->Dispose();
+  global_scope_ = nullptr;
+
+  if (WorkerThreadDebugger* debugger = WorkerThreadDebugger::From(GetIsolate()))
+    debugger->WorkerThreadDestroyed(this);
+
+  console_message_storage_.Clear();
+  loading_context_.Clear();
 
   if (IsOwningBackingThread())
     GetWorkerBackingThread().ShutdownOnBackingThread();

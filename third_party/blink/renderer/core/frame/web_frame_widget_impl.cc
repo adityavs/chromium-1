@@ -38,6 +38,7 @@
 #include "build/build_config.h"
 #include "cc/layers/picture_layer.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom-blink.h"
+#include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_scroll_into_view_params.h"
 #include "third_party/blink/public/web/web_autofill_client.h"
 #include "third_party/blink/public/web/web_element.h"
@@ -91,10 +92,10 @@ const float kIdealPaddingRatio = 0.3f;
 
 // Returns a rect which is offset and scaled accordingly to |base_rect|'s
 // location and size.
-FloatRect NormalizeRect(const FloatRect& to_normalize,
-                        const FloatRect& base_rect) {
+FloatRect NormalizeRect(const IntRect& to_normalize, const IntRect& base_rect) {
   FloatRect result(to_normalize);
-  result.SetLocation(to_normalize.Location() + (-base_rect.Location()));
+  result.SetLocation(
+      FloatPoint(to_normalize.Location() + (-base_rect.Location())));
   result.Scale(1.0 / base_rect.Width(), 1.0 / base_rect.Height());
   return result;
 }
@@ -279,8 +280,6 @@ void WebFrameWidgetImpl::BeginFrame(base::TimeTicks last_frame_time) {
   if (!LocalRootImpl())
     return;
 
-  UpdateGestureAnimation(last_frame_time);
-
   DocumentLifecycle::AllowThrottlingScope throttling_scope(
       LocalRootImpl()->GetFrame()->GetDocument()->Lifecycle());
   PageWidgetDelegate::Animate(*GetPage(), last_frame_time);
@@ -312,7 +311,8 @@ void WebFrameWidgetImpl::UpdateAllLifecyclePhasesAndCompositeForTesting() {
     layer_tree_view_->SynchronouslyCompositeNoRasterForTesting();
 }
 
-void WebFrameWidgetImpl::Paint(cc::PaintCanvas* canvas, const WebRect& rect) {
+void WebFrameWidgetImpl::PaintContent(cc::PaintCanvas* canvas,
+                                      const WebRect& rect) {
   // Out-of-process iframes require compositing.
   NOTREACHED();
 }
@@ -751,10 +751,11 @@ void WebFrameWidgetImpl::HandleMouseDown(LocalFrame& main_frame,
   // capture because it will interfere with the scrollbar receiving events.
   LayoutPoint point(event.PositionInWidget().x, event.PositionInWidget().y);
   if (event.button == WebMouseEvent::Button::kLeft) {
-    point = LocalRootImpl()->GetFrameView()->ConvertFromRootFrame(point);
+    HitTestLocation location(
+        LocalRootImpl()->GetFrameView()->ConvertFromRootFrame(point));
     HitTestResult result(
-        LocalRootImpl()->GetFrame()->GetEventHandler().HitTestResultAtPoint(
-            point));
+        LocalRootImpl()->GetFrame()->GetEventHandler().HitTestResultAtLocation(
+            location));
     result.SetToShadowHostIfInRestrictedShadowRoot();
     Node* hit_node = result.InnerNode();
 
@@ -843,9 +844,6 @@ void WebFrameWidgetImpl::HandleMouseUp(LocalFrame& main_frame,
 WebInputEventResult WebFrameWidgetImpl::HandleMouseWheel(
     LocalFrame& frame,
     const WebMouseWheelEvent& event) {
-  // Halt an in-progress fling on a wheel tick.
-  if (!event.has_precise_scrolling_deltas)
-    EndActiveFlingAnimation();
 
   View()->HidePopups();
   return PageWidgetEventHandler::HandleMouseWheel(frame, event);
@@ -887,11 +885,6 @@ WebInputEventResult WebFrameWidgetImpl::HandleGestureEvent(
       GetPage()->GetContextMenuController().ClearContextMenu();
       maybe_context_menu_scope.emplace();
       break;
-    case WebInputEvent::kGestureFlingStart:
-    case WebInputEvent::kGestureFlingCancel:
-      event_result = HandleGestureFlingEvent(event);
-      Client()->DidHandleGestureEvent(event, event_cancelled);
-      return event_result;
     default:
       NOTREACHED();
   }
@@ -1034,7 +1027,7 @@ void WebFrameWidgetImpl::InitializeLayerTreeView() {
   DCHECK(!mutator_);
   layer_tree_view_ = Client()->InitializeLayerTreeView();
   DCHECK(layer_tree_view_);
-  if (layer_tree_view_->CompositorAnimationHost()) {
+  if (Platform::Current()->IsThreadedAnimationEnabled()) {
     animation_host_ = std::make_unique<CompositorAnimationHost>(
         layer_tree_view_->CompositorAnimationHost());
   }
@@ -1142,9 +1135,10 @@ HitTestResult WebFrameWidgetImpl::HitTestResultForRootFramePos(
   LayoutPoint doc_point(
       LocalRootImpl()->GetFrame()->View()->ConvertFromRootFrame(
           pos_in_root_frame));
+  HitTestLocation location(doc_point);
   HitTestResult result =
-      LocalRootImpl()->GetFrame()->GetEventHandler().HitTestResultAtPoint(
-          doc_point, HitTestRequest::kReadOnly | HitTestRequest::kActive);
+      LocalRootImpl()->GetFrame()->GetEventHandler().HitTestResultAtLocation(
+          location, HitTestRequest::kReadOnly | HitTestRequest::kActive);
   result.SetToShadowHostIfInRestrictedShadowRoot();
   return result;
 }

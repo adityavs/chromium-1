@@ -78,7 +78,9 @@ class CORE_EXPORT NGInlineItem {
   NGInlineItemType Type() const { return static_cast<NGInlineItemType>(type_); }
   const char* NGInlineItemTypeToString(int val) const;
 
-  const ShapeResult* TextShapeResult() const { return shape_result_.get(); }
+  scoped_refptr<const ShapeResult> TextShapeResult() const {
+    return shape_result_;
+  }
   NGLayoutInlineShapeOptions ShapeOptions() const {
     return static_cast<NGLayoutInlineShapeOptions>(shape_options_);
   }
@@ -172,7 +174,10 @@ class CORE_EXPORT NGInlineItem {
   scoped_refptr<const ComputedStyle> style_;
   LayoutObject* layout_object_;
 
-  static constexpr unsigned kScriptBits = 8;  // UScriptCode, see Script().
+  // UScriptCode is -1 (USCRIPT_INVALID_CODE) to 177 as of ICU 60.
+  // This can be packed to 8 bits, by handling -1 separately.
+  static constexpr unsigned kScriptBits = 8;
+  static constexpr unsigned kInvalidScript = (1 << kScriptBits) - 1;
 
   unsigned type_ : 4;
   unsigned script_ : kScriptBits;

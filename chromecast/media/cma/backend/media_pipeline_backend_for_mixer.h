@@ -46,6 +46,7 @@ class MediaPipelineBackendForMixer : public MediaPipelineBackend {
   bool Primary() const;
   std::string DeviceId() const;
   AudioContentType ContentType() const;
+  AudioChannel AudioChannel() const;
   const scoped_refptr<base::SingleThreadTaskRunner>& GetTaskRunner() const;
   VideoDecoderForMixer* video_decoder() const { return video_decoder_.get(); }
   AudioDecoderForMixer* audio_decoder() const { return audio_decoder_.get(); }
@@ -55,6 +56,9 @@ class MediaPipelineBackendForMixer : public MediaPipelineBackend {
 
   int64_t GetPlaybackStartTimeForTesting() const {
     return start_playback_timestamp_us_;
+  }
+  int64_t GetPlaybackStartPtsForTesting() const {
+    return start_playback_pts_us_;
   }
 
  protected:
@@ -77,6 +81,7 @@ class MediaPipelineBackendForMixer : public MediaPipelineBackend {
 
   std::unique_ptr<AvSync> av_sync_;
   int64_t start_playback_timestamp_us_ = INT64_MIN;
+  int64_t start_playback_pts_us_ = INT64_MIN;
 
   DISALLOW_COPY_AND_ASSIGN(MediaPipelineBackendForMixer);
 };

@@ -34,50 +34,45 @@
 #include <utility>
 
 #include "base/memory/scoped_refptr.h"
-#include "base/single_thread_task_runner.h"
-#include "third_party/blink/public/mojom/page/display_cutout.mojom-blink.h"
 #include "third_party/blink/public/platform/web_focus_type.h"
 #include "third_party/blink/public/platform/web_insecure_request_policy.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_promise.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
-#include "third_party/blink/renderer/core/animation/worklet_animation_controller.h"
 #include "third_party/blink/renderer/core/core_export.h"
+#include "third_party/blink/renderer/core/css/css_style_sheet_init.h"
 #include "third_party/blink/renderer/core/dom/container_node.h"
 #include "third_party/blink/renderer/core/dom/create_element_flags.h"
 #include "third_party/blink/renderer/core/dom/document_encoding_data.h"
-#include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/document_lifecycle.h"
 #include "third_party/blink/renderer/core/dom/document_shutdown_notifier.h"
 #include "third_party/blink/renderer/core/dom/document_shutdown_observer.h"
 #include "third_party/blink/renderer/core/dom/document_timing.h"
 #include "third_party/blink/renderer/core/dom/frame_request_callback_collection.h"
 #include "third_party/blink/renderer/core/dom/live_node_list_registry.h"
-#include "third_party/blink/renderer/core/dom/mutation_observer.h"
 #include "third_party/blink/renderer/core/dom/scripted_idle_task_controller.h"
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_notifier.h"
 #include "third_party/blink/renderer/core/dom/synchronous_mutation_observer.h"
-#include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/dom/text_link_colors.h"
 #include "third_party/blink/renderer/core/dom/tree_scope.h"
 #include "third_party/blink/renderer/core/dom/user_action_element_set.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
+#include "third_party/blink/renderer/core/execution_context/security_context.h"
 #include "third_party/blink/renderer/core/frame/dom_timer_coordinator.h"
 #include "third_party/blink/renderer/core/frame/hosts_using_features.h"
 #include "third_party/blink/renderer/core/html/custom/v0_custom_element.h"
 #include "third_party/blink/renderer/core/html/parser/parser_synchronization_policy.h"
-#include "third_party/blink/renderer/core/page/page_visibility_state.h"
-#include "third_party/blink/renderer/core/page/viewport_description.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_member.h"
-#include "third_party/blink/renderer/platform/length.h"
-#include "third_party/blink/renderer/platform/loader/fetch/client_hints_preferences.h"
-#include "third_party/blink/renderer/platform/scheduler/public/frame_scheduler.h"
 #include "third_party/blink/renderer/platform/scroll/scroll_types.h"
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/web_task_runner.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
-#include "third_party/blink/renderer/platform/weborigin/referrer_policy.h"
 #include "third_party/blink/renderer/platform/wtf/hash_set.h"
+
+namespace base {
+class SingleThreadTaskRunner;
+}
 
 namespace ukm {
 class UkmRecorder;
@@ -87,6 +82,7 @@ namespace blink {
 
 namespace mojom {
 enum class EngagementLevel : int32_t;
+enum class PageVisibilityState : int32_t;
 }  // namespace mojom
 
 class AnimationClock;
@@ -105,6 +101,7 @@ class V0CustomElementRegistrationContext;
 class DOMImplementation;
 class DOMWindow;
 class DocumentFragment;
+class DocumentInit;
 class DocumentLoader;
 class DocumentMarkerController;
 class DocumentNameCollection;
@@ -164,6 +161,7 @@ class ResourceFetcher;
 class RootScrollerController;
 class SVGDocumentExtensions;
 class SVGUseElement;
+class Text;
 class TrustedHTML;
 class ScriptElementBase;
 class ScriptRunner;
@@ -183,9 +181,12 @@ class StyleSheetList;
 class TextAutosizer;
 class TransformSource;
 class TreeWalker;
+class USVStringOrTrustedURL;
 class V8NodeFilter;
+class ViewportData;
 class VisitedLinkState;
 class WebMouseEvent;
+class WorkletAnimationController;
 struct AnnotatedRegionValue;
 struct FocusParams;
 struct IconURL;
@@ -263,9 +264,7 @@ class CORE_EXPORT Document : public ContainerNode,
   static Document* Create(const DocumentInit& init) {
     return new Document(init);
   }
-  static Document* CreateForTest() {
-    return new Document(DocumentInit::Create());
-  }
+  static Document* CreateForTest();
   // Factory for web-exposed Document constructor. The argument document must be
   // a document instance representing window.document, and it works as the
   // source of ExecutionContext and security origin of the new document.
@@ -314,11 +313,7 @@ class CORE_EXPORT Document : public ContainerNode,
   DEFINE_ATTRIBUTE_EVENT_LISTENER(selectstart);
   DEFINE_ATTRIBUTE_EVENT_LISTENER(visibilitychange);
 
-  bool ShouldMergeWithLegacyDescription(ViewportDescription::Type) const;
-  bool ShouldOverrideLegacyDescription(ViewportDescription::Type) const;
-  void SetViewportDescription(const ViewportDescription&);
-  ViewportDescription GetViewportDescription() const;
-  Length ViewportDefaultMinWidth() const { return viewport_default_min_width_; }
+  ViewportData& GetViewportData() const { return *viewport_data_; }
 
   String OutgoingReferrer() const override;
   ReferrerPolicy GetReferrerPolicy() const override;
@@ -366,6 +361,15 @@ class CORE_EXPORT Document : public ContainerNode,
   // Creates an element without custom element processing.
   Element* CreateRawElement(const QualifiedName&,
                             const CreateElementFlags = CreateElementFlags());
+
+  ScriptPromise createCSSStyleSheet(ScriptState*,
+                                    const String&,
+                                    ExceptionState&);
+
+  ScriptPromise createCSSStyleSheet(ScriptState*,
+                                    const String&,
+                                    const CSSStyleSheetInit&,
+                                    ExceptionState&);
 
   Element* ElementFromPoint(double x, double y) const;
   HeapVector<Member<Element>> ElementsFromPoint(double x, double y) const;
@@ -610,7 +614,7 @@ class CORE_EXPORT Document : public ContainerNode,
                  ExceptionState&);
   DOMWindow* open(LocalDOMWindow* current_window,
                   LocalDOMWindow* entered_window,
-                  const AtomicString& url,
+                  const USVStringOrTrustedURL& stringOrUrl,
                   const AtomicString& name,
                   const AtomicString& features,
                   ExceptionState&);
@@ -618,6 +622,10 @@ class CORE_EXPORT Document : public ContainerNode,
   void close(ExceptionState&);
   // This is used internally and does not handle exceptions.
   void close();
+
+  // Corresponds to "9. Abort the active document of browsingContext."
+  // https://html.spec.whatwg.org/#navigate
+  void Abort();
 
   void CheckCompleted();
 
@@ -870,8 +878,6 @@ class CORE_EXPORT Document : public ContainerNode,
     return resize_observer_controller_;
   }
   ResizeObserverController& EnsureResizeObserverController();
-
-  void UpdateViewportDescription();
 
   // Returns the owning element in the parent document. Returns nullptr if
   // this is the top level document or the owner is remote.
@@ -1304,10 +1310,6 @@ class CORE_EXPORT Document : public ContainerNode,
     secure_context_state_ = state;
   }
 
-  ClientHintsPreferences& GetClientHintsPreferences() {
-    return client_hints_preferences_;
-  }
-
   CanvasFontCache* GetCanvasFontCache();
 
   // Used by unit tests so that all parsing will be main thread for
@@ -1326,6 +1328,24 @@ class CORE_EXPORT Document : public ContainerNode,
 
   void DidEnforceInsecureRequestPolicy();
   void DidEnforceInsecureNavigationsSet();
+
+  // Temporary flag for some UseCounter items. crbug.com/859391.
+  enum class InDOMNodeRemovedHandlerState {
+    kNone,
+    kDOMNodeRemoved,
+    kDOMNodeRemovedFromDocument
+  };
+  void SetInDOMNodeRemovedHandlerState(InDOMNodeRemovedHandlerState state) {
+    in_dom_node_removed_handler_state_ = state;
+  }
+  InDOMNodeRemovedHandlerState GetInDOMNodeRemovedHandlerState() const {
+    return in_dom_node_removed_handler_state_;
+  }
+  bool InDOMNodeRemovedHandler() const {
+    return in_dom_node_removed_handler_state_ !=
+           InDOMNodeRemovedHandlerState::kNone;
+  }
+  void CountDetachingNodeAccessInDOMNodeRemovedHandler();
 
   bool MayContainV0Shadow() const { return may_contain_v0_shadow_; }
 
@@ -1390,7 +1410,7 @@ class CORE_EXPORT Document : public ContainerNode,
   int64_t UkmSourceID() const;
 
   // May return nullptr.
-  FrameScheduler* GetScheduler() override;
+  FrameOrWorkerScheduler* GetScheduler() override;
 
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(TaskType) override;
 
@@ -1419,14 +1439,9 @@ class CORE_EXPORT Document : public ContainerNode,
   bool IsSlotAssignmentRecalcForbidden() {
     return slot_assignment_recalc_forbidden_recursion_depth_ > 0;
   }
+#else
+  bool IsSlotAssignmentRecalcForbidden() { return false; }
 #endif
-
-  // When true this will force a kCover viewport fit value which will result in
-  // the document expanding into the display cutout area.
-  void SetExpandIntoDisplayCutout(bool expand);
-  mojom::ViewportFit GetCurrentViewportFitForTests() const {
-    return viewport_fit_;
-  }
 
   bool IsVerticalScrollEnforced() const { return is_vertical_scroll_enforced_; }
 
@@ -1486,6 +1501,11 @@ class CORE_EXPORT Document : public ContainerNode,
   // ImplicitClose() actually does the work of closing the input stream.
   void ImplicitClose();
   bool ShouldComplete();
+
+  // Returns |true| if both document and its owning frame are still attached.
+  // Any of them could be detached during the check, e.g. by calling
+  // iframe.remove() from an event handler.
+  bool CheckCompletedInternal();
 
   void DetachParser();
 
@@ -1749,10 +1769,6 @@ class CORE_EXPORT Document : public ContainerNode,
   TaskRunnerTimer<Document> load_event_delay_timer_;
   TaskRunnerTimer<Document> plugin_loading_timer_;
 
-  ViewportDescription viewport_description_;
-  ViewportDescription legacy_viewport_description_;
-  Length viewport_default_min_width_;
-
   DocumentTiming document_timing_;
   Member<MediaQueryMatcher> media_query_matcher_;
   bool write_recursion_is_too_deep_;
@@ -1794,8 +1810,6 @@ class CORE_EXPORT Document : public ContainerNode,
 
   HostsUsingFeatures::Value hosts_using_features_value_;
 
-  ClientHintsPreferences client_hints_preferences_;
-
   Member<CanvasFontCache> canvas_font_cache_;
 
   TraceWrapperMember<IntersectionObserverController>
@@ -1804,6 +1818,9 @@ class CORE_EXPORT Document : public ContainerNode,
 
   int node_count_;
 
+  // Temporary flag for some UseCounter items. crbug.com/859391.
+  InDOMNodeRemovedHandlerState in_dom_node_removed_handler_state_ =
+      InDOMNodeRemovedHandlerState::kNone;
   bool may_contain_v0_shadow_ = false;
 
   Member<SnapCoordinator> snap_coordinator_;
@@ -1849,25 +1866,14 @@ class CORE_EXPORT Document : public ContainerNode,
   // Used for legacy layout tree fallback
   ReattachLegacyLayoutObjectList* reattach_legacy_object_list_;
 
-  // Stores the current value viewport-fit value.
-  mojom::ViewportFit viewport_fit_ = blink::mojom::ViewportFit::kAuto;
-  bool force_expand_display_cutout_ = false;
+  // TODO(tkent): Should it be moved to LocalFrame or LocalFrameView?
+  Member<ViewportData> viewport_data_;
 
   // This is set through feature policy 'vertical-scroll'.
   bool is_vertical_scroll_enforced_ = false;
-
-  mojom::blink::DisplayCutoutHostAssociatedPtr display_cutout_host_;
 };
 
 extern template class CORE_EXTERN_TEMPLATE_EXPORT Supplement<Document>;
-
-inline bool Document::ShouldOverrideLegacyDescription(
-    ViewportDescription::Type origin) const {
-  // The different (legacy) meta tags have different priorities based on the
-  // type regardless of which order they appear in the DOM. The priority is
-  // given by the ViewportDescription::Type enum.
-  return origin >= legacy_viewport_description_.type;
-}
 
 inline void Document::ScheduleLayoutTreeUpdateIfNeeded() {
   // Inline early out to avoid the function calls below.

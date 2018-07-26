@@ -8,6 +8,7 @@
 #include "components/viz/common/resources/single_release_callback.h"
 #include "components/viz/common/resources/transferable_resource.h"
 #include "components/viz/test/test_gpu_memory_buffer_manager.h"
+#include "gpu/GLES2/gl2extchromium.h"
 #include "gpu/command_buffer/common/gpu_memory_buffer_support.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -20,6 +21,7 @@
 #include "third_party/skia/include/core/SkSurface.h"
 
 using testing::_;
+using testing::AtLeast;
 using testing::Pointee;
 using testing::Return;
 using testing::SetArrayArgument;
@@ -135,8 +137,15 @@ TEST_F(CanvasResourceTest, GpuMemoryBufferSyncTokenRefresh) {
   ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
 
   constexpr GLuint image_id = 1;
+  const GLuint texture_target = gpu::GetPlatformSpecificTextureTarget();
   EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _)).WillOnce(Return(image_id));
-  EXPECT_CALL(gl_, BindTexture(gpu::GetPlatformSpecificTextureTarget(), _));
+  EXPECT_CALL(gl_, BindTexture(texture_target, _));
+  if (texture_target == GL_TEXTURE_EXTERNAL_OES) {
+    constexpr GLuint image_2d_id = 2;
+    EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _))
+        .WillOnce(Return(image_2d_id));
+    EXPECT_CALL(gl_, BindTexture(GL_TEXTURE_2D, _));
+  }
   scoped_refptr<CanvasResource> resource =
       CanvasResourceGpuMemoryBuffer::Create(
           IntSize(10, 10), CanvasColorParams(),
@@ -293,15 +302,20 @@ TEST_F(CanvasResourceTest, MakeUnacceleratedFromAcceleratedResource) {
   EXPECT_FALSE(new_resource->IsAccelerated());
 }
 
-TEST_F(CanvasResourceTest, RamGpuMemoryBuffer_ResourcePreparation) {
-  ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
-
-  SkImageInfo image_info =
-      SkImageInfo::MakeN32(10, 10, kPremul_SkAlphaType, nullptr);
+void PaintToCanvasResource(CanvasResource* canvas_resource) {
+  SkImageInfo image_info = SkImageInfo::MakeN32(
+      canvas_resource->Size().Width(), canvas_resource->Size().Height(),
+      kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
   sk_sp<SkSurface> surface = SkSurface::MakeRaster(image_info);
   SkPaint paint;
   paint.setColor(SK_ColorYELLOW);
   surface->getCanvas()->drawRect(SkRect::MakeXYWH(0, 0, 10, 10), paint);
+  canvas_resource->TakeSkImage(surface->makeImageSnapshot());
+}
+
+TEST_F(CanvasResourceTest, RamGpuMemoryBuffer_ResourcePreparation) {
+  testing::InSequence s;
+  ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
 
   EXPECT_TRUE(!!context_provider_wrapper_);
   constexpr GLuint image_id = 1;
@@ -325,7 +339,7 @@ TEST_F(CanvasResourceTest, RamGpuMemoryBuffer_ResourcePreparation) {
         .WillOnce(SetArrayArgument<1>(
             test_mailbox.name, test_mailbox.name + GL_MAILBOX_SIZE_CHROMIUM));
 
-    canvas_resource->TakeSkImage(surface->makeImageSnapshot());
+    PaintToCanvasResource(canvas_resource.get());
 
     viz::TransferableResource transferable_resource;
     std::unique_ptr<viz::SingleReleaseCallback> release_callback;
@@ -337,6 +351,79 @@ TEST_F(CanvasResourceTest, RamGpuMemoryBuffer_ResourcePreparation) {
 
     release_callback->Run(gpu::SyncToken(), false);
   }
+}
+
+TEST_F(CanvasResourceTest, GpuMemoryBuffer_accelerated_8bit) {
+  testing::InSequence s;
+  ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
+  EXPECT_TRUE(!!context_provider_wrapper_);
+
+  constexpr GLuint image_id = 1;
+  EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _)).WillOnce(Return(image_id));
+  EXPECT_CALL(gl_, BindTexture(_, _));
+
+  if (gpu::GetPlatformSpecificTextureTarget() == GL_TEXTURE_EXTERNAL_OES) {
+    constexpr GLuint second_image_id = 2;
+    EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _))
+        .WillOnce(Return(second_image_id));
+    EXPECT_CALL(gl_, BindTexture(_, _));
+  }
+
+  constexpr bool is_accelerated = true;
+  scoped_refptr<CanvasResource> canvas_resource =
+      CanvasResourceGpuMemoryBuffer::Create(
+          IntSize(10, 10), CanvasColorParams(), context_provider_wrapper_,
+          nullptr /*CanvasResourceProvider*/, kLow_SkFilterQuality,
+          is_accelerated);
+
+  EXPECT_TRUE(!!canvas_resource);
+}
+
+TEST_F(CanvasResourceTest, GpuMemoryBuffer_accelerated_float16) {
+  testing::InSequence s;
+  ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
+  EXPECT_TRUE(!!context_provider_wrapper_);
+
+  constexpr GLuint image_id = 1;
+  EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _)).WillOnce(Return(image_id));
+  EXPECT_CALL(gl_, BindTexture(_, _));
+
+  if (gpu::GetPlatformSpecificTextureTarget() == GL_TEXTURE_EXTERNAL_OES) {
+    constexpr GLuint second_image_id = 2;
+    EXPECT_CALL(gl_, CreateImageCHROMIUM(_, _, _, _))
+        .WillOnce(Return(second_image_id));
+    EXPECT_CALL(gl_, BindTexture(_, _));
+  }
+
+  constexpr bool is_accelerated = true;
+  scoped_refptr<CanvasResource> canvas_resource =
+      CanvasResourceGpuMemoryBuffer::Create(
+          IntSize(10, 10),
+          CanvasColorParams(kSRGBCanvasColorSpace, kF16CanvasPixelFormat,
+                            kNonOpaque),
+          context_provider_wrapper_, nullptr /*CanvasResourceProvider*/,
+          kLow_SkFilterQuality, is_accelerated);
+
+  EXPECT_TRUE(!!canvas_resource);
+}
+
+TEST_F(CanvasResourceTest, PrepareTransferableResource_SharedBitmap) {
+  testing::InSequence s;
+  ScopedTestingPlatformSupport<FakeCanvasResourcePlatformSupport> platform;
+  scoped_refptr<CanvasResource> canvas_resource =
+      CanvasResourceSharedBitmap::Create(IntSize(10, 10), CanvasColorParams(),
+                                         nullptr,  // CanvasResourceProvider
+                                         kLow_SkFilterQuality);
+  EXPECT_TRUE(!!canvas_resource);
+  viz::TransferableResource resource;
+  std::unique_ptr<viz::SingleReleaseCallback> release_callback;
+  bool success = canvas_resource->PrepareTransferableResource(
+      &resource, &release_callback, kUnverifiedSyncToken);
+
+  EXPECT_TRUE(success);
+  EXPECT_TRUE(resource.is_software);
+
+  release_callback->Run(gpu::SyncToken(), false);
 }
 
 }  // namespace blink

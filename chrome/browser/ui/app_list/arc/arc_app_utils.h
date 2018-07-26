@@ -13,6 +13,7 @@
 #include "base/macros.h"
 #include "base/optional.h"
 #include "components/arc/common/app.mojom.h"
+#include "components/arc/metrics/arc_metrics_constants.h"
 
 class Profile;
 
@@ -93,16 +94,19 @@ bool LaunchPlayStoreWithUrl(const std::string& url);
 // Launches an ARC app.
 bool LaunchApp(content::BrowserContext* context,
                const std::string& app_id,
-               int event_flags);
+               int event_flags,
+               UserInteractionType user_action);
 bool LaunchApp(content::BrowserContext* context,
                const std::string& app_id,
                int event_flags,
+               UserInteractionType user_action,
                int64_t display_id);
 
 bool LaunchAppWithIntent(content::BrowserContext* context,
                          const std::string& app_id,
                          const base::Optional<std::string>& launch_intent,
                          int event_flags,
+                         UserInteractionType user_action,
                          int64_t display_id);
 
 // Launches App Shortcut that was published by Android's ShortcutManager.

@@ -27,6 +27,11 @@ const base::Feature kAutofillDownstreamUseGooglePayBrandingOniOS{
 const base::Feature kAutofillDynamicForms{"AutofillDynamicForms",
                                           base::FEATURE_DISABLED_BY_DEFAULT};
 
+// Controls whether the server credit cards are saved only in the ephemeral
+// account-based storage, instead of the persistent local storage.
+const base::Feature kAutofillEnableAccountWalletStorage{
+    "AutofillEnableAccountWalletStorage", base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Controls whether the server credit cards are offered to be filled and
 // uploaded to Google Pay if the sync service is in auth error.
 const base::Feature kAutofillEnablePaymentsInteractionsOnAuthError{
@@ -72,10 +77,6 @@ const base::Feature kAutofillEnforceMinRequiredFieldsForUpload{
 const base::Feature kAutofillManualFallback{"AutofillManualFallback",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
 
-// Controls whether credit card suggestions are made on insecure pages.
-const base::Feature kAutofillRequireSecureCreditCardContext{
-    "AutofillRequireSecureCreditCardContext", base::FEATURE_ENABLED_BY_DEFAULT};
-
 // Controls whether Full Server credit cards should be reset when the sync
 // service is in an auth error state.
 const base::Feature kAutofillResetFullServerCardsOnAuthError{
@@ -94,6 +95,13 @@ const base::Feature kAutofillRestrictUnownedFieldsToFormlessCheckout{
 const base::Feature kAutofillSendExperimentIdsInPaymentsRPCs{
     "AutofillSendExperimentIdsInPaymentsRPCs",
     base::FEATURE_ENABLED_BY_DEFAULT};
+
+// If enabled, only countries of recently-used addresses are sent in the
+// GetUploadDetails call to Payments. If disabled, whole recently-used addresses
+// are sent.
+const base::Feature kAutofillSendOnlyCountryInGetUploadDetails{
+    "AutofillSendOnlyCountryInGetUploadDetails",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Controls whether we show warnings in the Dev console for misused autocomplete
 // types.

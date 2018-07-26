@@ -21,6 +21,10 @@
 #include "headless/public/headless_browser_context.h"
 #include "headless/public/headless_export.h"
 
+namespace net {
+class NetLog;
+}
+
 namespace headless {
 class HeadlessBrowserImpl;
 class HeadlessResourceContext;
@@ -68,7 +72,8 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
   storage::SpecialStoragePolicy* GetSpecialStoragePolicy() override;
   content::PushMessagingService* GetPushMessagingService() override;
   content::SSLHostStateDelegate* GetSSLHostStateDelegate() override;
-  content::PermissionManager* GetPermissionManager() override;
+  content::PermissionControllerDelegate* GetPermissionControllerDelegate()
+      override;
   content::BackgroundFetchDelegate* GetBackgroundFetchDelegate() override;
   content::BackgroundSyncController* GetBackgroundSyncController() override;
   content::BrowsingDataRemoverDelegate* GetBrowsingDataRemoverDelegate()
@@ -138,7 +143,9 @@ class HEADLESS_EXPORT HeadlessBrowserContextImpl final
   base::flat_map<int, base::UnguessableToken>
       frame_tree_node_id_to_devtools_frame_token_map_;
 
-  std::unique_ptr<content::PermissionManager> permission_manager_;
+  std::unique_ptr<content::PermissionControllerDelegate>
+      permission_controller_delegate_;
+  std::unique_ptr<net::NetLog> net_log_;
 
   HeadlessNetworkConditions network_conditions_;
 

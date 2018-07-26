@@ -102,7 +102,6 @@ static IntRect BackgroundRect(const LayoutObject& layout_object) {
   if (!layout_object.IsBox())
     return IntRect();
 
-  LayoutRect rect;
   const LayoutBox& box = ToLayoutBox(layout_object);
   return PixelSnappedIntRect(box.BackgroundRect(kBackgroundClipRect));
 }
@@ -554,8 +553,8 @@ void CompositedLayerMapping::UpdateAfterPartResize() {
       FloatPoint parent_position = child_containment_layer_
                                        ? child_containment_layer_->GetPosition()
                                        : FloatPoint();
-      document_layer->SetPosition(FlooredIntPoint(
-          FloatPoint(ContentsBox().Location()) - parent_position));
+      document_layer->SetPosition(FloatPoint(FlooredIntPoint(
+          FloatPoint(ContentsBox().Location()) - parent_position)));
     }
   }
 }
@@ -1040,9 +1039,9 @@ void CompositedLayerMapping::UpdateSquashingLayerGeometry(
   } else if (compositing_container) {
     common_transform_ancestor =
         &compositing_container->TransformAncestorOrRoot();
+  } else {
+    common_transform_ancestor = owning_layer_.Root();
   }
-
-  // What about a null compositing container?
 
   // FIXME: Cache these offsets.
   LayoutPoint compositing_container_offset_from_transformed_ancestor;
@@ -1128,7 +1127,7 @@ void CompositedLayerMapping::UpdateSquashingLayerGeometry(
     layers[i].paint_layer->SetSubpixelAccumulation(subpixel_accumulation);
   }
 
-  squashing_layer_->SetPosition(squash_layer_bounds.Location());
+  squashing_layer_->SetPosition(FloatPoint(squash_layer_bounds.Location()));
   squashing_layer_->SetSize(squash_layer_bounds.Size());
   // We can't squashing_layer_->SetOffsetFromLayoutObject().
   // Squashing layer has special paint and invalidation logic that already
@@ -1342,6 +1341,7 @@ void CompositedLayerMapping::ComputeGraphicsLayerParentLocation(
     IntSize scroll_offset = layout_box.ScrolledContentOffset();
     IntPoint scroll_origin =
         compositing_container->GetScrollableArea()->ScrollOrigin();
+    scroll_origin.Move(-layout_box.OriginAdjustmentForScrollbars());
     scroll_origin.Move(-layout_box.BorderLeft().ToInt(),
                        -layout_box.BorderTop().ToInt());
     graphics_layer_parent_location = -(scroll_origin + scroll_offset);
@@ -1530,7 +1530,7 @@ void CompositedLayerMapping::UpdateChildContainmentLayerGeometry() {
     IntPoint parent_location(
         child_containment_layer_->Parent()->OffsetFromLayoutObject());
     child_containment_layer_->SetPosition(
-        IntPoint(clipping_box.Location() - parent_location));
+        FloatPoint(clipping_box.Location() - parent_location));
   } else {
     IntRect clipping_box = PixelSnappedIntRect(
         ToLayoutBox(GetLayoutObject())
@@ -1541,7 +1541,7 @@ void CompositedLayerMapping::UpdateChildContainmentLayerGeometry() {
     IntPoint parent_location(
         child_containment_layer_->Parent()->OffsetFromLayoutObject());
     child_containment_layer_->SetPosition(
-        IntPoint(clipping_box.Location() - parent_location));
+        FloatPoint(clipping_box.Location() - parent_location));
   }
 
   if (child_clipping_mask_layer_ && !scrolling_layer_ &&
@@ -1773,7 +1773,7 @@ void CompositedLayerMapping::UpdateForegroundLayerGeometry() {
   }
   IntPoint parent_location(ParentForSublayers()->OffsetFromLayoutObject());
   foreground_layer_->SetPosition(
-      IntPoint(compositing_bounds.Location() - parent_location));
+      FloatPoint(compositing_bounds.Location() - parent_location));
 }
 
 void CompositedLayerMapping::UpdateDecorationOutlineLayerGeometry(
@@ -2184,7 +2184,7 @@ void CompositedLayerMapping::PositionOverflowControlsLayers() {
     Scrollbar* h_bar = owning_layer_.GetScrollableArea()->HorizontalScrollbar();
     if (h_bar) {
       IntRect frame_rect = h_bar->FrameRect();
-      layer->SetPosition(frame_rect.Location());
+      layer->SetPosition(FloatPoint(frame_rect.Location()));
       layer->SetOffsetFromLayoutObject(ToIntSize(frame_rect.Location()));
       layer->SetSize(frame_rect.Size());
       if (layer->HasContentsLayer())
@@ -2197,7 +2197,7 @@ void CompositedLayerMapping::PositionOverflowControlsLayers() {
     Scrollbar* v_bar = owning_layer_.GetScrollableArea()->VerticalScrollbar();
     if (v_bar) {
       IntRect frame_rect = v_bar->FrameRect();
-      layer->SetPosition(frame_rect.Location());
+      layer->SetPosition(FloatPoint(frame_rect.Location()));
       layer->SetOffsetFromLayoutObject(ToIntSize(frame_rect.Location()));
       layer->SetSize(frame_rect.Size());
       if (layer->HasContentsLayer())
@@ -2932,10 +2932,12 @@ LayoutRect CompositedLayerMapping::ContentsBox() const {
 }
 
 bool CompositedLayerMapping::NeedsToReparentOverflowControls() const {
+  const ComputedStyle& style = owning_layer_.GetLayoutObject().StyleRef();
   return owning_layer_.GetScrollableArea() &&
          owning_layer_.GetScrollableArea()->HasOverlayScrollbars() &&
-         !owning_layer_.GetLayoutObject().StyleRef().IsStackingContext() &&
-         owning_layer_.GetScrollableArea()->HasPaintLayerScrollChild();
+         !style.IsStackingContext() &&
+         (style.IsStacked() ||
+          owning_layer_.IsNonStackedWithInFlowStackedDescendant());
 }
 
 GraphicsLayer* CompositedLayerMapping::DetachLayerForOverflowControls() {
@@ -3248,11 +3250,11 @@ IntRect CompositedLayerMapping::RecomputeInterestRect(
   // If the visible content rect is empty, then it makes no sense to map it back
   // since there is nothing to map.
   if (!visible_content_rect.IsEmpty()) {
-    local_interest_rect =
+    local_interest_rect = FloatRect(
         anchor_layout_object
             ->AbsoluteToLocalQuad(visible_content_rect,
                                   kUseTransforms | kTraverseDocumentBoundaries)
-            .EnclosingBoundingBox();
+            .EnclosingBoundingBox());
     local_interest_rect.Move(-offset_from_anchor_layout_object);
     // TODO(chrishtr): the code below is a heuristic, instead we should detect
     // and return whether the mapping failed.  In some cases,
@@ -3508,6 +3510,11 @@ bool CompositedLayerMapping::IsTrackingRasterInvalidations() const {
       ->IsTrackingPaintInvalidations();
 }
 
+void CompositedLayerMapping::SetOverlayScrollbarsHidden(bool hidden) {
+  if (ScrollableArea* scrollable_area = owning_layer_.GetScrollableArea())
+    scrollable_area->SetScrollbarsHiddenIfOverlay(hidden);
+}
+
 #if DCHECK_IS_ON()
 void CompositedLayerMapping::VerifyNotPainting() {
   DCHECK(!GetLayoutObject().GetFrame()->GetPage() ||
@@ -3697,6 +3704,13 @@ String CompositedLayerMapping::DebugName(
   }
 
   return name;
+}
+
+const ScrollableArea* CompositedLayerMapping::GetScrollableAreaForTesting(
+    const GraphicsLayer* layer) const {
+  if (layer == scrolling_contents_layer_.get())
+    return owning_layer_.GetScrollableArea();
+  return nullptr;
 }
 
 }  // namespace blink

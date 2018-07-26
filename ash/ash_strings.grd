@@ -290,19 +290,16 @@ This file contains the strings for ash.
         You are currently casting screen.
       </message>
       <message name="IDS_ASH_STATUS_TRAY_CAST_CAST_TAB" desc="The title label used in the tray popup to tell the user we are casting a tab.">
-        Casting <ph name="TAB_NAME">$1<ex>YouTube</ex></ph> to <ph name="RECEIVER_NAME">$2<ex>Living Room</ex></ph>
+        <ph name="ROUTE_TITLE">$1<ex>YouTube</ex></ph> on <ph name="RECEIVER_NAME">$2<ex>Living Room</ex></ph>
       </message>
       <message name="IDS_ASH_STATUS_TRAY_CAST_CAST_TAB_ACCESSIBILITY_STOP" desc="Stop button accessibility label used in the tray popup to tell the user to stop a tab cast.">
-        Stop casting <ph name="TAB_NAME">$1<ex>YouTube</ex></ph> to <ph name="RECEIVER_NAME">$2<ex>Living Room</ex></ph>
-      </message>
-      <message name="IDS_ASH_STATUS_TRAY_CAST_CAST_TAB_NOTIFICATION_MESSAGE" desc="The notification message to tell the user we area casting a tab.">
-        You are currently casting <ph name="TAB_NAME">$1<ex>YouTube</ex></ph>
+        Stop <ph name="ROUTE_TITLE">$1<ex>YouTube</ex></ph> on <ph name="RECEIVER_NAME">$2<ex>Living Room</ex></ph>
       </message>
       <message name="IDS_ASH_STATUS_TRAY_CAST_CAST_UNKNOWN" desc="The label used when we have detected we are casting but do not know what we are casting or who we are casting to.">
-        Casting to an unknown receiver
+        Casting on an unknown receiver
       </message>
       <message name="IDS_ASH_STATUS_TRAY_CAST_CAST_UNKNOWN_ACCESSIBILITY_STOP" desc="Stop button accessibility label used in the tray popup to tell the user to stop a cast, but we do not know what we are casting or who we are casting to.">
-        Stop casting to an unknown receiver
+        Stop casting on an unknown receiver
       </message>
       <message name="IDS_ASH_STATUS_TRAY_CAST_DESKTOP" desc="The label used in the tray popup to notify that desktop may be cast.">
         Cast devices available
@@ -369,14 +366,23 @@ This file contains the strings for ash.
           Adobe Flash Player update available
         </message>
       </if>
+      <message name="IDS_ROLLBACK_NOTIFICATION_TITLE" desc="The title of the notification to notify that the user should restart to roll back the device.">
+        Device will be rolled back
+      </message>
       <message name="IDS_UPDATE_NOTIFICATION_MESSAGE_LEARN_MORE" desc="The body of the notification to notify that the user should restart to get system updates. This notification body links to the info page on the update.">
         Learn more about the latest <ph name="SYSTEM_APP_NAME">$1<ex>Chromium OS</ex></ph> update
       </message>
       <message name="IDS_UPDATE_NOTIFICATION_RESTART_BUTTON" meaning="button label" desc="The label used as the button to restart system and update. Displayed as the action button of the notification for system update.">
         Restart to update
       </message>
+      <message name="IDS_ROLLBACK_NOTIFICATION_RESTART_BUTTON" meaning="button label" desc="The label used as the button to restart system to rollback. Displayed as the action button of the notification for system rollback.">
+        Restart and reset
+      </message>
       <message name="IDS_UPDATE_NOTIFICATION_MESSAGE_POWERWASH" desc="The notification message used in the system notification update when user need to powerwash the device in order to update the system.">
         This update requires powerwashing your device. Learn more about the latest <ph name="SYSTEM_APP_NAME">$1<ex>Chromium OS</ex></ph> update.
+      </message>
+      <message name="IDS_UPDATE_NOTIFICATION_MESSAGE_ROLLBACK" desc="The notification message used in the system notification update when the device is rolled back and data will be deleted.">
+        Your administrator is rolling back your device. All data will be deleted when the device is restarted.
       </message>
 
       <message name="IDS_ASH_STATUS_TRAY_VOLUME" desc="The accessible text for the volume slider.">
@@ -433,6 +439,12 @@ This file contains the strings for ash.
       </message>
       <message name="IDS_ASH_STATUS_TRAY_ACCESSIBILITY_DICTATION" desc="The label used in the accessibility menu of the system tray to toggle on/off the speak to type feature.">
         Dictation
+      </message>
+      <message name="IDS_ASH_DICTATION_CONFIRMATION_TITLE" desc="The title for the modal dialog shown the first time the user enables dictation">
+        Dictation
+      </message>
+      <message name="IDS_ASH_DICTATION_CONFIRMATION_BODY" desc="The message shown the first time the user enables Dictation, explaining that the audio data will be sent to Google for transcription">
+        Dictation sends your voice to Google to allow voice typing in any text field.
       </message>
       <message name="IDS_ASH_STATUS_TRAY_ACCESSIBILITY_HIGH_CONTRAST_MODE" desc="The label used in the accessibility menu of the system tray to toggle on/off high contrast feature.">
         High contrast mode
@@ -1396,13 +1408,13 @@ This file contains the strings for ash.
         Managed by <ph name="DOMAIN">$1<ex>yourdomain.com</ex></ph>
       </message>
       <message name="IDS_ASH_LOGIN_PUBLIC_ACCOUNT_MONITORING_WARNING" desc="Template for text shown in the public account user pod, informing the user that this is a public, managed account.">
-        The device admin may be able to monitor your activity.
+        The device manager may be able to monitor your activity.
       </message>
       <message name="IDS_ASH_LOGIN_PUBLIC_ACCOUNT_SIGNOUT_REMINDER" desc="Text shown in the public account user pod, reminding the user to log out.">
-        Your information will be removed when you sign out. <ph name="LEARN_MORE">$1<ex>Learn more</ex></ph>
+        Your session will be cleared when you sign out. <ph name="LEARN_MORE">$1<ex>Learn more</ex></ph>
       </message>
       <message name="IDS_ASH_LOGIN_PUBLIC_SESSION_LANGUAGE_AND_INPUT" desc="Link in public session pod that shows a section which allows the user to change the UI language and keyboard layout.">
-        Language and input
+        Choose language and input
       </message>
       <message name="IDS_ASH_LOGIN_LANGUAGE_SELECTION_SELECT" desc="Label for language selection dropdown">
         Set your language
@@ -1590,6 +1602,9 @@ This file contains the strings for ash.
       </message>
       <message name="IDS_ASH_ASSISTANT_PROMPT_STYLUS" desc="Message shown to indicate that Assistant is ready to receive a selection made using the stylus.">
         Use your stylus to select
+      </message>
+      <message name="IDS_ASH_ASSISTANT_NOTIFICATION_DISPLAY_SOURCE" desc="The name for the source of the assistant notification.">
+        Assistant
       </message>
     </messages>
   </release>

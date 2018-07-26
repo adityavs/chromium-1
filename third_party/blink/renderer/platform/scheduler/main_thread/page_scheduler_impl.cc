@@ -12,7 +12,6 @@
 #include "base/strings/stringprintf.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
-#include "third_party/blink/renderer/platform/scheduler/base/virtual_time_domain.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/auto_advancing_virtual_time_domain.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
@@ -390,9 +389,10 @@ bool PageSchedulerImpl::HasActiveConnection() const {
   return has_active_connection_;
 }
 
-void PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
-  if (delegate_)
-    delegate_->RequestBeginMainFrameNotExpected(new_state);
+bool PageSchedulerImpl::RequestBeginMainFrameNotExpected(bool new_state) {
+  if (!delegate_)
+    return false;
+  return delegate_->RequestBeginMainFrameNotExpected(new_state);
 }
 
 bool PageSchedulerImpl::IsAudioPlaying() const {
@@ -545,7 +545,6 @@ void PageSchedulerImpl::UpdateBackgroundBudgetPoolSchedulingLifecycleState() {
 void PageSchedulerImpl::NotifyFrames() {
   for (FrameSchedulerImpl* frame_scheduler : frame_schedulers_) {
     frame_scheduler->UpdatePolicy();
-    frame_scheduler->UpdateQueuePriorities();
   }
 }
 

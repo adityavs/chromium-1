@@ -844,10 +844,11 @@ template <typename Container>
 void Move() {
   Object* obj = Object::Create();
   Container container1;
+  Container container2;
   container1.insert(obj);
   {
     ExpectWriteBarrierFires scope(ThreadState::Current(), {obj});
-    Container container2(std::move(container1));
+    container2 = std::move(container1);
   }
 }
 
@@ -1059,7 +1060,7 @@ TEST(IncrementalMarkingTest, HeapLinkedHashSetMove) {
 TEST(IncrementalMarkingTest, HeapLinkedHashSetSwap) {
   Swap<HeapLinkedHashSet<Member<Object>>>();
   // Weak references are strongified for the current cycle.
-  Move<HeapLinkedHashSet<WeakMember<Object>>>();
+  Swap<HeapLinkedHashSet<WeakMember<Object>>>();
 }
 
 // =============================================================================

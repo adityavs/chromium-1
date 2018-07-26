@@ -27,13 +27,13 @@
 #include "third_party/blink/renderer/core/dom/node.h"
 
 #include "third_party/blink/renderer/bindings/core/v8/node_or_string.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/css/css_selector.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/dom/attr.h"
 #include "third_party/blink/renderer/core/dom/attribute.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/child_list_mutation_scope.h"
 #include "third_party/blink/renderer/core/dom/child_node_list.h"
 #include "third_party/blink/renderer/core/dom/document.h"
@@ -44,6 +44,7 @@
 #include "third_party/blink/renderer/core/dom/element_rare_data.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
 #include "third_party/blink/renderer/core/dom/events/event_listener.h"
 #include "third_party/blink/renderer/core/dom/flat_tree_traversal.h"
@@ -104,7 +105,6 @@
 #include "third_party/blink/renderer/platform/bindings/microtask.h"
 #include "third_party/blink/renderer/platform/bindings/script_wrappable_visitor.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/instance_counters.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/traced_value.h"
@@ -355,6 +355,16 @@ String Node::nodeValue() const {
 
 void Node::setNodeValue(const String&) {
   // By default, setting nodeValue has no effect.
+}
+
+ContainerNode* Node::parentNode() const {
+  return IsShadowRoot() ? nullptr : ParentOrShadowHostNode();
+}
+
+ContainerNode* Node::ParentNodeWithCounting() const {
+  if (GetFlag(kInDOMNodeRemovedHandler))
+    GetDocument().CountDetachingNodeAccessInDOMNodeRemovedHandler();
+  return IsShadowRoot() ? nullptr : ParentOrShadowHostNode();
 }
 
 NodeList* Node::childNodes() {

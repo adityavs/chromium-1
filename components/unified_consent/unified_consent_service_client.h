@@ -5,6 +5,8 @@
 #ifndef COMPONENTS_UNIFIED_CONSENT_UNIFIED_CONSENT_SERVICE_CLIENT_H_
 #define COMPONENTS_UNIFIED_CONSENT_UNIFIED_CONSENT_SERVICE_CLIENT_H_
 
+namespace unified_consent {
+
 class UnifiedConsentServiceClient {
  public:
   virtual ~UnifiedConsentServiceClient() {}
@@ -21,6 +23,10 @@ class UnifiedConsentServiceClient {
   virtual void SetSafeBrowsingExtendedReportingEnabled(bool enabled) = 0;
   // Enables/disables prediction of network actions.
   virtual void SetNetworkPredictionEnabled(bool enabled) = 0;
+  // Enables/disables spell check.
+  virtual void SetSpellCheckEnabled(bool enabled) = 0;
 };
+
+}  // namespace unified_consent
 
 #endif  // COMPONENTS_UNIFIED_CONSENT_UNIFIED_CONSENT_SERVICE_CLIENT_H_

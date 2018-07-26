@@ -118,7 +118,7 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
         mojo::MakeRequest(&notification_service_ptr));
 
     // Provide a mock permission manager to the |browser_context_|.
-    browser_context_.SetPermissionManager(
+    browser_context_.SetPermissionControllerDelegate(
         std::make_unique<testing::NiceMock<MockPermissionManager>>());
   }
 
@@ -141,10 +141,10 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
       base::RunLoop run_loop;
       embedded_worker_helper_->context()->RegisterServiceWorker(
           GURL(kTestServiceWorkerUrl), options,
-          base::AdaptCallbackForRepeating(base::BindOnce(
+          base::BindOnce(
               &BlinkNotificationServiceImplTest::DidRegisterServiceWorker,
               base::Unretained(this), &service_worker_registration_id,
-              run_loop.QuitClosure())));
+              run_loop.QuitClosure()));
       run_loop.Run();
     }
 
@@ -179,8 +179,8 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
                                 const std::string& status_message,
                                 int64_t service_worker_registration_id) {
     DCHECK(out_service_worker_registration_id);
-    EXPECT_EQ(blink::SERVICE_WORKER_OK, status)
-        << ServiceWorkerStatusToString(status);
+    EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status)
+        << blink::ServiceWorkerStatusToString(status);
 
     *out_service_worker_registration_id = service_worker_registration_id;
 
@@ -193,8 +193,8 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
       blink::ServiceWorkerStatusCode status,
       scoped_refptr<ServiceWorkerRegistration> service_worker_registration) {
     DCHECK(out_service_worker_registration);
-    EXPECT_EQ(blink::SERVICE_WORKER_OK, status)
-        << ServiceWorkerStatusToString(status);
+    EXPECT_EQ(blink::ServiceWorkerStatusCode::kOk, status)
+        << blink::ServiceWorkerStatusToString(status);
 
     *out_service_worker_registration = service_worker_registration;
 
@@ -300,7 +300,7 @@ class BlinkNotificationServiceImplTest : public ::testing::Test {
   void SetPermissionStatus(blink::mojom::PermissionStatus permission_status) {
     MockPermissionManager* mock_permission_manager =
         static_cast<MockPermissionManager*>(
-            browser_context_.GetPermissionManager());
+            browser_context_.GetPermissionControllerDelegate());
 
     ON_CALL(*mock_permission_manager,
             GetPermissionStatus(PermissionType::NOTIFICATIONS, _, _))

@@ -31,6 +31,7 @@
 #include "ios/chrome/browser/autofill/address_normalizer_factory.h"
 #include "ios/chrome/browser/autofill/validation_rules_storage_factory.h"
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
+#import "ios/chrome/browser/metrics/ukm_url_recorder.h"
 #import "ios/chrome/browser/payments/ios_payment_instrument.h"
 #import "ios/chrome/browser/payments/payment_request_util.h"
 #include "ios/chrome/browser/signin/signin_manager_factory.h"
@@ -96,7 +97,8 @@ PaymentRequest::PaymentRequest(
       selected_payment_method_(nullptr),
       selected_shipping_option_(nullptr),
       profile_comparator_(GetApplicationLocale(), *this),
-      journey_logger_(IsIncognito(), GetLastCommittedURL(), GetUkmRecorder()),
+      journey_logger_(IsIncognito(),
+                      ukm::GetSourceIdForWebStateDocument(web_state)),
       payment_instruments_ready_(false),
       ios_instrument_finder_(
           GetApplicationContext()->GetSharedURLLoaderFactory(),
@@ -316,7 +318,7 @@ const PaymentDetailsModifier* PaymentRequest::GetApplicableModifier(
         &unused_payment_method_identifiers);
 
     if (selected_instrument->IsValidForModifier(
-            modifier.method_data.supported_methods,
+            modifier.method_data.supported_method,
             !modifier.method_data.supported_networks.empty(),
             supported_card_networks_set,
             !modifier.method_data.supported_types.empty(),
@@ -490,9 +492,8 @@ void PaymentRequest::RecordUseStats() {
 void PaymentRequest::ParsePaymentMethodData() {
   for (const PaymentMethodData& method_data_entry :
        web_payment_request_.method_data) {
-    for (const std::string& method : method_data_entry.supported_methods) {
-      stringified_method_data_[method].insert(method_data_entry.data);
-    }
+    stringified_method_data_[method_data_entry.supported_method].insert(
+        method_data_entry.data);
   }
 
   std::set<std::string> unused_payment_method_identifiers;

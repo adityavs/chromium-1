@@ -80,6 +80,8 @@
 #include "third_party/blink/renderer/core/paint/paint_info.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_painter.h"
 #include "third_party/blink/renderer/core/paint/paint_layer_scrollable_area.h"
+#include "third_party/blink/renderer/core/style/reference_clip_path_operation.h"
+#include "third_party/blink/renderer/core/style/shape_clip_path_operation.h"
 #include "third_party/blink/renderer/platform/bindings/runtime_call_stats.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
 #include "third_party/blink/renderer/platform/geometry/float_point_3d.h"
@@ -136,9 +138,7 @@ PaintLayerRareData::PaintLayerRareData()
 PaintLayerRareData::~PaintLayerRareData() = default;
 
 PaintLayer::PaintLayer(LayoutBoxModelObject& layout_object)
-    : has_self_painting_layer_descendant_(false),
-      has_self_painting_layer_descendant_dirty_(false),
-      is_root_layer_(layout_object.IsLayoutView()),
+    : is_root_layer_(layout_object.IsLayoutView()),
       has_visible_content_(false),
       needs_descendant_dependent_flags_update_(true),
       has_visible_descendant_(false),
@@ -175,6 +175,8 @@ PaintLayer::PaintLayer(LayoutBoxModelObject& layout_object)
       descendant_may_need_compositing_requirements_update_(false),
       needs_compositing_layer_assignment_(false),
       descendant_needs_compositing_layer_assignment_(false),
+      has_self_painting_layer_descendant_(false),
+      is_non_stacked_with_in_flow_stacked_descendant_(false),
       layout_object_(layout_object),
       parent_(nullptr),
       previous_(nullptr),
@@ -343,36 +345,6 @@ void PaintLayer::UpdateLayerPositionRecursive(
 
   for (PaintLayer* child = FirstChild(); child; child = child->NextSibling())
     child->UpdateLayerPositionRecursive(behavior);
-}
-
-void PaintLayer::UpdateHasSelfPaintingLayerDescendant() const {
-  DCHECK(has_self_painting_layer_descendant_dirty_);
-
-  has_self_painting_layer_descendant_ = false;
-
-  for (PaintLayer* child = FirstChild(); child; child = child->NextSibling()) {
-    if (child->IsSelfPaintingLayer() ||
-        child->HasSelfPaintingLayerDescendant()) {
-      has_self_painting_layer_descendant_ = true;
-      break;
-    }
-  }
-
-  has_self_painting_layer_descendant_dirty_ = false;
-}
-
-void PaintLayer::DirtyAncestorChainHasSelfPaintingLayerDescendantStatus() {
-  for (PaintLayer* layer = this; layer; layer = layer->Parent()) {
-    layer->has_self_painting_layer_descendant_dirty_ = true;
-    // If we have reached a self-painting layer, we know our parent should have
-    // a self-painting descendant in this case, there is no need to dirty our
-    // ancestors further.
-    if (layer->IsSelfPaintingLayer()) {
-      DCHECK(!Parent() || Parent()->has_self_painting_layer_descendant_dirty_ ||
-             Parent()->has_self_painting_layer_descendant_);
-      break;
-    }
-  }
 }
 
 bool PaintLayer::SticksToScroller() const {
@@ -770,14 +742,20 @@ void PaintLayer::UpdateDescendantDependentFlags() {
     has_descendant_with_clip_path_ = false;
     has_descendant_with_sticky_or_fixed_ = false;
     has_non_contained_absolute_position_descendant_ = false;
+    has_self_painting_layer_descendant_ = false;
+    is_non_stacked_with_in_flow_stacked_descendant_ = false;
 
     bool can_contain_abs =
         GetLayoutObject().CanContainAbsolutePositionObjects();
 
-    bool needs_stacking_node = GetLayoutObject().StyleRef().IsStackingContext();
+    const ComputedStyle& style = GetLayoutObject().StyleRef();
+    bool needs_stacking_node = style.IsStackingContext();
+    bool is_stacked = style.IsStacked();
 
     for (PaintLayer* child = FirstChild(); child;
          child = child->NextSibling()) {
+      const ComputedStyle& child_style = child->GetLayoutObject().StyleRef();
+
       child->UpdateDescendantDependentFlags();
 
       if (child->has_visible_content_ || child->has_visible_descendant_)
@@ -793,19 +771,29 @@ void PaintLayer::UpdateDescendantDependentFlags() {
 
       has_descendant_with_sticky_or_fixed_ |=
           child->HasDescendantWithStickyOrFixed() ||
-          child->GetLayoutObject().Style()->GetPosition() ==
-              EPosition::kSticky ||
-          child->GetLayoutObject().Style()->GetPosition() == EPosition::kFixed;
+          child_style.GetPosition() == EPosition::kSticky ||
+          child_style.GetPosition() == EPosition::kFixed;
 
       if (!can_contain_abs) {
         has_non_contained_absolute_position_descendant_ |=
             (child->HasNonContainedAbsolutePositionDescendant() ||
-             child->GetLayoutObject().Style()->GetPosition() ==
-                 EPosition::kAbsolute);
+             child_style.GetPosition() == EPosition::kAbsolute);
       }
 
-      needs_stacking_node = needs_stacking_node ||
-                            !child->GetLayoutObject().StyleRef().IsStacked();
+      needs_stacking_node = needs_stacking_node || !child_style.IsStacked();
+
+      has_self_painting_layer_descendant_ =
+          has_self_painting_layer_descendant_ ||
+          child->HasSelfPaintingLayerDescendant() ||
+          child->IsSelfPaintingLayer();
+
+      if (!is_stacked) {
+        if (child->IsNonStackedWithInFlowStackedDescendant())
+          is_non_stacked_with_in_flow_stacked_descendant_ = true;
+        else if (child_style.IsStacked() &&
+                 !child->GetLayoutObject().IsOutOfFlowPositioned())
+          is_non_stacked_with_in_flow_stacked_descendant_ = true;
+      }
     }
 
     UpdateStackingNode(needs_stacking_node);
@@ -1068,6 +1056,8 @@ LayoutPoint PaintLayer::ComputeOffsetFromAncestor(
 }
 
 PaintLayer* PaintLayer::CompositingContainer() const {
+  if (IsReplacedNormalFlowStacking())
+    return Parent();
   if (!GetLayoutObject().StyleRef().IsStacked())
     return IsSelfPaintingLayer() ? Parent() : ContainingLayer();
   if (PaintLayerStackingNode* ancestor_stacking_node =
@@ -1403,7 +1393,6 @@ void PaintLayer::AddChild(PaintLayer* child, PaintLayer* before_child) {
     DirtyVisibleContentStatus();
 
   MarkAncestorChainForDescendantDependentFlagsUpdate();
-  DirtyAncestorChainHasSelfPaintingLayerDescendantStatus();
 
   // Need to force requirements update, due to change of stacking order.
   SetNeedsCompositingRequirementsUpdate();
@@ -1448,8 +1437,6 @@ PaintLayer* PaintLayer::RemoveChild(PaintLayer* old_child) {
   if (old_child->AncestorOverflowLayer())
     old_child->RemoveAncestorOverflowLayer(old_child->AncestorOverflowLayer());
 
-  DirtyAncestorChainHasSelfPaintingLayerDescendantStatus();
-
   if (old_child->has_visible_content_ || old_child->has_visible_descendant_)
     MarkAncestorChainForDescendantDependentFlagsUpdate();
 
@@ -1474,14 +1461,15 @@ void PaintLayer::RemoveOnlyThisLayerAfterStyleChange(
     MarkAncestorChainForDescendantDependentFlagsUpdate();
   }
 
-  // Destructing PaintLayer would cause CompositedLayerMapping and composited
-  // layers to be destructed and detach from layer tree immediately. Layers
-  // could have dangling scroll/clip parent if compositing update were omitted.
-  if (LocalFrameView* frame_view = layout_object_.GetDocument().View())
-    frame_view->SetNeedsForcedCompositingUpdate();
-
   bool did_set_paint_invalidation = false;
   if (!RuntimeEnabledFeatures::SlimmingPaintV2Enabled()) {
+    // Destructing PaintLayer would cause CompositedLayerMapping and composited
+    // layers to be destructed and detach from layer tree immediately. Layers
+    // could have dangling scroll/clip parent if compositing update were
+    // omitted.
+    if (LocalFrameView* frame_view = layout_object_.GetDocument().View())
+      frame_view->SetNeedsForcedCompositingUpdate();
+
     // We need the current compositing status.
     DisableCompositingQueryAsserts disabler;
     if (IsPaintInvalidationContainer()) {
@@ -1781,22 +1769,18 @@ void PaintLayer::CollectFragments(
   }
 }
 
-static inline LayoutRect FrameVisibleRect(LayoutObject& layout_object) {
-  LocalFrameView* frame_view = layout_object.GetDocument().View();
-  if (!frame_view)
-    return LayoutRect();
-
-  return LayoutRect(LayoutPoint(), LayoutSize(frame_view->Size()));
-}
-
 PaintLayer::HitTestRecursionData::HitTestRecursionData(
     const LayoutRect& rect_arg,
-    const HitTestLocation& location_arg)
+    const HitTestLocation& location_arg,
+    const HitTestLocation& original_location_arg)
     : rect(rect_arg),
       location(location_arg),
+      original_location(original_location_arg),
       intersects_location(location_arg.Intersects(rect_arg)) {}
 
-bool PaintLayer::HitTest(HitTestResult& result) {
+bool PaintLayer::HitTest(const HitTestLocation& hit_test_location,
+                         HitTestResult& result,
+                         const LayoutRect& hit_test_area) {
   DCHECK(IsSelfPaintingLayer() || HasSelfPaintingLayerDescendant());
 
   // LayoutView should make sure to update layout before entering hit testing
@@ -1804,18 +1788,9 @@ bool PaintLayer::HitTest(HitTestResult& result) {
   DCHECK(!GetLayoutObject().GetDocument().GetLayoutView()->NeedsLayout());
 
   const HitTestRequest& request = result.GetHitTestRequest();
-  const HitTestLocation& hit_test_location = result.GetHitTestLocation();
 
-  // Start with frameVisibleRect to ensure we include the scrollbars.
-  LayoutRect hit_test_area = FrameVisibleRect(GetLayoutObject());
-  if (request.IgnoreClipping()) {
-    if (LocalFrameView* frame_view = GetLayoutObject().GetDocument().View()) {
-      hit_test_area.Unite(frame_view->DocumentToFrame(
-          LayoutRect(GetLayoutObject().View()->DocumentRect())));
-    }
-  }
-
-  HitTestRecursionData recursion_data(hit_test_area, hit_test_location);
+  HitTestRecursionData recursion_data(hit_test_area, hit_test_location,
+                                      hit_test_location);
   PaintLayer* inside_layer =
       HitTestLayer(this, nullptr, result, recursion_data, false);
   if (!inside_layer && IsRootLayer()) {
@@ -2147,7 +2122,7 @@ PaintLayer* PaintLayer::HitTestLayer(
       // Hit test with a temporary HitTestResult, because we only want to commit
       // to 'result' if we know we're frontmost.
       HitTestResult temp_result(result.GetHitTestRequest(),
-                                result.GetHitTestLocation());
+                                recursion_data.original_location);
       bool inside_fragment_foreground_rect = false;
 
       if (HitTestContentsForFragments(
@@ -2189,14 +2164,14 @@ PaintLayer* PaintLayer::HitTestLayer(
 
   if (recursion_data.intersects_location && IsSelfPaintingLayer()) {
     HitTestResult temp_result(result.GetHitTestRequest(),
-                              result.GetHitTestLocation());
+                              recursion_data.original_location);
     bool inside_fragment_background_rect = false;
     if (HitTestContentsForFragments(*layer_fragments, offset, temp_result,
                                     recursion_data.location, kHitTestSelf,
                                     inside_fragment_background_rect) &&
         IsHitCandidate(this, false, z_offset_for_contents_ptr,
                        unflattened_transform_state.get())) {
-      if (result.IsRectBasedTest())
+      if (recursion_data.original_location.IsRectBasedTest())
         result.Append(temp_result);
       else
         result = temp_result;
@@ -2303,7 +2278,8 @@ PaintLayer* PaintLayer::HitTestLayerByApplyingTransform(
     new_location.emplace(local_point, local_point_quad);
   else
     new_location.emplace(local_point);
-  HitTestRecursionData new_recursion_data(bounds_of_mapped_area, *new_location);
+  HitTestRecursionData new_recursion_data(bounds_of_mapped_area, *new_location,
+                                          recursion_data.original_location);
 
   // Now do a hit test with the root layer shifted to be us.
   return HitTestLayer(this, container_layer, result, new_recursion_data, true,
@@ -2350,12 +2326,8 @@ bool PaintLayer::HitTestContents(HitTestResult& result,
   return true;
 }
 
-bool PaintLayer::IsReplacedNormalFlowStacking() {
-  if (!GetLayoutObject().IsSVGForeignObject())
-    return false;
-  if (!GetLayoutObject().StyleRef().HasAutoZIndex())
-    return false;
-  return true;
+bool PaintLayer::IsReplacedNormalFlowStacking() const {
+  return GetLayoutObject().IsSVGForeignObject();
 }
 
 void PaintLayer::SetNeedsCompositingLayerAssignment() {
@@ -2416,14 +2388,15 @@ PaintLayer* PaintLayer::HitTestChildren(
 
     PaintLayer* hit_layer = nullptr;
     HitTestResult temp_result(result.GetHitTestRequest(),
-                              result.GetHitTestLocation());
+                              recursion_data.original_location);
     hit_layer = child_layer->HitTestLayer(
         root_layer, this, temp_result, recursion_data, false, transform_state,
         z_offset_for_descendants);
 
     // If it is a list-based test, we can safely append the temporary result
     // since it might had hit nodes but not necesserily had hitLayer set.
-    DCHECK(!result.IsRectBasedTest() || result.GetHitTestRequest().ListBased());
+    DCHECK(!recursion_data.original_location.IsRectBasedTest() ||
+           result.GetHitTestRequest().ListBased());
     if (result.GetHitTestRequest().ListBased())
       result.Append(temp_result);
 
@@ -2847,9 +2820,8 @@ bool PaintLayer::SupportsSubsequenceCaching() const {
   if (EnclosingPaginationLayer())
     return false;
 
-  // SVG documents paint atomically.
-  if (GetLayoutObject().IsSVGRoot() &&
-      GetLayoutObject().GetDocument().IsSVGDocument())
+  // SVG paints atomically.
+  if (GetLayoutObject().IsSVGRoot())
     return true;
 
   // Create subsequence for only stacking contexts whose painting are atomic.
@@ -2942,11 +2914,6 @@ bool PaintLayer::ChildBackgroundIsKnownToBeOpaqueInRect(
 }
 
 bool PaintLayer::ShouldBeSelfPaintingLayer() const {
-  if (GetLayoutObject().IsLayoutEmbeddedContent() &&
-      ToLayoutEmbeddedContent(GetLayoutObject())
-          .RequiresAcceleratedCompositing())
-    return true;
-
   // TODO(crbug.com/839341): Remove ScrollTimeline check once we support
   // main-thread AnimationWorklet and don't need to promote the scroll-source.
   return GetLayoutObject().LayerTypeRequired() == kNormalPaintLayer ||
@@ -2968,7 +2935,7 @@ void PaintLayer::UpdateSelfPaintingLayer() {
   SetNeedsRepaint();
 
   if (PaintLayer* parent = Parent()) {
-    parent->DirtyAncestorChainHasSelfPaintingLayerDescendantStatus();
+    parent->MarkAncestorChainForDescendantDependentFlagsUpdate();
 
     if (PaintLayer* enclosing_self_painting_layer =
             parent->EnclosingSelfPaintingLayer()) {

@@ -4,7 +4,7 @@
 
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_manager.h"
 
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_request.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/request_or_usv_string.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/modules/v8/request_or_usv_string_or_request_or_usv_string_sequence.h"
@@ -19,7 +19,7 @@
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_options.h"
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_registration.h"
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_type_converters.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_registration.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_registration.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
 #include "third_party/blink/renderer/platform/loader/cors/cors.h"

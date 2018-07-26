@@ -28,7 +28,6 @@
 #include "net/third_party/spdy/core/spdy_frame_builder.h"
 #include "third_party/boringssl/src/include/openssl/sha.h"
 
-using std::string;
 using testing::_;
 using testing::Invoke;
 
@@ -102,15 +101,15 @@ std::unique_ptr<QuicPacket> BuildUnsizedDataPacket(
       header.nonce != nullptr, header.packet_number_length);
 }
 
-string Sha1Hash(QuicStringPiece data) {
+QuicString Sha1Hash(QuicStringPiece data) {
   char buffer[SHA_DIGEST_LENGTH];
   SHA1(reinterpret_cast<const uint8_t*>(data.data()), data.size(),
        reinterpret_cast<uint8_t*>(buffer));
-  return string(buffer, QUIC_ARRAYSIZE(buffer));
+  return QuicString(buffer, QUIC_ARRAYSIZE(buffer));
 }
 
 uint64_t SimpleRandom::RandUint64() {
-  string hash =
+  QuicString hash =
       Sha1Hash(QuicStringPiece(reinterpret_cast<char*>(&seed_), sizeof(seed_)));
   DCHECK_EQ(static_cast<size_t>(SHA_DIGEST_LENGTH), hash.length());
   memcpy(&seed_, hash.data(), sizeof(seed_));
@@ -121,15 +120,6 @@ void SimpleRandom::RandBytes(void* data, size_t len) {
   uint8_t* real_data = static_cast<uint8_t*>(data);
   for (size_t offset = 0; offset < len; offset++) {
     real_data[offset] = RandUint64() & 0xff;
-  }
-}
-
-void SimpleRandom::Reseed(const void* additional_entropy, size_t len) {
-  const uint8_t* real_entropy = static_cast<const uint8_t*>(additional_entropy);
-  for (size_t offset = 0; offset < len; offset++) {
-    // Note: this is not actually a well-established way to incorporate new
-    // entropy, but good enough for tests.
-    seed_ *= real_entropy[len];
   }
 }
 
@@ -148,8 +138,6 @@ MockFramerVisitor::MockFramerVisitor() {
   ON_CALL(*this, OnPacketHeader(_)).WillByDefault(testing::Return(true));
 
   ON_CALL(*this, OnStreamFrame(_)).WillByDefault(testing::Return(true));
-
-  ON_CALL(*this, OnAckFrame(_)).WillByDefault(testing::Return(true));
 
   ON_CALL(*this, OnStopWaitingFrame(_)).WillByDefault(testing::Return(true));
 
@@ -198,10 +186,6 @@ bool NoOpFramerVisitor::OnPacketHeader(const QuicPacketHeader& header) {
 }
 
 bool NoOpFramerVisitor::OnStreamFrame(const QuicStreamFrame& frame) {
-  return true;
-}
-
-bool NoOpFramerVisitor::OnAckFrame(const QuicAckFrame& frame) {
   return true;
 }
 
@@ -572,6 +556,11 @@ TestQuicSpdyServerSession::CreateQuicCryptoServerStream(
       &helper_);
 }
 
+void TestQuicSpdyServerSession::OnCryptoHandshakeEvent(
+    CryptoHandshakeEvent event) {
+  QuicSession::OnCryptoHandshakeEvent(event);
+}
+
 QuicCryptoServerStream* TestQuicSpdyServerSession::GetMutableCryptoStream() {
   return static_cast<QuicCryptoServerStream*>(
       QuicServerSessionBase::GetMutableCryptoStream());
@@ -597,8 +586,13 @@ TestQuicSpdyClientSession::TestQuicSpdyClientSession(
 
 TestQuicSpdyClientSession::~TestQuicSpdyClientSession() {}
 
-bool TestQuicSpdyClientSession::IsAuthorized(const string& authority) {
+bool TestQuicSpdyClientSession::IsAuthorized(const QuicString& authority) {
   return true;
+}
+
+void TestQuicSpdyClientSession::OnCryptoHandshakeEvent(
+    CryptoHandshakeEvent event) {
+  QuicSession::OnCryptoHandshakeEvent(event);
 }
 
 QuicCryptoClientStream* TestQuicSpdyClientSession::GetMutableCryptoStream() {
@@ -629,6 +623,11 @@ void TestPushPromiseDelegate::OnRendezvousResult(QuicSpdyStream* stream) {
 MockPacketWriter::MockPacketWriter() {
   ON_CALL(*this, GetMaxPacketSize(_))
       .WillByDefault(testing::Return(kMaxPacketSize));
+  ON_CALL(*this, IsBatchMode()).WillByDefault(testing::Return(false));
+  ON_CALL(*this, GetNextWriteLocation())
+      .WillByDefault(testing::Return(nullptr));
+  ON_CALL(*this, Flush())
+      .WillByDefault(testing::Return(WriteResult(WRITE_STATUS_OK, 0)));
 }
 
 MockPacketWriter::~MockPacketWriter() {}
@@ -651,10 +650,10 @@ MockNetworkChangeVisitor::~MockNetworkChangeVisitor() {}
 
 namespace {
 
-string HexDumpWithMarks(const char* data,
-                        int length,
-                        const bool* marks,
-                        int mark_length) {
+QuicString HexDumpWithMarks(const char* data,
+                            int length,
+                            const bool* marks,
+                            int mark_length) {
   static const char kHexChars[] = "0123456789abcdef";
   static const int kColumns = 4;
 
@@ -665,7 +664,7 @@ string HexDumpWithMarks(const char* data,
     mark_length = std::min(mark_length, kSizeLimit);
   }
 
-  string hex;
+  QuicString hex;
   for (const char *row = data; length > 0;
        row += kColumns, length -= kColumns) {
     for (const char* p = row; p < row + 4; ++p) {
@@ -719,7 +718,7 @@ QuicEncryptedPacket* ConstructEncryptedPacket(
     bool version_flag,
     bool reset_flag,
     QuicPacketNumber packet_number,
-    const string& data) {
+    const QuicString& data) {
   return ConstructEncryptedPacket(
       destination_connection_id, source_connection_id, version_flag, reset_flag,
       packet_number, data, PACKET_8BYTE_CONNECTION_ID,
@@ -732,7 +731,7 @@ QuicEncryptedPacket* ConstructEncryptedPacket(
     bool version_flag,
     bool reset_flag,
     QuicPacketNumber packet_number,
-    const string& data,
+    const QuicString& data,
     QuicConnectionIdLength destination_connection_id_length,
     QuicConnectionIdLength source_connection_id_length,
     QuicPacketNumberLength packet_number_length) {
@@ -748,7 +747,7 @@ QuicEncryptedPacket* ConstructEncryptedPacket(
     bool version_flag,
     bool reset_flag,
     QuicPacketNumber packet_number,
-    const string& data,
+    const QuicString& data,
     QuicConnectionIdLength destination_connection_id_length,
     QuicConnectionIdLength source_connection_id_length,
     QuicPacketNumberLength packet_number_length,
@@ -765,7 +764,7 @@ QuicEncryptedPacket* ConstructEncryptedPacket(
     bool version_flag,
     bool reset_flag,
     QuicPacketNumber packet_number,
-    const string& data,
+    const QuicString& data,
     QuicConnectionIdLength destination_connection_id_length,
     QuicConnectionIdLength source_connection_id_length,
     QuicPacketNumberLength packet_number_length,
@@ -813,7 +812,7 @@ QuicEncryptedPacket* ConstructMisFramedEncryptedPacket(
     bool version_flag,
     bool reset_flag,
     QuicPacketNumber packet_number,
-    const string& data,
+    const QuicString& data,
     QuicConnectionIdLength destination_connection_id_length,
     QuicConnectionIdLength source_connection_id_length,
     QuicPacketNumberLength packet_number_length,
@@ -853,7 +852,7 @@ QuicEncryptedPacket* ConstructMisFramedEncryptedPacket(
   return new QuicEncryptedPacket(buffer, encrypted_length, true);
 }
 
-void CompareCharArraysWithHexError(const string& description,
+void CompareCharArraysWithHexError(const QuicString& description,
                                    const char* actual,
                                    const int actual_len,
                                    const char* expected,

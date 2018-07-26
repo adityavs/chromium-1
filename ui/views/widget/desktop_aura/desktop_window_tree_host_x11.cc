@@ -450,6 +450,8 @@ DesktopWindowTreeHostX11::CreateDragDropClient(
 }
 
 void DesktopWindowTreeHostX11::Close() {
+  content_window()->Hide();
+
   // TODO(erg): Might need to do additional hiding tasks here.
   delayed_resize_task_.Cancel();
 
@@ -1070,7 +1072,7 @@ void DesktopWindowTreeHostX11::SetOpacity(float opacity) {
   }
 }
 
-void DesktopWindowTreeHostX11::SetAspectRatio(const gfx::Size& aspect_ratio) {
+void DesktopWindowTreeHostX11::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
   XSizeHints size_hints;
   size_hints.flags = 0;
   long supplied_return;
@@ -1549,6 +1551,8 @@ void DesktopWindowTreeHostX11::InitX11Window(
   // SetWMSpecState) has no effect here since the window has not yet been
   // mapped. So we manually change the state.
   if (!state_atom_list.empty()) {
+    DCHECK(window_properties_in_client_.empty());
+    window_properties_in_client_ = state_atom_list;
     ui::SetAtomArrayProperty(xwindow_,
                              "_NET_WM_STATE",
                              "ATOM",

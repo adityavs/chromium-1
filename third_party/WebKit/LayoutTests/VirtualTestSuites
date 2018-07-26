@@ -36,6 +36,11 @@
   },
   {
     "prefix": "threaded",
+    "base": "external/wpt/css/css-scroll-snap",
+    "args": ["--enable-threaded-compositing"]
+  },
+  {
+    "prefix": "threaded",
     "base": "compositing/webgl",
     "args": ["--enable-threaded-compositing"]
   },
@@ -312,24 +317,6 @@
     "args": ["--force-device-scale-factor=2", "--enable-use-zoom-for-dsf"]
   },
   {
-    "prefix": "wheelscrolllatching",
-    "base": "fast/events/wheel",
-    "args": ["--enable-features=TouchpadAndWheelScrollLatching"]
-  },
-  {
-    "prefix": "wheelscrolllatching",
-    "base": "fast/compositor-wheel-scroll-latching/animated-scroll",
-    "args": ["--enable-features=TouchpadAndWheelScrollLatching",
-             "--enable-threaded-compositing"]
-  },
-  {
-    "prefix": "wheelscrolllatching",
-    "base": "fast/compositor-wheel-scroll-latching/non-animated-scroll",
-    "args": ["--enable-features=TouchpadAndWheelScrollLatching",
-             "--enable-threaded-compositing",
-             "--disable-smooth-scrolling"]
-  },
-  {
     "prefix": "scalefactor150",
     "base": "fast/events/synthetic-events",
     "args": ["--force-device-scale-factor=1.5"]
@@ -492,32 +479,62 @@
   {
     "prefix": "outofblink-cors",
     "base": "external/wpt/fetch",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
   },
   {
     "prefix": "outofblink-cors",
     "base": "external/wpt/http",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
   },
   {
     "prefix": "outofblink-cors",
     "base": "external/wpt/referrer-policy",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
   },
   {
     "prefix": "outofblink-cors",
     "base": "external/wpt/service-workers",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
   },
   {
     "prefix": "outofblink-cors",
     "base": "http/tests/fetch",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
   },
   {
     "prefix": "outofblink-cors",
     "base": "http/tests/xmlhttprequest",
-    "args": ["--enable-features=OutOfBlinkCORS"]
+    "args": ["--enable-features=OutOfBlinkCORS,ServiceWorkerServicification"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "external/wpt/fetch",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "external/wpt/http",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "external/wpt/referrer-policy",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "external/wpt/service-workers",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "http/tests/fetch",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
+  },
+  {
+    "prefix": "outofblink-cors-ns",
+    "base": "http/tests/xmlhttprequest",
+    "args": ["--enable-features=OutOfBlinkCORS,NetworkService"]
   },
   {
     "prefix": "presentation",
@@ -539,6 +556,11 @@
     "prefix": "paint-timing",
     "base": "external/wpt/paint-timing",
     "args": ["--enable-threaded-compositing"]
+  },
+  {
+    "prefix": "paint-touchaction-rects",
+    "base": "fast/events/touch",
+    "args": ["--enable-blink-features=PaintTouchActionRects"]
   },
   {
     "prefix": "cors-rfc1918",
@@ -581,49 +603,34 @@
     "args": ["--sampling-heap-profiler"]
   },
   {
-    "prefix": "htxg",
-    "base": "http/tests/loading/htxg",
+    "prefix": "sxg",
+    "base": "http/tests/loading/sxg",
     "args": ["--enable-features=SignedHTTPExchange"]
   },
   {
-    "prefix": "htxg",
-    "base": "http/tests/devtools/htxg",
+    "prefix": "sxg",
+    "base": "http/tests/devtools/sxg",
     "args": ["--enable-features=SignedHTTPExchange"]
   },
   {
-    "prefix": "htxg-with-network-service",
-    "base": "http/tests/loading/htxg",
+    "prefix": "sxg-with-network-service",
+    "base": "http/tests/loading/sxg",
     "args": ["--enable-features=SignedHTTPExchange,NetworkService"]
   },
   {
-    "prefix": "htxg-with-network-service",
-    "base": "http/tests/devtools/htxg",
+    "prefix": "sxg-with-network-service",
+    "base": "http/tests/devtools/sxg",
     "args": ["--enable-features=SignedHTTPExchange,NetworkService"]
   },
   {
-    "prefix": "htxg-origin-trial",
-    "base": "http/tests/loading/htxg",
+    "prefix": "sxg-origin-trial",
+    "base": "http/tests/loading/sxg",
     "args": ["--enable-features=SignedHTTPExchangeOriginTrial"]
   },
   {
-    "prefix": "htxg-origin-trial-with-network-service",
-    "base": "http/tests/loading/htxg",
+    "prefix": "sxg-origin-trial-with-network-service",
+    "base": "http/tests/loading/sxg",
     "args": ["--enable-features=SignedHTTPExchangeOriginTrial,NetworkService"]
-  },
-  {
-    "prefix": "picture-in-picture",
-    "base": "external/wpt/picture-in-picture",
-    "args": ["--enable-features=UseSurfaceLayerForVideo"]
-  },
-  {
-    "prefix": "picture-in-picture",
-    "base": "external/wpt/feature-policy",
-    "args": ["--enable-features=UseSurfaceLayerForVideo"]
-  },
-  {
-    "prefix": "picture-in-picture",
-    "base": "media/picture-in-picture",
-    "args": ["--enable-features=PictureInPicture,UseSurfaceLayerForVideo"]
   },
   {
     "prefix": "service-worker-servicification",
@@ -638,21 +645,6 @@
              "--disable-features=NetworkService"]
   },
   {
-    "prefix": "off-main-thread-websocket",
-    "base": "external/wpt/websockets",
-    "args": ["--disable-features=OffMainThreadWebSocket"]
-  },
-  {
-    "prefix": "off-main-thread-websocket",
-    "base": "http/tests/websocket",
-    "args": ["--disable-features=OffMainThreadWebSocket"]
-  },
-  {
-    "prefix": "off-main-thread-websocket",
-    "base": "http/tests/security/mixedContent/websocket",
-    "args": ["--disable-features=OffMainThreadWebSocket"]
-  },
-  {
     "prefix": "webrtc-wpt-unified-plan",
     "base": "external/wpt/webrtc",
     "args": ["--enable-blink-features=RTCUnifiedPlanByDefault"]
@@ -660,6 +652,18 @@
   {
     "prefix": "video-surface-layer",
     "base": "media",
+    "args": ["--enable-features=UseSurfaceLayerForVideo",
+             "--enable-display-compositor-pixel-dump"]
+  },
+  {
+    "prefix": "video-surface-layer",
+    "base": "external/wpt/picture-in-picture",
+    "args": ["--enable-features=UseSurfaceLayerForVideo",
+             "--enable-display-compositor-pixel-dump"]
+  },
+  {
+    "prefix": "video-surface-layer",
+    "base": "external/wpt/feature-policy",
     "args": ["--enable-features=UseSurfaceLayerForVideo",
              "--enable-display-compositor-pixel-dump"]
   },

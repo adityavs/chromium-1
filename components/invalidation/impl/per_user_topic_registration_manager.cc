@@ -102,22 +102,24 @@ void PerUserTopicRegistrationManager::RegistrationEntry::RegistrationFinished(
 }
 
 PerUserTopicRegistrationManager::PerUserTopicRegistrationManager(
-    const std::string& instance_id_token,
     const std::string& access_token,
     PrefService* local_state,
     network::mojom::URLLoaderFactory* url_loader_factory,
     const ParseJSONCallback& parse_json)
     : local_state_(local_state),
       access_token_(access_token),
-      token_(instance_id_token),
       parse_json_(parse_json),
       url_loader_factory_(url_loader_factory) {}
 
 PerUserTopicRegistrationManager::~PerUserTopicRegistrationManager() {}
 
 void PerUserTopicRegistrationManager::UpdateRegisteredIds(
-    const InvalidationObjectIdSet& ids) {
+    const InvalidationObjectIdSet& ids,
+    const std::string& instance_id_token) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+  token_ = instance_id_token;
+  // TODO(melandory): On change of token registrations
+  // should be re-requested.
   for (const invalidation::InvalidationObjectId& objectId : ids) {
     if (!base::ContainsKey(registration_statuses_, objectId)) {
       registration_statuses_[objectId] =

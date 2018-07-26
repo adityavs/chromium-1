@@ -68,10 +68,20 @@ ASH_PUBLIC_EXPORT extern const aura::WindowProperty<BackdropWindowMode>* const
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
     kBlockedForAssistantSnapshotKey;
 
+// If true, the window can attach into another window.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
+    kCanAttachToAnotherWindowKey;
+
 // If true, will send system keys to the window for dispatch.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
     kCanConsumeSystemKeysKey;
 
+// The bounds of the window control button container (min/max/restore) relative
+// to the window's frame.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<gfx::Rect*>* const
+    kCaptionButtonBoundsKey;
+
+// The state of the frame back button, whether it's visible and enabled.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<FrameBackButtonState>* const
     kFrameBackButtonStateKey;
 
@@ -158,6 +168,15 @@ ASH_PUBLIC_EXPORT extern const aura::WindowProperty<SkColor>* const
 // A property key to store the inactive color on the window frame.
 ASH_PUBLIC_EXPORT extern const aura::WindowProperty<SkColor>* const
     kFrameInactiveColorKey;
+
+// True when the frame colors were provided by a hosted app, i.e. by a
+// progressive web app manifest.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<bool>* const
+    kFrameIsThemedByHostedAppKey;
+
+// A property that controls the color of text rendered on a browser frame.
+ASH_PUBLIC_EXPORT extern const aura::WindowProperty<SkColor>* const
+    kFrameTextColorKey;
 
 // A property key to store ash::WindowPinType for a window.
 // When setting this property to PINNED or TRUSTED_PINNED, the window manager

@@ -46,6 +46,7 @@ cr.define('cr.ui.Oobe', function() {
       login.SyncConsentScreen.register();
       login.ArcTermsOfServiceScreen.register();
       login.RecommendAppsScreen.register();
+      login.AppDownloadingScreen.register();
       login.AppLaunchSplashScreen.register();
       login.ArcKioskSplashScreen.register();
       login.ConfirmPasswordScreen.register();
@@ -58,6 +59,7 @@ cr.define('cr.ui.Oobe', function() {
       login.WaitForContainerReadyScreen.register();
       login.UpdateRequiredScreen.register();
       login.DemoSetupScreen.register();
+      login.DiscoverScreen.register();
 
       cr.ui.Bubble.decorate($('bubble'));
       login.HeaderBar.decorate($('login-header-bar'));

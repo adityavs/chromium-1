@@ -37,8 +37,9 @@
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/public/web/web_view_client.h"
 #include "third_party/blink/public/web/web_widget_client.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache_base.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache_base.h"
 #include "third_party/blink/renderer/core/dom/context_features.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/events/message_event.h"
 #include "third_party/blink/renderer/core/events/web_input_event_conversion.h"
 #include "third_party/blink/renderer/core/exported/web_settings_impl.h"
@@ -60,7 +61,6 @@
 #include "third_party/blink/renderer/core/page/page_popup_supplement.h"
 #include "third_party/blink/renderer/platform/animation/compositor_animation_host.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_layer.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
@@ -153,7 +153,7 @@ class PagePopupChromeClient final : public EmptyChromeClient {
 
   WebScreenInfo GetScreenInfo() const override {
     return popup_->web_view_->Client()
-               ? popup_->web_view_->Client()->GetScreenInfo()
+               ? popup_->web_view_->WidgetClient()->GetScreenInfo()
                : WebScreenInfo();
   }
 
@@ -167,36 +167,36 @@ class PagePopupChromeClient final : public EmptyChromeClient {
 
   void SetEventListenerProperties(
       LocalFrame* frame,
-      WebEventListenerClass event_class,
-      WebEventListenerProperties properties) override {
+      cc::EventListenerClass event_class,
+      cc::EventListenerProperties properties) override {
     DCHECK(frame->IsMainFrame());
     WebWidgetClient* client = popup_->WidgetClient();
     if (WebLayerTreeView* layer_tree_view = popup_->layer_tree_view_) {
       layer_tree_view->SetEventListenerProperties(event_class, properties);
-      if (event_class == WebEventListenerClass::kTouchStartOrMove) {
+      if (event_class == cc::EventListenerClass::kTouchStartOrMove) {
         client->HasTouchEventHandlers(
-            properties != WebEventListenerProperties::kNothing ||
-            EventListenerProperties(frame,
-                                    WebEventListenerClass::kTouchEndOrCancel) !=
-                WebEventListenerProperties::kNothing);
-      } else if (event_class == WebEventListenerClass::kTouchEndOrCancel) {
+            properties != cc::EventListenerProperties::kNone ||
+            EventListenerProperties(
+                frame, cc::EventListenerClass::kTouchEndOrCancel) !=
+                cc::EventListenerProperties::kNone);
+      } else if (event_class == cc::EventListenerClass::kTouchEndOrCancel) {
         client->HasTouchEventHandlers(
-            properties != WebEventListenerProperties::kNothing ||
-            EventListenerProperties(frame,
-                                    WebEventListenerClass::kTouchStartOrMove) !=
-                WebEventListenerProperties::kNothing);
+            properties != cc::EventListenerProperties::kNone ||
+            EventListenerProperties(
+                frame, cc::EventListenerClass::kTouchStartOrMove) !=
+                cc::EventListenerProperties::kNone);
       }
     } else {
       client->HasTouchEventHandlers(true);
     }
   }
-  WebEventListenerProperties EventListenerProperties(
+  cc::EventListenerProperties EventListenerProperties(
       LocalFrame*,
-      WebEventListenerClass event_class) const override {
+      cc::EventListenerClass event_class) const override {
     if (popup_->layer_tree_view_) {
       return popup_->layer_tree_view_->EventListenerProperties(event_class);
     }
-    return WebEventListenerProperties::kNothing;
+    return cc::EventListenerProperties::kNone;
   }
 
   void SetHasScrollEventHandlers(LocalFrame* frame,
@@ -431,10 +431,11 @@ void WebPagePopupImpl::CompositeWithRasterForTesting() {
     layer_tree_view_->CompositeWithRasterForTesting();
 }
 
-void WebPagePopupImpl::Paint(cc::PaintCanvas* canvas, const WebRect& rect) {
+void WebPagePopupImpl::PaintContent(cc::PaintCanvas* canvas,
+                                    const WebRect& rect) {
   if (!closing_) {
-    PageWidgetDelegate::Paint(*page_, canvas, rect,
-                              *page_->DeprecatedLocalMainFrame());
+    PageWidgetDelegate::PaintContent(*page_, canvas, rect,
+                                     *page_->DeprecatedLocalMainFrame());
   }
 }
 

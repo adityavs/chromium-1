@@ -172,7 +172,7 @@ class ChromePasswordProtectionService : public PasswordProtectionService {
   // If password protection trigger is configured via enterprise policy, gets
   // the name of the organization that owns the enterprise policy. Otherwise,
   // returns an empty string.
-  std::string GetOrganizationName() const;
+  std::string GetOrganizationName(ReusedPasswordType password_type) const;
 
   // Triggers "safeBrowsingPrivate.OnPolicySpecifiedPasswordReuseDetected"
   // extension API for enterprise reporting.
@@ -222,9 +222,10 @@ class ChromePasswordProtectionService : public PasswordProtectionService {
       const LoginReputationClientResponse* response) override;
 
   // Updates security state for the current |web_contents| based on
-  // |threat_type|, such that page info bubble will show appropriate status
-  // when user clicks on the security chip.
+  // |threat_type| and reused |password_type|, such that page info bubble will
+  // show appropriate status when user clicks on the security chip.
   void UpdateSecurityState(SBThreatType threat_type,
+                           ReusedPasswordType password_type,
                            content::WebContents* web_contents) override;
 
   void RemoveUnhandledSyncPasswordReuseOnURLsDeleted(
@@ -256,6 +257,13 @@ class ChromePasswordProtectionService : public PasswordProtectionService {
     sync_password_hash_ = new_password_hash;
   }
 
+  // Determines if we should show chrome://reset-password interstitial based on
+  // previous request outcome, the reused |password_type| and the
+  // |main_frame_url|.
+  bool CanShowInterstitial(RequestOutcome reason,
+                           ReusedPasswordType password_type,
+                           const GURL& main_frame_url) override;
+
   FRIEND_TEST_ALL_PREFIXES(ChromePasswordProtectionServiceTest,
                            VerifyUserPopulationForPasswordOnFocusPing);
   FRIEND_TEST_ALL_PREFIXES(ChromePasswordProtectionServiceTest,
@@ -278,6 +286,8 @@ class ChromePasswordProtectionService : public PasswordProtectionService {
   FRIEND_TEST_ALL_PREFIXES(
       ChromePasswordProtectionServiceTest,
       VerifyUnhandledSyncPasswordReuseUponClearHistoryDeletion);
+  FRIEND_TEST_ALL_PREFIXES(ChromePasswordProtectionServiceTest,
+                           VerifyCanShowInterstitial);
   FRIEND_TEST_ALL_PREFIXES(ChromePasswordProtectionServiceBrowserTest,
                            VerifyCheckGaiaPasswordChange);
   FRIEND_TEST_ALL_PREFIXES(ChromePasswordProtectionServiceBrowserTest,

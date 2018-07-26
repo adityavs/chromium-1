@@ -30,7 +30,6 @@
 #include "components/password_manager/core/browser/password_generation_manager.h"
 #include "components/password_manager/core/browser/password_manager.h"
 #include "components/password_manager/core/browser/password_manager_client.h"
-#include "components/password_manager/core/browser/password_manager_constants.h"
 #include "components/strings/grit/components_strings.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/render_view_host.h"
@@ -96,12 +95,7 @@ PasswordGenerationPopupControllerImpl::PasswordGenerationPopupControllerImpl(
       state_(kOfferGeneration),
       web_contents_(web_contents),
       weak_ptr_factory_(this) {
-  base::string16 link =
-      l10n_util::GetStringUTF16(IDS_PASSWORD_MANAGER_SMART_LOCK);
-  size_t offset = 0;
-  help_text_ =
-      l10n_util::GetStringFUTF16(IDS_PASSWORD_GENERATION_PROMPT, link, &offset);
-  link_range_ = gfx::Range(offset, offset + link.length());
+  help_text_ = l10n_util::GetStringUTF16(IDS_PASSWORD_GENERATION_PROMPT);
 }
 
 PasswordGenerationPopupControllerImpl::
@@ -169,19 +163,32 @@ int PasswordGenerationPopupControllerImpl::GetMinimumWidth() {
 void PasswordGenerationPopupControllerImpl::CalculateBounds() {
   gfx::Size bounds = view_->GetPreferredSizeOfPasswordView();
 
+  gfx::Rect new_element_bounds = gfx::ToEnclosingRect(element_bounds());
+  // Consider the element is |kElementBorderPadding| pixels larger at the top
+  // and at the bottom in order to reposition the dropdown, so that it doesn't
+  // look too close to the element.
+  constexpr int kElementBorderPadding = 1;
+  new_element_bounds.Inset(/*horizontal=*/0,
+                           /*vertical=*/-kElementBorderPadding);
+
   popup_bounds_ = view_common_.CalculatePopupBounds(
-      bounds.width(), bounds.height(), gfx::ToEnclosingRect(element_bounds()),
-      container_view(), IsRTL());
+      bounds.width(), bounds.height(), new_element_bounds, container_view(),
+      IsRTL());
 }
 
 void PasswordGenerationPopupControllerImpl::Show(GenerationState state) {
   // When switching from editing to generation state, regenerate the password.
   if (state == kOfferGeneration &&
       (state_ != state || current_password_.empty())) {
+    uint32_t spec_priority = 0;
     current_password_ =
         driver_->GetPasswordGenerationManager()->GeneratePassword(
             web_contents_->GetLastCommittedURL().GetOrigin(), form_signature_,
-            field_signature_, max_length_);
+            field_signature_, max_length_, &spec_priority);
+    if (driver_ && driver_->GetPasswordManager()) {
+      driver_->GetPasswordManager()->ReportSpecPriorityForGeneratedPassword(
+          form_, spec_priority);
+    }
   }
   state_ = state;
 
@@ -244,16 +251,7 @@ void PasswordGenerationPopupControllerImpl::ViewDestroyed() {
 }
 
 void PasswordGenerationPopupControllerImpl::OnSavedPasswordsLinkClicked() {
-#if defined(OS_ANDROID)
-  chrome::android::PreferencesLauncher::ShowPasswordSettings();
-#else
-  NavigateParams params(
-      chrome::FindBrowserWithWebContents(web_contents_),
-      GURL(password_manager::kPasswordManagerAccountDashboardURL),
-      ui::PAGE_TRANSITION_LINK);
-  params.disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
-  Navigate(&params);
-#endif
+  NOTREACHED();
 }
 
 void PasswordGenerationPopupControllerImpl::SetSelectionAtPoint(
@@ -335,6 +333,6 @@ const base::string16& PasswordGenerationPopupControllerImpl::HelpText() {
   return help_text_;
 }
 
-const gfx::Range& PasswordGenerationPopupControllerImpl::HelpTextLinkRange() {
-  return link_range_;
+gfx::Range PasswordGenerationPopupControllerImpl::HelpTextLinkRange() {
+  return gfx::Range();
 }

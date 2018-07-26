@@ -14,6 +14,7 @@
 #include "net/third_party/quic/core/crypto/quic_encrypter.h"
 #include "net/third_party/quic/core/quic_simple_buffer_allocator.h"
 #include "net/third_party/quic/core/quic_utils.h"
+#include "net/third_party/quic/platform/api/quic_expect_bug.h"
 #include "net/third_party/quic/platform/api/quic_socket_address.h"
 #include "net/third_party/quic/platform/api/quic_string.h"
 #include "net/third_party/quic/platform/api/quic_string_piece.h"
@@ -39,6 +40,8 @@ namespace {
 class MockDelegate : public QuicPacketGenerator::DelegateInterface {
  public:
   MockDelegate() {}
+  MockDelegate(const MockDelegate&) = delete;
+  MockDelegate& operator=(const MockDelegate&) = delete;
   ~MockDelegate() override {}
 
   MOCK_METHOD2(ShouldGeneratePacket,
@@ -46,6 +49,7 @@ class MockDelegate : public QuicPacketGenerator::DelegateInterface {
                     IsHandshake handshake));
   MOCK_METHOD0(GetUpdatedAckFrame, const QuicFrame());
   MOCK_METHOD1(PopulateStopWaitingFrame, void(QuicStopWaitingFrame*));
+  MOCK_METHOD0(GetPacketBuffer, char*());
   MOCK_METHOD1(OnSerializedPacket, void(SerializedPacket* packet));
   MOCK_METHOD3(OnUnrecoverableError,
                void(QuicErrorCode, const QuicString&, ConnectionCloseSource));
@@ -70,9 +74,6 @@ class MockDelegate : public QuicPacketGenerator::DelegateInterface {
     EXPECT_CALL(*this, ShouldGeneratePacket(NO_RETRANSMITTABLE_DATA, _))
         .WillRepeatedly(Return(true));
   }
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockDelegate);
 };
 
 // Simple struct for describing the contents of a packet.
@@ -151,6 +152,7 @@ class QuicPacketGeneratorTest : public QuicTest {
                 Perspective::IS_CLIENT),
         generator_(42, &framer_, &random_generator_, &delegate_, &producer_),
         creator_(QuicPacketGeneratorPeer::GetPacketCreator(&generator_)) {
+    EXPECT_CALL(delegate_, GetPacketBuffer()).WillRepeatedly(Return(nullptr));
     creator_->SetEncrypter(
         ENCRYPTION_FORWARD_SECURE,
         QuicMakeUnique<NullEncrypter>(Perspective::IS_CLIENT));

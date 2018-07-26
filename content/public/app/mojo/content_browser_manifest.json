@@ -60,8 +60,8 @@
           "content.mojom.WorkerURLLoaderFactoryProvider",
           "device.mojom.BatteryMonitor",
           "device.mojom.GamepadHapticsManager",
-          "device.mojom.GamepadMonitor",
           "discardable_memory.mojom.DiscardableSharedMemoryManager",
+          "indexed_db.mojom.Factory",
           "media.mojom.KeySystemSupport",
           "media.mojom.VideoCaptureHost",
           "media.mojom.VideoDecodePerfHistory",
@@ -82,11 +82,13 @@
           "info",
           "debug_recording",
           "device_notifier",
+          "log_factory_manager",
           "stream_factory",
           "testing_api"
         ],
         "cdm": [ "media:cdm" ],
-        "content": [ "view" ],
+        "chromecast": [ "multizone" ],
+        "content": [ "navigation" ],
         "content_gpu": [ "browser" ],
         "content_plugin": [ "browser" ],
         "content_renderer": [ "browser" ],
@@ -147,10 +149,12 @@
           "autofill.mojom.AutofillDriver",
           "autofill.mojom.PasswordManagerDriver",
           "blink.mojom.AnchorElementMetricsHost",
+          "blink.mojom.Authenticator",
           "blink.mojom.BackgroundFetchService",
           "blink.mojom.BudgetService",
           "blink.mojom.CacheStorage",
           "blink.mojom.ColorChooserFactory",
+          "blink.mojom.CredentialManager",
           "blink.mojom.DisplayCutoutHost",
           "blink.mojom.DedicatedWorkerFactory",
           "blink.mojom.LockManager",
@@ -168,6 +172,7 @@
           "blink.mojom.TextSuggestionHost",
           "blink.mojom.UnhandledTapNotifier",
           "blink.mojom.WebBluetoothService",
+          "blink.test.mojom.VirtualAuthenticatorManager",
 
 
           // TODO(beng): figure out how to overlay test interfaces like this.
@@ -180,6 +185,7 @@
           "content.mojom.RendererAudioInputStreamFactory",
           "content.mojom.RendererAudioOutputStreamFactory",
           "content.mojom.SharedWorkerConnector",
+          "device.mojom.GamepadMonitor",
           "device.mojom.Geolocation",
           "device.mojom.NFC",
           "device.mojom.SensorProvider",
@@ -199,16 +205,13 @@
           "mojom.ProcessInternalsHandler",
           "network.mojom.RestrictedCookieManager",
           "network.mojom.WebSocket",
-          "password_manager.mojom.CredentialManager",
           "payments.mojom.PaymentManager",
           "payments.mojom.PaymentRequest",
           "resource_coordinator.mojom.FrameCoordinationUnit",
           "shape_detection.mojom.BarcodeDetectionProvider",
           "shape_detection.mojom.FaceDetectionProvider",
           "shape_detection.mojom.TextDetection",
-          "ui.mojom.Gpu",
-          "webauth.mojom.Authenticator",
-          "webauth.test.mojom.VirtualAuthenticatorManager"
+          "ui.mojom.Gpu"
         ]
       },
       "requires": {
@@ -220,6 +223,7 @@
         "renderer": [
           "blink.mojom.BudgetService",
           "blink.mojom.CacheStorage",
+          "blink.mojom.DedicatedWorkerFactory",
           "blink.mojom.LockManager",
           "blink.mojom.NotificationService",
           "blink.mojom.PermissionService",

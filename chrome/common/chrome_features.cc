@@ -59,6 +59,13 @@ const base::Feature kAppBanners {
 };
 #endif  // !defined(OS_ANDROID)
 
+#if defined(OS_ANDROID)
+// Enables messaging in site permissions UI informing user when notifications
+// are disabled for the entire app.
+const base::Feature kAppNotificationStatusMessaging{
+    "AppNotificationStatusMessaging", base::FEATURE_DISABLED_BY_DEFAULT};
+#endif  // defined(OS_ANDROID)
+
 // If enabled, the list of content suggestions on the New Tab page will contain
 // assets (e.g. books, pictures, audio) that the user downloaded for later use.
 // DO NOT check directly whether this feature is enabled (i.e. do not use
@@ -142,6 +149,8 @@ const base::Feature kTabMetricsLogging{"TabMetricsLogging",
 
 #if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
 // Enables the blocking of third-party modules.
+// Note: Due to a limitation in the implementation of this feature, it is
+// required to start the browser two times to fully enable or disable it.
 const base::Feature kThirdPartyModulesBlocking{
     "ThirdPartyModulesBlocking", base::FEATURE_DISABLED_BY_DEFAULT};
 #endif
@@ -186,7 +195,7 @@ const base::Feature kCrostini{"Crostini", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Whether the UsageTimeLimit policy should be applied to the user.
 const base::Feature kUsageTimeLimitPolicy{"UsageTimeLimitPolicy",
-                                          base::FEATURE_DISABLED_BY_DEFAULT};
+                                          base::FEATURE_ENABLED_BY_DEFAULT};
 #endif
 
 #if defined(OS_WIN)
@@ -229,7 +238,7 @@ const base::Feature kDownloadsForeground{"DownloadsForeground",
 #if defined(OS_ANDROID)
 // Enable changing default downloads storage location on Android.
 const base::Feature kDownloadsLocationChange{"DownloadsLocationChange",
-                                             base::FEATURE_DISABLED_BY_DEFAULT};
+                                             base::FEATURE_ENABLED_BY_DEFAULT};
 #endif
 
 // An experimental way of showing app banners, which has modal banners and gives
@@ -255,13 +264,6 @@ const base::Feature kExternalExtensionDefaultButtonControl{
     "ExternalExtensionDefaultButtonControl", base::FEATURE_DISABLED_BY_DEFAULT};
 
 #if BUILDFLAG(ENABLE_VR)
-// Controls features related to VR browsing that are under development.
-const base::Feature kVrBrowsingExperimentalFeatures{
-    "VrBrowsingExperimentalFeatures", base::FEATURE_DISABLED_BY_DEFAULT};
-
-// Controls experimental rendering features for VR browsing.
-const base::Feature kVrBrowsingExperimentalRendering{
-    "VrBrowsingExperimentalRendering", base::FEATURE_DISABLED_BY_DEFAULT};
 
 #if BUILDFLAG(ENABLE_OCULUS_VR)
 // Controls Oculus support.
@@ -311,6 +313,11 @@ const base::Feature kHappinessTrackingSystem {
 const base::Feature kViewsCastDialog{"ViewsCastDialog",
                                      base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // !defined(OS_ANDROID)
+
+// Enables navigation suggestions for internationalized domain names that are
+// visually similar to popular domains.
+const base::Feature kIdnNavigationSuggestions{
+    "IdnNavigationSuggestions", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Controls whether the "improved recovery component" is used. The improved
 // recovery component is a redesigned Chrome component intended to restore
@@ -377,6 +384,10 @@ const base::Feature kMaterialDesignIncognitoNTP{
       base::FEATURE_ENABLED_BY_DEFAULT
 #endif
 };
+
+// Enables or disables Mirroring Service.
+const base::Feature kMirroringService{"MirroringService",
+                                      base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Enables or disables modal permission prompts.
 const base::Feature kModalPermissionPrompts{"ModalPermissionPrompts",
@@ -463,6 +474,12 @@ const base::Feature kPreloadLockScreen{"PreloadLockScreen",
 #endif
 
 #if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+// If enabled, Print Preview will use the CloudPrinterHandler instead of the
+// cloud print interface to communicate with the cloud print server. This
+// prevents Print Preview from making direct network requests. See
+// https://crbug.com/829414.
+const base::Feature kCloudPrinterHandler{"CloudPrinterHandler",
+                                         base::FEATURE_DISABLED_BY_DEFAULT};
 // Enables the new Print Preview UI.
 const base::Feature kNewPrintPreview{"NewPrintPreview",
                                      base::FEATURE_DISABLED_BY_DEFAULT};
@@ -530,6 +547,10 @@ const base::Feature kSiteSettings{"SiteSettings",
 const base::Feature kNativeSmb{"NativeSmb", base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // defined(OS_CHROMEOS)
 
+// Enables a special visual treatment for windows with a single tab.
+const base::Feature kSingleTabMode{"SingleTabMode",
+                                   base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Enables or disables the ability to use the sound content setting to mute a
 // website.
 const base::Feature kSoundContentSetting{"SoundContentSetting",
@@ -563,6 +584,12 @@ const base::Feature kAdaptiveScreenBrightnessLogging{
 // Chrome OS.
 const base::Feature kUserActivityEventLogging{"UserActivityEventLogging",
                                               base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Enables or disables user activity prediction for power management on
+// Chrome OS.
+const base::Feature kUserActivityPrediction{"UserActivityPrediction",
+                                            base::FEATURE_DISABLED_BY_DEFAULT};
+
 #endif
 
 // Enables using the main HTTP cache for media files as well.
@@ -612,10 +639,6 @@ const base::Feature kCrosCompUpdates{"CrosCompUpdates",
 const base::Feature kCrOSComponent{"CrOSComponent",
                                    base::FEATURE_ENABLED_BY_DEFAULT};
 
-// Enables or disables Instant Tethering on Chrome OS.
-const base::Feature kInstantTethering{"InstantTethering",
-                                      base::FEATURE_DISABLED_BY_DEFAULT};
-
 // Enables or disables TPM firmware update capability on Chrome OS.
 const base::Feature kTPMFirmwareUpdate{"TPMFirmwareUpdate",
                                        base::FEATURE_DISABLED_BY_DEFAULT};
@@ -624,6 +647,10 @@ const base::Feature kTPMFirmwareUpdate{"TPMFirmwareUpdate",
 // userInfo Gaia message.
 const base::Feature kCrOSEnableUSMUserService{"CrOSEnableUSMUserService",
                                               base::FEATURE_ENABLED_BY_DEFAULT};
+
+// Enables or disables initialization & use of the Chrome OS ML Service.
+const base::Feature kMachineLearningService{"MachineLearningService",
+                                            base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // defined(OS_CHROMEOS)
 
 #if !defined(OS_ANDROID)

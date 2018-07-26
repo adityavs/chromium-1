@@ -97,10 +97,12 @@ class BufferPoolBufferHandleProvider
 };
 
 VideoCaptureDeviceClient::VideoCaptureDeviceClient(
+    VideoCaptureBufferType target_buffer_type,
     std::unique_ptr<VideoFrameReceiver> receiver,
     scoped_refptr<VideoCaptureBufferPool> buffer_pool,
     VideoCaptureJpegDecoderFactoryCB optional_jpeg_decoder_factory_callback)
-    : receiver_(std::move(receiver)),
+    : target_buffer_type_(target_buffer_type),
+      receiver_(std::move(receiver)),
       optional_jpeg_decoder_factory_callback_(
           std::move(optional_jpeg_decoder_factory_callback)),
       buffer_pool_(std::move(buffer_pool)),
@@ -402,9 +404,21 @@ VideoCaptureDeviceClient::ReserveOutputBuffer(const gfx::Size& frame_size,
   if (!base::ContainsValue(buffer_ids_known_by_receiver_, buffer_id)) {
     media::mojom::VideoBufferHandlePtr buffer_handle =
         media::mojom::VideoBufferHandle::New();
-    buffer_handle->set_shared_buffer_handle(
-        buffer_pool_->GetHandleForInterProcessTransit(buffer_id,
-                                                      true /*read_only*/));
+    switch (target_buffer_type_) {
+      case VideoCaptureBufferType::kSharedMemory:
+        buffer_handle->set_shared_buffer_handle(
+            buffer_pool_->GetHandleForInterProcessTransit(buffer_id,
+                                                          true /*read_only*/));
+        break;
+      case VideoCaptureBufferType::kSharedMemoryViaRawFileDescriptor:
+        buffer_handle->set_shared_memory_via_raw_file_descriptor(
+            buffer_pool_->CreateSharedMemoryViaRawFileDescriptorStruct(
+                buffer_id));
+        break;
+      case VideoCaptureBufferType::kMailboxHolder:
+        NOTREACHED();
+        break;
+    }
     receiver_->OnNewBuffer(buffer_id, std::move(buffer_handle));
     buffer_ids_known_by_receiver_.push_back(buffer_id);
   }

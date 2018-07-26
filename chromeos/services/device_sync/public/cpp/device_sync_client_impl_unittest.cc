@@ -104,7 +104,20 @@ class TestDeviceSyncClientObserver : public DeviceSyncClient::Observer {
     closure_for_new_devices_synced_ = std::move(closure);
   }
 
+  void OnReady() override {
+    if (ready_count_ == 0u) {
+      // Ensure that OnReady() was called before the other callbacks.
+      EXPECT_FALSE(enrollment_finished_count_);
+      EXPECT_FALSE(new_devices_synced_count_);
+    }
+
+    ++ready_count_;
+  }
+
   void OnEnrollmentFinished() override {
+    // Ensure that OnReady() was called before the other callbacks.
+    EXPECT_TRUE(ready_count_);
+
     ++enrollment_finished_count_;
 
     EXPECT_TRUE(closure_for_enrollment_finished_);
@@ -112,16 +125,21 @@ class TestDeviceSyncClientObserver : public DeviceSyncClient::Observer {
   }
 
   void OnNewDevicesSynced() override {
+    // Ensure that OnReady() was called before the other callbacks.
+    EXPECT_TRUE(ready_count_);
+
     ++new_devices_synced_count_;
 
     EXPECT_TRUE(closure_for_new_devices_synced_);
     std::move(closure_for_new_devices_synced_).Run();
   }
 
+  size_t ready_count() { return ready_count_; }
   size_t enrollment_finished_count() { return enrollment_finished_count_; }
   size_t new_devices_synced_count() { return new_devices_synced_count_; }
 
  private:
+  size_t ready_count_ = 0u;
   size_t enrollment_finished_count_ = 0u;
   size_t new_devices_synced_count_ = 0u;
 
@@ -198,69 +216,97 @@ class DeviceSyncClientImplTest : public testing::Test {
   }
 
   void InvokeInitialGetLocalMetadataAndThenSync() {
-    EXPECT_FALSE(client_->GetLocalDeviceMetadata());
+    EXPECT_FALSE(client_->is_ready());
+    EXPECT_EQ(0u, test_observer_->ready_count());
     EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+    EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
 
-    base::RunLoop enrollment_run_loop;
-    test_observer_->set_closure_for_enrollment_finished(
-        enrollment_run_loop.QuitClosure());
     fake_device_sync_->InvokePendingGetLocalDeviceMetadataCallback(
         test_remote_device_list_[0]);
-    enrollment_run_loop.Run();
 
-    // In the case where enrollment finishes before sync, the local device
-    // metadata must still be accessible.
+    // Ensure that no Observer callbacks are called until both the local device
+    // metadata and the remote devices are supplied.
+    EXPECT_FALSE(client_->is_ready());
+    EXPECT_EQ(0u, test_observer_->ready_count());
+    EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+    EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
+
+    base::RunLoop run_loop;
+
+    fake_device_sync_->InvokePendingGetSyncedDevicesCallback(
+        test_remote_device_list_);
+
+    test_observer_->set_closure_for_enrollment_finished(
+        run_loop.QuitWhenIdleClosure());
+    test_observer_->set_closure_for_new_devices_synced(
+        run_loop.QuitWhenIdleClosure());
+
+    run_loop.Run();
+
+    EXPECT_TRUE(client_->is_ready());
+    EXPECT_EQ(1u, test_observer_->ready_count());
     EXPECT_EQ(test_remote_device_list_[0].public_key,
               client_->GetLocalDeviceMetadata()->public_key());
     EXPECT_EQ(1u, test_observer_->enrollment_finished_count());
-
-    EXPECT_EQ(1u, client_->GetSyncedDevices().size());
-    EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
-
-    base::RunLoop sync_run_loop;
-    test_observer_->set_closure_for_new_devices_synced(
-        sync_run_loop.QuitClosure());
-    fake_device_sync_->InvokePendingGetSyncedDevicesCallback(
-        test_remote_device_list_);
-    sync_run_loop.Run();
-
     VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
         client_->GetSyncedDevices(), test_remote_device_list_);
     EXPECT_EQ(1u, test_observer_->new_devices_synced_count());
   }
 
   void InvokeInitialSyncAndThenGetLocalMetadata() {
-    EXPECT_EQ(0u, client_->GetSyncedDevices().size());
+    EXPECT_FALSE(client_->is_ready());
+    EXPECT_EQ(0u, test_observer_->ready_count());
+    EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
     EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
 
-    base::RunLoop sync_run_loop;
-    test_observer_->set_closure_for_new_devices_synced(
-        sync_run_loop.QuitClosure());
+    // Since local device metadata has not yet been supplied at this point,
+    // |client_| will queue up another call to fetch it. The callback is handled
+    // at the end of this method.
     fake_device_sync_->InvokePendingGetSyncedDevicesCallback(
         test_remote_device_list_);
-    sync_run_loop.Run();
 
+    // Ensure that no Observer callbacks are called until both the local device
+    // metadata and the remote devices are supplied.
+    EXPECT_FALSE(client_->is_ready());
+    EXPECT_EQ(0u, test_observer_->ready_count());
+    EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+    EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
+
+    base::RunLoop run_loop;
+
+    fake_device_sync_->InvokePendingGetLocalDeviceMetadataCallback(
+        test_remote_device_list_[0]);
+
+    test_observer_->set_closure_for_new_devices_synced(
+        run_loop.QuitWhenIdleClosure());
+    test_observer_->set_closure_for_enrollment_finished(
+        run_loop.QuitWhenIdleClosure());
+
+    run_loop.Run();
+
+    EXPECT_TRUE(client_->is_ready());
+    EXPECT_EQ(1u, test_observer_->ready_count());
+    EXPECT_EQ(test_remote_device_list_[0].public_key,
+              client_->GetLocalDeviceMetadata()->public_key());
+    EXPECT_EQ(1u, test_observer_->enrollment_finished_count());
     VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
         client_->GetSyncedDevices(), test_remote_device_list_);
     EXPECT_EQ(1u, test_observer_->new_devices_synced_count());
 
-    EXPECT_FALSE(client_->GetLocalDeviceMetadata());
-    EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+    base::RunLoop second_enrollment_run_loop;
 
-    base::RunLoop enrollment_run_loop;
-    test_observer_->set_closure_for_enrollment_finished(
-        enrollment_run_loop.QuitClosure());
     fake_device_sync_->InvokePendingGetLocalDeviceMetadataCallback(
         test_remote_device_list_[0]);
-    enrollment_run_loop.Run();
-    EXPECT_EQ(test_remote_device_list_[0].public_key,
-              client_->GetLocalDeviceMetadata()->public_key());
+    test_observer_->set_closure_for_enrollment_finished(
+        second_enrollment_run_loop.QuitWhenIdleClosure());
+
+    second_enrollment_run_loop.Run();
 
     // Ensure that the rest of the synced devices are not removed from the cache
     // when updating the local device metadata.
     VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
         client_->GetSyncedDevices(), test_remote_device_list_);
-    EXPECT_EQ(1u, test_observer_->enrollment_finished_count());
+    EXPECT_EQ(2u, test_observer_->enrollment_finished_count());
   }
 
   void TearDown() override {
@@ -294,7 +340,7 @@ class DeviceSyncClientImplTest : public testing::Test {
   }
 
   void CallSetSoftwareFeatureState(
-      const base::Optional<std::string>& expected_error_code) {
+      mojom::NetworkRequestResult expected_result_code) {
     base::RunLoop run_loop;
 
     client_->SetSoftwareFeatureState(
@@ -308,14 +354,14 @@ class DeviceSyncClientImplTest : public testing::Test {
     SendPendingMojoMessages();
 
     fake_device_sync_->InvokePendingSetSoftwareFeatureStateCallback(
-        expected_error_code);
+        expected_result_code);
     run_loop.Run();
 
-    EXPECT_EQ(expected_error_code, set_software_feature_state_error_code_);
+    EXPECT_EQ(expected_result_code, set_software_feature_state_result_code_);
   }
 
   void CallFindEligibleDevices(
-      const base::Optional<std::string>& expected_error_code,
+      mojom::NetworkRequestResult expected_result_code,
       cryptauth::RemoteDeviceList expected_eligible_devices,
       cryptauth::RemoteDeviceList expected_ineligible_devices) {
     base::RunLoop run_loop;
@@ -329,12 +375,12 @@ class DeviceSyncClientImplTest : public testing::Test {
     SendPendingMojoMessages();
 
     fake_device_sync_->InvokePendingFindEligibleDevicesCallback(
-        expected_error_code,
+        expected_result_code,
         mojom::FindEligibleDevicesResponse::New(expected_eligible_devices,
                                                 expected_ineligible_devices));
     run_loop.Run();
 
-    EXPECT_EQ(expected_error_code,
+    EXPECT_EQ(expected_result_code,
               std::get<0>(find_eligible_devices_error_code_and_response_));
     VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
         std::get<1>(find_eligible_devices_error_code_and_response_),
@@ -408,8 +454,9 @@ class DeviceSyncClientImplTest : public testing::Test {
 
   base::Optional<bool> force_enrollment_now_completed_success_;
   base::Optional<bool> force_sync_now_completed_success_;
-  base::Optional<std::string> set_software_feature_state_error_code_;
-  std::tuple<base::Optional<std::string>,
+  base::Optional<mojom::NetworkRequestResult>
+      set_software_feature_state_result_code_;
+  std::tuple<mojom::NetworkRequestResult,
              cryptauth::RemoteDeviceRefList,
              cryptauth::RemoteDeviceRefList>
       find_eligible_devices_error_code_and_response_;
@@ -429,18 +476,18 @@ class DeviceSyncClientImplTest : public testing::Test {
 
   void OnSetSoftwareFeatureStateCompleted(
       base::OnceClosure callback,
-      const base::Optional<std::string>& error_code) {
-    set_software_feature_state_error_code_ = error_code;
+      mojom::NetworkRequestResult result_code) {
+    set_software_feature_state_result_code_ = result_code;
     std::move(callback).Run();
   }
 
   void OnFindEligibleDevicesCompleted(
       base::OnceClosure callback,
-      const base::Optional<std::string>& error_code,
+      mojom::NetworkRequestResult result_code,
       cryptauth::RemoteDeviceRefList eligible_devices,
       cryptauth::RemoteDeviceRefList ineligible_devices) {
     find_eligible_devices_error_code_and_response_ =
-        std::make_tuple(error_code, eligible_devices, ineligible_devices);
+        std::make_tuple(result_code, eligible_devices, ineligible_devices);
     std::move(callback).Run();
   }
 
@@ -465,43 +512,46 @@ TEST_F(
 
   SendPendingMojoMessages();
 
-  EXPECT_FALSE(client_->GetLocalDeviceMetadata());
+  EXPECT_FALSE(client_->is_ready());
+  EXPECT_EQ(0u, test_observer_->ready_count());
   EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+  EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
 
   // Simulate local device metadata not being ready. It will be ready once
   // synced devices are returned, at which point |client_| should call
   // GetLocalMetadata() again.
   fake_device_sync_->InvokePendingGetLocalDeviceMetadataCallback(base::nullopt);
-
-  EXPECT_FALSE(client_->GetLocalDeviceMetadata());
-  EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
-
-  EXPECT_EQ(0u, client_->GetSyncedDevices().size());
-  EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
-
-  base::RunLoop sync_run_loop;
-  test_observer_->set_closure_for_new_devices_synced(
-      sync_run_loop.QuitClosure());
   fake_device_sync_->InvokePendingGetSyncedDevicesCallback(
       test_remote_device_list_);
-  sync_run_loop.Run();
 
-  VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
-      client_->GetSyncedDevices(), test_remote_device_list_);
-  EXPECT_EQ(1u, test_observer_->new_devices_synced_count());
+  EXPECT_FALSE(client_->is_ready());
+  EXPECT_EQ(0u, test_observer_->ready_count());
+  EXPECT_EQ(0u, test_observer_->enrollment_finished_count());
+  EXPECT_EQ(0u, test_observer_->new_devices_synced_count());
 
   SendPendingMojoMessages();
 
-  base::RunLoop get_local_metadata_run_loop;
-  test_observer_->set_closure_for_enrollment_finished(
-      get_local_metadata_run_loop.QuitClosure());
+  base::RunLoop run_loop;
+
+  // Simulate the local device metadata now being ready.
   fake_device_sync_->InvokePendingGetLocalDeviceMetadataCallback(
       test_remote_device_list_[0]);
-  get_local_metadata_run_loop.Run();
 
+  test_observer_->set_closure_for_enrollment_finished(
+      run_loop.QuitWhenIdleClosure());
+  test_observer_->set_closure_for_new_devices_synced(
+      run_loop.QuitWhenIdleClosure());
+
+  run_loop.Run();
+
+  EXPECT_TRUE(client_->is_ready());
+  EXPECT_EQ(1u, test_observer_->ready_count());
   EXPECT_EQ(test_remote_device_list_[0].public_key,
             client_->GetLocalDeviceMetadata()->public_key());
   EXPECT_EQ(1u, test_observer_->enrollment_finished_count());
+  VerifyRemoteDeviceRefListAndRemoteDeviceListAreEqual(
+      client_->GetSyncedDevices(), test_remote_device_list_);
+  EXPECT_EQ(1u, test_observer_->new_devices_synced_count());
 }
 
 TEST_F(DeviceSyncClientImplTest, TestOnEnrollmentFinished) {
@@ -622,7 +672,7 @@ TEST_F(DeviceSyncClientImplTest, TestGetSyncedDevices_DeviceRemovedFromCache) {
 TEST_F(DeviceSyncClientImplTest, TestSetSoftwareFeatureState) {
   InitializeClient();
 
-  CallSetSoftwareFeatureState("error_code");
+  CallSetSoftwareFeatureState(mojom::NetworkRequestResult::kSuccess);
 }
 
 TEST_F(DeviceSyncClientImplTest, TestFindEligibleDevices_NoErrorCode) {
@@ -634,14 +684,16 @@ TEST_F(DeviceSyncClientImplTest, TestFindEligibleDevices_NoErrorCode) {
       {test_remote_device_list_[2], test_remote_device_list_[3],
        test_remote_device_list_[4]});
 
-  CallFindEligibleDevices(base::nullopt, expected_eligible_devices,
+  CallFindEligibleDevices(mojom::NetworkRequestResult::kSuccess,
+                          expected_eligible_devices,
                           expected_ineligible_devices);
 }
 
 TEST_F(DeviceSyncClientImplTest, TestFindEligibleDevices_ErrorCode) {
   InitializeClient();
 
-  CallFindEligibleDevices("error_code", cryptauth::RemoteDeviceList(),
+  CallFindEligibleDevices(mojom::NetworkRequestResult::kEndpointNotFound,
+                          cryptauth::RemoteDeviceList(),
                           cryptauth::RemoteDeviceList());
 }
 

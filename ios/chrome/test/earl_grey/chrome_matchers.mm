@@ -11,6 +11,7 @@
 #include "base/mac/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #include "components/strings/grit/components_strings.h"
+#include "components/unified_consent/feature.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_ui_constants.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_switch_item.h"
@@ -27,6 +28,7 @@
 #import "ios/chrome/browser/ui/settings/cells/settings_switch_item.h"
 #import "ios/chrome/browser/ui/settings/cells/sync_switch_item.h"
 #import "ios/chrome/browser/ui/settings/clear_browsing_data_collection_view_controller.h"
+#import "ios/chrome/browser/ui/settings/clear_browsing_data_ui_constants.h"
 #import "ios/chrome/browser/ui/settings/import_data_collection_view_controller.h"
 #import "ios/chrome/browser/ui/settings/settings_collection_view_controller.h"
 #import "ios/chrome/browser/ui/settings/sync_settings_collection_view_controller.h"
@@ -241,7 +243,8 @@ id<GREYMatcher> ToolsMenuButton() {
 }
 
 id<GREYMatcher> ShareButton() {
-  return ButtonWithAccessibilityLabelId(IDS_IOS_TOOLS_MENU_SHARE);
+  return grey_allOf(ButtonWithAccessibilityLabelId(IDS_IOS_TOOLS_MENU_SHARE),
+                    grey_sufficientlyVisible(), nil);
 }
 
 id<GREYMatcher> ShowTabsButton() {
@@ -290,8 +293,10 @@ id<GREYMatcher> AccountConsistencySetupSigninButton() {
 }
 
 id<GREYMatcher> AccountConsistencyConfirmationOkButton() {
-  return ButtonWithAccessibilityLabelId(
-      IDS_IOS_ACCOUNT_CONSISTENCY_CONFIRMATION_OK_BUTTON);
+  int labelID = base::FeatureList::IsEnabled(unified_consent::kUnifiedConsent)
+                    ? IDS_IOS_ACCOUNT_UNIFIED_CONSENT_OK_BUTTON
+                    : IDS_IOS_ACCOUNT_CONSISTENCY_CONFIRMATION_OK_BUTTON;
+  return ButtonWithAccessibilityLabelId(labelID);
 }
 
 id<GREYMatcher> AddAccountButton() {
@@ -305,6 +310,13 @@ id<GREYMatcher> SignOutAccountsButton() {
 id<GREYMatcher> ClearBrowsingDataCollectionView() {
   return grey_accessibilityID(
       kClearBrowsingDataCollectionViewAccessibilityIdentifier);
+}
+
+id<GREYMatcher> ConfirmClearBrowsingDataButton() {
+  return grey_allOf(
+      grey_accessibilityLabel(l10n_util::GetNSString(IDS_IOS_CLEAR_BUTTON)),
+      grey_accessibilityTrait(UIAccessibilityTraitButton),
+      grey_not(grey_accessibilityID(kClearBrowsingDataButtonIdentifier)), nil);
 }
 
 id<GREYMatcher> SettingsMenuButton() {
@@ -352,7 +364,8 @@ id<GREYMatcher> SettingsSyncManageSyncedDataButton() {
 }
 
 id<GREYMatcher> AccountsSyncButton() {
-  return grey_accessibilityID(kSettingsAccountsSyncCellId);
+  return grey_allOf(grey_accessibilityID(kSettingsAccountsSyncCellId),
+                    grey_sufficientlyVisible(), nil);
 }
 
 id<GREYMatcher> ContentSettingsButton() {

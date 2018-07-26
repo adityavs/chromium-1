@@ -222,6 +222,8 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
   friend class Thread;
   FRIEND_TEST_ALL_PREFIXES(MessageLoopTest, DeleteUnboundLoop);
 
+  class Controller;
+
   // Creates a MessageLoop without binding to a thread.
   // If |type| is TYPE_CUSTOM non-null |pump_factory| must be also given
   // to create a message pump for this message loop.  Otherwise a default
@@ -261,6 +263,14 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
   // responsible for synchronizing ScheduleWork() calls.
   void ScheduleWork();
 
+  // Returns |next_run_time| capped at 1 day from |recent_time_|. This is used
+  // to mitigate https://crbug.com/850450 where some platforms are unhappy with
+  // delays > 100,000,000 seconds. In practice, a diagnosis metric showed that
+  // no sleep > 1 hour ever completes (always interrupted by an earlier
+  // MessageLoop event) and 99% of completed sleeps are the ones scheduled for
+  // <= 1 second. Details @ https://crrev.com/c/1142589.
+  TimeTicks CapAtOneDay(TimeTicks next_run_time);
+
   // MessagePump::Delegate methods:
   bool DoWork() override;
   bool DoDelayedWork(TimeTicks* next_delayed_work_time) override;
@@ -276,15 +286,6 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
 
   // A recent snapshot of Time::Now(), used to check delayed_work_queue_.
   TimeTicks recent_time_;
-
-  // Non-null when the last thing this MessageLoop did is become idle with
-  // pending delayed tasks. Used to report metrics on the following wake up.
-  struct ScheduledWakeup {
-    // The scheduled time of the next delayed task when this loop became idle.
-    TimeTicks next_run_time;
-    // The delta until |next_run_time| when this loop became idle.
-    TimeDelta intended_sleep;
-  } scheduled_wakeup_;
 
   ObserverList<DestructionObserver> destruction_observers_;
 
@@ -304,6 +305,9 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
 
   ObserverList<TaskObserver> task_observers_;
 
+  // Pointer to this MessageLoop's Controller, valid until the reference to
+  // |incoming_task_queue_| is dropped below.
+  Controller* const message_loop_controller_;
   scoped_refptr<internal::IncomingTaskQueue> incoming_task_queue_;
 
   // A task runner which we haven't bound to a thread yet.
@@ -346,10 +350,7 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
 //
 class BASE_EXPORT MessageLoopForUI : public MessageLoop {
  public:
-  MessageLoopForUI() : MessageLoop(TYPE_UI) {
-  }
-
-  explicit MessageLoopForUI(std::unique_ptr<MessagePump> pump);
+  explicit MessageLoopForUI(Type type = TYPE_UI);
 
   // TODO(gab): Mass migrate callers to MessageLoopCurrentForUI::Get()/IsSet().
   static MessageLoopCurrentForUI current();
@@ -363,14 +364,23 @@ class BASE_EXPORT MessageLoopForUI : public MessageLoop {
 #endif
 
 #if defined(OS_ANDROID)
-  // On Android, the UI message loop is handled by Java side. So Run() should
-  // never be called. Instead use Start(), which will forward all the native UI
-  // events to the Java message loop.
-  void Start();
-
-  // In Android there are cases where we want to abort immediately without
+  // On Android there are cases where we want to abort immediately without
   // calling Quit(), in these cases we call Abort().
   void Abort();
+
+  // True if this message pump has been aborted.
+  bool IsAborted();
+
+  // Since Run() is never called on Android, and the message loop is run by the
+  // java Looper, quitting the RunLoop won't join the thread, so we need a
+  // callback to run when the RunLoop goes idle to let the Java thread know when
+  // it can safely quit.
+  void QuitWhenIdle(base::OnceClosure callback);
+#endif
+
+#if defined(OS_WIN)
+  // See method of the same name in the Windows MessagePumpForUI implementation.
+  void EnableWmQuit();
 #endif
 };
 

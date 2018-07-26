@@ -992,9 +992,8 @@ LayoutUnit LayoutBox::VerticalScrollbarWidthClampedToContentBox() const {
   LayoutUnit width(VerticalScrollbarWidth());
   DCHECK_GE(width, LayoutUnit());
   if (width) {
-    LayoutUnit minimum_width = LogicalWidth() - BorderAndPaddingLogicalWidth();
-    DCHECK_GE(minimum_width, LayoutUnit());
-    width = std::min(width, minimum_width);
+    LayoutUnit maximum_width = LogicalWidth() - BorderAndPaddingLogicalWidth();
+    width = std::min(width, maximum_width.ClampNegativeToZero());
   }
   return width;
 }
@@ -1609,9 +1608,8 @@ bool LayoutBox::HitTestClippedOutByBorder(
       Style()->GetRoundedBorderFor(border_rect));
 }
 
-void LayoutBox::Paint(const PaintInfo& paint_info,
-                      const LayoutPoint& paint_offset) const {
-  BoxPainter(*this).Paint(paint_info, paint_offset);
+void LayoutBox::Paint(const PaintInfo& paint_info) const {
+  BoxPainter(*this).Paint(paint_info);
 }
 
 void LayoutBox::PaintBoxDecorationBackground(
@@ -2782,9 +2780,14 @@ LayoutUnit LayoutBox::ComputeIntrinsicLogicalWidthUsing(
     const Length& logical_width_length,
     LayoutUnit available_logical_width,
     LayoutUnit border_and_padding) const {
-  if (logical_width_length.GetType() == kFillAvailable)
+  if (logical_width_length.GetType() == kFillAvailable) {
+    if (!IsHTMLMarqueeElement(GetNode())) {
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kCSSFillAvailableLogicalWidth);
+    }
     return std::max(border_and_padding,
                     FillAvailableMeasure(available_logical_width));
+  }
 
   LayoutUnit min_logical_width;
   LayoutUnit max_logical_width;
@@ -3296,10 +3299,15 @@ LayoutUnit LayoutBox::ComputeIntrinsicLogicalContentHeightUsing(
       return IntrinsicSize().Height();
     return intrinsic_content_height;
   }
-  if (logical_height_length.IsFillAvailable())
+  if (logical_height_length.IsFillAvailable()) {
+    if (!IsHTMLMarqueeElement(GetNode())) {
+      UseCounter::Count(GetDocument(),
+                        WebFeature::kCSSFillAvailableLogicalHeight);
+    }
     return ContainingBlock()->AvailableLogicalHeight(
                kExcludeMarginBorderPadding) -
            border_and_padding;
+  }
   NOTREACHED();
   return LayoutUnit();
 }
@@ -3986,6 +3994,12 @@ void LayoutBox::ComputeInlineStaticDistance(
     LayoutUnit static_position = child->Layer()->StaticInlinePosition() +
                                  container_logical_width +
                                  container_block->BorderLogicalLeft();
+    if (container_block->IsBox() &&
+        ToLayoutBox(container_block)
+            ->ShouldPlaceBlockDirectionScrollbarOnLogicalLeft()) {
+      static_position +=
+          ToLayoutBox(container_block)->OriginAdjustmentForScrollbars().Width();
+    }
     for (LayoutObject* curr = child->Parent(); curr; curr = curr->Container()) {
       if (curr->IsBox()) {
         if (curr == enclosing_box)
@@ -4394,6 +4408,7 @@ void LayoutBox::ComputePositionedLogicalWidthUsing(
   }
 
   if (container_block->IsBox() &&
+      container_block->IsHorizontalWritingMode() == IsHorizontalWritingMode() &&
       ToLayoutBox(container_block)->ScrollsOverflowY() &&
       ToLayoutBox(container_block)
           ->ShouldPlaceBlockDirectionScrollbarOnLogicalLeft()) {
@@ -4749,6 +4764,15 @@ void LayoutBox::ComputePositionedLogicalHeightUsing(
     }
   }
   computed_values.extent_ = logical_height_value;
+
+  if (container_block->IsBox() &&
+      container_block->IsHorizontalWritingMode() != IsHorizontalWritingMode() &&
+      ToLayoutBox(container_block)->ScrollsOverflowY() &&
+      ToLayoutBox(container_block)
+          ->ShouldPlaceBlockDirectionScrollbarOnLogicalLeft()) {
+    logical_top_value = logical_top_value +
+                         ToLayoutBox(container_block)->VerticalScrollbarWidth();
+  }
 
   // Use computed values to calculate the vertical position.
   computed_values.position_ =
@@ -5377,10 +5401,13 @@ LayoutRect LayoutBox::LayoutOverflowRectForPropagation(
   LayoutRect rect = BorderBoxRect();
   // We want to include the margin, but only when it adds height. Quirky margins
   // don't contribute height nor do the margins of self-collapsing blocks.
-  if (!StyleRef().HasMarginAfterQuirk() && !IsSelfCollapsingBlock())
+  if (!StyleRef().HasMarginAfterQuirk() && !IsSelfCollapsingBlock()) {
+    const ComputedStyle* container_style =
+        container ? container->Style() : nullptr;
     rect.Expand(IsHorizontalWritingMode()
-                    ? LayoutSize(LayoutUnit(), MarginAfter())
-                    : LayoutSize(MarginAfter(), LayoutUnit()));
+                    ? LayoutSize(LayoutUnit(), MarginAfter(container_style))
+                    : LayoutSize(MarginAfter(container_style), LayoutUnit()));
+  }
 
   if (!HasOverflowClip() && !ShouldApplyLayoutContainment())
     rect.Unite(LayoutOverflowRect());
@@ -5484,20 +5511,6 @@ LayoutPoint LayoutBox::FlipForWritingModeForChild(
   return LayoutPoint(point.X() + Size().Width() - child->Size().Width() -
                          (2 * child->Location().X()),
                      point.Y());
-}
-
-LayoutPoint LayoutBox::FlipForWritingModeForChildForPaint(
-    const LayoutBox* child,
-    const LayoutPoint& point) const {
-  // Do nothing unless in FlippedBlocks(). Fast path optimization
-  if (!Style()->IsFlippedBlocksWritingMode())
-    return point;
-  // If child will be painted by LayoutNG, and will use fragment.Offset(),
-  // flip is not needed.
-  if (!AdjustPaintOffsetScope::WillUseLegacyLocation(child))
-    return point;
-
-  return FlipForWritingModeForChild(child, point);
 }
 
 LayoutBox* LayoutBox::LocationContainer() const {
@@ -6035,10 +6048,10 @@ bool LayoutBox::ComputeShouldClipOverflow() const {
 }
 
 void LayoutBox::MutableForPainting::
-    SavePreviousContentBoxSizeAndLayoutOverflowRect() {
+    SavePreviousContentBoxRectAndLayoutOverflowRect() {
   auto& rare_data = GetLayoutBox().EnsureRareData();
-  rare_data.has_previous_content_box_size_and_layout_overflow_rect_ = true;
-  rare_data.previous_content_box_size_ = GetLayoutBox().ContentSize();
+  rare_data.has_previous_content_box_rect_and_layout_overflow_rect_ = true;
+  rare_data.previous_content_box_rect_ = GetLayoutBox().ContentBoxRect();
   rare_data.previous_physical_layout_overflow_rect_ =
       GetLayoutBox().PhysicalLayoutOverflowRect();
 }

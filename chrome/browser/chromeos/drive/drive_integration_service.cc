@@ -4,14 +4,18 @@
 
 #include "chrome/browser/chromeos/drive/drive_integration_service.h"
 
+#include <memory>
+
 #include "base/bind.h"
 #include "base/files/file_enumerator.h"
 #include "base/files/file_util.h"
 #include "base/logging.h"
 #include "base/macros.h"
+#include "base/md5.h"
 #include "base/strings/stringprintf.h"
 #include "base/sys_info.h"
 #include "base/task_scheduler/post_task.h"
+#include "base/unguessable_token.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/chrome_notification_types.h"
 #include "chrome/browser/chromeos/drive/debug_info_collector.h"
@@ -30,6 +34,7 @@
 #include "chrome/browser/signin/signin_manager_factory.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/grit/generated_resources.h"
+#include "chromeos/chromeos_features.h"
 #include "components/drive/chromeos/file_cache.h"
 #include "components/drive/chromeos/file_system.h"
 #include "components/drive/chromeos/resource_metadata.h"
@@ -54,6 +59,7 @@
 #include "content/public/common/user_agent.h"
 #include "google_apis/drive/auth_service.h"
 #include "mojo/public/cpp/bindings/interface_request.h"
+#include "net/base/network_change_notifier.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
 #include "services/device/public/mojom/constants.mojom.h"
 #include "services/device/public/mojom/wake_lock_provider.mojom.h"
@@ -205,25 +211,41 @@ FileError InitializeMetadata(
 
 }  // namespace
 
-const base::Feature kDriveFs{"DriveFS", base::FEATURE_DISABLED_BY_DEFAULT};
-
 // Observes drive disable Preference's change.
-class DriveIntegrationService::PreferenceWatcher {
+class DriveIntegrationService::PreferenceWatcher
+    : public net::NetworkChangeNotifier::NetworkChangeObserver {
  public:
   explicit PreferenceWatcher(PrefService* pref_service)
       : pref_service_(pref_service),
-        integration_service_(NULL),
+        integration_service_(nullptr),
         weak_ptr_factory_(this) {
     DCHECK(pref_service);
     pref_change_registrar_.Init(pref_service);
     pref_change_registrar_.Add(
         prefs::kDisableDrive,
-        base::Bind(&PreferenceWatcher::OnPreferenceChanged,
-                   weak_ptr_factory_.GetWeakPtr()));
+        base::BindRepeating(&PreferenceWatcher::OnPreferenceChanged,
+                            weak_ptr_factory_.GetWeakPtr()));
+    pref_change_registrar_.Add(
+        prefs::kDisableDriveOverCellular,
+        base::BindRepeating(&PreferenceWatcher::UpdateSyncPauseState,
+                            weak_ptr_factory_.GetWeakPtr()));
+  }
+
+  ~PreferenceWatcher() override {
+    if (integration_service_ && integration_service_->drivefs_holder_) {
+      net::NetworkChangeNotifier::RemoveNetworkChangeObserver(this);
+    }
   }
 
   void set_integration_service(DriveIntegrationService* integration_service) {
     integration_service_ = integration_service;
+    if (integration_service_->drivefs_holder_) {
+      net::NetworkChangeNotifier::AddNetworkChangeObserver(this);
+    }
+  }
+
+  void UpdateSyncPauseState() {
+    OnNetworkChanged(net::NetworkChangeNotifier::GetConnectionType());
   }
 
  private:
@@ -231,6 +253,17 @@ class DriveIntegrationService::PreferenceWatcher {
     DCHECK(integration_service_);
     integration_service_->SetEnabled(
         !pref_service_->GetBoolean(prefs::kDisableDrive));
+  }
+
+  // net::NetworkChangeNotifier::NetworkChangeObserver
+  void OnNetworkChanged(
+      net::NetworkChangeNotifier::ConnectionType type) override {
+    if (!integration_service_->GetDriveFsInterface())
+      return;
+
+    integration_service_->GetDriveFsInterface()->SetPauseSyncing(
+        net::NetworkChangeNotifier::IsConnectionCellular(type) &&
+        pref_service_->GetBoolean(prefs::kDisableDriveOverCellular));
   }
 
   PrefService* pref_service_;
@@ -246,80 +279,88 @@ class DriveIntegrationService::DriveFsHolder
  public:
   DriveFsHolder(Profile* profile,
                 base::RepeatingClosure on_drivefs_mounted,
+                base::RepeatingCallback<void(base::Optional<base::TimeDelta>)>
+                    on_drivefs_unmounted,
                 DriveFsMojoConnectionDelegateFactory
-                    test_drivefs_mojo_connection_delegate_factory);
+                    test_drivefs_mojo_connection_delegate_factory)
+      : profile_(profile),
+        on_drivefs_mounted_(std::move(on_drivefs_mounted)),
+        on_drivefs_unmounted_(std::move(on_drivefs_unmounted)),
+        test_drivefs_mojo_connection_delegate_factory_(
+            std::move(test_drivefs_mojo_connection_delegate_factory)),
+        drivefs_host_(profile_->GetPath(), this) {}
 
   drivefs::DriveFsHost* drivefs_host() { return &drivefs_host_; }
 
  private:
   // drivefs::DriveFsHost::Delegate:
-  net::URLRequestContextGetter* GetRequestContext() override;
-  service_manager::Connector* GetConnector() override;
-  const AccountId& GetAccountId() override;
-  void OnMounted(const base::FilePath& path) override;
+  net::URLRequestContextGetter* GetRequestContext() override {
+    return profile_->GetRequestContext();
+  }
+
+  service_manager::Connector* GetConnector() override {
+    return content::BrowserContext::GetConnectorFor(profile_);
+  }
+
+  const AccountId& GetAccountId() override {
+    return chromeos::ProfileHelper::Get()
+        ->GetUserByProfile(profile_)
+        ->GetAccountId();
+  }
+
+  std::string GetObfuscatedAccountId() override {
+    return base::MD5String(GetProfileSalt() + "-" +
+                           GetAccountId().GetAccountIdKey());
+  }
+
+  void OnMountFailed(base::Optional<base::TimeDelta> remount_delay) override {
+    on_drivefs_unmounted_.Run(std::move(remount_delay));
+  }
+
+  void OnMounted(const base::FilePath& path) override {
+    on_drivefs_mounted_.Run();
+  }
+
+  void OnUnmounted(base::Optional<base::TimeDelta> remount_delay) override {
+    on_drivefs_unmounted_.Run(std::move(remount_delay));
+  }
+
+  const std::string& GetProfileSalt() {
+    if (!profile_salt_.empty()) {
+      return profile_salt_;
+    }
+    PrefService* prefs = profile_->GetPrefs();
+    profile_salt_ = prefs->GetString(prefs::kDriveFsProfileSalt);
+    if (profile_salt_.empty()) {
+      profile_salt_ = base::UnguessableToken::Create().ToString();
+      prefs->SetString(prefs::kDriveFsProfileSalt, profile_salt_);
+    }
+    return profile_salt_;
+  }
+
   std::unique_ptr<drivefs::DriveFsHost::MojoConnectionDelegate>
-  CreateMojoConnectionDelegate() override;
-  bool AreRefreshTokensReady() override;
+  CreateMojoConnectionDelegate() override {
+    if (test_drivefs_mojo_connection_delegate_factory_)
+      return test_drivefs_mojo_connection_delegate_factory_.Run();
+    return Delegate::CreateMojoConnectionDelegate();
+  }
 
   Profile* const profile_;
 
   // Invoked when DriveFS mounting is completed.
   const base::RepeatingClosure on_drivefs_mounted_;
+  const base::RepeatingCallback<void(base::Optional<base::TimeDelta>)>
+      on_drivefs_unmounted_;
 
   const DriveFsMojoConnectionDelegateFactory
       test_drivefs_mojo_connection_delegate_factory_;
 
   drivefs::DriveFsHost drivefs_host_;
 
+  std::string profile_salt_;
+
   DISALLOW_COPY_AND_ASSIGN(DriveFsHolder);
 };
-
-DriveIntegrationService::DriveFsHolder::DriveFsHolder(
-    Profile* profile,
-    base::RepeatingClosure on_drivefs_mounted,
-    DriveFsMojoConnectionDelegateFactory
-        test_drivefs_mojo_connection_delegate_factory)
-    : profile_(profile),
-      on_drivefs_mounted_(std::move(on_drivefs_mounted)),
-      test_drivefs_mojo_connection_delegate_factory_(
-          std::move(test_drivefs_mojo_connection_delegate_factory)),
-      drivefs_host_(profile_->GetPath(), this) {}
-
-net::URLRequestContextGetter*
-DriveIntegrationService::DriveFsHolder::GetRequestContext() {
-  return profile_->GetRequestContext();
-}
-
-service_manager::Connector*
-DriveIntegrationService::DriveFsHolder::GetConnector() {
-  return content::BrowserContext::GetConnectorFor(profile_);
-}
-
-const AccountId& DriveIntegrationService::DriveFsHolder::GetAccountId() {
-  return chromeos::ProfileHelper::Get()
-      ->GetUserByProfile(profile_)
-      ->GetAccountId();
-}
-
-std::unique_ptr<drivefs::DriveFsHost::MojoConnectionDelegate>
-DriveIntegrationService::DriveFsHolder::CreateMojoConnectionDelegate() {
-  if (test_drivefs_mojo_connection_delegate_factory_)
-    return test_drivefs_mojo_connection_delegate_factory_.Run();
-  return Delegate::CreateMojoConnectionDelegate();
-}
-
-bool DriveIntegrationService::DriveFsHolder::AreRefreshTokensReady() {
-  const auto state = ProfileOAuth2TokenServiceFactory::GetForProfile(profile_)
-                         ->GetDelegate()
-                         ->GetLoadCredentialsState();
-  return state != OAuth2TokenServiceDelegate::LOAD_CREDENTIALS_IN_PROGRESS &&
-         state != OAuth2TokenServiceDelegate::LOAD_CREDENTIALS_NOT_STARTED;
-}
-
-void DriveIntegrationService::DriveFsHolder::OnMounted(
-    const base::FilePath& path) {
-  on_drivefs_mounted_.Run();
-}
 
 DriveIntegrationService::DriveIntegrationService(
     Profile* profile,
@@ -339,19 +380,22 @@ DriveIntegrationService::DriveIntegrationService(
                                 : util::GetCacheRootPath(profile)),
       preference_watcher_(preference_watcher),
       drivefs_holder_(
-          base::FeatureList::IsEnabled(kDriveFs)
+          base::FeatureList::IsEnabled(chromeos::features::kDriveFs)
               ? std::make_unique<DriveFsHolder>(
                     profile_,
                     base::BindRepeating(&DriveIntegrationService::
                                             AddDriveMountPointAfterMounted,
                                         base::Unretained(this)),
+                    base::BindRepeating(
+                        &DriveIntegrationService::MaybeRemountFileSystem,
+                        base::Unretained(this)),
                     std::move(test_drivefs_mojo_connection_delegate_factory))
               : nullptr),
       weak_ptr_factory_(this) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK(profile && !profile->IsOffTheRecord());
 
-  logger_.reset(new EventLogger);
+  logger_ = std::make_unique<EventLogger>();
   blocking_task_runner_ = base::CreateSequencedTaskRunnerWithTraits(
       {base::MayBlock(), base::TaskPriority::USER_BLOCKING,
        base::WithBaseSyncPrimitives()});
@@ -379,12 +423,12 @@ DriveIntegrationService::DriveIntegrationService(
       url_loader_factory = g_browser_process->system_network_context_manager()
                                ->GetSharedURLLoaderFactory();
     }
-    drive_service_.reset(new DriveAPIService(
+    drive_service_ = std::make_unique<DriveAPIService>(
         oauth_service, g_browser_process->system_request_context(),
         url_loader_factory, blocking_task_runner_.get(),
         GURL(google_apis::DriveApiUrlGenerator::kBaseUrlForProduction),
         GURL(google_apis::DriveApiUrlGenerator::kBaseThumbnailUrlForProduction),
-        GetDriveUserAgent(), NO_TRAFFIC_ANNOTATION_YET));
+        GetDriveUserAgent(), NO_TRAFFIC_ANNOTATION_YET);
   }
 
   device::mojom::WakeLockProviderPtr wake_lock_provider;
@@ -394,18 +438,18 @@ DriveIntegrationService::DriveIntegrationService(
   connector->BindInterface(device::mojom::kServiceName,
                            mojo::MakeRequest(&wake_lock_provider));
 
-  scheduler_.reset(new JobScheduler(
+  scheduler_ = std::make_unique<JobScheduler>(
       profile_->GetPrefs(), logger_.get(), drive_service_.get(),
-      blocking_task_runner_.get(), std::move(wake_lock_provider)));
+      blocking_task_runner_.get(), std::move(wake_lock_provider));
   metadata_storage_.reset(new internal::ResourceMetadataStorage(
       cache_root_directory_.Append(kMetadataDirectory),
       blocking_task_runner_.get()));
   cache_.reset(new internal::FileCache(
       metadata_storage_.get(),
       cache_root_directory_.Append(kCacheFileDirectory),
-      blocking_task_runner_.get(),
-      NULL /* free_disk_space_getter */));
-  drive_app_registry_.reset(new DriveAppRegistry(drive_service_.get()));
+      blocking_task_runner_.get(), nullptr /* free_disk_space_getter */));
+  drive_app_registry_ =
+      std::make_unique<DriveAppRegistry>(drive_service_.get());
 
   resource_metadata_.reset(new internal::ResourceMetadata(
       metadata_storage_.get(), cache_.get(), blocking_task_runner_));
@@ -417,9 +461,9 @@ DriveIntegrationService::DriveIntegrationService(
                 logger_.get(), cache_.get(), scheduler_.get(),
                 resource_metadata_.get(), blocking_task_runner_.get(),
                 cache_root_directory_.Append(kTemporaryFileDirectory)));
-  download_handler_.reset(new DownloadHandler(file_system()));
-  debug_info_collector_.reset(new DebugInfoCollector(
-      resource_metadata_.get(), file_system(), blocking_task_runner_.get()));
+  download_handler_ = std::make_unique<DownloadHandler>(file_system());
+  debug_info_collector_ = std::make_unique<DebugInfoCollector>(
+      resource_metadata_.get(), file_system(), blocking_task_runner_.get());
 
   SetEnabled(drive::util::IsDriveEnabledForProfile(profile));
 }
@@ -551,7 +595,7 @@ void DriveIntegrationService::OnPushNotificationEnabled(bool enabled) {
 void DriveIntegrationService::ClearCacheAndRemountFileSystem(
     const base::Callback<void(bool)>& callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(!callback.is_null());
+  DCHECK(callback);
 
   // TODO(crbug.com/845393): Implement for DriveFS.
   if (state_ != INITIALIZED || drivefs_holder_) {
@@ -587,7 +631,7 @@ void DriveIntegrationService::AddBackDriveMountPoint(
     const base::Callback<void(bool)>& callback,
     FileError error) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  DCHECK(!callback.is_null());
+  DCHECK(callback);
 
   state_ = error == FILE_ERROR_OK ? INITIALIZED : NOT_INITIALIZED;
 
@@ -605,6 +649,8 @@ void DriveIntegrationService::AddDriveMountPoint() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
   DCHECK_EQ(INITIALIZED, state_);
   DCHECK(enabled_);
+
+  weak_ptr_factory_.InvalidateWeakPtrs();
 
   if (drivefs_holder_ && !drivefs_holder_->drivefs_host()->IsMounted()) {
     drivefs_holder_->drivefs_host()->Mount();
@@ -632,10 +678,16 @@ void DriveIntegrationService::AddDriveMountPointAfterMounted() {
     for (auto& observer : observers_)
       observer.OnFileSystemMounted();
   }
+
+  if (drivefs_holder_ && preference_watcher_) {
+    preference_watcher_->UpdateSyncPauseState();
+  }
 }
 
 void DriveIntegrationService::RemoveDriveMountPoint() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  weak_ptr_factory_.InvalidateWeakPtrs();
 
   if (!mount_point_name_.empty()) {
     if (!drivefs_holder_)
@@ -653,6 +705,21 @@ void DriveIntegrationService::RemoveDriveMountPoint() {
   }
   if (drivefs_holder_)
     drivefs_holder_->drivefs_host()->Unmount();
+}
+
+void DriveIntegrationService::MaybeRemountFileSystem(
+    base::Optional<base::TimeDelta> remount_delay) {
+  DCHECK_EQ(INITIALIZED, state_);
+
+  RemoveDriveMountPoint();
+
+  if (remount_delay) {
+    base::SequencedTaskRunnerHandle::Get()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce(&DriveIntegrationService::AddDriveMountPoint,
+                       weak_ptr_factory_.GetWeakPtr()),
+        remount_delay.value());
+  }
 }
 
 void DriveIntegrationService::Initialize() {
@@ -698,8 +765,9 @@ void DriveIntegrationService::InitializeAfterMetadataInitialized(
 
   // Initialize Download Handler for hooking downloads to the Drive folder.
   content::DownloadManager* download_manager =
-      g_browser_process->download_status_updater() ?
-      BrowserContext::GetDownloadManager(profile_) : NULL;
+      g_browser_process->download_status_updater()
+          ? BrowserContext::GetDownloadManager(profile_)
+          : nullptr;
   download_handler_->Initialize(
       download_manager,
       cache_root_directory_.Append(kTemporaryFileDirectory));
@@ -711,7 +779,8 @@ void DriveIntegrationService::InitializeAfterMetadataInitialized(
           BrowserContext::GetDownloadManager(
               profile_->GetOffTheRecordProfile()));
     }
-    profile_notification_registrar_.reset(new content::NotificationRegistrar);
+    profile_notification_registrar_ =
+        std::make_unique<content::NotificationRegistrar>();
     profile_notification_registrar_->Add(
         this,
         chrome::NOTIFICATION_PROFILE_CREATED,
@@ -767,7 +836,7 @@ void DriveIntegrationService::Observe(
 //===================== DriveIntegrationServiceFactory =======================
 
 DriveIntegrationServiceFactory::FactoryCallback*
-    DriveIntegrationServiceFactory::factory_for_test_ = NULL;
+    DriveIntegrationServiceFactory::factory_for_test_ = nullptr;
 
 DriveIntegrationServiceFactory::ScopedFactoryForTest::ScopedFactoryForTest(
     FactoryCallback* factory_for_test) {
@@ -775,7 +844,7 @@ DriveIntegrationServiceFactory::ScopedFactoryForTest::ScopedFactoryForTest(
 }
 
 DriveIntegrationServiceFactory::ScopedFactoryForTest::~ScopedFactoryForTest() {
-  factory_for_test_ = NULL;
+  factory_for_test_ = nullptr;
 }
 
 // static
@@ -806,8 +875,7 @@ DriveIntegrationServiceFactory::DriveIntegrationServiceFactory()
   DependsOn(DownloadCoreServiceFactory::GetInstance());
 }
 
-DriveIntegrationServiceFactory::~DriveIntegrationServiceFactory() {
-}
+DriveIntegrationServiceFactory::~DriveIntegrationServiceFactory() = default;
 
 content::BrowserContext* DriveIntegrationServiceFactory::GetBrowserContextToUse(
     content::BrowserContext* context) const {
@@ -818,18 +886,18 @@ KeyedService* DriveIntegrationServiceFactory::BuildServiceInstanceFor(
     content::BrowserContext* context) const {
   Profile* profile = Profile::FromBrowserContext(context);
 
-  DriveIntegrationService* service = NULL;
+  DriveIntegrationService* service = nullptr;
   if (!factory_for_test_) {
-    DriveIntegrationService::PreferenceWatcher* preference_watcher = NULL;
+    DriveIntegrationService::PreferenceWatcher* preference_watcher = nullptr;
     if (chromeos::IsProfileAssociatedWithGaiaAccount(profile)) {
       // Drive File System can be enabled.
       preference_watcher =
           new DriveIntegrationService::PreferenceWatcher(profile->GetPrefs());
     }
 
-    service = new DriveIntegrationService(
-        profile, preference_watcher,
-        NULL, std::string(), base::FilePath(), NULL);
+    service =
+        new DriveIntegrationService(profile, preference_watcher, nullptr,
+                                    std::string(), base::FilePath(), nullptr);
   } else {
     service = factory_for_test_->Run(profile);
   }

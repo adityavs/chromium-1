@@ -5,19 +5,24 @@
 #ifndef SERVICES_UI_WS2_WINDOW_SERVICE_H_
 #define SERVICES_UI_WS2_WINDOW_SERVICE_H_
 
+#include <stdint.h>
+
 #include <memory>
 #include <set>
+#include <string>
 
 #include "base/component_export.h"
 #include "base/macros.h"
+#include "base/observer_list.h"
 #include "services/service_manager/public/cpp/binder_registry.h"
 #include "services/service_manager/public/cpp/service.h"
 #include "services/ui/ime/ime_driver_bridge.h"
 #include "services/ui/ime/ime_registrar_impl.h"
 #include "services/ui/input_devices/input_device_server.h"
 #include "services/ui/public/interfaces/ime/ime.mojom.h"
-#include "services/ui/public/interfaces/screen_provider.mojom.h"
+#include "services/ui/public/interfaces/remoting_event_injector.mojom.h"
 #include "services/ui/public/interfaces/user_activity_monitor.mojom.h"
+#include "services/ui/public/interfaces/window_server_test.mojom.h"
 #include "services/ui/public/interfaces/window_tree.mojom.h"
 #include "services/ui/ws2/ids.h"
 #include "ui/aura/mus/property_converter.h"
@@ -28,6 +33,10 @@ class Window;
 namespace client {
 class FocusClient;
 }
+}
+
+namespace display {
+class Display;
 }
 
 namespace gfx {
@@ -45,10 +54,12 @@ class WindowTreeClient;
 namespace ws2 {
 
 class GpuInterfaceProvider;
+class RemotingEventInjector;
 class ScreenProvider;
 class ServerWindow;
 class UserActivityMonitor;
 class WindowServiceDelegate;
+class WindowServiceObserver;
 class WindowTree;
 class WindowTreeFactory;
 
@@ -70,14 +81,19 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
   // Creates a new WindowTree, caller must call one of the Init() functions on
   // the returned object.
   std::unique_ptr<WindowTree> CreateWindowTree(
-      mojom::WindowTreeClient* window_tree_client);
+      mojom::WindowTreeClient* window_tree_client,
+      const std::string& client_name = std::string());
 
   // Sets the window frame metrics.
   void SetFrameDecorationValues(const gfx::Insets& client_area_insets,
                                 int max_title_bar_button_width);
 
   // Whether |window| hosts a remote client.
-  static bool HasRemoteClient(aura::Window* window);
+  static bool HasRemoteClient(const aura::Window* window);
+
+  void AddObserver(WindowServiceObserver* observer);
+  void RemoveObserver(WindowServiceObserver* observer);
+  base::ObserverList<WindowServiceObserver>& observers() { return observers_; }
 
   WindowServiceDelegate* delegate() { return delegate_; }
 
@@ -89,12 +105,30 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
 
   service_manager::BinderRegistry* registry() { return &registry_; }
 
+  // Called when the surface of |client_name| is first activated.
+  void OnFirstSurfaceActivation(const std::string& client_name);
+
   // Called when a WindowServiceClient is about to be destroyed.
   void OnWillDestroyWindowTree(WindowTree* tree);
 
-  // Asks the client that created |window| to close |window|. |window| must be
-  // a top-level window.
-  void RequestClose(aura::Window* window);
+  // Asks the client that created |window| to close |window|. Returns true if
+  // |window| is a top-level created by a remote client, false otherwise.
+  bool RequestClose(aura::Window* window);
+
+  // Called when the metrics of a display changes. It is expected the local
+  // environment call this *before* the change is applied to any
+  // WindowTreeHosts. This is necessary to ensure clients are notified of the
+  // change before the client is notified of a bounds change. To do otherwise
+  // results in the client applying bounds change with the wrong scale factor.
+  // |changed_metrics| is a bitmask of the DisplayObserver::DisplayMetric.
+  void OnDisplayMetricsChanged(const display::Display& display,
+                               uint32_t changed_metrics);
+
+  // Returns an id useful for debugging. See ServerWindow::GetIdForDebugging()
+  // for details.
+  std::string GetIdForDebugging(aura::Window* window);
+
+  ScreenProvider* screen_provider() { return screen_provider_.get(); }
 
   // service_manager::Service:
   void OnStart() override;
@@ -103,14 +137,27 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
                        mojo::ScopedMessagePipeHandle handle) override;
 
  private:
+  friend class WindowServerTestImpl;
+
+  // Sets a callback to be called whenever a surface is activated. This
+  // corresponds to a client submitting a new CompositorFrame for a Window. This
+  // should only be called in a test configuration.
+  void SetSurfaceActivationCallback(
+      base::OnceCallback<void(const std::string&)> callback);
+
   void BindClipboardHostRequest(mojom::ClipboardHostRequest request);
-  void BindScreenProviderRequest(mojom::ScreenProviderRequest request);
   void BindImeRegistrarRequest(mojom::IMERegistrarRequest request);
   void BindImeDriverRequest(mojom::IMEDriverRequest request);
   void BindInputDeviceServerRequest(mojom::InputDeviceServerRequest request);
+  void BindRemotingEventInjectorRequest(
+      mojom::RemotingEventInjectorRequest request);
   void BindUserActivityMonitorRequest(
       mojom::UserActivityMonitorRequest request);
-  void BindWindowTreeFactoryRequest(mojom::WindowTreeFactoryRequest request);
+  void BindWindowServerTestRequest(mojom::WindowServerTestRequest request);
+
+  void BindWindowTreeFactoryRequest(
+      mojom::WindowTreeFactoryRequest request,
+      const service_manager::BindSourceInfo& source_info);
 
   WindowServiceDelegate* delegate_;
 
@@ -121,6 +168,9 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
 
   aura::client::FocusClient* focus_client_;
 
+  service_manager::BinderRegistryWithArgs<
+      const service_manager::BindSourceInfo&>
+      registry_with_source_info_;
   service_manager::BinderRegistry registry_;
 
   std::unique_ptr<UserActivityMonitor> user_activity_monitor_;
@@ -132,6 +182,8 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
 
   // Provides info to InputDeviceClient users, via InputDeviceManager.
   ui::InputDeviceServer input_device_server_;
+
+  std::unique_ptr<RemotingEventInjector> remoting_event_injector_;
 
   std::unique_ptr<ClipboardHost> clipboard_host_;
 
@@ -149,6 +201,13 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowService
 
   // All WindowTrees created by the WindowService.
   std::set<WindowTree*> window_trees_;
+
+  base::ObserverList<WindowServiceObserver> observers_;
+
+  // Returns true if various test interfaces are exposed.
+  bool test_config_ = false;
+
+  base::OnceCallback<void(const std::string&)> surface_activation_callback_;
 
   DISALLOW_COPY_AND_ASSIGN(WindowService);
 };

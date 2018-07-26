@@ -78,7 +78,6 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
       blink::mojom::ServiceWorkerObjectAssociatedPtrInfo remote_object_ptr_info,
       blink::mojom::ServiceWorkerState sent_state);
 
-  int provider_id() const { return provider_id_; }
   ServiceWorkerVersion* version() { return version_.get(); }
 
   base::WeakPtr<ServiceWorkerObjectHost> AsWeakPtr();
@@ -103,13 +102,12 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
   base::WeakPtr<ServiceWorkerContextCore> context_;
   // |provider_host_| is valid throughout lifetime of |this| because it owns
   // |this|.
-  ServiceWorkerProviderHost* provider_host_;
+  ServiceWorkerProviderHost* const provider_host_;
   // The origin of the |provider_host_|. Note that this is const because once a
   // JavaScript ServiceWorker object is created for an execution context, we
   // don't expect that context to change origins and still hold on to the
   // object.
   const url::Origin provider_origin_;
-  const int provider_id_;
   scoped_refptr<ServiceWorkerVersion> version_;
   // Typically both |bindings_| and |remote_objects_| contain only one Mojo
   // connection, corresponding to the content::WebServiceWorkerImpl in the
@@ -121,9 +119,6 @@ class CONTENT_EXPORT ServiceWorkerObjectHost
   mojo::AssociatedBindingSet<blink::mojom::ServiceWorkerObjectHost> bindings_;
   mojo::AssociatedInterfacePtrSet<blink::mojom::ServiceWorkerObject>
       remote_objects_;
-
-  // TODO(crbug.com/838410): Temporary debugging for the linked bug.
-  bool in_dtor_ = false;
 
   base::WeakPtrFactory<ServiceWorkerObjectHost> weak_ptr_factory_;
 

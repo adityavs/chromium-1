@@ -13,12 +13,14 @@ import android.view.ViewStub;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManager;
 import org.chromium.chrome.browser.compositor.layouts.OverviewModeBehavior;
+import org.chromium.chrome.browser.compositor.layouts.ToolbarSwipeLayout;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchManager;
 import org.chromium.chrome.browser.fullscreen.ChromeFullscreenManager;
 import org.chromium.chrome.browser.modelutil.PropertyKey;
 import org.chromium.chrome.browser.modelutil.PropertyModelChangeProcessor;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.toolbar.BottomToolbarViewBinder.ViewHolder;
+import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.resources.ResourceManager;
 
 /**
@@ -36,6 +38,9 @@ public class BottomToolbarCoordinator {
 
     /** The home button component that lives in the bottom toolbar. */
     private final ToolbarButtonCoordinator mHomeButtonCoordinator;
+
+    /** The menu button that lives in the bottom toolbar. */
+    private final MenuButton mMenuButton;
 
     /**
      * Build the coordinator that manages the bottom toolbar.
@@ -63,6 +68,7 @@ public class BottomToolbarCoordinator {
         mTabSwitcherButtonCoordinator = new TabSwitcherButtonCoordinator(toolbarRoot);
         mHomeButtonCoordinator =
                 new ToolbarButtonCoordinator(toolbarRoot.findViewById(R.id.home_button));
+        mMenuButton = toolbarRoot.findViewById(R.id.menu_button_wrapper);
     }
 
     /**
@@ -90,41 +96,57 @@ public class BottomToolbarCoordinator {
             OnClickListener tabSwitcherListener, OnClickListener searchAcceleratorListener,
             OnClickListener homeButtonListener, OnTouchListener menuButtonListener,
             TabModelSelector tabModelSelector, OverviewModeBehavior overviewModeBehavior,
-            ContextualSearchManager contextualSearchManager) {
-        mMediator.setButtonListeners(searchAcceleratorListener, menuButtonListener);
+            ContextualSearchManager contextualSearchManager, WindowAndroid windowAndroid) {
+        mMediator.setSearchAcceleratorListener(searchAcceleratorListener);
         mMediator.setLayoutManager(layoutManager);
         mMediator.setResourceManager(resourceManager);
         mMediator.setOverviewModeBehavior(overviewModeBehavior);
         mMediator.setToolbarSwipeHandler(layoutManager.getToolbarSwipeHandler());
         mMediator.setContextualSearchManager(contextualSearchManager);
+        mMediator.setWindowAndroid(windowAndroid);
 
         mTabSwitcherButtonCoordinator.setTabSwitcherListener(tabSwitcherListener);
         mTabSwitcherButtonCoordinator.setTabModelSelector(tabModelSelector);
 
         mHomeButtonCoordinator.setButtonListeners(homeButtonListener, null);
         mHomeButtonCoordinator.setOverviewModeBehavior(
-                overviewModeBehavior, ToolbarButtonCoordinator.BROWSING_MODE);
+                overviewModeBehavior, ToolbarButtonCoordinator.ButtonVisibility.BROWSING_MODE);
+
+        mMenuButton.setTouchListener(menuButtonListener);
     }
 
     /**
      * Show the update badge over the bottom toolbar's app menu.
      */
     public void showAppMenuUpdateBadge() {
-        mMediator.setUpdateBadgeVisibility(true);
+        mMenuButton.setUpdateBadgeVisibility(true);
     }
 
     /**
      * Remove the update badge.
      */
     public void removeAppMenuUpdateBadge() {
-        mMediator.setUpdateBadgeVisibility(false);
+        mMenuButton.setUpdateBadgeVisibility(false);
     }
 
     /**
      * @return Whether the update badge is showing.
      */
     public boolean isShowingAppMenuUpdateBadge() {
-        return mMediator.isShowingAppMenuUpdateBadge();
+        return mMenuButton.isShowingAppMenuUpdateBadge();
+    }
+
+    /**
+     * @param layout The {@link ToolbarSwipeLayout} that the bottom toolbar will hook into. This
+     *               allows the bottom toolbar to provide the layout with scene layers with the
+     *               bottom toolbar's texture.
+     */
+    public void setToolbarSwipeLayout(ToolbarSwipeLayout layout) {
+        mMediator.setToolbarSwipeLayout(layout);
+    }
+
+    public View getMenuButton() {
+        return mMenuButton.getMenuButton();
     }
 
     /**

@@ -41,17 +41,15 @@ class ZeroCopyGpuBacking : public ResourcePool::GpuBacking {
       gl->DestroyImageCHROMIUM(image_id);
   }
 
-  base::trace_event::MemoryAllocatorDumpGuid MemoryDumpGuid(
-      uint64_t tracing_process_id) override {
+  void OnMemoryDump(
+      base::trace_event::ProcessMemoryDump* pmd,
+      const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
+      uint64_t tracing_process_id,
+      int importance) const override {
     if (!gpu_memory_buffer)
-      return {};
-    return gpu_memory_buffer->GetGUIDForTracing(tracing_process_id);
-  }
-
-  base::UnguessableToken SharedMemoryGuid() override {
-    if (!gpu_memory_buffer)
-      return {};
-    return gpu_memory_buffer->GetHandle().handle.GetGUID();
+      return;
+    gpu_memory_buffer->OnMemoryDump(pmd, buffer_dump_guid, tracing_process_id,
+                                    importance);
   }
 
   // The ContextProvider used to clean up the texture and image ids.
@@ -151,13 +149,13 @@ class ZeroCopyRasterBufferImpl : public RasterBuffer {
   }
 
   // Overridden from RasterBuffer:
-  void Playback(
-      const RasterSource* raster_source,
-      const gfx::Rect& raster_full_rect,
-      const gfx::Rect& raster_dirty_rect,
-      uint64_t new_content_id,
-      const gfx::AxisTransform2d& transform,
-      const RasterSource::PlaybackSettings& playback_settings) override {
+  void Playback(const RasterSource* raster_source,
+                const gfx::Rect& raster_full_rect,
+                const gfx::Rect& raster_dirty_rect,
+                uint64_t new_content_id,
+                const gfx::AxisTransform2d& transform,
+                const RasterSource::PlaybackSettings& playback_settings,
+                const GURL& url) override {
     TRACE_EVENT0("cc", "ZeroCopyRasterBuffer::Playback");
 
     if (!gpu_memory_buffer_) {

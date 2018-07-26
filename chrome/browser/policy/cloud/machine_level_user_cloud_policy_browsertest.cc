@@ -116,6 +116,20 @@ class FakeBrowserDMTokenStorage : public BrowserDMTokenStorage {
 
   void SetClientId(std::string client_id) { client_id_ = client_id; }
 
+  std::string InitClientId() override {
+    NOTREACHED();
+    return std::string();
+  }
+  std::string InitEnrollmentToken() override {
+    NOTREACHED();
+    return std::string();
+  }
+  std::string InitDMToken() override {
+    NOTREACHED();
+    return std::string();
+  }
+  void SaveDMToken(const std::string& dm_token) override { NOTREACHED(); }
+
   void EnableStorage(bool storage_enabled) {
     storage_enabled_ = storage_enabled;
   }
@@ -407,13 +421,7 @@ class MachineLevelUserCloudPolicyEnrollmentTest
   DISALLOW_COPY_AND_ASSIGN(MachineLevelUserCloudPolicyEnrollmentTest);
 };
 
-#if defined(OS_MACOSX)
-// TODO(crbug.com/844487): Fix this test on Mac.
-#define MAYBE_Test DISABLED_Test
-#else
-#define MAYBE_Test Test
-#endif
-IN_PROC_BROWSER_TEST_P(MachineLevelUserCloudPolicyEnrollmentTest, MAYBE_Test) {
+IN_PROC_BROWSER_TEST_P(MachineLevelUserCloudPolicyEnrollmentTest, Test) {
   WaitForPolicyRegisterFinished();
 
   EXPECT_EQ(is_enrollment_token_valid() ? "fake_device_management_token"
@@ -433,6 +441,16 @@ IN_PROC_BROWSER_TEST_P(MachineLevelUserCloudPolicyEnrollmentTest, MAYBE_Test) {
   histogram_tester_.ExpectBucketCount(kEnrollmentResultMetrics, expected_result,
                                       1);
   histogram_tester_.ExpectTotalCount(kEnrollmentResultMetrics, 1);
+
+#if defined(OS_MACOSX)
+  // Verify the last mericis of launch is recorded in
+  // applicationDidFinishNotification.
+  if (is_enrollment_token_valid()) {
+    EXPECT_EQ(1u, histogram_tester_
+                      .GetAllSamples("Startup.OSX.DockIconWillFinishBouncing")
+                      .size());
+  }
+#endif
 }
 
 INSTANTIATE_TEST_CASE_P(,

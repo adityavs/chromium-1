@@ -28,6 +28,9 @@ extern const base::Feature kSyncUserLanguageDetectionEvents;
 extern const base::Feature kSyncUserTranslationEvents;
 extern const base::Feature kSyncUSSBookmarks;
 extern const base::Feature kSyncUSSSessions;
+extern const base::Feature kSyncUSSAutofillProfile;
+extern const base::Feature kSyncUSSAutofillWalletData;
+extern const base::Feature kSyncUSSAutofillWalletMetadata;
 
 }  // namespace switches
 

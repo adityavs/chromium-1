@@ -133,7 +133,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
                          int error_code) override;
   void Destroy() override;
   void SetTooltipText(const base::string16& tooltip_text) override;
-  gfx::Vector2d GetOffsetFromRootSurface() override;
+  void TransformPointToRootSurface(gfx::PointF* point) override;
   gfx::Rect GetBoundsInRootWindow() override;
   void ProcessAckedTouchEvent(const TouchEventWithLatencyInfo& touch,
                               InputEventAckState ack_result) override;
@@ -169,7 +169,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
   void OnDidNavigateMainFrameToNewPage() override;
   void SetNeedsBeginFrames(bool needs_begin_frames) override;
   void SetWantsAnimateOnlyBeginFrames() override;
-  viz::FrameSinkId GetFrameSinkId() override;
+  const viz::FrameSinkId& GetFrameSinkId() const override;
   bool TransformPointToLocalCoordSpaceLegacy(
       const gfx::PointF& point,
       const viz::SurfaceId& original_surface,
@@ -183,7 +183,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
       viz::EventSource source = viz::EventSource::ANY) override;
   TouchSelectionControllerClientManager*
   GetTouchSelectionControllerClientManager() override;
-  viz::LocalSurfaceId GetLocalSurfaceId() const override;
+  const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   void OnRenderWidgetInit() override;
   void TakeFallbackContentFrom(RenderWidgetHostView* view) override;
   void OnSynchronizedDisplayPropertiesChanged() override;
@@ -482,7 +482,7 @@ class CONTENT_EXPORT RenderWidgetHostViewAndroid
   std::unique_ptr<TouchSelectionControllerClientManagerAndroid>
       touch_selection_controller_client_manager_;
 
-  // Bounds to use if we have no backing ContentViewCore
+  // Bounds to use if we have no backing WebContents.
   gfx::Rect default_bounds_;
 
   const bool using_browser_compositor_;

@@ -132,7 +132,7 @@ class TestRunner : public WebTestRunner {
     return is_web_platform_tests_mode_;
   }
   void set_is_web_platform_tests_mode() { is_web_platform_tests_mode_ = true; }
-  const std::vector<std::string>& file_chooser_paths() const {
+  const base::Optional<std::vector<std::string>>& file_chooser_paths() const {
     return file_chooser_paths_;
   }
 
@@ -155,7 +155,7 @@ class TestRunner : public WebTestRunner {
   bool policyDelegateIsPermissive() const;
   bool policyDelegateShouldNotifyDone() const;
   void setToolTipText(const blink::WebString&);
-  void setDragImage(const blink::WebImage& drag_image);
+  void setDragImage(const SkBitmap& drag_image);
   bool shouldDumpNavigationPolicy() const;
 
   midi::mojom::Result midiAccessorResult();
@@ -584,7 +584,7 @@ class TestRunner : public WebTestRunner {
   int chooser_count_;
 
   // Captured drag image.
-  blink::WebImage drag_image_;
+  SkBitmap drag_image_;
 
   // View that was focused by a previous call to TestRunner::SetFocus method.
   // Note - this can be a dangling pointer to an already destroyed WebView (this
@@ -600,7 +600,7 @@ class TestRunner : public WebTestRunner {
   // Forces v8 compilation cache to be disabled (used for inspector tests).
   bool disable_v8_cache_ = false;
 
-  std::vector<std::string> file_chooser_paths_;
+  base::Optional<std::vector<std::string>> file_chooser_paths_;
 
   base::WeakPtrFactory<TestRunner> weak_factory_;
 

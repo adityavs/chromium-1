@@ -16,7 +16,10 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/test_reg_util_win.h"
 #include "base/test/test_timeouts.h"
+#include "chrome/install_static/install_util.h"
+#include "chrome_elf/nt_registry/nt_registry.h"
 #include "chrome_elf/sha1/sha1.h"
 #include "chrome_elf/third_party_dlls/hook.h"
 #include "chrome_elf/third_party_dlls/main_unittest_exe.h"
@@ -95,7 +98,7 @@ PackedListModule GeneratePackedListModule(const std::string& image_name,
   assert(!image_name.empty());
 
   // SHA1 hash the two strings, and copy them into the new struct.
-  std::string code_id = GetFingerprintString(imagesize, timedatestamp);
+  std::string code_id = GetFingerprintString(timedatestamp, imagesize);
   code_id = elf_sha1::SHA1HashString(code_id);
   std::string name_hash = elf_sha1::SHA1HashString(image_name);
 
@@ -122,6 +125,49 @@ inline bool MakeFileCopy(const std::wstring& old_path,
   base::FilePath source(MakePath(old_path, old_name));
   base::FilePath destination(MakePath(new_path, new_name));
   return base::CopyFileW(source, destination);
+}
+
+// Utility function for protecting local registry.
+void RegRedirect(nt::ROOT_KEY key,
+                 registry_util::RegistryOverrideManager* rom) {
+  ASSERT_NE(key, nt::AUTO);
+  HKEY root = (key == nt::HKCU ? HKEY_CURRENT_USER : HKEY_LOCAL_MACHINE);
+  base::string16 temp;
+
+  ASSERT_NO_FATAL_FAILURE(rom->OverrideRegistry(root, &temp));
+  ASSERT_TRUE(nt::SetTestingOverride(key, temp));
+}
+
+// Utility function to disable local registry protection.
+void CancelRegRedirect(nt::ROOT_KEY key) {
+  ASSERT_NE(key, nt::AUTO);
+  ASSERT_TRUE(nt::SetTestingOverride(key, base::string16()));
+}
+
+// Use NtRegistry to query status codes (it's more handy than base).
+// - Returns true if the key value exists and is type REG_BINARY.
+bool QueryStatusCodes(std::vector<ThirdPartyStatus>* status_array) {
+  HANDLE handle = nullptr;
+  if (!nt::OpenRegKey(nt::HKCU,
+                      install_static::GetRegistryPath()
+                          .append(kThirdPartyRegKeyName)
+                          .c_str(),
+                      KEY_QUERY_VALUE, &handle, nullptr)) {
+    return false;
+  }
+
+  ULONG type = REG_NONE;
+  std::vector<uint8_t> temp_buffer;
+  bool success =
+      nt::QueryRegKeyValue(handle, kStatusCodesRegValue, &type, &temp_buffer);
+  nt::CloseRegKey(handle);
+
+  if (!success || type != REG_BINARY)
+    return false;
+
+  ConvertBufferToStatusCodes(temp_buffer, status_array);
+
+  return true;
 }
 
 //------------------------------------------------------------------------------
@@ -439,6 +485,78 @@ TEST_F(ThirdPartyTest, SHA1SanityCheck) {
   EXPECT_EQ(::memcmp(elf_sha1_generated.code_id_hash,
                      module_code_id_hash.data(), elf_sha1::kSHA1Length),
             0);
+}
+
+// Test that full section path is left alone, in terms of case.
+TEST_F(ThirdPartyTest, PathCaseSensitive) {
+  // Rename module to have mixed case.
+  ASSERT_TRUE(MakeFileCopy(GetExeDir(), kTestDllName2, GetScopedTempDirValue(),
+                           kTestDllName1MixedCase));
+
+  // 1) Sanity check that the hook GetDataFromImage() mining leaves the
+  // section path alone.
+  TestModuleData module_data = {};
+  ASSERT_TRUE(GetTestModuleData(kTestDllName1MixedCase, GetScopedTempDirValue(),
+                                &module_data));
+  // Reminder: this string is actually UTF-8, but this test ensures it is ascii.
+  // Also, |section_path| will be a device path, so convert to drive letter
+  // before comparing.
+  base::FilePath drive;
+  ASSERT_TRUE(base::DevicePathToDriveLetterPath(
+      base::FilePath(base::ASCIIToUTF16(module_data.section_path)), &drive));
+
+  EXPECT_EQ(drive.value().compare(
+                MakePath(GetScopedTempDirValue(), kTestDllName1MixedCase)),
+            0);
+
+  // 2) Now check an actual log.  Successful DLL load with no blacklist is fine
+  //    for this test.
+  base::CommandLine cmd_line1 = base::CommandLine::FromString(kTestExeFilename);
+  cmd_line1.AppendArgNative(GetBlTestFilePath());
+  cmd_line1.AppendArgNative(
+      base::IntToString16(main_unittest_exe::kTestSingleDllLoad));
+  cmd_line1.AppendArgNative(
+      MakePath(GetScopedTempDirValue(), kTestDllName1MixedCase));
+
+  int exit_code = 0;
+  LaunchChildAndWait(cmd_line1, &exit_code);
+  ASSERT_EQ(main_unittest_exe::kDllLoadSuccess, exit_code);
+}
+
+// Test the status-code passing in registry.
+TEST_F(ThirdPartyTest, StatusCodes) {
+  // 1. Enable reg override for test net.
+  registry_util::RegistryOverrideManager override_manager;
+  ASSERT_NO_FATAL_FAILURE(RegRedirect(nt::HKCU, &override_manager));
+
+  // 2. Reset the registry key and value to empty.
+  ASSERT_TRUE(ResetStatusCodesForTesting());
+
+  // 3. Confirm key and empty value.
+  std::vector<ThirdPartyStatus> code_array;
+  EXPECT_TRUE(QueryStatusCodes(&code_array));
+  EXPECT_EQ(0, code_array.size());
+
+  // 4. Add status codes, then verify.
+  ASSERT_NO_FATAL_FAILURE(
+      AddStatusCodeForTesting(ThirdPartyStatus::kFileEmpty));
+  ASSERT_NO_FATAL_FAILURE(
+      AddStatusCodeForTesting(ThirdPartyStatus::kLogsCreateMutexFailure));
+  ASSERT_NO_FATAL_FAILURE(
+      AddStatusCodeForTesting(ThirdPartyStatus::kHookVirtualProtectFailure));
+  EXPECT_TRUE(QueryStatusCodes(&code_array));
+  ASSERT_EQ(3, code_array.size());
+  EXPECT_EQ(ThirdPartyStatus::kFileEmpty, code_array[0]);
+  EXPECT_EQ(ThirdPartyStatus::kLogsCreateMutexFailure, code_array[1]);
+  EXPECT_EQ(ThirdPartyStatus::kHookVirtualProtectFailure, code_array[2]);
+
+  // 5. Reset the registry value to empty.
+  EXPECT_TRUE(ResetStatusCodesForTesting());
+  EXPECT_TRUE(QueryStatusCodes(&code_array));
+  EXPECT_EQ(0, code_array.size());
+
+  // 6. Disable reg override.
+  ASSERT_NO_FATAL_FAILURE(CancelRegRedirect(nt::HKCU));
 }
 
 }  // namespace

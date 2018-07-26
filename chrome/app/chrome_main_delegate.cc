@@ -541,7 +541,7 @@ bool ChromeMainDelegate::BasicStartupComplete(int* exit_code) {
 #if defined(OS_WIN) && !defined(CHROME_MULTIPLE_DLL_BROWSER)
   v8_breakpad_support::SetUp();
 #endif
-#if defined(OS_LINUX) && !defined(OS_ANDROID)
+#if defined(OS_LINUX)
   breakpad::SetFirstChanceExceptionHandler(v8::V8::TryHandleSignal);
 #endif
 
@@ -761,12 +761,6 @@ void ChromeMainDelegate::PreSandboxStartup() {
 #endif
 
 #if defined(OS_MACOSX)
-  // On the Mac, the child executable lives at a predefined location within
-  // the app bundle's versioned directory.
-  base::PathService::Override(content::CHILD_PROCESS_EXE,
-                              chrome::GetVersionedDirectory().Append(
-                                  chrome::kHelperProcessExecutablePath));
-
   InitMacCrashReporter(command_line, process_type);
   SetUpInstallerPreferences(command_line);
 #endif

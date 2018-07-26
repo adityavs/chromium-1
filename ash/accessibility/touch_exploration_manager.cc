@@ -19,6 +19,7 @@
 #include "chromeos/audio/chromeos_sounds.h"
 #include "chromeos/audio/cras_audio_handler.h"
 #include "chromeos/chromeos_switches.h"
+#include "extensions/common/constants.h"
 #include "ui/aura/client/aura_constants.h"
 #include "ui/gfx/geometry/rect.h"
 #include "ui/keyboard/keyboard_controller.h"
@@ -37,7 +38,8 @@ AccessibilityController* GetA11yController() {
 TouchExplorationManager::TouchExplorationManager(
     RootWindowController* root_window_controller)
     : root_window_controller_(root_window_controller),
-      audio_handler_(chromeos::CrasAudioHandler::Get()) {
+      audio_handler_(chromeos::CrasAudioHandler::Get()),
+      observing_window_(nullptr) {
   Shell::Get()->AddShellObserver(this);
   Shell::Get()->accessibility_controller()->AddObserver(this);
   Shell::Get()->activation_client()->AddObserver(this);
@@ -54,9 +56,20 @@ TouchExplorationManager::~TouchExplorationManager() {
   keyboard::KeyboardController::Get()->RemoveObserver(this);
   display::Screen::GetScreen()->RemoveObserver(this);
   Shell::Get()->RemoveShellObserver(this);
+  if (observing_window_)
+    observing_window_->RemoveObserver(this);
 }
 
 void TouchExplorationManager::OnAccessibilityStatusChanged() {
+  UpdateTouchExplorationState();
+}
+
+void TouchExplorationManager::OnWindowPropertyChanged(aura::Window* winodw,
+                                                      const void* key,
+                                                      intptr_t old) {
+  if (key != aura::client::kAccessibilityTouchExplorationPassThrough)
+    return;
+
   UpdateTouchExplorationState();
 }
 
@@ -151,6 +164,16 @@ void TouchExplorationManager::OnWindowActivated(
     ::wm::ActivationChangeObserver::ActivationReason reason,
     aura::Window* gained_active,
     aura::Window* lost_active) {
+  if (lost_active && lost_active->HasObserver(this)) {
+    lost_active->RemoveObserver(this);
+    observing_window_ = nullptr;
+  }
+
+  if (gained_active && !gained_active->HasObserver(this)) {
+    gained_active->AddObserver(this);
+    observing_window_ = gained_active;
+  }
+
   UpdateTouchExplorationState();
 }
 
@@ -204,7 +227,8 @@ void TouchExplorationManager::UpdateTouchExplorationState() {
       // Clear the focus highlight.
       Shell::Get()->accessibility_focus_ring_controller()->SetFocusRing(
           std::vector<gfx::Rect>(),
-          mojom::FocusRingBehavior::PERSIST_FOCUS_RING);
+          mojom::FocusRingBehavior::PERSIST_FOCUS_RING,
+          extension_misc::kChromeVoxExtensionId);
     } else {
       touch_exploration_controller_->SetExcludeBounds(gfx::Rect());
     }

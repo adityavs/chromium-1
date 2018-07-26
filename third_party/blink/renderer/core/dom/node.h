@@ -181,6 +181,7 @@ class CORE_EXPORT Node : public EventTarget {
   virtual void setNodeValue(const String&);
   virtual NodeType getNodeType() const = 0;
   ContainerNode* parentNode() const;
+  ContainerNode* ParentNodeWithCounting() const;
   Element* parentElement() const;
   ContainerNode* ParentElementOrShadowRoot() const;
   ContainerNode* ParentElementOrDocumentFragment() const;
@@ -842,6 +843,13 @@ class CORE_EXPORT Node : public EventTarget {
     return GetFlag(kHasDuplicateAttributes);
   }
 
+  void SetInDOMNodeRemovedHandler(bool flag) {
+    SetFlag(flag, kInDOMNodeRemovedHandler);
+  }
+  bool InDOMNodeRemovedHandler() const {
+    return GetFlag(kInDOMNodeRemovedHandler);
+  }
+
   // If the node is a plugin, then this returns its WebPluginContainer.
   WebPluginContainerImpl* GetWebPluginContainer() const;
 
@@ -897,11 +905,14 @@ class CORE_EXPORT Node : public EventTarget {
 
     kHasDuplicateAttributes = 1 << 28,
 
+    // Temporary flag for some UseCounter items. crbug.com/859391.
+    kInDOMNodeRemovedHandler = 1 << 29,
+
     kDefaultNodeFlags =
         kIsFinishedParsingChildrenFlag | kNeedsReattachStyleChange
   };
 
-  // 4 bits remaining.
+  // 3 bits remaining.
 
   bool GetFlag(NodeFlags mask) const { return node_flags_ & mask; }
   void SetFlag(bool f, NodeFlags mask) {
@@ -1028,10 +1039,6 @@ inline void Node::SetParentOrShadowHostNode(ContainerNode* parent) {
 inline ContainerNode* Node::ParentOrShadowHostNode() const {
   DCHECK(IsMainThread());
   return reinterpret_cast<ContainerNode*>(parent_or_shadow_host_node_.Get());
-}
-
-inline ContainerNode* Node::parentNode() const {
-  return IsShadowRoot() ? nullptr : ParentOrShadowHostNode();
 }
 
 inline void Node::LazyReattachIfAttached() {

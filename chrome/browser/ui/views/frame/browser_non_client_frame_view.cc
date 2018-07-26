@@ -13,10 +13,12 @@
 #include "chrome/browser/profiles/profile_attributes_entry.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/themes/theme_properties.h"
+#include "chrome/browser/ui/extensions/hosted_app_browser_controller.h"
 #include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/view_ids.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/tabs/tab_strip.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/grit/theme_resources.h"
 #include "components/signin/core/browser/profile_management_switches.h"
 #include "third_party/skia/include/core/SkColor.h"
@@ -68,8 +70,16 @@ int BrowserNonClientFrameView::GetAvatarIconPadding() {
   return MD::IsNewerMaterialUi() ? 8 : 4;
 }
 
+// static
+int BrowserNonClientFrameView::GetTabstripPadding() {
+  // In Refresh, the apparent padding around the tabstrip is contained within
+  // the tabs and/or new tab button.
+  return MD::IsRefreshUi() ? 0 : 4;
+}
+
 void BrowserNonClientFrameView::OnBrowserViewInitViewsComplete() {
   MaybeObserveTabstrip();
+  OnSingleTabModeChanged();
   UpdateMinimumSize();
 }
 
@@ -88,6 +98,10 @@ bool BrowserNonClientFrameView::ShouldHideTopUIForFullscreen() const {
   return frame()->IsFullscreen();
 }
 
+bool BrowserNonClientFrameView::HasClientEdge() const {
+  return !MD::IsRefreshUi();
+}
+
 gfx::ImageSkia BrowserNonClientFrameView::GetIncognitoAvatarIcon() const {
   const SkColor icon_color = color_utils::PickContrastingColor(
       SK_ColorWHITE, gfx::kChromeIconGrey, GetFrameColor());
@@ -104,7 +118,7 @@ SkColor BrowserNonClientFrameView::GetToolbarTopSeparatorColor() const {
 
 SkColor BrowserNonClientFrameView::GetTabSeparatorColor() const {
   DCHECK(MD::IsRefreshUi());
-  constexpr SkAlpha kTabSeparatorAlpha = 0x6E;  // 43%
+  constexpr SkAlpha kTabSeparatorAlpha = 0x4D;  // 30%
   const SkColor frame_color = GetFrameColor();
   const SkColor base_color =
       color_utils::BlendTowardOppositeLuma(frame_color, SK_AlphaOPAQUE);
@@ -121,9 +135,15 @@ SkColor BrowserNonClientFrameView::GetTabBackgroundColor(TabState state) const {
 }
 
 SkColor BrowserNonClientFrameView::GetTabForegroundColor(TabState state) const {
-  if (MD::IsRefreshUi() && state == TAB_INACTIVE && ShouldPaintAsThemed()) {
-    return color_utils::IsDark(GetFrameColor()) ? SK_ColorWHITE
-                                                : gfx::kGoogleGrey800;
+  if (MD::IsRefreshUi() && state == TAB_INACTIVE &&
+      !GetThemeProvider()->HasCustomColor(
+          ThemeProperties::COLOR_BACKGROUND_TAB_TEXT)) {
+    const SkColor background_color = GetTabBackgroundColor(TAB_INACTIVE);
+    const SkColor default_color = color_utils::IsDark(background_color)
+                                      ? gfx::kGoogleGrey500
+                                      : gfx::kGoogleGrey700;
+    return color_utils::GetColorWithMinimumContrast(default_color,
+                                                    background_color);
   }
 
   const auto color_id = state == TAB_ACTIVE
@@ -141,9 +161,10 @@ void BrowserNonClientFrameView::UpdateClientArea() {}
 void BrowserNonClientFrameView::UpdateMinimumSize() {}
 
 int BrowserNonClientFrameView::GetTabStripLeftInset() const {
+  int left_inset = GetTabstripPadding();
   if (profile_indicator_icon())
-    return 2 * GetAvatarIconPadding() + GetIncognitoAvatarIcon().width();
-  return MD::IsRefreshUi() ? 8 : 4;
+    left_inset += GetAvatarIconPadding() + GetIncognitoAvatarIcon().width();
+  return left_inset;
 }
 
 void BrowserNonClientFrameView::ChildPreferredSizeChanged(views::View* child) {
@@ -177,7 +198,8 @@ bool BrowserNonClientFrameView::IsSingleTabModeAvailable() const {
   // The special color we use won't be visible if there's a frame image, but
   // since it's used to determine constrast of other UI elements, the theme
   // color should be used instead.
-  return MD::IsRefreshUi() && ShouldPaintAsActive() && GetFrameImage().isNull();
+  return base::FeatureList::IsEnabled(features::kSingleTabMode) &&
+         MD::IsRefreshUi() && ShouldPaintAsActive() && GetFrameImage().isNull();
 }
 
 bool BrowserNonClientFrameView::ShouldPaintAsSingleTabMode() const {
@@ -186,6 +208,11 @@ bool BrowserNonClientFrameView::ShouldPaintAsSingleTabMode() const {
 }
 
 SkColor BrowserNonClientFrameView::GetFrameColor(bool active) const {
+  extensions::HostedAppBrowserController* hosted_app_controller =
+      browser_view()->browser()->hosted_app_controller();
+  if (hosted_app_controller && hosted_app_controller->GetThemeColor())
+    return *hosted_app_controller->GetThemeColor();
+
   ThemeProperties::OverwritableByUserThemeProperty color_id;
   if (ShouldPaintAsSingleTabMode()) {
     color_id = ThemeProperties::COLOR_TOOLBAR;
@@ -357,20 +384,16 @@ bool BrowserNonClientFrameView::DoesIntersectRect(const views::View* target,
 
   bool should_leave_to_top_container = false;
 #if defined(OS_CHROMEOS)
-  if (browser_view()->immersive_mode_controller()->IsRevealed()) {
-    // In immersive mode, the caption buttons container is reparented to the
-    // TopContainerView and hence |rect| should not be claimed here.
-    // See BrowserNonClientFrameViewAsh::OnImmersiveRevealStarted().
-    should_leave_to_top_container = true;
-  }
+  // In immersive mode, the caption buttons container is reparented to the
+  // TopContainerView and hence |rect| should not be claimed here.  See
+  // BrowserNonClientFrameViewAsh::OnImmersiveRevealStarted().
+  should_leave_to_top_container =
+      browser_view()->immersive_mode_controller()->IsRevealed();
 #endif  // defined(OS_CHROMEOS)
 
   if (!browser_view()->IsTabStripVisible()) {
-    if (should_leave_to_top_container)
-      return false;
-
     // Claim |rect| if it is above the top of the topmost client area view.
-    return rect.y() < GetTopInset(false);
+    return !should_leave_to_top_container && (rect.y() < GetTopInset(false));
   }
 
   // If the rect is outside the bounds of the client area, claim it.
@@ -385,9 +408,6 @@ bool BrowserNonClientFrameView::DoesIntersectRect(const views::View* target,
   // Otherwise, claim |rect| only if it is above the bottom of the tabstrip in
   // a non-tab portion.
   TabStrip* tabstrip = browser_view()->tabstrip();
-  if (!tabstrip || !browser_view()->IsTabStripVisible())
-    return false;
-
   gfx::RectF rect_in_tabstrip_coords_f(rect);
   View::ConvertRectToTarget(this, tabstrip, &rect_in_tabstrip_coords_f);
   gfx::Rect rect_in_tabstrip_coords =
@@ -402,13 +422,10 @@ bool BrowserNonClientFrameView::DoesIntersectRect(const views::View* target,
     return tabstrip->IsRectInWindowCaption(rect_in_tabstrip_coords);
   }
 
-  if (should_leave_to_top_container)
-    return false;
-
   // We claim |rect| because it is above the bottom of the tabstrip, but
   // not in the tabstrip itself. In particular, the avatar label/button is left
   // of the tabstrip and the window controls are right of the tabstrip.
-  return true;
+  return !should_leave_to_top_container;
 }
 
 void BrowserNonClientFrameView::OnProfileAdded(

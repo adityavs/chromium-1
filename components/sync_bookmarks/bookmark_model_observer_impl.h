@@ -6,10 +6,16 @@
 #define COMPONENTS_SYNC_BOOKMARKS_BOOKMARK_MODEL_OBSERVER_IMPL_H_
 
 #include <set>
+#include <string>
 
 #include "base/callback.h"
 #include "components/bookmarks/browser/bookmark_model_observer.h"
+#include "components/bookmarks/browser/bookmark_node.h"
 #include "url/gurl.h"
+
+namespace syncer {
+class UniquePosition;
+}
 
 namespace sync_bookmarks {
 
@@ -38,6 +44,10 @@ class BookmarkModelObserverImpl : public bookmarks::BookmarkModelObserver {
   void BookmarkNodeAdded(bookmarks::BookmarkModel* model,
                          const bookmarks::BookmarkNode* parent,
                          int index) override;
+  void OnWillRemoveBookmarks(bookmarks::BookmarkModel* model,
+                             const bookmarks::BookmarkNode* parent,
+                             int old_index,
+                             const bookmarks::BookmarkNode* node) override;
   void BookmarkNodeRemoved(bookmarks::BookmarkModel* model,
                            const bookmarks::BookmarkNode* parent,
                            int old_index,
@@ -47,6 +57,8 @@ class BookmarkModelObserverImpl : public bookmarks::BookmarkModelObserver {
                                    const std::set<GURL>& removed_urls) override;
   void BookmarkNodeChanged(bookmarks::BookmarkModel* model,
                            const bookmarks::BookmarkNode* node) override;
+  void BookmarkMetaInfoChanged(bookmarks::BookmarkModel* model,
+                               const bookmarks::BookmarkNode* node) override;
   void BookmarkNodeFaviconChanged(bookmarks::BookmarkModel* model,
                                   const bookmarks::BookmarkNode* node) override;
   void BookmarkNodeChildrenReordered(
@@ -54,6 +66,17 @@ class BookmarkModelObserverImpl : public bookmarks::BookmarkModelObserver {
       const bookmarks::BookmarkNode* node) override;
 
  private:
+  syncer::UniquePosition ComputePosition(const bookmarks::BookmarkNode& parent,
+                                         int index,
+                                         const std::string& sync_id);
+
+  // Processes the deletion of a bookmake node and updates the
+  // |bookmark_tracker_| accordingly. If |node| is a bookmark, it gets marked
+  // as deleted and that it requires a commit. If it's a folder, it recurses
+  // over all children before processing the folder itself.
+  void ProcessDelete(const bookmarks::BookmarkNode* parent,
+                     const bookmarks::BookmarkNode* node);
+
   // Points to the tracker owned by the processor. It keeps the mapping between
   // bookmark nodes and corresponding sync server entities.
   SyncedBookmarkTracker* const bookmark_tracker_;

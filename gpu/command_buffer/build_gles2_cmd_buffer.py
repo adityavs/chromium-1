@@ -663,7 +663,7 @@ _NAMED_TYPE_INFO = {
       'GL_PIXEL_PACK_BUFFER',
     ],
   },
-  'FramebufferParameter': {
+  'FramebufferAttachmentParameter': {
     'type': 'GLenum',
     'valid': [
       'GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE',
@@ -682,6 +682,10 @@ _NAMED_TYPE_INFO = {
       'GL_FRAMEBUFFER_ATTACHMENT_COLOR_ENCODING',
       'GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LAYER',
     ],
+  },
+  'FramebufferParameter' : {
+    'type': 'GLenum',
+    'valid' : [],
   },
   'MatrixMode': {
     'type': 'GLenum',
@@ -1749,6 +1753,8 @@ _NAMED_TYPE_INFO = {
 #               'extension': True.
 # not_shared:   For GENn types, True if objects can't be shared between contexts
 # es3:          ES3 API. True if the function requires an ES3 or WebGL2 context.
+# es31:         ES31 API. True if the function requires an WebGL2Compute
+#               context.
 
 _FUNCTION_INFO = {
   'ActiveTexture': {
@@ -2173,6 +2179,12 @@ _FUNCTION_INFO = {
   'DisableVertexAttribArray': {
     'decoder_func': 'DoDisableVertexAttribArray',
     'impl_func': False,
+    'unit_test': False,
+  },
+  'DispatchCompute': {
+    'cmd_args': 'GLuint num_groups_x, GLuint num_groups_y, GLuint num_groups_z',
+    'trace_level': 2,
+    'es31': True,
     'unit_test': False,
   },
   'DrawArrays': {
@@ -4058,6 +4070,12 @@ _FUNCTION_INFO = {
     'impl_func': True,
     'internal': True,
     'es3': True,
+  },
+  'FramebufferParameteri': {
+    'decoder_func': 'DoFramebufferParameteri',
+    'unit_test': False,
+    'extension': 'MESA_framebuffer_flip_y',
+    'extension_flag': 'mesa_framebuffer_flip_y',
   },
 }
 

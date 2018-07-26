@@ -17,7 +17,6 @@
 <translation id="1668054258064581266">Nachdem Sie Ihr Konto aus Chromium entfernt haben, müssen Sie Ihre geöffneten Tabs möglicherweise neu laden, damit die Änderung wirksam wird.</translation>
 <translation id="1688750314291223739">Richten Sie die Synchronisierung ein, um Ihre personalisierten Browserfunktionen online zu speichern und über Chromium auf jedem Computer darauf zuzugreifen.</translation>
 <translation id="1708666629004767631">Es gibt eine neue, sicherere Version von Chromium.</translation>
-<translation id="1716051742506968">{0,plural, =0{Ein Chromium-Update ist verfügbar}=1{Ein Chromium-Update ist verfügbar}other{Ein Chromium-Update steht seit # Tagen zur Verfügung}}</translation>
 <translation id="1766096484055239003">Laut Ihrem Administrator müssen Sie Chromium neu starten, um ein Update durchzuführen</translation>
 <translation id="1774152462503052664">Chromium im Hintergrund ausführen</translation>
 <translation id="1779356040007214683">Um Chromium sicherer zu machen, haben wir einige Erweiterungen deaktiviert, die nicht im <ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> aufgeführt sind und möglicherweise ohne Ihr Wissen hinzugefügt wurden.</translation>
@@ -26,7 +25,6 @@
 <translation id="1881322772814446296">Sie melden sich mit einem verwalteten Konto an und ermöglichen dessen Administrator Zugriff auf Ihr Chromium-Profil. Ihre Chromium-Daten, wie Apps, Lesezeichen, Verlauf, Passwörter und andere Einstellungen, werden dauerhaft mit <ph name="USER_NAME" /> verknüpft. Sie können diese Daten über das Google Konten-Dashboard löschen, aber nicht mit einem anderen Konto verknüpfen. Wenn Sie Ihre bestehenden Chromium-Daten getrennt verwenden möchten, können Sie ein neues Profil erstellen. <ph name="LEARN_MORE" /></translation>
 <translation id="1929939181775079593">Chromium reagiert nicht. Jetzt neu starten?</translation>
 <translation id="1966382378801805537">Chromium kann den Standardbrowser nicht bestimmen oder festlegen</translation>
-<translation id="1967743265616885482">Es ist bekannt, dass ein Modul mit dem gleichen Namen einen Konflikt mit Chromium verursacht.</translation>
 <translation id="2008474315282236005">Dadurch wird 1 Element von diesem Gerät gelöscht. Wenn Sie Ihre Daten später abrufen möchten, melden Sie sich als <ph name="USER_EMAIL" /> in Chromium an.</translation>
 <translation id="2117378023188580026">Laut Ihrem Administrator sollten Sie Chromium neu starten, um dieses Update durchzuführen</translation>
 <translation id="2119636228670142020">Über &amp;Chromium OS</translation>
@@ -51,7 +49,6 @@
 <translation id="2886012850691518054">Optional: Unterstützen Sie Google bei der Verbesserung von Chromium durch automatisches Senden von Nutzungsstatistiken und Absturzberichten.</translation>
 <translation id="2898082584336937987">Installieren Sie Chromium auf Ihrem Smartphone. Wir senden Ihnen eine SMS an: <ph name="PHONE_NUMBER" />.</translation>
 <translation id="2910007522516064972">Über &amp;Chromium</translation>
-<translation id="2943431542152338750">{0,plural, =1{Chromium innerhalb eines Tages neu starten}other{Chromium innerhalb von # Tagen neu starten}}</translation>
 <translation id="2977470724722393594">Chromium ist auf dem neuesten Stand</translation>
 <translation id="3032787606318309379">Wird zu Chromium hinzugefügt...</translation>
 <translation id="3046695367536568084">Sie können Apps verwenden, wenn Sie in Chromium angemeldet sind. Chromium kann dann Ihre Apps, Lesezeichen, Passwörter, Ihren Verlauf und andere Einstellungen auf Ihren Geräten synchronisieren.</translation>
@@ -92,15 +89,12 @@
 <translation id="4260985389288095068">Schädliche Software wurde auf Ihrem Computer gefunden. Chromium kann diese Software entfernen und Ihre Einstellungen wiederherstellen, sodass Ihr Browser wieder wie gewohnt funktioniert.</translation>
 <translation id="4271805377592243930">Hilfe für Chromium aufrufen</translation>
 <translation id="4285930937574705105">Die Installation konnte aufgrund eines undefinierten Fehlers nicht abgeschlossen werden. Falls Chromium derzeit ausgeführt wird, schließen Sie es bitte und versuchen Sie es erneut.</translation>
-<translation id="4330585738697551178">Es ist bekannt, dass dieses Modul einen Konflikt mit Chromium verursacht.</translation>
 <translation id="4407044323746248786">Chromium trotzdem beenden?</translation>
 <translation id="4415566066719264597">Chromium im Hintergrund ausführen</translation>
 <translation id="4421155425831608516">Die Anmeldung in Chromium wurde vom Administrator dieses Geräts deaktiviert.</translation>
 <translation id="4423735387467980091">Chromium anpassen und einstellen</translation>
-<translation id="4449801103833300785">{0,plural, =1{Chromium wird in einer Stunde neu gestartet}other{Chromium wird in # Stunden neu gestartet}}</translation>
 <translation id="4567424176335768812">Sie sind als <ph name="USER_EMAIL_ADDRESS" /> angemeldet. Auf allen Geräten, auf denen Sie angemeldet sind, sind nun Ihre Lesezeichen, Ihr Verlauf und andere Einstellungen verfügbar.</translation>
 <translation id="459535195905078186">Chromium-Apps</translation>
-<translation id="4604377857208775795">{0,plural, =1{Chromium wird in 1 Minute neu gestartet}other{Chromium wird in # Minuten neu gestartet}}</translation>
 <translation id="4621240073146040695">Fast fertig! Starten Sie Chromium neu, um die Aktualisierung abzuschließen.</translation>
 <translation id="4677944499843243528">Das Profil wird offenbar gerade von einem Chromium-Prozess (<ph name="PROCESS_ID" />) auf einem anderen Computer (<ph name="HOST_NAME" />) verwendet. Das Profil wurde von Chromium gesperrt, damit es nicht beschädigt wird. Wenn Sie sicher sind, dass das Profil nicht von anderen Prozessen verwendet wird, können Sie das Profil entsperren und Chromium neu starten.</translation>
 <translation id="469338717132742108">Hilfe für Chromium OS aufrufen</translation>
@@ -155,12 +149,13 @@
 <translation id="6394232988457703198">Chromium jetzt neu starten.</translation>
 <translation id="6400072781405947421">Chromium funktioniert unter Umständen nicht ordnungsgemäß, da es unter Mac OS X 10.9 nicht mehr unterstützt wird.</translation>
 <translation id="6403826409255603130">Chromium ist ein Webbrowser, der Webseiten und Apps in Sekundenschnelle lädt und dabei äußerst stabil und nutzerfreundlich ist. Dank des integrierten Malware- und Phishing-Schutzes können Sie bedenkenlos im Internet surfen.</translation>
+<translation id="641451971369018375">Funktionen nutzen, die helfen, Chrome für Sie noch besser zu machen</translation>
 <translation id="6457450909262716557">{SECONDS,plural, =1{Chromium wird in 1 Sekunde neu gestartet}other{Chromium wird in # Sekunden neu gestartet}}</translation>
 <translation id="6475912303565314141">Die Erweiterung legt auch die Seite fest, die beim Start von Chromium angezeigt wird.</translation>
 <translation id="6485906693002546646">Ihre E-Mail-Adresse <ph name="PROFILE_EMAIL" /> wird zurzeit für die Synchronisierung Ihrer Chromium-Inhalte verwendet. Wenn Sie Ihre Synchronisierungseinstellungen ändern oder Chromium ohne Google-Konto verwenden möchten, rufen Sie <ph name="SETTINGS_LINK" /> auf.</translation>
 <translation id="6510925080656968729">Chromium deinstallieren</translation>
+<translation id="6570579332384693436">Zur Behebung von Tippfehlern sendet Chromium eingegebenen Text an Google</translation>
 <translation id="6598877126913850652">Zu Chromium-Benachrichtigungseinstellungen wechseln</translation>
-<translation id="6664239887951090350">{0,plural, =0{Chromium wird jetzt neu gestartet}=1{Chromium wird in 1 Sekunde neu gestartet}other{Chromium wird in # Sekunden neu gestartet}}</translation>
 <translation id="6676384891291319759">Internetzugriff</translation>
 <translation id="6717134281241384636">Ihr Profil kann nicht verwendet werden, da es aus einer neueren Version von Chromium stammt.
 
@@ -171,7 +166,6 @@ Einige Funktionen stehen möglicherweise nicht zur Verfügung. Geben Sie bitte e
 <translation id="6857782730669500492">Chromium – <ph name="PAGE_TITLE" /></translation>
 <translation id="6863361426438995919">Google Pay (in Chromium kopiert)</translation>
 <translation id="6893813176749746474">Chromium wurde aktualisiert, Sie haben den Browser jedoch mindestens 30 Tage nicht verwendet.</translation>
-<translation id="6944967875980567883">In Chromium geladene Module</translation>
 <translation id="6964305034639999644">Link in Chromium-Inkognito-Fenster öffnen</translation>
 <translation id="6970811910055250180">Ihr Gerät wird aktualisiert...</translation>
 <translation id="6990124437352146030">Chromium benötigt für diese Website die Berechtigung, auf Ihr Mikrofon zuzugreifen</translation>
@@ -214,10 +208,12 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="7774736947049807614">Authentifizierungszertifikat fehlgeschlagen. Bitte melden Sie sich wieder bei Chromium als <ph name="USER_NAME" /> an oder wenden Sie sich an Ihren Administrator, um weitere Informationen zu erhalten. <ph name="ADDITIONAL_EXPLANATION" /></translation>
 <translation id="7790626492778995050"><ph name="PAGE_TITLE" /> – Chromium Canary</translation>
 <translation id="7867198900892795913">Chromium konnte nicht auf die neueste Version aktualisiert werden. In Ihrer Version fehlen daher einige neue Funktionen und Sicherheitspatches.</translation>
+<translation id="7901117350626490574">Ein neues Update für Chromium ist verfügbar und wird installiert, sobald Sie den Browser neu starten.</translation>
 <translation id="7937630085815544518">Sie waren in Chromium als <ph name="USER_EMAIL_ADDRESS" /> angemeldet. Melden Sie sich bitte wieder mit demselben Konto an.</translation>
 <translation id="7962572577636132072">Chromium wird automatisch aktualisiert, sodass Sie immer über die neueste Version verfügen.</translation>
 <translation id="7975919845073681630">Dies ist eine Zweitinstallation, daher kann Chromium nicht als Standardbrowser festgelegt werden.</translation>
 <translation id="7979877361127045932">Im Chromium-Menü ausblenden</translation>
+<translation id="8013436988911883588">Sobald Chromium Zugriff hat, können Websites Sie um Zugriff bitten.</translation>
 <translation id="8030318113982266900">Ihr Gerät wird auf Kanal <ph name="CHANNEL_NAME" /> aktualisiert...</translation>
 <translation id="8157153840442649507">Chromium wird in dieser Sprache angezeigt</translation>
 <translation id="81770708095080097">Diese Datei ist schädlich und wurde von Chromium blockiert.</translation>
@@ -243,7 +239,6 @@ Weitere Informationen wurden per E-Mail an <ph name="ACCOUNT_EMAIL" /> gesendet.
 <translation id="8897323336392112261">Die Erweiterung legt auch fest, welche Seite beim Start von Chromium angezeigt wird oder wenn Sie auf die Schaltfläche "Startseite" klicken.</translation>
 <translation id="8907580949721785412">Chromium möchte Passwörter anzeigen. Geben Sie Ihr Windows-Passwort ein, um dies zuzulassen.</translation>
 <translation id="8941642502866065432">Chromium kann nicht aktualisiert werden</translation>
-<translation id="8968921422458636175">Chromium speichert dieses Passwort mit <ph name="SAVED_PASSWORD_LINK" />. Sie müssen es sich nicht merken.</translation>
 <translation id="8974095189086268230">Chromium OS wird durch zusätzliche <ph name="BEGIN_LINK_CROS_OSS" />Open-Source-Software<ph name="END_LINK_CROS_OSS" /> möglich gemacht.</translation>
 <translation id="8985587603644336029">Auf diesem Computer war zuvor ein Nutzer mit dem Konto <ph name="ACCOUNT_EMAIL_LAST" /> in Chromium angemeldet. Falls dies nicht Ihr Konto ist, erstellen Sie einen neuen Chromium-Nutzer, um Ihre Daten getrennt zu verwenden.
 

@@ -19,8 +19,12 @@ constexpr base::TimeDelta kLongTaskDiscardingThreshold =
 
 }  // namespace
 
-MetricsHelper::MetricsHelper(WebThreadType thread_type)
+MetricsHelper::MetricsHelper(WebThreadType thread_type,
+                             bool has_cpu_timing_for_each_task)
     : thread_type_(thread_type),
+      has_cpu_timing_for_each_task_(has_cpu_timing_for_each_task),
+      last_known_time_(has_cpu_timing_for_each_task_ ? base::ThreadTicks::Now()
+                                                     : base::ThreadTicks()),
       thread_task_duration_reporter_(
           "RendererScheduler.TaskDurationPerThreadType2"),
       thread_task_cpu_duration_reporter_(
@@ -32,51 +36,60 @@ MetricsHelper::MetricsHelper(WebThreadType thread_type)
       background_thread_task_duration_reporter_(
           "RendererScheduler.TaskDurationPerThreadType2.Background"),
       background_thread_task_cpu_duration_reporter_(
-          "RendererScheduler.TaskCPUDurationPerThreadType2.Background") {}
+          "RendererScheduler.TaskCPUDurationPerThreadType2.Background"),
+      tracked_cpu_duration_reporter_(
+          "Scheduler.Experimental.Renderer.CPUTimePerThread.Tracked"),
+      non_tracked_cpu_duration_reporter_(
+          "Scheduler.Experimental.Renderer.CPUTimePerThread.Untracked") {}
 
 MetricsHelper::~MetricsHelper() {}
 
 bool MetricsHelper::ShouldDiscardTask(
     base::sequence_manager::TaskQueue* queue,
     const base::sequence_manager::TaskQueue::Task& task,
-    base::TimeTicks start_time,
-    base::TimeTicks end_time,
-    base::Optional<base::TimeDelta> thread_time) {
+    const base::sequence_manager::TaskQueue::TaskTiming& task_timing) {
   // TODO(altimin): Investigate the relationship between thread time and
   // wall time for discarded tasks.
-  return end_time - start_time > kLongTaskDiscardingThreshold;
+  return task_timing.wall_duration() > kLongTaskDiscardingThreshold;
 }
 
 void MetricsHelper::RecordCommonTaskMetrics(
     base::sequence_manager::TaskQueue* queue,
     const base::sequence_manager::TaskQueue::Task& task,
-    base::TimeTicks start_time,
-    base::TimeTicks end_time,
-    base::Optional<base::TimeDelta> thread_time) {
-  base::TimeDelta wall_time = end_time - start_time;
-
-  thread_task_duration_reporter_.RecordTask(thread_type_, wall_time);
+    const base::sequence_manager::TaskQueue::TaskTiming& task_timing) {
+  DCHECK(!has_cpu_timing_for_each_task_ || task_timing.has_thread_time());
+  thread_task_duration_reporter_.RecordTask(thread_type_,
+                                            task_timing.wall_duration());
 
   bool backgrounded = internal::ProcessState::Get()->is_process_backgrounded;
 
   if (backgrounded) {
-    background_thread_task_duration_reporter_.RecordTask(thread_type_,
-                                                         wall_time);
+    background_thread_task_duration_reporter_.RecordTask(
+        thread_type_, task_timing.wall_duration());
   } else {
-    foreground_thread_task_duration_reporter_.RecordTask(thread_type_,
-                                                         wall_time);
+    foreground_thread_task_duration_reporter_.RecordTask(
+        thread_type_, task_timing.wall_duration());
   }
 
-  if (!thread_time)
+  if (!task_timing.has_thread_time())
     return;
   thread_task_cpu_duration_reporter_.RecordTask(thread_type_,
-                                                thread_time.value());
+                                                task_timing.thread_duration());
   if (backgrounded) {
     background_thread_task_cpu_duration_reporter_.RecordTask(
-        thread_type_, thread_time.value());
+        thread_type_, task_timing.thread_duration());
   } else {
     foreground_thread_task_cpu_duration_reporter_.RecordTask(
-        thread_type_, thread_time.value());
+        thread_type_, task_timing.thread_duration());
+  }
+
+  if (has_cpu_timing_for_each_task_) {
+    non_tracked_cpu_duration_reporter_.RecordTask(
+        thread_type_, task_timing.start_thread_time() - last_known_time_);
+    tracked_cpu_duration_reporter_.RecordTask(thread_type_,
+                                              task_timing.thread_duration());
+
+    last_known_time_ = task_timing.end_thread_time();
   }
 }
 

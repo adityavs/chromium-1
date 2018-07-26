@@ -4,7 +4,7 @@
 
 #include "third_party/blink/renderer/modules/accessibility/ax_position.h"
 
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
@@ -176,7 +176,6 @@ const AXPosition AXPosition::FromPosition(
                       position_with_affinity.Affinity());
 }
 
-// Only for use by |AXSelection| to represent empty selection ranges.
 AXPosition::AXPosition()
     : container_object_(nullptr),
       text_offset_or_child_index_(0),

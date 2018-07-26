@@ -19,6 +19,7 @@
 #include "chromeos/components/proximity_auth/screenlock_bridge.h"
 #include "chromeos/services/device_sync/public/cpp/device_sync_client.h"
 #include "components/cryptauth/cryptauth_device_manager.h"
+#include "components/cryptauth/network_request_error.h"
 #include "components/cryptauth/remote_device_ref.h"
 #include "components/prefs/pref_change_registrar.h"
 
@@ -115,6 +116,7 @@ class EasyUnlockServiceRegular
                           device_change_result) override;
 
   // device_sync::DeviceSyncClient::Observer:
+  void OnReady() override;
   void OnEnrollmentFinished() override;
   void OnNewDevicesSynced() override;
 
@@ -138,13 +140,13 @@ class EasyUnlockServiceRegular
   // Callback for ToggleEasyUnlock CryptAuth API.
   void OnToggleEasyUnlockApiComplete(
       const cryptauth::ToggleEasyUnlockResponse& response);
-  void OnToggleEasyUnlockApiFailed(const std::string& error_message);
+  void OnToggleEasyUnlockApiFailed(cryptauth::NetworkRequestError error);
 
   void OnTurnOffEasyUnlockCompleted(
-      const base::Optional<std::string>& error_code);
+      device_sync::mojom::NetworkRequestResult result_code);
 
   void OnTurnOffEasyUnlockSuccess();
-  void OnTurnOffEasyUnlockFailure(const std::string& error_message);
+  void OnTurnOffEasyUnlockFailure();
 
   // Called with the user's credentials (e.g. username and password) after the
   // user reauthenticates to begin setup.
@@ -219,14 +221,6 @@ class EasyUnlockServiceRegular
   // the Chromebook is unlocked, we can show the subsequent 'pairing applied'
   // notification.
   bool shown_pairing_changed_notification_;
-
-  // If this service is the first caller on DeviceSyncClient, it won't have
-  // devices cached yet. |is_waiting_for_initial_sync_| is set to true if
-  // DeviceSyncClient has no devices, to indicate that we are waiting for the
-  // initial sync, to be inspected in OnNewDevicesSynced(). OnNewDevicesSynced()
-  // needs to know that it is receiving the initial sync, not a newly forced
-  // one, in order to prevent it from running unrelated logic.
-  bool is_waiting_for_initial_sync_ = false;
 
   // Listens to pref changes.
   PrefChangeRegistrar registrar_;

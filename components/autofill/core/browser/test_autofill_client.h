@@ -14,6 +14,7 @@
 #include "base/i18n/rtl.h"
 #include "base/macros.h"
 #include "components/autofill/core/browser/autofill_client.h"
+#include "components/autofill/core/browser/test_address_normalizer.h"
 #include "components/prefs/pref_service.h"
 #include "components/ukm/test_ukm_recorder.h"
 #include "services/identity/public/cpp/identity_test_environment.h"
@@ -41,6 +42,9 @@ class TestAutofillClient : public AutofillClient {
                         UnmaskCardReason reason,
                         base::WeakPtr<CardUnmaskDelegate> delegate) override;
   void OnUnmaskVerificationResult(PaymentsRpcResult result) override;
+  void ShowLocalCardMigrationPrompt(base::OnceClosure closure) override;
+  void ConfirmSaveAutofillProfile(const AutofillProfile& profile,
+                                  base::OnceClosure callback) override;
   void ConfirmSaveCreditCardLocally(const CreditCard& card,
                                     const base::Closure& callback) override;
   void ConfirmSaveCreditCardToCloud(
@@ -58,6 +62,7 @@ class TestAutofillClient : public AutofillClient {
       const gfx::RectF& element_bounds,
       base::i18n::TextDirection text_direction,
       const std::vector<Suggestion>& suggestions,
+      bool autoselect_first_suggestion,
       base::WeakPtr<AutofillPopupDelegate> delegate) override;
   void UpdateAutofillPopupDataListValues(
       const std::vector<base::string16>& values,
@@ -106,6 +111,7 @@ class TestAutofillClient : public AutofillClient {
  private:
   identity::IdentityTestEnvironment identity_test_env_;
   syncer::SyncService* test_sync_service_ = nullptr;
+  TestAddressNormalizer test_address_normalizer_;
 
   // NULL by default.
   std::unique_ptr<PrefService> prefs_;

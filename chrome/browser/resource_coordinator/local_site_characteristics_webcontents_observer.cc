@@ -6,6 +6,8 @@
 
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/local_site_characteristics_data_store_factory.h"
+#include "chrome/browser/resource_coordinator/time.h"
+#include "chrome/browser/resource_coordinator/utils.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/web_contents.h"
 
@@ -41,7 +43,9 @@ LocalSiteCharacteristicsWebContentsObserver::
     DCHECK(PageSignalReceiver::IsEnabled());
 
     TabLoadTracker::Get()->AddObserver(this);
-    PageSignalReceiver::GetInstance()->AddObserver(this);
+    page_signal_receiver_ = PageSignalReceiver::GetInstance();
+    DCHECK(page_signal_receiver_);
+    page_signal_receiver_->AddObserver(this);
   }
 }
 
@@ -57,6 +61,7 @@ void LocalSiteCharacteristicsWebContentsObserver::OnVisibilityChanged(
     return;
 
   auto rc_visibility = ContentVisibilityToRCVisibility(visibility);
+  UpdateBackgroundedTime(rc_visibility);
   writer_->NotifySiteVisibilityChanged(rc_visibility);
 }
 
@@ -64,7 +69,7 @@ void LocalSiteCharacteristicsWebContentsObserver::WebContentsDestroyed() {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   if (!g_skip_observer_registration_for_testing) {
     TabLoadTracker::Get()->RemoveObserver(this);
-    PageSignalReceiver::GetInstance()->RemoveObserver(this);
+    page_signal_receiver_->RemoveObserver(this);
   }
   writer_.reset();
   writer_origin_ = url::Origin();
@@ -97,8 +102,7 @@ void LocalSiteCharacteristicsWebContentsObserver::DidFinishNavigation(
   writer_.reset();
   writer_origin_ = url::Origin();
 
-  // Only store information for the HTTP(S) sites for now.
-  if (!navigation_handle->GetURL().SchemeIsHTTPOrHTTPS())
+  if (!URLShouldBeStoredInLocalDatabase(navigation_handle->GetURL()))
     return;
 
   Profile* profile =
@@ -107,14 +111,15 @@ void LocalSiteCharacteristicsWebContentsObserver::DidFinishNavigation(
   SiteCharacteristicsDataStore* data_store =
       LocalSiteCharacteristicsDataStoreFactory::GetForProfile(profile);
   DCHECK(data_store);
-  writer_ = data_store->GetWriterForOrigin(
-      new_origin,
-      ContentVisibilityToRCVisibility(web_contents()->GetVisibility()));
+  auto rc_visibility =
+      ContentVisibilityToRCVisibility(web_contents()->GetVisibility());
+  writer_ = data_store->GetWriterForOrigin(new_origin, rc_visibility);
+  UpdateBackgroundedTime(rc_visibility);
 
   // The writer is initially in an unloaded state, load it if necessary.
   if (TabLoadTracker::Get()->GetLoadingState(web_contents()) ==
       LoadingState::LOADED) {
-    writer_->NotifySiteLoaded();
+    OnSiteLoaded();
   }
 
   writer_origin_ = new_origin;
@@ -132,7 +137,8 @@ void LocalSiteCharacteristicsWebContentsObserver::TitleWasSet(
   }
 
   MaybeNotifyBackgroundFeatureUsage(
-      &SiteCharacteristicsDataWriter::NotifyUpdatesTitleInBackground);
+      &SiteCharacteristicsDataWriter::NotifyUpdatesTitleInBackground,
+      FeatureType::kTitleChange);
 }
 
 void LocalSiteCharacteristicsWebContentsObserver::DidUpdateFaviconURL(
@@ -145,7 +151,8 @@ void LocalSiteCharacteristicsWebContentsObserver::DidUpdateFaviconURL(
   }
 
   MaybeNotifyBackgroundFeatureUsage(
-      &SiteCharacteristicsDataWriter::NotifyUpdatesFaviconInBackground);
+      &SiteCharacteristicsDataWriter::NotifyUpdatesFaviconInBackground,
+      FeatureType::kFaviconChange);
 }
 
 void LocalSiteCharacteristicsWebContentsObserver::OnAudioStateChanged(
@@ -156,7 +163,8 @@ void LocalSiteCharacteristicsWebContentsObserver::OnAudioStateChanged(
     return;
 
   MaybeNotifyBackgroundFeatureUsage(
-      &SiteCharacteristicsDataWriter::NotifyUsesAudioInBackground);
+      &SiteCharacteristicsDataWriter::NotifyUsesAudioInBackground,
+      FeatureType::kAudioUsage);
 }
 
 void LocalSiteCharacteristicsWebContentsObserver::OnLoadingStateChange(
@@ -172,9 +180,10 @@ void LocalSiteCharacteristicsWebContentsObserver::OnLoadingStateChange(
 
   // Ignore the transitions from/to an UNLOADED state.
   if (new_loading_state == LoadingState::LOADED) {
-    writer_->NotifySiteLoaded();
+    OnSiteLoaded();
   } else if (old_loading_state == LoadingState::LOADED) {
     writer_->NotifySiteUnloaded();
+    loaded_time_ = base::TimeTicks();
   }
 }
 
@@ -186,24 +195,53 @@ void LocalSiteCharacteristicsWebContentsObserver::
   if (web_contents() != contents)
     return;
 
-  // TODO(sebmarchand): The URL from the page_navigation_id wants to be the
-  //     base of the origin this is saved against.
-  MaybeNotifyBackgroundFeatureUsage(
-      &SiteCharacteristicsDataWriter::NotifyUsesNotificationsInBackground);
+  DCHECK_NE(nullptr, page_signal_receiver_);
+
+  // Don't notify the writer if the origin of this navigation event isn't the
+  // same as the one tracked by the writer.
+  if ((page_signal_receiver_->GetNavigationIDForWebContents(contents) ==
+       page_navigation_id.navigation_id) ||
+      url::Origin::Create(GURL(page_navigation_id.url))
+          .IsSameOriginWith(writer_origin_)) {
+    MaybeNotifyBackgroundFeatureUsage(
+        &SiteCharacteristicsDataWriter::NotifyUsesNotificationsInBackground,
+        FeatureType::kNotificationUsage);
+  }
 }
 
-bool LocalSiteCharacteristicsWebContentsObserver::
-    ShouldIgnoreFeatureUsageEvent() {
+bool LocalSiteCharacteristicsWebContentsObserver::ShouldIgnoreFeatureUsageEvent(
+    FeatureType feature_type) {
   // The feature usage should be ignored if there's no writer for this tab.
   if (!writer_)
     return true;
 
-  // Features happening before the site gets loaded are also ignored.
-  // TODO(sebmarchand): Consider recording audio/notification usage before the
-  // site gets fully loaded.
-  if (TabLoadTracker::Get()->GetLoadingState(web_contents()) !=
-      LoadingState::LOADED) {
+  // Ignore all features happening before the website gets fully loaded except
+  // for the non-persistent notifications.
+  if (feature_type != FeatureType::kNotificationUsage &&
+      TabLoadTracker::Get()->GetLoadingState(web_contents()) !=
+          LoadingState::LOADED) {
     return true;
+  }
+
+  // Ignore events if the tab is not in background.
+  if (ContentVisibilityToRCVisibility(web_contents()->GetVisibility()) !=
+      TabVisibility::kBackground) {
+    return true;
+  }
+
+  if (feature_type == FeatureType::kTitleChange ||
+      feature_type == FeatureType::kFaviconChange) {
+    DCHECK(!loaded_time_.is_null());
+    if (NowTicks() - loaded_time_ < GetStaticSiteCharacteristicsDatabaseParams()
+                                        .title_or_favicon_change_grace_period) {
+      return true;
+    }
+  } else if (feature_type == FeatureType::kAudioUsage) {
+    DCHECK(!backgrounded_time_.is_null());
+    if (NowTicks() - backgrounded_time_ <
+        GetStaticSiteCharacteristicsDatabaseParams().audio_usage_grace_period) {
+      return true;
+    }
   }
 
   return false;
@@ -211,15 +249,28 @@ bool LocalSiteCharacteristicsWebContentsObserver::
 
 void LocalSiteCharacteristicsWebContentsObserver::
     MaybeNotifyBackgroundFeatureUsage(
-        void (SiteCharacteristicsDataWriter::*method)()) {
+        void (SiteCharacteristicsDataWriter::*method)(),
+        FeatureType feature_type) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  if (ShouldIgnoreFeatureUsageEvent())
+  if (ShouldIgnoreFeatureUsageEvent(feature_type))
     return;
 
-  if (ContentVisibilityToRCVisibility(web_contents()->GetVisibility()) ==
-      TabVisibility::kBackground) {
     (writer_.get()->*method)();
+}
+
+void LocalSiteCharacteristicsWebContentsObserver::OnSiteLoaded() {
+  DCHECK(writer_);
+  writer_->NotifySiteLoaded();
+  loaded_time_ = NowTicks();
+}
+
+void LocalSiteCharacteristicsWebContentsObserver::UpdateBackgroundedTime(
+    TabVisibility visibility) {
+  if (visibility == TabVisibility::kBackground) {
+    backgrounded_time_ = NowTicks();
+  } else {
+    backgrounded_time_ = base::TimeTicks();
   }
 }
 

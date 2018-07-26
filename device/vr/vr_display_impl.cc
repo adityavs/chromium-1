@@ -17,14 +17,13 @@ namespace device {
 
 VRDisplayImpl::VRDisplayImpl(
     VRDeviceBase* device,
-    mojom::VRMagicWindowProviderRequest magic_window_request,
+    mojom::XRFrameDataProviderRequest magic_window_request,
+    mojom::XREnviromentIntegrationProviderRequest enviroment_request,
     mojom::XRSessionControllerRequest session_request)
-    : magic_window_binding_(this),
-      session_controller_binding_(this),
+    : magic_window_binding_(this, std::move(magic_window_request)),
+      enviroment_binding_(this, std::move(enviroment_request)),
+      session_controller_binding_(this, std::move(session_request)),
       device_(device) {
-  magic_window_binding_.Bind(std::move(magic_window_request));
-  session_controller_binding_.Bind(std::move(session_request));
-
   // Unretained is safe because the binding will close when we are destroyed,
   // so we won't receive any more callbacks after that.
   session_controller_binding_.set_connection_error_handler(base::BindOnce(
@@ -35,27 +34,21 @@ VRDisplayImpl::~VRDisplayImpl() = default;
 
 // Gets frame data for sessions.
 void VRDisplayImpl::GetFrameData(
-    mojom::VRMagicWindowProvider::GetFrameDataCallback callback) {
+    mojom::XRFrameDataProvider::GetFrameDataCallback callback) {
   if (device_->HasExclusiveSession() || restrict_frame_data_) {
     std::move(callback).Run(nullptr);
     return;
   }
 
-  // If a valid frame_size has been set, use the GetFrameData with session
-  // geometry.
-  if (!session_frame_size_.IsEmpty()) {
-    device_->GetFrameData(session_frame_size_, session_rotation_,
-                          std::move(callback));
-  } else {
-    device_->GetFrameData(std::move(callback));
-  }
+  device_->GetFrameData(std::move(callback));
 }
 
 void VRDisplayImpl::UpdateSessionGeometry(const gfx::Size& frame_size,
                                           display::Display::Rotation rotation) {
   // Check for a valid frame size.
-  // While Mojo should handle negative values, we also do not want to allow 0.
-  // TODO(https://crbug.com/841062): Reconsider how we check the sizes.
+
+  // TODO(https://crbug.com/841062, https://crbug.com/836496): Reconsider how we
+  // check the sizes.
   if (frame_size.width() <= 0 || frame_size.height() <= 0 ||
       frame_size.width() > kMaxImageHeightOrWidth ||
       frame_size.height() > kMaxImageHeightOrWidth) {
@@ -69,7 +62,7 @@ void VRDisplayImpl::UpdateSessionGeometry(const gfx::Size& frame_size,
 
 void VRDisplayImpl::RequestHitTest(
     mojom::XRRayPtr ray,
-    mojom::VRMagicWindowProvider::RequestHitTestCallback callback) {
+    mojom::XREnviromentIntegrationProvider::RequestHitTestCallback callback) {
   if (restrict_frame_data_) {
     std::move(callback).Run(base::nullopt);
     return;

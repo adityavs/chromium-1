@@ -22,6 +22,7 @@
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/runtime_call_stats.h"
 #include "third_party/blink/renderer/platform/bindings/v8_object_constructor.h"
+#include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/wtf/get_ptr.h"
 
 namespace blink {
@@ -305,6 +306,133 @@ static void doNotCheckSecurityUnforgeableVoidMethodOriginSafeMethodGetter(const 
   }
 }
 
+static void doNotCheckSecurityVoidOverloadMethod1Method(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  TestInterfaceCheckSecurity* impl = V8TestInterfaceCheckSecurity::ToImpl(info.Holder());
+
+  V8StringResource<> argument1;
+  V8StringResource<> argument2;
+  argument1 = info[0];
+  if (!argument1.Prepare())
+    return;
+
+  argument2 = info[1];
+  if (!argument2.Prepare())
+    return;
+
+  impl->doNotCheckSecurityVoidOverloadMethod(argument1, argument2);
+}
+
+static void doNotCheckSecurityVoidOverloadMethod2Method(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterfaceCheckSecurity", "doNotCheckSecurityVoidOverloadMethod");
+
+  TestInterfaceCheckSecurity* impl = V8TestInterfaceCheckSecurity::ToImpl(info.Holder());
+
+  V8StringResource<> argument1;
+  int32_t argument2;
+  int numArgsPassed = info.Length();
+  while (numArgsPassed > 0) {
+    if (!info[numArgsPassed - 1]->IsUndefined())
+      break;
+    --numArgsPassed;
+  }
+  argument1 = info[0];
+  if (!argument1.Prepare())
+    return;
+
+  if (UNLIKELY(numArgsPassed <= 1)) {
+    impl->doNotCheckSecurityVoidOverloadMethod(argument1);
+    return;
+  }
+  argument2 = NativeValueTraits<IDLLong>::NativeValue(info.GetIsolate(), info[1], exceptionState, kNormalConversion);
+  if (exceptionState.HadException())
+    return;
+
+  impl->doNotCheckSecurityVoidOverloadMethod(argument1, argument2);
+}
+
+static int doNotCheckSecurityVoidOverloadMethodMethodLength() {
+  if (RuntimeEnabledFeatures::FeatureNameEnabled()) {
+    return 1;
+  }
+  return 2;
+}
+
+static void doNotCheckSecurityVoidOverloadMethodMethod(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  bool isArityError = false;
+
+  switch (std::min(2, info.Length())) {
+    case 1:
+      if (RuntimeEnabledFeatures::FeatureNameEnabled()) {
+        if (true) {
+          doNotCheckSecurityVoidOverloadMethod2Method(info);
+          return;
+        }
+      }
+      break;
+    case 2:
+      if (RuntimeEnabledFeatures::FeatureNameEnabled()) {
+        if (info[1]->IsUndefined()) {
+          doNotCheckSecurityVoidOverloadMethod2Method(info);
+          return;
+        }
+      }
+      if (RuntimeEnabledFeatures::FeatureNameEnabled()) {
+        if (info[1]->IsNumber()) {
+          doNotCheckSecurityVoidOverloadMethod2Method(info);
+          return;
+        }
+      }
+      if (true) {
+        doNotCheckSecurityVoidOverloadMethod1Method(info);
+        return;
+      }
+      if (RuntimeEnabledFeatures::FeatureNameEnabled()) {
+        if (true) {
+          doNotCheckSecurityVoidOverloadMethod2Method(info);
+          return;
+        }
+      }
+      break;
+    default:
+      isArityError = true;
+  }
+
+  ExceptionState exceptionState(info.GetIsolate(), ExceptionState::kExecutionContext, "TestInterfaceCheckSecurity", "doNotCheckSecurityVoidOverloadMethod");
+  if (isArityError) {
+    if (info.Length() < TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodMethodLength()) {
+      exceptionState.ThrowTypeError(ExceptionMessages::NotEnoughArguments(TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodMethodLength(), info.Length()));
+      return;
+    }
+  }
+  exceptionState.ThrowTypeError("No function was found that matched the signature provided.");
+}
+
+static void doNotCheckSecurityVoidOverloadMethodOriginSafeMethodGetter(const v8::PropertyCallbackInfo<v8::Value>& info) {
+  static int domTemplateKey; // This address is used for a key to look up the dom template.
+  V8PerIsolateData* data = V8PerIsolateData::From(info.GetIsolate());
+  const DOMWrapperWorld& world = DOMWrapperWorld::World(info.GetIsolate()->GetCurrentContext());
+  v8::Local<v8::FunctionTemplate> interfaceTemplate = data->FindInterfaceTemplate(world, &V8TestInterfaceCheckSecurity::wrapperTypeInfo);
+  v8::Local<v8::Signature> signature = v8::Signature::New(info.GetIsolate(), interfaceTemplate);
+
+  v8::Local<v8::FunctionTemplate> methodTemplate = data->FindOrCreateOperationTemplate(world, &domTemplateKey, V8TestInterfaceCheckSecurity::doNotCheckSecurityVoidOverloadMethodMethodCallback, V8Undefined(), signature, TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodMethodLength());
+  // Return the function by default, unless the user script has overwritten it.
+  V8SetReturnValue(info, methodTemplate->GetFunction(info.GetIsolate()->GetCurrentContext()).ToLocalChecked());
+
+  TestInterfaceCheckSecurity* impl = V8TestInterfaceCheckSecurity::ToImpl(info.Holder());
+  if (!BindingSecurity::ShouldAllowAccessTo(CurrentDOMWindow(info.GetIsolate()), impl, BindingSecurity::ErrorReportOption::kDoNotReport)) {
+    return;
+  }
+
+  // {{method.name}} must be same with |methodName| (=name) in
+  // {{cpp_class}}OriginSafeMethodSetter defined in interface.cpp.tmpl.
+  V8PrivateProperty::Symbol propertySymbol =
+      V8PrivateProperty::GetSymbol(info.GetIsolate(), "doNotCheckSecurityVoidOverloadMethod");
+  v8::Local<v8::Object> holder = v8::Local<v8::Object>::Cast(info.Holder());
+  if (propertySymbol.HasValue(holder)) {
+    V8SetReturnValue(info, propertySymbol.GetOrUndefined(holder));
+  }
+}
+
 static void TestInterfaceCheckSecurityOriginSafeMethodSetter(v8::Local<v8::Name> name, v8::Local<v8::Value> v8Value, const v8::PropertyCallbackInfo<void>& info) {
   if (!name->IsString())
     return;
@@ -355,6 +483,7 @@ static const struct {
   {"doNotCheckSecurityVoidMethod", &TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidMethodOriginSafeMethodGetter, nullptr},
   {"doNotCheckSecurityPerWorldBindingsVoidMethod", &TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityPerWorldBindingsVoidMethodOriginSafeMethodGetter, nullptr},
   {"doNotCheckSecurityUnforgeableVoidMethod", &TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityUnforgeableVoidMethodOriginSafeMethodGetter, nullptr},
+  {"doNotCheckSecurityVoidOverloadMethod", &TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodOriginSafeMethodGetter, nullptr},
 };
 } // namespace TestInterfaceCheckSecurityV8Internal
 
@@ -466,6 +595,18 @@ void V8TestInterfaceCheckSecurity::doNotCheckSecurityUnforgeableVoidMethodOrigin
   RUNTIME_CALL_TIMER_SCOPE_DISABLED_BY_DEFAULT(info.GetIsolate(), "Blink_TestInterfaceCheckSecurity_doNotCheckSecurityUnforgeableVoidMethod_OriginSafeMethodGetter");
 
   TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityUnforgeableVoidMethodOriginSafeMethodGetter(info);
+}
+
+void V8TestInterfaceCheckSecurity::doNotCheckSecurityVoidOverloadMethodMethodCallback(const v8::FunctionCallbackInfo<v8::Value>& info) {
+  RUNTIME_CALL_TIMER_SCOPE_DISABLED_BY_DEFAULT(info.GetIsolate(), "Blink_TestInterfaceCheckSecurity_doNotCheckSecurityVoidOverloadMethod");
+
+  TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodMethod(info);
+}
+
+void V8TestInterfaceCheckSecurity::doNotCheckSecurityVoidOverloadMethodOriginSafeMethodGetterCallback(v8::Local<v8::Name>, const v8::PropertyCallbackInfo<v8::Value>& info) {
+  RUNTIME_CALL_TIMER_SCOPE_DISABLED_BY_DEFAULT(info.GetIsolate(), "Blink_TestInterfaceCheckSecurity_doNotCheckSecurityVoidOverloadMethod_OriginSafeMethodGetter");
+
+  TestInterfaceCheckSecurityV8Internal::doNotCheckSecurityVoidOverloadMethodOriginSafeMethodGetter(info);
 }
 
 void V8TestInterfaceCheckSecurity::TestInterfaceCheckSecurityOriginSafeMethodSetterCallback(v8::Local<v8::Name> name, v8::Local<v8::Value> v8Value, const v8::PropertyCallbackInfo<void>& info) {
@@ -623,6 +764,11 @@ static void installV8TestInterfaceCheckSecurityTemplate(
       {"doNotCheckSecurityUnforgeableVoidMethod", V8TestInterfaceCheckSecurity::doNotCheckSecurityUnforgeableVoidMethodOriginSafeMethodGetterCallback, nullptr, static_cast<v8::PropertyAttribute>(v8::ReadOnly | v8::DontDelete), V8DOMConfiguration::kOnInstance, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kHasSideEffect, V8DOMConfiguration::kAllWorlds}
   };
   for (const auto& attributeConfig : doNotCheckSecurityUnforgeableVoidMethodOriginSafeAttributeConfiguration)
+    V8DOMConfiguration::InstallAttribute(isolate, world, instanceTemplate, prototypeTemplate, attributeConfig);
+  static const V8DOMConfiguration::AttributeConfiguration doNotCheckSecurityVoidOverloadMethodOriginSafeAttributeConfiguration[] = {
+      {"doNotCheckSecurityVoidOverloadMethod", V8TestInterfaceCheckSecurity::doNotCheckSecurityVoidOverloadMethodOriginSafeMethodGetterCallback, V8TestInterfaceCheckSecurity::TestInterfaceCheckSecurityOriginSafeMethodSetterCallback, static_cast<v8::PropertyAttribute>(v8::None), V8DOMConfiguration::kOnInstance, V8DOMConfiguration::kCheckHolder, V8DOMConfiguration::kHasSideEffect, V8DOMConfiguration::kAllWorlds}
+  };
+  for (const auto& attributeConfig : doNotCheckSecurityVoidOverloadMethodOriginSafeAttributeConfiguration)
     V8DOMConfiguration::InstallAttribute(isolate, world, instanceTemplate, prototypeTemplate, attributeConfig);
 
   V8TestInterfaceCheckSecurity::InstallRuntimeEnabledFeaturesOnTemplate(

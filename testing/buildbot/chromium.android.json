@@ -34,7 +34,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -69,7 +68,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -104,7 +102,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -139,7 +136,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 600,
           "output_links": [
             {
               "link": [
@@ -174,7 +170,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -288,7 +283,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -323,7 +317,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -358,7 +351,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -393,7 +385,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 600,
           "output_links": [
             {
               "link": [
@@ -428,7 +419,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -725,7 +715,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 180,
           "output_links": [
             {
               "link": [
@@ -1070,7 +1059,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -1114,7 +1102,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -1202,7 +1189,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -1290,7 +1276,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -1335,7 +1320,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -1380,7 +1364,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -1425,7 +1408,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -1685,7 +1667,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -1815,7 +1796,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -1902,7 +1882,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -2204,7 +2183,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -2291,7 +2269,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -2335,7 +2312,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -2379,7 +2355,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -2467,7 +2442,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -2640,7 +2614,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 180,
           "output_links": [
             {
               "link": [
@@ -2813,7 +2786,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -3221,7 +3193,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -3486,7 +3457,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -3575,7 +3545,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -3664,7 +3633,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -3709,7 +3677,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 2400,
           "output_links": [
             {
               "link": [
@@ -3720,7 +3687,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -3755,7 +3722,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -3800,7 +3766,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 600,
           "output_links": [
             {
               "link": [
@@ -3845,7 +3810,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -3891,7 +3855,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -3902,7 +3865,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -3937,7 +3900,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -3948,7 +3910,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 3
         },
         "test": "content_shell_test_apk"
       },
@@ -3983,7 +3945,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -4073,7 +4034,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -4162,7 +4122,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -4251,7 +4210,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -4340,7 +4298,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -4385,7 +4342,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -4474,7 +4430,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -4519,7 +4474,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -4608,7 +4562,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -4785,7 +4738,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -4874,7 +4826,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -4919,7 +4870,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -4964,7 +4914,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -5010,7 +4959,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -5055,7 +5003,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -5188,7 +5135,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -5233,7 +5179,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -5278,7 +5223,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -5323,7 +5267,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -5368,7 +5311,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -5413,7 +5355,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -5424,7 +5365,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -5503,7 +5444,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -5548,7 +5488,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -6269,7 +6208,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -6314,7 +6253,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -6325,7 +6264,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -6362,7 +6301,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1920,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -6543,7 +6482,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -6554,7 +6493,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -6600,7 +6539,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 3
         },
         "test": "content_shell_test_apk"
       },
@@ -6906,7 +6845,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -7446,7 +7385,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -7581,7 +7520,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -7626,7 +7565,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -7717,7 +7656,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -8088,7 +8027,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -8359,7 +8298,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 7
         },
         "test": "webview_instrumentation_test_apk"
       },
@@ -8443,7 +8382,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -8533,7 +8472,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 600,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -8803,7 +8742,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -8983,7 +8922,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9028,7 +8967,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9039,7 +8978,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -9074,7 +9013,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9119,7 +9058,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 600,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9164,7 +9103,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9210,7 +9149,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9221,7 +9160,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -9256,7 +9195,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9267,7 +9206,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 3
         },
         "test": "content_shell_test_apk"
       },
@@ -9302,7 +9241,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9483,7 +9422,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9573,7 +9512,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9798,7 +9737,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 960,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -9843,7 +9782,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10023,7 +9962,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10113,7 +10052,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10248,7 +10187,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10293,7 +10232,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10339,7 +10278,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10384,7 +10323,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10519,7 +10458,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10564,7 +10503,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10744,7 +10683,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10755,7 +10694,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -10835,7 +10774,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -10880,7 +10819,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -11015,7 +10954,7 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
+          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -11026,7 +10965,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 7
         },
         "test": "webview_instrumentation_test_apk"
       },
@@ -11637,7 +11576,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -11682,7 +11621,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -11906,7 +11845,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -11917,7 +11856,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -12261,7 +12200,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -12789,7 +12728,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -12921,7 +12860,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -12965,7 +12904,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -13054,7 +12993,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -13417,7 +13356,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -13671,7 +13610,7 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
+          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -13682,7 +13621,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 8
+          "shards": 7
         },
         "test": "webview_instrumentation_test_apk"
       },
@@ -13765,7 +13704,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -13854,7 +13792,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 600,
           "output_links": [
             {
               "link": [
@@ -14119,7 +14056,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -14208,7 +14144,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -14297,7 +14232,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -14342,7 +14276,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -14353,7 +14286,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -14388,7 +14321,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -14433,7 +14365,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 600,
           "output_links": [
             {
               "link": [
@@ -14478,7 +14409,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -14524,7 +14454,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -14535,7 +14464,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -14570,7 +14499,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -14581,7 +14509,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 3
         },
         "test": "content_shell_test_apk"
       },
@@ -14616,7 +14544,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -14706,7 +14633,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -14795,7 +14721,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -14884,7 +14809,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -14973,7 +14897,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -15018,7 +14941,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -15107,7 +15029,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -15152,7 +15073,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -15329,7 +15249,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -15418,7 +15337,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -15507,7 +15425,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -15552,7 +15469,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -15597,7 +15513,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -15643,7 +15558,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 60,
           "output_links": [
             {
               "link": [
@@ -15688,7 +15602,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -15821,7 +15734,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -15866,7 +15778,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -15911,7 +15822,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -15956,7 +15866,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -16001,7 +15910,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -16046,7 +15954,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -16057,7 +15964,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -16136,7 +16043,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -16181,7 +16087,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -16314,7 +16219,6 @@
             }
           ],
           "expiration": 10800,
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -16325,7 +16229,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 7
         },
         "test": "webview_instrumentation_test_apk"
       },
@@ -16389,11 +16293,11 @@
             "--bucket",
             "chromium-result-details",
             "--test-name",
-            "chrome_public_test_vr_apk-pixelxl-cardboard-nougat"
+            "chrome_public_test_vr_apk-ddready-cardboard"
           ],
           "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
         },
-        "name": "chrome_public_test_vr_apk-pixelxl-cardboard-nougat",
+        "name": "chrome_public_test_vr_apk-ddready-cardboard",
         "swarming": {
           "can_use_on_swarming_builders": true,
           "cipd_packages": [
@@ -16427,11 +16331,11 @@
             "--bucket",
             "chromium-result-details",
             "--test-name",
-            "chrome_public_test_vr_apk-pixelxl-ddview-nougat"
+            "chrome_public_test_vr_apk-ddready-ddview"
           ],
           "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
         },
-        "name": "chrome_public_test_vr_apk-pixelxl-ddview-nougat",
+        "name": "chrome_public_test_vr_apk-ddready-ddview",
         "swarming": {
           "can_use_on_swarming_builders": true,
           "cipd_packages": [
@@ -16467,11 +16371,11 @@
             "--bucket",
             "chromium-result-details",
             "--test-name",
-            "chrome_public_test_vr_apk-pixelxl-ddview-nougat-donenabled"
+            "chrome_public_test_vr_apk-ddready-ddview-donenabled"
           ],
           "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
         },
-        "name": "chrome_public_test_vr_apk-pixelxl-ddview-nougat-donenabled",
+        "name": "chrome_public_test_vr_apk-ddready-ddview-donenabled",
         "swarming": {
           "can_use_on_swarming_builders": true,
           "cipd_packages": [
@@ -16492,6 +16396,241 @@
           "hard_timeout": 1800
         },
         "test": "chrome_public_test_vr_apk"
+      }
+    ]
+  },
+  "Oreo Phone Tester": {
+    "gtest_tests": [
+      {
+        "args": [
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "experiment_percentage": 100,
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
+            "chrome_public_test_apk"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "OPR3.170623.008",
+              "device_type": "marlin",
+              "os": "Android"
+            }
+          ],
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ],
+          "shards": 5
+        },
+        "test": "chrome_public_test_apk"
+      },
+      {
+        "args": [
+          "--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_cardboard_skipdon_setupcomplete.json",
+          "--replace-system-package=com.google.vr.vrcore,//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk",
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
+            "chrome_public_test_vr_apk-ddready-cardboard"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "name": "chrome_public_test_vr_apk-ddready-cardboard",
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "OPR3.170623.008",
+              "device_type": "marlin",
+              "os": "Android"
+            }
+          ],
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ]
+        },
+        "test": "chrome_public_test_vr_apk"
+      },
+      {
+        "args": [
+          "--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_ddview_skipdon_setupcomplete.json",
+          "--replace-system-package=com.google.vr.vrcore,//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk",
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
+            "chrome_public_test_vr_apk-ddready-ddview"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "name": "chrome_public_test_vr_apk-ddready-ddview",
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "OPR3.170623.008",
+              "device_type": "marlin",
+              "os": "Android"
+            }
+          ],
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ]
+        },
+        "test": "chrome_public_test_vr_apk"
+      },
+      {
+        "args": [
+          "--shared-prefs-file=//chrome/android/shared_preference_files/test/vr_ddview_don_setupcomplete.json",
+          "--replace-system-package=com.google.vr.vrcore,//third_party/gvr-android-sdk/test-apks/vr_services/vr_services_current.apk",
+          "--annotation=Restriction=DON_Enabled",
+          "--don-enabled",
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
+            "chrome_public_test_vr_apk-ddready-ddview-donenabled"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "name": "chrome_public_test_vr_apk-ddready-ddview-donenabled",
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "OPR3.170623.008",
+              "device_type": "marlin",
+              "os": "Android"
+            }
+          ],
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ]
+        },
+        "test": "chrome_public_test_vr_apk"
+      },
+      {
+        "args": [
+          "--gs-results-bucket=chromium-result-details",
+          "--recover-devices"
+        ],
+        "experiment_percentage": 100,
+        "merge": {
+          "args": [
+            "--bucket",
+            "chromium-result-details",
+            "--test-name",
+            "webview_instrumentation_test_apk"
+          ],
+          "script": "//build/android/pylib/results/presentation/test_results_presentation.py"
+        },
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/logdog/butler/${platform}",
+              "location": "bin",
+              "revision": "git_revision:ff387eadf445b24c935f1cf7d6ddd279f8a6b04c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "device_os": "OPR3.170623.008",
+              "device_type": "marlin",
+              "os": "Android"
+            }
+          ],
+          "expiration": 10800,
+          "output_links": [
+            {
+              "link": [
+                "https://luci-logdog.appspot.com/v/?s",
+                "=android%2Fswarming%2Flogcats%2F",
+                "${TASK_ID}%2F%2B%2Funified_logcats"
+              ],
+              "name": "shard #${SHARD_INDEX} logcats"
+            }
+          ],
+          "shards": 5
+        },
+        "test": "webview_instrumentation_test_apk"
       }
     ]
   },
@@ -16660,7 +16799,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 180,
           "output_links": [
             {
               "link": [
@@ -16679,7 +16817,6 @@
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
-        "experiment_percentage": 100,
         "merge": {
           "args": [
             "--bucket",
@@ -17006,7 +17143,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -17050,7 +17186,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -17097,7 +17232,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1920,
           "output_links": [
             {
               "link": [
@@ -17141,7 +17275,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -17228,7 +17361,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -17273,7 +17405,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -17318,7 +17449,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -17363,7 +17493,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -17623,7 +17752,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -17753,7 +17881,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -17840,7 +17967,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -18142,7 +18268,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -18229,7 +18354,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -18273,7 +18397,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -18317,7 +18440,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -18405,7 +18527,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -18578,7 +18699,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 180,
           "output_links": [
             {
               "link": [
@@ -18751,7 +18871,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -19029,6 +19148,7 @@
       {
         "isolate_name": "monochrome_apk_checker",
         "name": "monochrome_apk_checker",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "dimension_sets": [
@@ -19219,7 +19339,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -19306,7 +19425,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -19325,7 +19443,6 @@
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
-        "experiment_percentage": 100,
         "merge": {
           "args": [
             "--bucket",
@@ -19652,7 +19769,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -19697,7 +19813,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1500,
           "output_links": [
             {
               "link": [
@@ -19708,7 +19823,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 10
+          "shards": 20
         },
         "test": "chrome_public_test_apk"
       },
@@ -19744,7 +19859,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -19788,7 +19902,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -19832,7 +19945,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -19876,7 +19988,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -19921,7 +20032,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -19932,7 +20042,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 6
+          "shards": 9
         },
         "test": "content_browsertests"
       },
@@ -19966,7 +20076,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -20011,7 +20120,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -20099,7 +20207,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -20272,7 +20379,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -20402,7 +20508,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 120,
           "output_links": [
             {
               "link": [
@@ -20489,7 +20594,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -20791,7 +20895,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 900,
           "output_links": [
             {
               "link": [
@@ -20878,7 +20981,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -20922,7 +21024,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -20966,7 +21067,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1800,
           "output_links": [
             {
               "link": [
@@ -21054,7 +21154,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 300,
           "output_links": [
             {
               "link": [
@@ -21399,7 +21498,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -21410,7 +21508,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 2
+          "shards": 5
         },
         "test": "unit_tests"
       },
@@ -21487,7 +21585,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -21531,7 +21628,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 960,
           "output_links": [
             {
               "link": [
@@ -21661,7 +21757,6 @@
               "os": "Android"
             }
           ],
-          "hard_timeout": 1200,
           "output_links": [
             {
               "link": [
@@ -21672,7 +21767,7 @@
               "name": "shard #${SHARD_INDEX} logcats"
             }
           ],
-          "shards": 8
+          "shards": 7
         },
         "test": "webview_instrumentation_test_apk"
       },
@@ -21724,6 +21819,7 @@
       {
         "isolate_name": "components_perftests",
         "name": "components_perftests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "dimension_sets": [
@@ -21738,6 +21834,7 @@
       {
         "isolate_name": "monochrome_apk_checker",
         "name": "monochrome_apk_checker",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "dimension_sets": [
@@ -21756,6 +21853,7 @@
         ],
         "isolate_name": "telemetry_perf_unittests",
         "name": "telemetry_perf_unittests",
+        "only_retry_failed_tests": true,
         "swarming": {
           "can_use_on_swarming_builders": true,
           "dimension_sets": [
@@ -21766,7 +21864,7 @@
               "temp_band": "<30"
             }
           ],
-          "hard_timeout": 1500,
+          "hard_timeout": 960,
           "shards": 15
         }
       }

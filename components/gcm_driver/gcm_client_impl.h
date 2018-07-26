@@ -46,6 +46,10 @@ namespace net {
 class URLRequestContext;
 }  // namespace net
 
+namespace network {
+class SharedURLLoaderFactory;
+}  // namespace network
+
 namespace gcm {
 
 class CheckinRequest;
@@ -110,6 +114,7 @@ class GCMClientImpl
       const scoped_refptr<base::SequencedTaskRunner>& blocking_task_runner,
       const scoped_refptr<net::URLRequestContextGetter>&
           url_request_context_getter,
+      const scoped_refptr<network::SharedURLLoaderFactory>& url_loader_factory,
       std::unique_ptr<Encryptor> encryptor,
       GCMClient::Delegate* delegate) override;
   void Start(StartMode start_mode) override;
@@ -133,7 +138,8 @@ class GCMClientImpl
   void UpdateAccountMapping(const AccountMapping& account_mapping) override;
   void RemoveAccountMapping(const std::string& account_id) override;
   void SetLastTokenFetchTime(const base::Time& time) override;
-  void UpdateHeartbeatTimer(std::unique_ptr<base::Timer> timer) override;
+  void UpdateHeartbeatTimer(
+      std::unique_ptr<base::RetainingOneShotTimer> timer) override;
   void AddInstanceIDData(const std::string& app_id,
                          const std::string& instance_id,
                          const std::string& extra_data) override;
@@ -364,6 +370,7 @@ class GCMClientImpl
 
   std::unique_ptr<ConnectionFactory> connection_factory_;
   scoped_refptr<net::URLRequestContextGetter> url_request_context_getter_;
+  scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
   // Controls receiving and sending of packets and reliable message queueing.
   // Must be destroyed before |network_session_|.

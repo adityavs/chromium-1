@@ -68,6 +68,9 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   bool GetIntListAttribute(ax::mojom::IntListAttribute attribute,
                            std::vector<int32_t>* value) const;
 
+  // Returns the selection container if inside one.
+  AXPlatformNodeBase* GetSelectionContainer() const;
+
   // Returns the table or ARIA grid if inside one.
   AXPlatformNodeBase* GetTable() const;
 
@@ -133,6 +136,16 @@ class AX_EXPORT AXPlatformNodeBase : public AXPlatformNode {
   // but a leaf node should never have children that are focusable or
   // that might send notifications.
   bool IsLeaf();
+
+  // Returns true if this node can be scrolled either in the horizontal or the
+  // vertical direction.
+  bool IsScrollable() const;
+
+  // Returns true if this node can be scrolled in the horizontal direction.
+  bool IsHorizontallyScrollable() const;
+
+  // Returns true if this node can be scrolled in the vertical direction.
+  bool IsVerticallyScrollable() const;
 
   bool HasFocus();
 

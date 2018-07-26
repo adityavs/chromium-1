@@ -99,8 +99,12 @@ NSIndexPath* CreateIndexPath(NSInteger index) {
   collectionView.backgroundView.backgroundColor =
       UIColorFromRGB(kGridBackgroundColor);
   if (@available(iOS 11, *))
+    // CollectionView, in contrast to TableView, doesn’t inset the
+    // cell content to the safe area guide by default. We will just manage the
+    // collectionView contentInset manually to fit in the safe area instead.
     collectionView.contentInsetAdjustmentBehavior =
-        UIScrollViewContentInsetAdjustmentAlways;
+        UIScrollViewContentInsetAdjustmentNever;
+
   self.itemReorderRecognizer = [[UILongPressGestureRecognizer alloc]
       initWithTarget:self
               action:@selector(handleItemReorderingWithGesture:)];
@@ -188,9 +192,9 @@ NSIndexPath* CreateIndexPath(NSInteger index) {
 
 - (GridTransitionLayout*)transitionLayout {
   [self.collectionView layoutIfNeeded];
-  NSMutableArray<GridTransitionLayoutItem*>* items =
-      [[NSMutableArray alloc] init];
-  GridTransitionLayoutItem* selectedItem;
+  NSMutableArray<GridTransitionItem*>* items = [[NSMutableArray alloc] init];
+  GridTransitionActiveItem* activeItem;
+  GridTransitionItem* selectionItem;
   for (NSIndexPath* path in self.collectionView.indexPathsForVisibleItems) {
     GridCell* cell = base::mac::ObjCCastStrict<GridCell>(
         [self.collectionView cellForItemAtIndexPath:path]);
@@ -200,15 +204,26 @@ NSIndexPath* CreateIndexPath(NSInteger index) {
     // change to the other properties such as center, bounds, etc.
     attributes.frame =
         [self.collectionView convertRect:attributes.frame toView:nil];
-    GridTransitionLayoutItem* item =
-        [GridTransitionLayoutItem itemWithCell:[cell proxyForTransitions]
-                                    attributes:attributes];
-    [items addObject:item];
     if ([cell.itemIdentifier isEqualToString:self.selectedItemID]) {
-      selectedItem = item;
+      GridTransitionCell* activeCell =
+          [GridTransitionCell transitionCellFromCell:cell];
+      activeItem = [GridTransitionActiveItem itemWithCell:activeCell
+                                                   center:attributes.center
+                                                     size:attributes.size];
+      selectionItem = [GridTransitionItem
+          itemWithCell:[GridTransitionSelectionCell transitionCellFromCell:cell]
+                center:attributes.center];
+    } else {
+      UIView* cellSnapshot = [cell snapshotViewAfterScreenUpdates:YES];
+      GridTransitionItem* item =
+          [GridTransitionItem itemWithCell:cellSnapshot
+                                    center:attributes.center];
+      [items addObject:item];
     }
   }
-  return [GridTransitionLayout layoutWithItems:items selectedItem:selectedItem];
+  return [GridTransitionLayout layoutWithInactiveItems:items
+                                            activeItem:activeItem
+                                         selectionItem:selectionItem];
 }
 
 #pragma mark - UICollectionViewDataSource
@@ -273,14 +288,27 @@ NSIndexPath* CreateIndexPath(NSInteger index) {
   return NO;
 }
 
+#pragma mark - UIScrollViewDelegate
+
+- (void)scrollViewDidChangeAdjustedContentInset:(UIScrollView*)scrollView {
+  // Adjust Content Inset changed. Force a re-layout of the CollectionView to
+  // visualize changes.
+  [self.collectionView.collectionViewLayout invalidateLayout];
+}
+
 #pragma mark - GridCellDelegate
 
 - (void)closeButtonTappedForCell:(GridCell*)cell {
-  NSUInteger index = base::checked_cast<NSUInteger>(
-      [self.collectionView indexPathForCell:cell].item);
-  DCHECK_LT(index, self.items.count);
-  NSString* itemID = self.items[index].identifier;
-  [self.delegate gridViewController:self didCloseItemWithID:itemID];
+  // Disable the reordering recognizer to cancel any in-flight reordering.  The
+  // DCHECK below ensures that the gesture is re-enabled after being cancelled
+  // in |-handleItemReorderingWithGesture:|.
+  if (self.itemReorderRecognizer.state != UIGestureRecognizerStatePossible) {
+    self.itemReorderRecognizer.enabled = NO;
+    DCHECK(self.itemReorderRecognizer.enabled);
+  }
+
+  [self.delegate gridViewController:self
+                 didCloseItemWithID:cell.itemIdentifier];
   // Record when a tab is closed via the X.
   // TODO(crbug.com/856965) : Rename metrics.
   base::RecordAction(base::UserMetricsAction("MobileStackViewCloseTab"));
@@ -466,6 +494,8 @@ NSIndexPath* CreateIndexPath(NSInteger index) {
   cell.theme = self.theme;
   cell.itemIdentifier = item.identifier;
   cell.title = item.title;
+  cell.snapshot = nil;
+  cell.icon = nil;
   NSString* itemIdentifier = item.identifier;
   [self.imageDataSource faviconForIdentifier:itemIdentifier
                                   completion:^(UIImage* icon) {

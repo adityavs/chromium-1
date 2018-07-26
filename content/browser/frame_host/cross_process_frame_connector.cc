@@ -145,9 +145,9 @@ void CrossProcessFrameConnector::RenderProcessGone() {
       frame_proxy_in_parent_renderer_->GetRoutingID()));
 }
 
-void CrossProcessFrameConnector::SetChildFrameSurface(
+void CrossProcessFrameConnector::FirstSurfaceActivation(
     const viz::SurfaceInfo& surface_info) {
-  frame_proxy_in_parent_renderer_->Send(new FrameMsg_SetChildFrameSurface(
+  frame_proxy_in_parent_renderer_->Send(new FrameMsg_FirstSurfaceActivation(
       frame_proxy_in_parent_renderer_->GetRoutingID(), surface_info));
 }
 
@@ -252,8 +252,7 @@ void CrossProcessFrameConnector::ForwardAckedTouchpadPinchGestureEvent(
 
 void CrossProcessFrameConnector::BubbleScrollEvent(
     const blink::WebGestureEvent& event) {
-  DCHECK((view_->wheel_scroll_latching_enabled() &&
-          event.GetType() == blink::WebInputEvent::kGestureScrollBegin) ||
+  DCHECK(event.GetType() == blink::WebInputEvent::kGestureScrollBegin ||
          event.GetType() == blink::WebInputEvent::kGestureScrollUpdate ||
          event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
          event.GetType() == blink::WebInputEvent::kGestureFlingStart);
@@ -276,27 +275,15 @@ void CrossProcessFrameConnector::BubbleScrollEvent(
   // action of the parent frame to Auto so that this gesture event is allowed.
   parent_view->host()->input_router()->ForceSetTouchActionAuto();
 
-  if (view_->wheel_scroll_latching_enabled()) {
-    if (event.GetType() == blink::WebInputEvent::kGestureScrollBegin) {
-      event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
-      is_scroll_bubbling_ = true;
-    } else if (is_scroll_bubbling_) {
-      event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
-    }
-    if (event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-        event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
-      is_scroll_bubbling_ = false;
-    }
-  } else {  // !view_->wheel_scroll_latching_enabled()
-    if (event.GetType() == blink::WebInputEvent::kGestureScrollUpdate) {
-      event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
-      is_scroll_bubbling_ = true;
-    } else if ((event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
-                event.GetType() == blink::WebInputEvent::kGestureFlingStart) &&
-               is_scroll_bubbling_) {
-      event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
-      is_scroll_bubbling_ = false;
-    }
+  if (event.GetType() == blink::WebInputEvent::kGestureScrollBegin) {
+    event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
+    is_scroll_bubbling_ = true;
+  } else if (is_scroll_bubbling_) {
+    event_router->BubbleScrollEvent(parent_view, resent_gesture_event, view_);
+  }
+  if (event.GetType() == blink::WebInputEvent::kGestureScrollEnd ||
+      event.GetType() == blink::WebInputEvent::kGestureFlingStart) {
+    is_scroll_bubbling_ = false;
   }
 }
 
@@ -334,9 +321,7 @@ void CrossProcessFrameConnector::OnSynchronizeVisualProperties(
   if ((last_received_local_frame_size_ != visual_properties.local_frame_size ||
        screen_info_ != visual_properties.screen_info ||
        capture_sequence_number() != visual_properties.capture_sequence_number ||
-       last_received_zoom_level_ != visual_properties.zoom_level ||
-       last_received_uses_temporary_zoom_ !=
-           visual_properties.uses_temporary_zoom) &&
+       last_received_zoom_level_ != visual_properties.zoom_level) &&
       local_surface_id_ == surface_id.local_surface_id()) {
     bad_message::ReceivedBadMessage(
         frame_proxy_in_parent_renderer_->GetProcess(),
@@ -345,7 +330,6 @@ void CrossProcessFrameConnector::OnSynchronizeVisualProperties(
   }
 
   last_received_zoom_level_ = visual_properties.zoom_level;
-  last_received_uses_temporary_zoom_ = visual_properties.uses_temporary_zoom;
   last_received_local_frame_size_ = visual_properties.local_frame_size;
   SynchronizeVisualProperties(surface_id, visual_properties);
 }

@@ -6,7 +6,7 @@
 
 #include <memory>
 
-#include "base/test/simple_test_tick_clock.h"
+#include "base/test/test_mock_time_task_runner.h"
 #include "cc/test/fake_layer_tree_frame_sink_client.h"
 #include "components/viz/common/display/renderer_settings.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
@@ -22,7 +22,6 @@
 #include "components/viz/test/begin_frame_args_test.h"
 #include "components/viz/test/compositor_frame_helpers.h"
 #include "components/viz/test/fake_output_surface.h"
-#include "components/viz/test/ordered_simple_task_runner.h"
 #include "components/viz/test/test_context_provider.h"
 #include "components/viz/test/test_gpu_memory_buffer_manager.h"
 #include "components/viz/test/test_shared_bitmap_manager.h"
@@ -64,8 +63,8 @@ class TestCompositorFrameSinkSupportManager
 class DirectLayerTreeFrameSinkTest : public testing::Test {
  public:
   DirectLayerTreeFrameSinkTest()
-      : now_src_(new base::SimpleTestTickClock()),
-        task_runner_(new cc::OrderedSimpleTaskRunner(now_src_.get(), true)),
+      : task_runner_(base::MakeRefCounted<base::TestMockTimeTaskRunner>(
+            base::TestMockTimeTaskRunner::Type::kStandalone)),
         display_size_(1920, 1080),
         display_rect_(display_size_),
         frame_sink_manager_(&bitmap_manager_),
@@ -126,8 +125,7 @@ class DirectLayerTreeFrameSinkTest : public testing::Test {
   }
 
  protected:
-  std::unique_ptr<base::SimpleTestTickClock> now_src_;
-  scoped_refptr<cc::OrderedSimpleTaskRunner> task_runner_;
+  scoped_refptr<base::TestMockTimeTaskRunner> task_runner_;
 
   const gfx::Size display_size_;
   const gfx::Rect display_rect_;
@@ -212,9 +210,8 @@ TEST_F(DirectLayerTreeFrameSinkTest, HitTestRegionList) {
       0.5f /* opacity */, SkBlendMode::kSrcOver, 0 /* sorting_context_id */);
   auto* quad2 = pass2->quad_list.AllocateAndConstruct<SurfaceDrawQuad>();
   quad2->SetNew(shared_quad_state2, rect2 /* rect */, rect2 /* visible_rect */,
-                child_surface_id /* primary_surface_id */,
-                base::Optional<SurfaceId>() /* fallback_surface_id */,
-                SK_ColorBLACK, false /* stretch_content_to_fill_bounds */);
+                SurfaceRange(base::nullopt, child_surface_id), SK_ColorBLACK,
+                false /* stretch_content_to_fill_bounds */);
   pass_list.push_back(std::move(pass2));
 
   auto pass3 = RenderPass::Create();
@@ -254,9 +251,8 @@ TEST_F(DirectLayerTreeFrameSinkTest, HitTestRegionList) {
       0.5f /* opacity */, SkBlendMode::kSrcOver, 0 /* sorting_context_id */);
   auto* quad4 = pass4->quad_list.AllocateAndConstruct<SurfaceDrawQuad>();
   quad4->SetNew(shared_quad_state4, rect4 /* rect */, rect4 /* visible_rect */,
-                child_surface_id4 /* primary_surface_id */,
-                base::Optional<SurfaceId>() /* fallback_surface_id */,
-                SK_ColorBLACK, false /* stretch_content_to_fill_bounds */);
+                SurfaceRange(base::nullopt, child_surface_id4), SK_ColorBLACK,
+                false /* stretch_content_to_fill_bounds */);
   pass_list.push_back(std::move(pass4));
 
   const auto* hit_test_region_list1 =

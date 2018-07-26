@@ -5,13 +5,19 @@
 #include "chrome/browser/ui/views/frame/hosted_app_button_container.h"
 
 #include "base/metrics/histogram_macros.h"
+#include "base/task_runner.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "chrome/browser/ui/browser_content_setting_bubble_model_delegate.h"
 #include "chrome/browser/ui/content_settings/content_setting_image_model.h"
+#include "chrome/browser/ui/extensions/hosted_app_browser_controller.h"
+#include "chrome/browser/ui/layout_constants.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
 #include "chrome/browser/ui/views/frame/hosted_app_menu_button.h"
+#include "chrome/browser/ui/views/frame/hosted_app_origin_text.h"
 #include "chrome/browser/ui/views/location_bar/content_setting_image_view.h"
 #include "chrome/browser/ui/views/page_action/page_action_icon_container_view.h"
 #include "chrome/browser/ui/views/toolbar/browser_actions_container.h"
+#include "ui/base/hit_test.h"
 #include "ui/compositor/layer_animation_element.h"
 #include "ui/compositor/layer_animation_sequence.h"
 #include "ui/compositor/scoped_layer_animation_settings.h"
@@ -22,6 +28,7 @@
 #include "ui/views/controls/label.h"
 #include "ui/views/layout/box_layout.h"
 #include "ui/views/layout/layout_provider.h"
+#include "ui/views/view_properties.h"
 #include "ui/views/widget/native_widget_aura.h"
 
 namespace {
@@ -56,17 +63,24 @@ class HostedAppToolbarActionsBar : public ToolbarActionsBar {
   DISALLOW_COPY_AND_ASSIGN(HostedAppToolbarActionsBar);
 };
 
+int HorizontalPaddingBetweenItems() {
+  return views::LayoutProvider::Get()->GetDistanceMetric(
+      views::DISTANCE_RELATED_CONTROL_HORIZONTAL);
+}
+
 }  // namespace
+
+const base::TimeDelta HostedAppButtonContainer::kTitlebarAnimationDelay =
+    base::TimeDelta::FromMilliseconds(750);
 
 class HostedAppButtonContainer::ContentSettingsContainer
     : public views::View,
       public ContentSettingImageView::Delegate {
  public:
-  ContentSettingsContainer(BrowserView* browser_view, SkColor icon_color);
+  explicit ContentSettingsContainer(BrowserView* browser_view);
   ~ContentSettingsContainer() override = default;
 
-  // Updates the visibility of each content setting.
-  void RefreshContentSettingViews() {
+  void UpdateContentSettingViewsVisibility() {
     for (auto* v : content_setting_views_)
       v->Update();
   }
@@ -77,12 +91,27 @@ class HostedAppButtonContainer::ContentSettingsContainer
       v->SetIconColor(icon_color);
   }
 
+  void SetUpForFadeIn() {
+    SetVisible(false);
+    SetPaintToLayer();
+    layer()->SetFillsBoundsOpaquely(false);
+    layer()->SetOpacity(0);
+  }
+
   void FadeIn() {
+    if (visible())
+      return;
     SetVisible(true);
     DCHECK_EQ(layer()->opacity(), 0);
     ui::ScopedLayerAnimationSettings settings(layer()->GetAnimator());
     settings.SetTransitionDuration(kContentSettingsFadeInDuration);
     layer()->SetOpacity(1);
+  }
+
+  void EnsureVisible() {
+    SetVisible(true);
+    if (layer())
+      layer()->SetOpacity(1);
   }
 
   const std::vector<ContentSettingImageView*>&
@@ -119,10 +148,6 @@ class HostedAppButtonContainer::ContentSettingsContainer
   DISALLOW_COPY_AND_ASSIGN(ContentSettingsContainer);
 };
 
-void HostedAppButtonContainer::DisableAnimationForTesting() {
-  g_animation_disabled_for_testing = true;
-}
-
 views::View* HostedAppButtonContainer::GetContentSettingContainerForTesting() {
   return content_settings_container_;
 }
@@ -133,20 +158,19 @@ HostedAppButtonContainer::GetContentSettingViewsForTesting() const {
 }
 
 HostedAppButtonContainer::ContentSettingsContainer::ContentSettingsContainer(
-    BrowserView* browser_view,
-    SkColor icon_color)
+    BrowserView* browser_view)
     : browser_view_(browser_view) {
-  SetLayoutManager(std::make_unique<views::BoxLayout>(
-      views::BoxLayout::kHorizontal, gfx::Insets(),
-      views::LayoutProvider::Get()->GetDistanceMetric(
-          views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
+  DCHECK(
+      extensions::HostedAppBrowserController::IsForExperimentalHostedAppBrowser(
+          browser_view->browser()));
 
-  if (!g_animation_disabled_for_testing) {
-    SetVisible(false);
-    SetPaintToLayer();
-    layer()->SetFillsBoundsOpaquely(false);
-    layer()->SetOpacity(0);
-  }
+  views::BoxLayout& layout =
+      *SetLayoutManager(std::make_unique<views::BoxLayout>(
+          views::BoxLayout::kHorizontal, gfx::Insets(),
+          views::LayoutProvider::Get()->GetDistanceMetric(
+              views::DISTANCE_RELATED_CONTROL_HORIZONTAL)));
+  // Right align to clip the leftmost items first when not enough space.
+  layout.set_main_axis_alignment(views::BoxLayout::MAIN_AXIS_ALIGNMENT_END);
 
   std::vector<std::unique_ptr<ContentSettingImageModel>> models =
       ContentSettingImageModel::GenerateContentSettingImageModels();
@@ -154,55 +178,72 @@ HostedAppButtonContainer::ContentSettingsContainer::ContentSettingsContainer(
     auto image_view = std::make_unique<ContentSettingImageView>(
         std::move(model), this,
         views::NativeWidgetAura::GetWindowTitleFontList());
-    image_view->SetIconColor(icon_color);
     // Padding around content setting icons.
     constexpr int kContentSettingIconInteriorPadding = 4;
     image_view->SetBorder(views::CreateEmptyBorder(
         gfx::Insets(kContentSettingIconInteriorPadding)));
     image_view->disable_animation();
+    image_view->SetProperty(views::kHitTestComponentKey,
+                            static_cast<int>(HTCLIENT));
     content_setting_views_.push_back(image_view.get());
     AddChildView(image_view.release());
   }
 }
 
-HostedAppButtonContainer::HostedAppButtonContainer(BrowserView* browser_view,
-                                                   SkColor active_icon_color,
-                                                   SkColor inactive_icon_color)
-    : browser_view_(browser_view),
+HostedAppButtonContainer::HostedAppButtonContainer(
+    views::Widget* widget,
+    BrowserView* browser_view,
+    HostedAppOriginText* hosted_app_origin_text,
+    SkColor active_icon_color,
+    SkColor inactive_icon_color)
+    : scoped_widget_observer_(this),
+      browser_view_(browser_view),
+      hosted_app_origin_text_(hosted_app_origin_text),
       active_icon_color_(active_icon_color),
       inactive_icon_color_(inactive_icon_color),
-      app_menu_button_(new HostedAppMenuButton(browser_view)),
+      content_settings_container_(new ContentSettingsContainer(browser_view)),
+      page_action_icon_container_view_(new PageActionIconContainerView(
+          {PageActionIconType::kFind, PageActionIconType::kZoom},
+          GetLayoutConstant(HOSTED_APP_PAGE_ACTION_ICON_SIZE),
+          HorizontalPaddingBetweenItems(),
+          browser_view->browser(),
+          this,
+          nullptr)),
       browser_actions_container_(
           new BrowserActionsContainer(browser_view->browser(),
                                       nullptr,
                                       this,
-                                      false /* interactive */)) {
+                                      false /* interactive */)),
+      app_menu_button_(new HostedAppMenuButton(browser_view)) {
   DCHECK(browser_view_);
-  const int kHorizontalPadding =
-      views::LayoutProvider::Get()->GetDistanceMetric(
-          views::DISTANCE_RELATED_CONTROL_HORIZONTAL);
-  auto layout = std::make_unique<views::BoxLayout>(
-      views::BoxLayout::kHorizontal, gfx::Insets(0, kHorizontalPadding),
-      kHorizontalPadding);
-  layout->set_cross_axis_alignment(
+  views::BoxLayout& layout =
+      *SetLayoutManager(std::make_unique<views::BoxLayout>(
+          views::BoxLayout::kHorizontal,
+          gfx::Insets(0, HorizontalPaddingBetweenItems()),
+          HorizontalPaddingBetweenItems()));
+  // Right align to clip the leftmost items first when not enough space.
+  layout.set_main_axis_alignment(views::BoxLayout::MAIN_AXIS_ALIGNMENT_END);
+  layout.set_cross_axis_alignment(
       views::BoxLayout::CROSS_AXIS_ALIGNMENT_CENTER);
-  SetLayoutManager(std::move(layout));
 
-  auto content_settings_container = std::make_unique<ContentSettingsContainer>(
-      browser_view, active_icon_color);
-  content_settings_container_ = content_settings_container.get();
-  AddChildView(content_settings_container.release());
+  content_settings_container_->SetProperty(views::kHitTestComponentKey,
+                                           static_cast<int>(HTCLIENT));
+  AddChildView(content_settings_container_);
 
-  page_action_icon_container_view_ = new PageActionIconContainerView();
+  page_action_icon_container_view_->SetProperty(views::kHitTestComponentKey,
+                                                static_cast<int>(HTCLIENT));
   AddChildView(page_action_icon_container_view_);
 
+  browser_actions_container_->SetProperty(views::kHitTestComponentKey,
+                                          static_cast<int>(HTCLIENT));
   AddChildView(browser_actions_container_);
-
-  app_menu_button_->SetIconColor(active_icon_color);
   AddChildView(app_menu_button_);
+
+  UpdateIconsColor();
 
   browser_view_->SetToolbarButtonProvider(this);
   browser_view_->immersive_mode_controller()->AddObserver(this);
+  scoped_widget_observer_.Add(widget);
 }
 
 HostedAppButtonContainer::~HostedAppButtonContainer() {
@@ -212,53 +253,67 @@ HostedAppButtonContainer::~HostedAppButtonContainer() {
     immersive_controller->RemoveObserver(this);
 }
 
-void HostedAppButtonContainer::RefreshContentSettingViews() {
-  content_settings_container_->RefreshContentSettingViews();
+void HostedAppButtonContainer::UpdateContentSettingViewsVisibility() {
+  content_settings_container_->UpdateContentSettingViewsVisibility();
 }
 
 void HostedAppButtonContainer::SetPaintAsActive(bool active) {
-  content_settings_container_->SetIconColor(active ? active_icon_color_
-                                                   : inactive_icon_color_);
-
-  app_menu_button_->SetIconColor(active ? active_icon_color_
-                                        : inactive_icon_color_);
+  if (paint_as_active_ == active)
+    return;
+  paint_as_active_ = active;
+  UpdateIconsColor();
 }
 
-void HostedAppButtonContainer::StartTitlebarAnimation(
-    base::TimeDelta origin_text_slide_duration) {
-  if (g_animation_disabled_for_testing ||
-      browser_view_->immersive_mode_controller()->IsEnabled()) {
+bool HostedAppButtonContainer::ShouldAnimate() const {
+  return !g_animation_disabled_for_testing && hosted_app_origin_text_ &&
+         !browser_view_->immersive_mode_controller()->IsEnabled();
+}
+
+void HostedAppButtonContainer::StartTitlebarAnimation() {
+  if (!ShouldAnimate())
     return;
-  }
 
-  app_menu_button_->StartHighlightAnimation(origin_text_slide_duration);
+  hosted_app_origin_text_->StartSlideAnimation();
+  app_menu_button_->StartHighlightAnimation(
+      HostedAppOriginText::AnimationDuration());
+  icon_fade_in_delay_.Start(
+      FROM_HERE, HostedAppOriginText::AnimationDuration(), this,
+      &HostedAppButtonContainer::FadeInContentSettingIcons);
+}
 
-  fade_in_content_setting_buttons_timer_.Start(
-      FROM_HERE, origin_text_slide_duration, content_settings_container_,
-      &ContentSettingsContainer::FadeIn);
+void HostedAppButtonContainer::FadeInContentSettingIcons() {
+  content_settings_container_->FadeIn();
+}
+
+void HostedAppButtonContainer::DisableAnimationForTesting() {
+  g_animation_disabled_for_testing = true;
+}
+
+void HostedAppButtonContainer::UpdateIconsColor() {
+  SkColor icon_color =
+      paint_as_active_ ? active_icon_color_ : inactive_icon_color_;
+  content_settings_container_->SetIconColor(icon_color);
+  page_action_icon_container_view_->SetIconColor(icon_color);
+  app_menu_button_->SetIconColor(icon_color);
 }
 
 void HostedAppButtonContainer::ChildPreferredSizeChanged(views::View* child) {
-  if (child != browser_actions_container_ &&
-      child != content_settings_container_) {
-    return;
-  }
-
   PreferredSizeChanged();
 }
 
 void HostedAppButtonContainer::OnImmersiveRevealStarted() {
-  // Cancel the content setting animation as icons need immediately show in
-  // immersive mode.
-  if (fade_in_content_setting_buttons_timer_.IsRunning()) {
-    fade_in_content_setting_buttons_timer_.AbandonAndStop();
-    content_settings_container_->SetVisible(true);
-  }
+  // Don't wait for the fade in animation to make content setting icons visible
+  // once in immersive mode.
+  content_settings_container_->EnsureVisible();
 }
 
 void HostedAppButtonContainer::ChildVisibilityChanged(views::View* child) {
   // Changes to layout need to be taken into account by the frame view.
   PreferredSizeChanged();
+}
+
+const char* HostedAppButtonContainer::GetClassName() const {
+  return "HostedAppButtonContainer";
 }
 
 views::MenuButton* HostedAppButtonContainer::GetOverflowReferenceView() {
@@ -281,6 +336,11 @@ HostedAppButtonContainer::CreateToolbarActionsBar(
                                                       main_bar);
 }
 
+content::WebContents*
+HostedAppButtonContainer::GetWebContentsForPageActionIconView() {
+  return browser_view_->GetActiveWebContents();
+}
+
 BrowserActionsContainer*
 HostedAppButtonContainer::GetBrowserActionsContainer() {
   return browser_actions_container_;
@@ -295,10 +355,41 @@ AppMenuButton* HostedAppButtonContainer::GetAppMenuButton() {
   return app_menu_button_;
 }
 
+gfx::Rect HostedAppButtonContainer::GetFindBarBoundingBox(
+    int contents_height) const {
+  if (!IsDrawn())
+    return gfx::Rect();
+
+  gfx::Rect anchor_bounds =
+      app_menu_button_->ConvertRectToWidget(app_menu_button_->GetLocalBounds());
+  if (base::i18n::IsRTL()) {
+    // Find bar will be left aligned so align to left edge of app menu button.
+    int widget_width = GetWidget()->GetRootView()->width();
+    return gfx::Rect(anchor_bounds.x(), anchor_bounds.bottom(),
+                     widget_width - anchor_bounds.x(), contents_height);
+  }
+  // Find bar will be right aligned so align to right edge of app menu button.
+  return gfx::Rect(0, anchor_bounds.bottom(),
+                   anchor_bounds.x() + anchor_bounds.width(), contents_height);
+}
+
 void HostedAppButtonContainer::FocusToolbar() {
   SetPaneFocus(nullptr);
 }
 
 views::AccessiblePaneView* HostedAppButtonContainer::GetAsAccessiblePaneView() {
   return this;
+}
+
+void HostedAppButtonContainer::OnWidgetVisibilityChanged(views::Widget* widget,
+                                                         bool visibility) {
+  if (!visibility || !pending_widget_visibility_)
+    return;
+  pending_widget_visibility_ = false;
+  if (ShouldAnimate()) {
+    content_settings_container_->SetUpForFadeIn();
+    animation_start_delay_.Start(
+        FROM_HERE, kTitlebarAnimationDelay, this,
+        &HostedAppButtonContainer::StartTitlebarAnimation);
+  }
 }

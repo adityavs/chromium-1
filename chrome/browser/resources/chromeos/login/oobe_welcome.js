@@ -47,14 +47,6 @@ Polymer({
     },
 
     /**
-     * Flag that enables MD-OOBE.
-     */
-    enabled: {
-      type: Boolean,
-      value: false,
-    },
-
-    /**
      * Accessibility options status.
      * @type {!OobeTypes.A11yStatuses}
      */
@@ -80,15 +72,6 @@ Polymer({
     },
 
     /**
-     * True when connected to a network.
-     * @private
-     */
-    isConnected_: {
-      type: Boolean,
-      value: false,
-    },
-
-    /**
      * Controls displaying of "Enable debugging features" link.
      */
     debuggingLinkVisible: Boolean,
@@ -103,8 +86,9 @@ Polymer({
     if (document.documentElement.getAttribute('full-screen-dialog'))
       this.fullScreenDialog = true;
 
-    if (this.fullScreenDialog)
+    if (this.fullScreenDialog) {
       this.$.welcomeScreen.fullScreenDialog = true;
+    }
 
     this.behaviors.forEach((behavior) => {
       if (behavior.onBeforeShow)
@@ -116,7 +100,11 @@ Polymer({
    * This is called when UI strings are changed.
    */
   updateLocalizedContent: function() {
-    this.$.networkSelectLogin.setCrOncStrings();
+    this.languages = loadTimeData.getValue('languageList');
+    this.keyboards = loadTimeData.getValue('inputMethodsList');
+    this.timezones = loadTimeData.getValue('timezoneList');
+    this.highlightStrength = loadTimeData.getValue('highlightStrength');
+
     this.$.welcomeScreen.i18nUpdateLocale();
     this.i18nUpdateLocale();
   },
@@ -180,17 +168,6 @@ Polymer({
     this.getActiveScreen_().focus();
   },
 
-  /** @private */
-  onNetworkSelectionScreenShown_: function() {
-    // After #networkSelect is stamped, trigger a refresh so that the list
-    // will be updated with the currently visible networks and sized
-    // appropriately.
-    this.async(function() {
-      this.$.networkSelectLogin.refresh();
-      this.$.networkSelectLogin.focus();
-    }.bind(this));
-  },
-
   /**
    * Handles "visible" event.
    * @private
@@ -213,7 +190,7 @@ Polymer({
    * @private
    */
   onWelcomeNextButtonClicked_: function() {
-    this.showScreen_('networkSelectionScreen');
+    chrome.send('login.WelcomeScreen.userActed', ['continue']);
   },
 
   /**
@@ -250,20 +227,6 @@ Polymer({
    */
   onWelcomeTimezoneButtonClicked_: function() {
     this.showScreen_('timezoneScreen');
-  },
-
-  /** @private */
-  onNetworkNextTap_: function() {
-    chrome.send('login.WelcomeScreen.userActed', ['continue']);
-  },
-
-  /**
-   * Handle "<- Back" button on network selection screen.
-   *
-   * @private
-   */
-  onNetworkSelectionBackButtonPressed_: function() {
-    this.showScreen_('welcomeScreen');
   },
 
   /**

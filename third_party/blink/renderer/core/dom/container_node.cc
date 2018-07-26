@@ -30,6 +30,8 @@
 #include "third_party/blink/renderer/core/dom/child_list_mutation_scope.h"
 #include "third_party/blink/renderer/core/dom/class_collection.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
+#include "third_party/blink/renderer/core/dom/events/scoped_event_queue.h"
 #include "third_party/blink/renderer/core/dom/name_node_list.h"
 #include "third_party/blink/renderer/core/dom/node_child_removal_tracker.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
@@ -37,15 +39,16 @@
 #include "third_party/blink/renderer/core/dom/node_rare_data.h"
 #include "third_party/blink/renderer/core/dom/node_traversal.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
+#include "third_party/blink/renderer/core/dom/slot_assignment_recalc_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/static_node_list.h"
 #include "third_party/blink/renderer/core/dom/whitespace_attacher.h"
 #include "third_party/blink/renderer/core/events/mutation_event.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/use_counter.h"
 #include "third_party/blink/renderer/core/html/forms/radio_node_list.h"
 #include "third_party/blink/renderer/core/html/html_collection.h"
 #include "third_party/blink/renderer/core/html/html_frame_owner_element.h"
 #include "third_party/blink/renderer/core/html/html_tag_collection.h"
-#include "third_party/blink/renderer/core/html/parser/nesting_level_incrementer.h"
 #include "third_party/blink/renderer/core/layout/layout_block_flow.h"
 #include "third_party/blink/renderer/core/layout/layout_inline.h"
 #include "third_party/blink/renderer/core/layout/layout_text.h"
@@ -56,7 +59,6 @@
 #include "third_party/blink/renderer/platform/bindings/runtime_call_stats.h"
 #include "third_party/blink/renderer/platform/bindings/script_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_isolate_data.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 
 namespace blink {
@@ -414,10 +416,7 @@ Node* ContainerNode::InsertBefore(Node* new_child,
   // 5. Insert node into parent before reference child.
   NodeVector post_insertion_notification_targets;
   {
-#if DCHECK_IS_ON()
-    NestingLevelIncrementer slot_assignment_recalc_forbidden_scope(
-        GetDocument().SlotAssignmentRecalcForbiddenRecursionDepth());
-#endif
+    SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
     ChildListMutationScope mutation(*this);
     InsertNodeVector(targets, ref_child, AdoptAndInsertBefore(),
                      &post_insertion_notification_targets);
@@ -582,10 +581,7 @@ Node* ContainerNode::ReplaceChild(Node* new_child,
         needs_recheck = true;
     }
 
-#if DCHECK_IS_ON()
-    NestingLevelIncrementer slot_assignment_recalc_forbidden_scope(
-        GetDocument().SlotAssignmentRecalcForbiddenRecursionDepth());
-#endif
+    SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
 
     // 13. Let nodes be node’s children if node is a DocumentFragment node, and
     // a list containing solely node otherwise.
@@ -704,10 +700,7 @@ Node* ContainerNode::RemoveChild(Node* old_child,
   }
 
   {
-#if DCHECK_IS_ON()
-    NestingLevelIncrementer slot_assignment_recalc_forbidden_scope(
-        GetDocument().SlotAssignmentRecalcForbiddenRecursionDepth());
-#endif
+    SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
     HTMLFrameOwnerElement::PluginDisposeSuspendScope suspend_plugin_dispose;
     TreeOrderedMap::RemoveScope tree_remove_scope;
 
@@ -810,10 +803,7 @@ void ContainerNode::RemoveChildren(SubtreeModificationAction action) {
     HTMLFrameOwnerElement::PluginDisposeSuspendScope suspend_plugin_dispose;
     TreeOrderedMap::RemoveScope tree_remove_scope;
     {
-#if DCHECK_IS_ON()
-      NestingLevelIncrementer slot_assignment_recalc_forbidden_scope(
-          GetDocument().SlotAssignmentRecalcForbiddenRecursionDepth());
-#endif
+      SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
       EventDispatchForbiddenScope assert_no_event_dispatch;
       ScriptForbiddenScope forbid_script;
 
@@ -853,10 +843,7 @@ Node* ContainerNode::AppendChild(Node* new_child,
 
   NodeVector post_insertion_notification_targets;
   {
-#if DCHECK_IS_ON()
-    NestingLevelIncrementer slot_assignment_recalc_forbidden_scope(
-        GetDocument().SlotAssignmentRecalcForbiddenRecursionDepth());
-#endif
+    SlotAssignmentRecalcForbiddenScope forbid_slot_recalc(GetDocument());
     ChildListMutationScope mutation(*this);
     InsertNodeVector(targets, nullptr, AdoptAndAppendChild(),
                      &post_insertion_notification_targets);
@@ -1249,7 +1236,12 @@ Element* ContainerNode::QuerySelector(const AtomicString& selectors,
       selectors, GetDocument(), exception_state);
   if (!selector_query)
     return nullptr;
-  return selector_query->QueryFirst(*this);
+  Element* element = selector_query->QueryFirst(*this);
+  if (element && element->GetDocument().InDOMNodeRemovedHandler()) {
+    if (NodeChildRemovalTracker::IsBeingRemoved(element))
+      GetDocument().CountDetachingNodeAccessInDOMNodeRemovedHandler();
+  }
+  return element;
 }
 
 Element* ContainerNode::QuerySelector(const AtomicString& selectors) {
@@ -1312,24 +1304,47 @@ static void DispatchChildRemovalEvents(Node& child) {
   probe::willRemoveDOMNode(&child);
 
   Node* c = &child;
-  Document* document = &child.GetDocument();
+  Document& document = child.GetDocument();
 
   // Dispatch pre-removal mutation events.
   if (c->parentNode() &&
-      document->HasListenerType(Document::kDOMNodeRemovedListener)) {
+      document.HasListenerType(Document::kDOMNodeRemovedListener)) {
+    bool original_node_flag = c->InDOMNodeRemovedHandler();
+    auto original_document_state = document.GetInDOMNodeRemovedHandlerState();
+    if (ScopedEventQueue::Instance()->ShouldQueueEvents()) {
+      UseCounter::Count(document, WebFeature::kDOMNodeRemovedEventDelayed);
+    } else {
+      c->SetInDOMNodeRemovedHandler(true);
+      document.SetInDOMNodeRemovedHandlerState(
+          Document::InDOMNodeRemovedHandlerState::kDOMNodeRemoved);
+    }
     NodeChildRemovalTracker scope(child);
     c->DispatchScopedEvent(MutationEvent::Create(
         EventTypeNames::DOMNodeRemoved, Event::Bubbles::kYes, c->parentNode()));
+    document.SetInDOMNodeRemovedHandlerState(original_document_state);
+    c->SetInDOMNodeRemovedHandler(original_node_flag);
   }
 
   // Dispatch the DOMNodeRemovedFromDocument event to all descendants.
-  if (c->isConnected() && document->HasListenerType(
-                              Document::kDOMNodeRemovedFromDocumentListener)) {
+  if (c->isConnected() &&
+      document.HasListenerType(Document::kDOMNodeRemovedFromDocumentListener)) {
+    bool original_node_flag = c->InDOMNodeRemovedHandler();
+    auto original_document_state = document.GetInDOMNodeRemovedHandlerState();
+    if (ScopedEventQueue::Instance()->ShouldQueueEvents()) {
+      UseCounter::Count(document,
+                        WebFeature::kDOMNodeRemovedFromDocumentEventDelayed);
+    } else {
+      c->SetInDOMNodeRemovedHandler(true);
+      document.SetInDOMNodeRemovedHandlerState(
+          Document::InDOMNodeRemovedHandlerState::kDOMNodeRemovedFromDocument);
+    }
     NodeChildRemovalTracker scope(child);
     for (; c; c = NodeTraversal::Next(*c, &child)) {
       c->DispatchScopedEvent(MutationEvent::Create(
           EventTypeNames::DOMNodeRemovedFromDocument, Event::Bubbles::kNo));
     }
+    document.SetInDOMNodeRemovedHandlerState(original_document_state);
+    child.SetInDOMNodeRemovedHandler(original_node_flag);
   }
 }
 

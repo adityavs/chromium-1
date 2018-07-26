@@ -137,6 +137,7 @@ template("google_apis_tmpl") {
       "//base/third_party/dynamic_annotations",
       "//crypto",
       "//mojo/public/cpp/bindings:struct_traits",
+      "//services/network/public/cpp",
     ]
 
     if (defined(invoker.deps)) {
@@ -257,7 +258,7 @@ test("google_apis_unittests") {
     ":test_support",
     "//base",
     "//base/test:run_all_unittests",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//testing/gmock",
     "//testing/gtest",
   ]

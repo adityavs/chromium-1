@@ -22,10 +22,6 @@
 #include "ui/gfx/geometry/vector3d_f.h"
 #include "ui/gfx/transform.h"
 
-namespace blink {
-class WebGestureEvent;
-}
-
 namespace gfx {
 class Transform;
 }
@@ -38,8 +34,6 @@ namespace vr {
 
 // Angle (radians) the beam down from the controller axis, for wrist comfort.
 constexpr float kErgoAngleOffset = 0.26f;
-
-using GestureList = std::vector<std::unique_ptr<blink::WebGestureEvent>>;
 
 class VrController : public PlatformController {
  public:
@@ -59,13 +53,7 @@ class VrController : public PlatformController {
   // Called once per frame to update controller state.
   void UpdateState(const gfx::Transform& head_pose);
 
-  std::unique_ptr<GestureList> DetectGestures();
-
-  bool IsTouching();
-
-  float TouchPosX();
-
-  float TouchPosY();
+  InputEventList DetectGestures();
 
   gfx::Quaternion Orientation() const;
   gfx::Point3F Position() const;
@@ -79,35 +67,29 @@ class VrController : public PlatformController {
 
   bool TouchUpHappened();
 
-  bool ButtonUpHappened(gvr::ControllerButton button);
-  bool ButtonDownHappened(gvr::ControllerButton button);
   bool ButtonState(gvr::ControllerButton button) const;
 
   bool IsConnected();
+  void EnableDeadzoneForTesting();
 
   // PlatformController
   bool IsButtonDown(PlatformController::ButtonType type) const override;
+  bool ButtonUpHappened(PlatformController::ButtonType type) const override;
+  bool ButtonDownHappened(PlatformController::ButtonType type) const override;
+  bool IsTouchingTrackpad() const override;
+  gfx::PointF GetPositionInTrackpad() const override;
   base::TimeTicks GetLastOrientationTimestamp() const override;
   base::TimeTicks GetLastTouchTimestamp() const override;
   base::TimeTicks GetLastButtonTimestamp() const override;
   PlatformController::Handedness GetHandedness() const override;
   bool GetRecentered() const override;
+  int GetBatteryLevel() const override;
 
  private:
 
-  struct ButtonInfo {
-    gvr::ControllerButton button;
-    bool button_up;
-    bool button_down;
-    bool button_state;
-    int64_t timestamp;
-  };
-
   bool GetButtonLongPressFromButtonInfo();
 
-  void UpdateTouchInfo();
-
-  void UpdateCurrentTouchInfo();
+  void UpdateTimestamps();
 
   void UpdateOverallVelocity();
 
@@ -132,15 +114,18 @@ class VrController : public PlatformController {
   // Handedness from user prefs.
   gvr::ControllerHandedness handedness_;
 
-  // Current touch info from GVR.
-  TouchInfo touch_info_;
-
   // Head offset. Keeps the controller at the user's side with 6DoF headsets.
   gfx::Point3F head_offset_;
+
+  base::TimeTicks last_orientation_timestamp_;
+  base::TimeTicks last_touch_timestamp_;
+  base::TimeTicks last_button_timestamp_;
 
   int64_t last_timestamp_nanos_ = 0;
 
   float alpha_value_ = 1.0f;
+
+  bool enable_deadzone_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(VrController);
 };

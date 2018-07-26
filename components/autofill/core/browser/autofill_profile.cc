@@ -36,6 +36,7 @@
 #include "components/autofill/core/browser/state_names.h"
 #include "components/autofill/core/browser/validation.h"
 #include "components/autofill/core/common/autofill_clock.h"
+#include "components/autofill/core/common/autofill_constants.h"
 #include "components/autofill/core/common/autofill_l10n_util.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/strings/grit/components_strings.h"
@@ -254,13 +255,13 @@ AutofillProfile::~AutofillProfile() {
 }
 
 AutofillProfile& AutofillProfile::operator=(const AutofillProfile& profile) {
+  if (this == &profile)
+    return *this;
+
   set_use_count(profile.use_count());
   set_use_date(profile.use_date());
   set_previous_use_date(profile.previous_use_date());
   set_modification_date(profile.modification_date());
-
-  if (this == &profile)
-    return *this;
 
   set_guid(profile.guid());
   set_origin(profile.origin());
@@ -463,6 +464,30 @@ bool AutofillProfile::IsSubsetOfForFieldSet(
   }
 
   return true;
+}
+
+void AutofillProfile::OverwriteDataFrom(const AutofillProfile& profile) {
+  // Verified profiles should never be overwritten with unverified data.
+  DCHECK(!IsVerified() || profile.IsVerified());
+  DCHECK_EQ(guid(), profile.guid());
+
+  // Some fields should not got overwritten by empty values; back-up the
+  // values.
+  std::string language_code_value = language_code();
+  std::string origin_value = origin();
+  int validity_bitfield_value = GetValidityBitfieldValue();
+  base::string16 name_full_value = GetRawInfo(NAME_FULL);
+
+  *this = profile;
+
+  if (origin().empty())
+    set_origin(origin_value);
+  if (language_code().empty())
+    set_language_code(language_code_value);
+  if (GetValidityBitfieldValue() == 0)
+    SetValidityFromBitfieldValue(validity_bitfield_value);
+  if (!HasRawInfo(NAME_FULL))
+    SetRawInfo(NAME_FULL, name_full_value);
 }
 
 bool AutofillProfile::MergeDataFrom(const AutofillProfile& profile,

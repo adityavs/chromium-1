@@ -45,6 +45,7 @@
 #include "third_party/blink/renderer/core/style/svg_computed_style_defs.h"
 #include "third_party/blink/renderer/core/style/transform_origin.h"
 #include "third_party/blink/renderer/platform/fonts/font_description.h"
+#include "third_party/blink/renderer/platform/graphics/image_orientation.h"
 #include "third_party/blink/renderer/platform/length_size.h"
 #include "third_party/blink/renderer/platform/text/tab_size.h"
 #include "third_party/blink/renderer/platform/transforms/rotation.h"
@@ -203,6 +204,9 @@ class StyleBuilderConverter {
   static float ConvertTextStrokeWidth(StyleResolverState&, const CSSValue&);
   static TextSizeAdjust ConvertTextSizeAdjust(StyleResolverState&,
                                               const CSSValue&);
+  static TextUnderlinePosition ConvertTextUnderlinePosition(
+      StyleResolverState& state,
+      const CSSValue& value);
   static TransformOperations ConvertTransformOperations(StyleResolverState&,
                                                         const CSSValue&);
   static TransformOrigin ConvertTransformOrigin(StyleResolverState&,

@@ -223,8 +223,7 @@ TracingHandler::TracingHandler(FrameTreeNode* frame_tree_node_,
   }
 }
 
-TracingHandler::~TracingHandler() {
-}
+TracingHandler::~TracingHandler() = default;
 
 // static
 std::vector<TracingHandler*> TracingHandler::ForAgentHost(
@@ -386,17 +385,17 @@ void TracingHandler::Start(Maybe<std::string> categories,
   if (buffer_usage_reporting_interval.isJust())
     SetupTimer(buffer_usage_reporting_interval.fromJust());
 
-  base::trace_event::TraceConfig trace_config;
+  trace_config_ = base::trace_event::TraceConfig();
   if (config.isJust()) {
     std::unique_ptr<base::Value> value =
         protocol::toBaseValue(config.fromJust()->toValue().get(), 1000);
     if (value && value->is_dict()) {
-      trace_config = GetTraceConfigFromDevToolsConfig(
+      trace_config_ = GetTraceConfigFromDevToolsConfig(
           *static_cast<base::DictionaryValue*>(value.get()));
     }
   } else if (categories.isJust() || options.isJust()) {
-    trace_config = base::trace_event::TraceConfig(
-        categories.fromMaybe(""), options.fromMaybe(""));
+    trace_config_ = base::trace_event::TraceConfig(categories.fromMaybe(""),
+                                                   options.fromMaybe(""));
   }
 
   // If inspected target is a render process Tracing.start will be handled by
@@ -404,11 +403,57 @@ void TracingHandler::Start(Maybe<std::string> categories,
   if (frame_tree_node_)
     callback->fallThrough();
 
+  SetupProcessFilter(nullptr);
+
   TracingController::GetInstance()->StartTracing(
-      trace_config,
-      base::Bind(&TracingHandler::OnRecordingEnabled,
-                 weak_factory_.GetWeakPtr(),
-                 base::Passed(std::move(callback))));
+      trace_config_, base::BindRepeating(&TracingHandler::OnRecordingEnabled,
+                                         weak_factory_.GetWeakPtr(),
+                                         base::Passed(std::move(callback))));
+}
+
+void TracingHandler::SetupProcessFilter(
+    RenderFrameHost* new_render_frame_host) {
+  if (!frame_tree_node_)
+    return;
+
+  base::ProcessId browser_pid = base::Process::Current().Pid();
+  std::unordered_set<base::ProcessId> included_process_ids({browser_pid});
+  if (new_render_frame_host)
+    AppendProcessId(new_render_frame_host, &included_process_ids);
+  for (FrameTreeNode* node :
+       frame_tree_node_->frame_tree()->SubtreeNodes(frame_tree_node_)) {
+    RenderFrameHost* frame_host = node->current_frame_host();
+    if (frame_host)
+      AppendProcessId(frame_host, &included_process_ids);
+  }
+  trace_config_.SetProcessFilterConfig(
+      base::trace_event::TraceConfig::ProcessFilterConfig(
+          included_process_ids));
+}
+
+void TracingHandler::AppendProcessId(
+    RenderFrameHost* render_frame_host,
+    std::unordered_set<base::ProcessId>* process_set) {
+  RenderProcessHost* process_host = render_frame_host->GetProcess();
+  if (process_host->GetProcess().IsValid()) {
+    process_set->insert(process_host->GetProcess().Pid());
+  } else {
+    process_host->PostTaskWhenProcessIsReady(
+        base::BindOnce(&TracingHandler::OnProcessReady,
+                       weak_factory_.GetWeakPtr(), process_host));
+  }
+}
+
+void TracingHandler::OnProcessReady(RenderProcessHost* process_host) {
+  if (!did_initiate_recording_)
+    return;
+  std::unordered_set<base::ProcessId> included_process_ids(
+      {process_host->GetProcess().Pid()});
+  trace_config_.SetProcessFilterConfig(
+      base::trace_event::TraceConfig::ProcessFilterConfig(
+          included_process_ids));
+  TracingController::GetInstance()->StartTracing(
+      trace_config_, base::RepeatingCallback<void()>());
 }
 
 void TracingHandler::End(std::unique_ptr<EndCallback> callback) {
@@ -474,6 +519,8 @@ void TracingHandler::OnRecordingEnabled(
 
 void TracingHandler::OnBufferUsage(float percent_full,
                                    size_t approximate_event_count) {
+  if (!did_initiate_recording_)
+    return;
   // TODO(crbug426117): remove set_value once all clients have switched to
   // the new interface of the event.
   frontend_->BufferUsage(percent_full, approximate_event_count, percent_full);
@@ -549,14 +596,13 @@ void TracingHandler::SetupTimer(double usage_reporting_interval) {
 
   base::TimeDelta interval = base::TimeDelta::FromMilliseconds(
       std::ceil(usage_reporting_interval));
-  buffer_usage_poll_timer_.reset(new base::Timer(
+  buffer_usage_poll_timer_.reset(new base::RepeatingTimer());
+  buffer_usage_poll_timer_->Start(
       FROM_HERE, interval,
       base::Bind(base::IgnoreResult(&TracingController::GetTraceBufferUsage),
                  base::Unretained(TracingController::GetInstance()),
                  base::Bind(&TracingHandler::OnBufferUsage,
-                            weak_factory_.GetWeakPtr())),
-      true));
-  buffer_usage_poll_timer_->Reset();
+                            weak_factory_.GetWeakPtr())));
 }
 
 void TracingHandler::StopTracing(
@@ -605,6 +651,10 @@ void TracingHandler::ReadyToCommitNavigation(
   TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("devtools.timeline"),
                        "FrameCommittedInBrowser", TRACE_EVENT_SCOPE_THREAD,
                        "data", std::move(data));
+
+  SetupProcessFilter(navigation_handle->GetRenderFrameHost());
+  TracingController::GetInstance()->StartTracing(
+      trace_config_, base::RepeatingCallback<void()>());
 }
 
 void TracingHandler::FrameDeleted(RenderFrameHostImpl* frame_host) {

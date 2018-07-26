@@ -36,13 +36,15 @@
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "third_party/blink/public/platform/interface_provider.h"
 #include "third_party/blink/public/platform/interface_registry.h"
+#include "third_party/blink/public/platform/scheduler/web_resource_loading_task_runner_handle.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_controller.h"
 #include "third_party/blink/renderer/core/CoreProbeSink.h"
+#include "third_party/blink/renderer/core/aom/computed_accessible_node.h"
 #include "third_party/blink/renderer/core/core_initializer.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/dom/child_frame_disconnector.h"
-#include "third_party/blink/renderer/core/dom/computed_accessible_node.h"
+#include "third_party/blink/renderer/core/dom/document_init.h"
 #include "third_party/blink/renderer/core/dom/document_parser.h"
 #include "third_party/blink/renderer/core/dom/document_type.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
@@ -78,9 +80,11 @@
 #include "third_party/blink/renderer/core/loader/frame_load_request.h"
 #include "third_party/blink/renderer/core/loader/idleness_detector.h"
 #include "third_party/blink/renderer/core/loader/navigation_scheduler.h"
+#include "third_party/blink/renderer/core/loader/previews_resource_loading_hints_receiver_impl.h"
 #include "third_party/blink/renderer/core/page/drag_controller.h"
 #include "third_party/blink/renderer/core/page/focus_controller.h"
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
+#include "third_party/blink/renderer/core/paint/compositing/graphics_layer_tree_as_text.h"
 #include "third_party/blink/renderer/core/paint/compositing/paint_layer_compositor.h"
 #include "third_party/blink/renderer/core/paint/object_painter.h"
 #include "third_party/blink/renderer/core/probe/core_probes.h"
@@ -147,6 +151,12 @@ class EmptyFrameScheduler final : public FrameScheduler {
   scoped_refptr<base::SingleThreadTaskRunner> GetTaskRunner(
       TaskType type) override {
     return Platform::Current()->MainThread()->GetTaskRunner();
+  }
+
+  std::unique_ptr<scheduler::WebResourceLoadingTaskRunnerHandle>
+  CreateResourceLoadingTaskRunnerHandle() override {
+    return scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
+        GetTaskRunner(TaskType::kNetworkingWithURLLoaderAnnotation));
   }
 
   void SetFrameVisible(bool) override {}
@@ -343,7 +353,8 @@ void LocalFrame::Detach(FrameDetachType type) {
 
   if (IsLocalRoot()) {
     performance_monitor_->Shutdown();
-    ad_tracker_->Shutdown();
+    if (ad_tracker_)
+      ad_tracker_->Shutdown();
   }
   idleness_detector_->Shutdown();
   if (inspector_trace_events_)
@@ -483,6 +494,7 @@ void LocalFrame::DocumentAttached() {
   GetInputMethodController().DocumentAttached(GetDocument());
   GetSpellChecker().DocumentAttached(GetDocument());
   GetTextSuggestionController().DocumentAttached(GetDocument());
+  previews_resource_loading_hints_receiver_.reset();
 }
 
 Frame* LocalFrame::FindFrameForNavigation(const AtomicString& name,
@@ -552,8 +564,7 @@ void LocalFrame::DidResume() {
     DEFINE_STATIC_LOCAL(
         CustomCountHistogram, resume_histogram,
         ("DocumentEventTiming.ResumeDuration", 0, 10000000, 50));
-    resume_histogram.Count(
-        (resume_event_end - resume_event_start).InMicroseconds());
+    resume_histogram.CountMicroseconds(resume_event_end - resume_event_start);
     // TODO(fmeawad): Move the following logic to the page once we have a
     // PageResourceCoordinator in Blink
     if (auto* frame_resource_coordinator = GetFrameResourceCoordinator()) {
@@ -808,7 +819,8 @@ String LocalFrame::SelectedTextForClipboard() const {
 
 PositionWithAffinity LocalFrame::PositionForPoint(
     const LayoutPoint& frame_point) {
-  HitTestResult result = GetEventHandler().HitTestResultAtPoint(frame_point);
+  HitTestLocation location(frame_point);
+  HitTestResult result = GetEventHandler().HitTestResultAtLocation(location);
   Node* node = result.InnerNodeOrImageMapImage();
   if (!node)
     return PositionWithAffinity();
@@ -826,12 +838,12 @@ Document* LocalFrame::DocumentAtPoint(const LayoutPoint& point_in_root_frame) {
   if (!View())
     return nullptr;
 
-  LayoutPoint pt = View()->ConvertFromRootFrame(point_in_root_frame);
+  HitTestLocation location(View()->ConvertFromRootFrame(point_in_root_frame));
 
   if (!ContentLayoutObject())
     return nullptr;
-  HitTestResult result = GetEventHandler().HitTestResultAtPoint(
-      pt, HitTestRequest::kReadOnly | HitTestRequest::kActive);
+  HitTestResult result = GetEventHandler().HitTestResultAtLocation(
+      location, HitTestRequest::kReadOnly | HitTestRequest::kActive);
   return result.InnerNode() ? &result.InnerNode()->GetDocument() : nullptr;
 }
 
@@ -874,7 +886,8 @@ String LocalFrame::GetLayerTreeAsTextForTesting(unsigned flags) const {
         while (root_layer->Parent())
           root_layer = root_layer->Parent();
       }
-      layers = root_layer->LayerTreeAsJSON(static_cast<LayerTreeFlags>(flags));
+      layers = GraphicsLayerTreeAsJSON(root_layer,
+                                       static_cast<LayerTreeFlags>(flags));
     }
   }
 
@@ -929,10 +942,12 @@ inline LocalFrame::LocalFrame(LocalFrameClient* client,
       interface_registry_(interface_registry) {
   if (IsLocalRoot()) {
     probe_sink_ = new CoreProbeSink();
-    ad_tracker_ = new AdTracker(this);
     performance_monitor_ = new PerformanceMonitor(this);
     inspector_trace_events_ = new InspectorTraceEvents();
     probe_sink_->addInspectorTraceEvents(inspector_trace_events_);
+    if (RuntimeEnabledFeatures::AdTaggingEnabled()) {
+      ad_tracker_ = new AdTracker(this);
+    }
   } else {
     // Inertness only needs to be updated if this frame might inherit the
     // inert state from a higher-level frame. If this is an OOPIF local root,
@@ -946,7 +961,11 @@ inline LocalFrame::LocalFrame(LocalFrameClient* client,
   idleness_detector_ = new IdlenessDetector(this);
   inspector_task_runner_->InitIsolate(V8PerIsolateData::MainThreadIsolate());
 
-  SetIsAdSubframeIfNecessary();
+  if (ad_tracker_) {
+    SetIsAdSubframeIfNecessary();
+  }
+  DCHECK(ad_tracker_ ? RuntimeEnabledFeatures::AdTaggingEnabled()
+                     : !RuntimeEnabledFeatures::AdTaggingEnabled());
 }
 
 FrameScheduler* LocalFrame::GetFrameScheduler() {
@@ -1097,16 +1116,6 @@ static bool CanAccessAncestor(const SecurityOrigin& active_security_origin,
   }
 
   return false;
-}
-
-blink::mojom::blink::PrefetchURLLoaderService*
-LocalFrame::PrefetchURLLoaderService() {
-  if (!prefetch_loader_service_ &&
-      base::FeatureList::IsEnabled(network::features::kNetworkService)) {
-    GetInterfaceProvider().GetInterface(
-        mojo::MakeRequest(&prefetch_loader_service_));
-  }
-  return prefetch_loader_service_.get();
 }
 
 bool LocalFrame::CanNavigateWithoutFramebusting(const Frame& target_frame,
@@ -1260,7 +1269,8 @@ PluginData* LocalFrame::GetPluginData() const {
 }
 
 void LocalFrame::SetAdTrackerForTesting(AdTracker* ad_tracker) {
-  ad_tracker_->Shutdown();
+  if (ad_tracker_)
+    ad_tracker_->Shutdown();
   ad_tracker_ = ad_tracker;
 }
 
@@ -1368,18 +1378,15 @@ void LocalFrame::ForceSynchronousDocumentInstall(
 
   GetDocument()->OpenForNavigation(kForceSynchronousParsing, mime_type,
                                    AtomicString("UTF-8"));
-  data->ForEachSegment(
-      [this](const char* segment, size_t segment_size, size_t segment_offset) {
-        GetDocument()->Parser()->AppendBytes(segment, segment_size);
-        return true;
-      });
+  for (const auto& segment : *data)
+    GetDocument()->Parser()->AppendBytes(segment.data(), segment.size());
   GetDocument()->Parser()->Finish();
 
   // Upon loading of SVGIamges, log PageVisits in UseCounter.
   // Do not track PageVisits for inspector, web page popups, and validation
   // message overlays (the other callers of this method).
-  if (GetPage() && GetDocument()->IsSVGDocument())
-    GetPage()->GetUseCounter().DidCommitLoad(this);
+  if (GetDocument()->IsSVGDocument())
+    loader_.GetDocumentLoader()->GetUseCounter().DidCommitLoad(this);
 }
 
 bool LocalFrame::IsProvisional() const {
@@ -1428,6 +1435,18 @@ void LocalFrame::PauseSubresourceLoading(
 
 void LocalFrame::ResumeSubresourceLoading() {
   pause_handle_bindings_.CloseAllBindings();
+}
+
+void LocalFrame::AnimateSnapFling(base::TimeTicks monotonic_time) {
+  GetEventHandler().AnimateSnapFling(monotonic_time);
+}
+
+void LocalFrame::BindPreviewsResourceLoadingHintsRequest(
+    blink::mojom::blink::PreviewsResourceLoadingHintsReceiverRequest request) {
+  DCHECK(!previews_resource_loading_hints_receiver_);
+  previews_resource_loading_hints_receiver_ =
+      std::make_unique<PreviewsResourceLoadingHintsReceiverImpl>(
+          std::move(request), GetDocument());
 }
 
 }  // namespace blink

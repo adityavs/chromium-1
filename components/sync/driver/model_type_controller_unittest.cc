@@ -13,10 +13,9 @@
 #include "base/memory/ref_counted.h"
 #include "base/message_loop/message_loop.h"
 #include "base/run_loop.h"
-#include "base/sequenced_task_runner.h"
 #include "base/test/test_simple_task_runner.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/threading/thread.h"
-#include "base/threading/thread_task_runner_handle.h"
 #include "components/sync/device_info/local_device_info_provider_mock.h"
 #include "components/sync/driver/fake_sync_service.h"
 #include "components/sync/driver/sync_client_mock.h"
@@ -89,7 +88,8 @@ class TestDelegate : public ModelTypeControllerDelegate,
         initial_sync_done_);
     activation_response->type_processor =
         std::make_unique<ModelTypeProcessorProxy>(
-            base::AsWeakPtr(&processor_), base::ThreadTaskRunnerHandle::Get());
+            base::AsWeakPtr(&processor_),
+            base::SequencedTaskRunnerHandle::Get());
     std::move(callback).Run(std::move(activation_response));
   }
 
@@ -228,7 +228,7 @@ class ModelTypeControllerTest : public testing::Test {
 
   void DeactivateDataTypeAndStop(SyncStopMetadataFate metadata_fate) {
     controller_->DeactivateDataType(&configurer_);
-    controller_->Stop(metadata_fate);
+    controller_->Stop(metadata_fate, base::DoNothing());
   }
 
   // These threads can ping-pong for a bit so we run the model thread twice.
@@ -378,7 +378,7 @@ TEST_F(ModelTypeControllerTest, StopWhenDatatypeDisabled) {
 TEST_F(ModelTypeControllerTest, StopBeforeLoadModels) {
   EXPECT_EQ(DataTypeController::NOT_RUNNING, controller()->state());
 
-  controller()->Stop(CLEAR_METADATA);
+  controller()->Stop(CLEAR_METADATA, base::DoNothing());
 
   EXPECT_EQ(DataTypeController::NOT_RUNNING, controller()->state());
   // Ensure that DisableSync is not called.

@@ -22,14 +22,13 @@
 #include "base/strings/stringprintf.h"
 #include "base/threading/platform_thread.h"
 #include "base/timer/timer.h"
-#include "chromeos/chromeos_switches.h"
+#include "chromeos/dbus/dbus_switches.h"
 #include "chromeos/dbus/fake_power_manager_client.h"
 #include "chromeos/dbus/power_manager/backlight.pb.h"
 #include "chromeos/dbus/power_manager/idle.pb.h"
 #include "chromeos/dbus/power_manager/input_event.pb.h"
 #include "chromeos/dbus/power_manager/peripheral_battery_status.pb.h"
 #include "chromeos/dbus/power_manager/switch_states.pb.h"
-#include "chromeos/system/statistics_provider.h"
 #include "components/device_event_log/device_event_log.h"
 #include "dbus/bus.h"
 #include "dbus/message.h"
@@ -228,8 +227,21 @@ class PowerManagerClientImpl : public PowerManagerClient {
         power_manager::kGetScreenBrightnessPercentMethod);
     power_manager_proxy_->CallMethod(
         &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
-        base::BindOnce(&PowerManagerClientImpl::OnGetScreenBrightnessPercent,
-                       weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+        base::BindOnce(
+            &PowerManagerClientImpl::OnGetScreenOrKeyboardBrightnessPercent,
+            weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
+  }
+
+  void GetKeyboardBrightnessPercent(
+      DBusMethodCallback<double> callback) override {
+    dbus::MethodCall method_call(
+        power_manager::kPowerManagerInterface,
+        power_manager::kGetKeyboardBrightnessPercentMethod);
+    power_manager_proxy_->CallMethod(
+        &method_call, dbus::ObjectProxy::TIMEOUT_USE_DEFAULT,
+        base::BindOnce(
+            &PowerManagerClientImpl::OnGetScreenOrKeyboardBrightnessPercent,
+            weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
   }
 
   void RequestStatusUpdate() override {
@@ -450,6 +462,10 @@ class PowerManagerClientImpl : public PowerManagerClient {
         base::BindOnce(&OnVoidDBusMethod, std::move(callback)));
   }
 
+  void DeferScreenDim() override {
+    SimpleMethodCallToPowerManager(power_manager::kDeferScreenDimMethod);
+  }
+
  protected:
   void Init(dbus::Bus* bus) override {
     power_manager_proxy_ = bus->GetObjectProxy(
@@ -483,6 +499,8 @@ class PowerManagerClientImpl : public PowerManagerClient {
          &PowerManagerClientImpl::SuspendDoneReceived},
         {power_manager::kDarkSuspendImminentSignal,
          &PowerManagerClientImpl::DarkSuspendImminentReceived},
+        {power_manager::kScreenDimImminentSignal,
+         &PowerManagerClientImpl::ScreenDimImminentReceived},
         {power_manager::kIdleActionImminentSignal,
          &PowerManagerClientImpl::IdleActionImminentReceived},
         {power_manager::kIdleActionDeferredSignal,
@@ -648,13 +666,10 @@ class PowerManagerClientImpl : public PowerManagerClient {
     }
   }
 
-  void OnGetScreenBrightnessPercent(DBusMethodCallback<double> callback,
-                                    dbus::Response* response) {
+  void OnGetScreenOrKeyboardBrightnessPercent(
+      DBusMethodCallback<double> callback,
+      dbus::Response* response) {
     if (!response) {
-      if (!system::StatisticsProvider::GetInstance()->IsRunningOnVm()) {
-        POWER_LOG(ERROR) << "Error calling "
-                         << power_manager::kGetScreenBrightnessPercentMethod;
-      }
       std::move(callback).Run(base::nullopt);
       return;
     }
@@ -874,6 +889,11 @@ class PowerManagerClientImpl : public PowerManagerClient {
     for (auto& observer : observers_)
       observer.SuspendDone(duration);
     base::PowerMonitorDeviceSource::HandleSystemResumed();
+  }
+
+  void ScreenDimImminentReceived(dbus::Signal* signal) {
+    for (auto& observer : observers_)
+      observer.ScreenDimImminent();
   }
 
   void IdleActionImminentReceived(dbus::Signal* signal) {

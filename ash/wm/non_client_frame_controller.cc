@@ -17,13 +17,13 @@
 #include "ash/public/cpp/immersive/immersive_fullscreen_controller_delegate.h"
 #include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
-#include "ash/wm/move_event_handler.h"
 #include "ash/wm/panels/panel_frame_view.h"
 #include "ash/wm/property_util.h"
 #include "ash/wm/window_properties.h"
 #include "ash/wm/window_util.h"
 #include "ash/ws/window_service_owner.h"
 #include "base/macros.h"
+#include "base/strings/string16.h"
 #include "base/strings/utf_string_conversions.h"
 #include "services/ui/public/interfaces/window_manager.mojom.h"
 #include "services/ui/ws2/window_properties.h"
@@ -33,7 +33,6 @@
 #include "ui/aura/client/transient_window_client.h"
 #include "ui/aura/mus/property_converter.h"
 #include "ui/aura/mus/property_utils.h"
-#include "ui/aura/mus/window_manager_delegate.h"
 #include "ui/aura/mus/window_port_mus.h"
 #include "ui/aura/window.h"
 #include "ui/base/class_property.h"
@@ -174,7 +173,6 @@ class ImmersiveFullscreenControllerDelegateMus
 class WmNativeWidgetAura : public views::NativeWidgetAura {
  public:
   WmNativeWidgetAura(views::internal::NativeWidgetDelegate* delegate,
-                     aura::WindowManagerClient* window_manager_client,
                      bool remove_standard_frame,
                      bool enable_immersive,
                      mojom::WindowStyle window_style)
@@ -185,8 +183,7 @@ class WmNativeWidgetAura : public views::NativeWidgetAura {
             true /* is_parallel_widget_in_window_manager */),
         remove_standard_frame_(remove_standard_frame),
         enable_immersive_(enable_immersive),
-        window_style_(window_style),
-        window_manager_client_(window_manager_client) {}
+        window_style_(window_style) {}
   ~WmNativeWidgetAura() override = default;
 
   void SetHeaderHeight(int height) {
@@ -198,10 +195,6 @@ class WmNativeWidgetAura : public views::NativeWidgetAura {
 
   // views::NativeWidgetAura:
   views::NonClientFrameView* CreateNonClientFrameView() override {
-    if (window_manager_client_) {
-      move_event_handler_ = std::make_unique<MoveEventHandler>(
-          window_manager_client_, GetNativeView());
-    }
     // TODO(sky): investigate why we have this. Seems this should be the same
     // as not specifying client area insets.
     if (remove_standard_frame_)
@@ -238,12 +231,6 @@ class WmNativeWidgetAura : public views::NativeWidgetAura {
   const bool enable_immersive_;
   const mojom::WindowStyle window_style_;
 
-  // TODO: this is no longer necessary once --mash is removed,
-  // https://crbug.com/842365.
-  std::unique_ptr<MoveEventHandler> move_event_handler_;
-
-  aura::WindowManagerClient* window_manager_client_;
-
   std::unique_ptr<ImmersiveFullscreenControllerDelegateMus> immersive_delegate_;
 
   // Not used for panels or if |remove_standard_frame_| is true. This is owned
@@ -256,6 +243,27 @@ class WmNativeWidgetAura : public views::NativeWidgetAura {
   ui::Cursor cursor_;
 
   DISALLOW_COPY_AND_ASSIGN(WmNativeWidgetAura);
+};
+
+// ContentsViewMus links the ash Widget's accessibility node tree with the one
+// inside a remote process app. This is needed to support focus; ash needs to
+// have "focus" on a leaf node in its Widget/View hierarchy in order for the
+// accessibility subsystem to see focused nodes in the remote app.
+class ContentsViewMus : public views::View {
+ public:
+  ContentsViewMus() = default;
+  ~ContentsViewMus() override = default;
+
+  // views::View:
+  const char* GetClassName() const override { return "ContentsViewMus"; }
+  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
+    node_data->AddIntAttribute(ax::mojom::IntAttribute::kChildTreeId,
+                               views::AXRemoteHost::kRemoteAXTreeID);
+    node_data->role = ax::mojom::Role::kClient;
+  }
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(ContentsViewMus);
 };
 
 class ClientViewMus : public views::ClientView {
@@ -274,23 +282,13 @@ class ClientViewMus : public views::ClientView {
     // pass the request to the remote client and return false (to cancel the
     // close). If the remote client wants the window to close, it will close it
     // in a way that does not reenter this code path.
-    if (frame_controller_->window_manager_client()) {
-      frame_controller_->window_manager_client()->RequestClose(
-          frame_controller_->window());
-    } else {
-      Shell::Get()->window_service_owner()->window_service()->RequestClose(
-          frame_controller_->window());
-    }
+    Shell::Get()->window_service_owner()->window_service()->RequestClose(
+        frame_controller_->window());
     return false;
   }
 
   // views::View:
   const char* GetClassName() const override { return "ClientViewMus"; }
-  void GetAccessibleNodeData(ui::AXNodeData* node_data) override {
-    node_data->AddIntAttribute(ax::mojom::IntAttribute::kChildTreeId,
-                               views::AXRemoteHost::kRemoteAXTreeID);
-    node_data->role = ax::mojom::Role::kClient;
-  }
 
  private:
   NonClientFrameController* frame_controller_;
@@ -306,11 +304,8 @@ NonClientFrameController::NonClientFrameController(
     const gfx::Rect& bounds,
     ui::mojom::WindowType window_type,
     aura::PropertyConverter* property_converter,
-    std::map<std::string, std::vector<uint8_t>>* properties,
-    aura::WindowManagerClient* window_manager_client)
-    : window_manager_client_(window_manager_client),
-      widget_(new views::Widget),
-      window_(nullptr) {
+    std::map<std::string, std::vector<uint8_t>>* properties)
+    : widget_(new views::Widget), window_(nullptr) {
   // To simplify things this code creates a Widget. While a Widget is created
   // we need to ensure we don't inadvertently change random properties of the
   // underlying ui::Window. For example, showing the Widget shouldn't change
@@ -330,11 +325,9 @@ NonClientFrameController::NonClientFrameController(
   params.opacity = views::Widget::InitParams::OPAQUE_WINDOW;
   params.layer_type = ui::LAYER_SOLID_COLOR;
   WmNativeWidgetAura* native_widget = new WmNativeWidgetAura(
-      widget_, window_manager_client_, ShouldRemoveStandardFrame(*properties),
+      widget_, ShouldRemoveStandardFrame(*properties),
       ShouldEnableImmersive(*properties), GetWindowStyle(*properties));
   window_ = native_widget->GetNativeView();
-  window_->SetProperty(aura::client::kEmbedType,
-                       aura::client::WindowEmbedType::TOP_LEVEL_IN_WM);
   window_->SetProperty(kNonClientFrameControllerKey, this);
   window_->SetProperty(kWidgetCreationTypeKey, WidgetCreationType::FOR_CLIENT);
   window_->AddObserver(this);
@@ -379,11 +372,7 @@ int NonClientFrameController::GetMaxTitleBarButtonWidth() {
   return GetAshLayoutSize(AshLayoutSize::kNonBrowserCaption).width() * 3;
 }
 
-void NonClientFrameController::SetClientArea(
-    const gfx::Insets& insets,
-    const std::vector<gfx::Rect>& additional_client_areas) {
-  client_area_insets_ = insets;
-  additional_client_areas_ = additional_client_areas;
+void NonClientFrameController::SetClientArea(const gfx::Insets& insets) {
   static_cast<WmNativeWidgetAura*>(widget_->native_widget())
       ->SetHeaderHeight(insets.top());
 }
@@ -391,12 +380,6 @@ void NonClientFrameController::SetClientArea(
 void NonClientFrameController::StoreCursor(const ui::Cursor& cursor) {
   static_cast<WmNativeWidgetAura*>(widget_->native_widget())
       ->set_cursor(cursor);
-}
-
-NonClientFrameController::~NonClientFrameController() {
-  aura::client::GetTransientWindowClient()->RemoveObserver(this);
-  if (window_)
-    window_->RemoveObserver(this);
 }
 
 base::string16 NonClientFrameController::GetWindowTitle() const {
@@ -436,9 +419,27 @@ bool NonClientFrameController::ShouldShowWindowTitle() const {
   return window_ && window_->GetProperty(aura::client::kTitleShownKey);
 }
 
+void NonClientFrameController::DeleteDelegate() {
+  delete this;
+}
+
+views::Widget* NonClientFrameController::GetWidget() {
+  return widget_;
+}
+
+const views::Widget* NonClientFrameController::GetWidget() const {
+  return widget_;
+}
+
+views::View* NonClientFrameController::GetContentsView() {
+  return contents_view_;
+}
+
 views::ClientView* NonClientFrameController::CreateClientView(
     views::Widget* widget) {
-  return new ClientViewMus(widget, GetContentsView(), this);
+  DCHECK(!contents_view_);
+  contents_view_ = new ContentsViewMus();  // Owned by views hierarchy.
+  return new ClientViewMus(widget, contents_view_, this);
 }
 
 void NonClientFrameController::OnWindowPropertyChanged(aura::Window* window,
@@ -490,6 +491,12 @@ void NonClientFrameController::OnTransientChildWindowRemoved(
       DetachedTitleAreaRendererForClient::ForWindow(transient_child);
   if (renderer)
     renderer->Detach();
+}
+
+NonClientFrameController::~NonClientFrameController() {
+  aura::client::GetTransientWindowClient()->RemoveObserver(this);
+  if (window_)
+    window_->RemoveObserver(this);
 }
 
 }  // namespace ash

@@ -542,6 +542,8 @@ public class ImeAdapterImpl implements ImeAdapter, WindowEventObserver {
         } else if (ViewUtils.hasFocus(containerView)
                 && resultCode == InputMethodManager.RESULT_UNCHANGED_SHOWN) {
             // If the OSK was already there, focus the form immediately.
+            // Also, the VR soft keyboard always reports RESULT_UNCHANGED_SHOWN as it
+            // doesn't affect the size of the web contents.
             mWebContents.scrollFocusedEditableNodeIntoView();
         }
     }
@@ -591,8 +593,8 @@ public class ImeAdapterImpl implements ImeAdapter, WindowEventObserver {
         if (DEBUG_LOGS) Log.i(TAG, "hideKeyboard");
         View view = mViewDelegate.getContainerView();
         if (mInputMethodManagerWrapper.isActive(view)) {
-            // NOTE: we should not set ResultReceiver here. Otherwise, IMM will own ContentViewCore
-            // and ImeAdapter even after input method goes away and result gets received.
+            // NOTE: we should not set ResultReceiver here. Otherwise, IMM will own
+            // ImeAdapter even after input method goes away and result gets received.
             mInputMethodManagerWrapper.hideSoftInputFromWindow(view.getWindowToken(), 0, null);
         }
         // Detach input connection by returning null from onCreateInputConnection().

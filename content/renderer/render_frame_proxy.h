@@ -127,7 +127,7 @@ class CONTENT_EXPORT RenderFrameProxy : public IPC::Listener,
   // IPC::Listener
   bool OnMessageReceived(const IPC::Message& msg) override;
 
-  // Out-of-process child frames receive a signal from RenderWidgetCompositor
+  // Out-of-process child frames receive a signal from blink::LayerTreeView
   // when a compositor frame will begin.
   void WillBeginCompositorFrame();
 
@@ -137,7 +137,7 @@ class CONTENT_EXPORT RenderFrameProxy : public IPC::Listener,
 
   // Out-of-process child frames receive a signal from RenderWidget when the
   // zoom level has changed.
-  void OnZoomLevelChanged(bool uses_temporary_zoom, double zoom_level);
+  void OnZoomLevelChanged(double zoom_level);
 
   // Invoked by RenderWidget when a new capture sequence number was set,
   // indicating that surfaces should be synchronized.
@@ -219,16 +219,13 @@ class CONTENT_EXPORT RenderFrameProxy : public IPC::Listener,
             RenderViewImpl* render_view,
             RenderWidget* render_widget);
 
-  void ResendResizeParams();
-
-  void SetChildFrameSurface(const viz::SurfaceInfo& surface_info);
+  void ResendVisualProperties();
 
   // IPC handlers
   void OnDeleteProxy();
   void OnChildFrameProcessGone();
   void OnCompositorFrameSwapped(const IPC::Message& message);
-  // TODO(fsamuel): Rename OnFirstSurfaceActivation().
-  void OnSetChildFrameSurface(const viz::SurfaceInfo& surface_info);
+  void OnFirstSurfaceActivation(const viz::SurfaceInfo& surface_info);
   void OnIntrinsicSizingInfoOfChildChanged(
       blink::WebIntrinsicSizingInfo sizing_info);
   void OnUpdateOpener(int opener_routing_id);

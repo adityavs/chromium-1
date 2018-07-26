@@ -40,7 +40,7 @@
 #include "third_party/blink/public/common/frame/user_activation_update_type.h"
 #include "third_party/blink/public/mojom/page/page_visibility_state.mojom-shared.h"
 #include "third_party/blink/public/platform/blame_context.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider.h"
 #include "third_party/blink/public/platform/web_application_cache_host.h"
 #include "third_party/blink/public/platform/web_common.h"
 #include "third_party/blink/public/platform/web_content_security_policy.h"
@@ -318,7 +318,9 @@ class BLINK_EXPORT WebLocalFrameClient {
   // The client should handle the request as a download.
   // If the request is for a blob: URL, a BlobURLTokenPtr should be provided
   // as |blob_url_token| to ensure the correct blob gets downloaded.
+  enum class CrossOriginRedirects { kFollow, kNavigate };
   virtual void DownloadURL(const WebURLRequest&,
+                           CrossOriginRedirects cross_origin_redirect_behavior,
                            mojo::ScopedMessagePipeHandle blob_url_token) {}
 
   // The client should load an error page in the current frame.
@@ -330,8 +332,6 @@ class BLINK_EXPORT WebLocalFrameClient {
   // defaultPolicy should just be returned.
 
   struct NavigationPolicyInfo {
-    WebDocumentLoader::ExtraData* extra_data;
-
     // Note: if browser side navigations are enabled, the client may modify
     // the urlRequest. However, should this happen, the client should change
     // the WebNavigationPolicy to WebNavigationPolicyIgnore, and the load
@@ -357,8 +357,7 @@ class BLINK_EXPORT WebLocalFrameClient {
     ArchiveStatus archive_status;
 
     explicit NavigationPolicyInfo(WebURLRequest& url_request)
-        : extra_data(nullptr),
-          url_request(url_request),
+        : url_request(url_request),
           navigation_type(kWebNavigationTypeOther),
           default_policy(kWebNavigationPolicyIgnore),
           replaces_current_history_item(false),
@@ -699,22 +698,11 @@ class BLINK_EXPORT WebLocalFrameClient {
 
   // Find-in-page notifications ------------------------------------------
 
-  // Notifies how many matches have been found in this frame so far, for a
-  // given identifier.  |finalUpdate| specifies whether this is the last
-  // update for this frame.
-  virtual void ReportFindInPageMatchCount(int identifier,
-                                          int count,
-                                          bool final_update) {}
-
-  // Notifies what tick-mark rect is currently selected.   The given
-  // identifier lets the client know which request this message belongs
-  // to, so that it can choose to ignore the message if it has moved on
-  // to other things.  The selection rect is expected to have coordinates
-  // relative to the top left corner of the web page area and represent
-  // where on the screen the selection rect is currently located.
-  virtual void ReportFindInPageSelection(int identifier,
-                                         int active_match_ordinal,
-                                         const WebRect& selection) {}
+  virtual void SendFindReply(int request_id,
+                             int match_count,
+                             int ordinal,
+                             const WebRect& selection_rect,
+                             bool final_status_update) {}
 
   // MediaStream -----------------------------------------------------
 

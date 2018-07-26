@@ -11,9 +11,12 @@
 #include "base/bind.h"
 #include "base/memory/ptr_util.h"
 #include "chromeos/components/proximity_auth/logging/logging.h"
+#include "components/cryptauth/proto/enum_util.h"
 #include "components/cryptauth/remote_device.h"
 #include "components/cryptauth/remote_device_ref.h"
 #include "components/cryptauth/secure_message_delegate.h"
+
+namespace cryptauth {
 
 namespace {
 
@@ -23,12 +26,14 @@ GetSoftwareFeatureToStateMap(const cryptauth::ExternalDeviceInfo& device) {
       software_feature_to_state_map;
 
   for (int i = 0; i < device.supported_software_features_size(); ++i) {
-    software_feature_to_state_map[device.supported_software_features(i)] =
+    software_feature_to_state_map[SoftwareFeatureStringToEnum(
+        device.supported_software_features(i))] =
         cryptauth::SoftwareFeatureState::kSupported;
   }
 
   for (int i = 0; i < device.enabled_software_features_size(); ++i) {
-    software_feature_to_state_map[device.enabled_software_features(i)] =
+    software_feature_to_state_map[SoftwareFeatureStringToEnum(
+        device.enabled_software_features(i))] =
         cryptauth::SoftwareFeatureState::kEnabled;
   }
 
@@ -36,8 +41,6 @@ GetSoftwareFeatureToStateMap(const cryptauth::ExternalDeviceInfo& device) {
 }
 
 }  // namespace
-
-namespace cryptauth {
 
 // static
 RemoteDeviceLoader::Factory* RemoteDeviceLoader::Factory::factory_instance_ =
@@ -129,7 +132,6 @@ void RemoteDeviceLoader::OnPSKDerived(
 
   RemoteDevice remote_device(
       user_id_, device.friendly_device_name(), device.public_key(), psk,
-      device.unlock_key(), device.mobile_hotspot_supported(),
       device.last_update_time_millis(), GetSoftwareFeatureToStateMap(device),
       beacon_seeds);
 

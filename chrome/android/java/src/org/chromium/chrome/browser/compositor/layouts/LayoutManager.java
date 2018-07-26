@@ -673,10 +673,11 @@ public class LayoutManager implements LayoutUpdateHost, LayoutProvider,
         if (layoutTab == null) return;
 
         String url = tab.getUrl();
-        boolean isNativePage = url != null && url.startsWith(UrlConstants.CHROME_NATIVE_URL_PREFIX);
+        boolean isNativePage = tab.isNativePage()
+                || (url != null && url.startsWith(UrlConstants.CHROME_NATIVE_URL_PREFIX));
         int themeColor = tab.getThemeColor();
 
-        boolean canUseLiveTexture = tab.getContentViewCore() != null && !tab.isShowingSadTab()
+        boolean canUseLiveTexture = tab.getWebContents() != null && !tab.isShowingSadTab()
                 && !isNativePage && !tab.isHidden();
 
         boolean isNtp = tab.getNativePage() instanceof NewTabPage;

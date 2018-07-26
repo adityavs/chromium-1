@@ -32,7 +32,7 @@ import org.chromium.chrome.browser.services.AndroidEduAndChildAccountHelper;
 import org.chromium.chrome.browser.signin.SigninManager;
 import org.chromium.chrome.browser.util.FeatureUtilities;
 import org.chromium.chrome.browser.util.IntentUtils;
-import org.chromium.chrome.browser.vr_shell.VrIntentUtils;
+import org.chromium.chrome.browser.vr.VrModuleProvider;
 import org.chromium.chrome.browser.webapps.WebApkActivity;
 import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.ChildAccountStatus;
@@ -139,9 +139,10 @@ public abstract class FirstRunFlowSequencer  {
 
     @VisibleForTesting
     protected boolean shouldShowSearchEnginePage() {
+        @LocaleManager.SearchEnginePromoType
         int searchPromoType = LocaleManager.getInstance().getSearchEnginePromoShowType();
-        return searchPromoType == LocaleManager.SEARCH_ENGINE_PROMO_SHOW_NEW
-                || searchPromoType == LocaleManager.SEARCH_ENGINE_PROMO_SHOW_EXISTING;
+        return searchPromoType == LocaleManager.SearchEnginePromoType.SHOW_NEW
+                || searchPromoType == LocaleManager.SearchEnginePromoType.SHOW_EXISTING;
     }
 
     @VisibleForTesting
@@ -348,7 +349,7 @@ public abstract class FirstRunFlowSequencer  {
 
         Log.d(TAG, "Redirecting user through FRE.");
         if ((intent.getFlags() & Intent.FLAG_ACTIVITY_NEW_TASK) != 0) {
-            boolean isVrIntent = VrIntentUtils.isVrIntent(intent);
+            boolean isVrIntent = VrModuleProvider.getIntentDelegate().isVrIntent(intent);
             boolean isGenericFreActive = false;
             List<WeakReference<Activity>> activities = ApplicationStatus.getRunningActivities();
             for (WeakReference<Activity> weakActivity : activities) {
@@ -381,7 +382,8 @@ public abstract class FirstRunFlowSequencer  {
 
             if (!(caller instanceof Activity)) freIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (isVrIntent) {
-                freIntent = VrIntentUtils.setupVrFreIntent(caller, intent, freIntent);
+                freIntent =
+                        VrModuleProvider.getIntentDelegate().setupVrFreIntent(caller, freIntent);
             }
             IntentUtils.safeStartActivity(caller, freIntent);
         } else {

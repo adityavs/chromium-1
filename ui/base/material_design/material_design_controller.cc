@@ -7,11 +7,16 @@
 #include <string>
 
 #include "base/command_line.h"
+#include "base/feature_list.h"
 #include "base/logging.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/trace_event/trace_event.h"
 #include "build/build_config.h"
+#include "build/buildflag.h"
 #include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_switches.h"
+#include "ui/base/ui_features.h"
+#include "ui/gfx/animation/linear_animation.h"
 #include "ui/gfx/color_palette.h"
 #include "ui/gfx/color_utils.h"
 
@@ -34,6 +39,19 @@
 namespace ui {
 namespace {
 
+#if defined(OS_CHROMEOS) || defined(OS_WIN) || defined(OS_LINUX)
+
+// Whether Material Refresh should be used by default.
+// Material refresh is controlled by both --top-chrome-md and this feature.
+// --top-chrome-md should take precedence over what this feature may indicate.
+bool IsMaterialRefreshEnabled() {
+  static constexpr base::Feature kMaterialRefreshEnabledFeature = {
+      "MaterialRefresh", base::FEATURE_ENABLED_BY_DEFAULT};
+  return base::FeatureList::IsEnabled(kMaterialRefreshEnabledFeature);
+}
+
+#endif
+
 #if defined(OS_CHROMEOS)
 
 // Whether to use MATERIAL_TOUCH_OPTIMIZED when a touch device is detected.
@@ -42,9 +60,18 @@ const base::Feature kTouchOptimizedUi = {"TouchOptimizedUi",
                                          base::FEATURE_ENABLED_BY_DEFAULT};
 
 MaterialDesignController::Mode GetDefaultTouchDeviceMode() {
-  return base::FeatureList::IsEnabled(kTouchOptimizedUi)
-             ? MaterialDesignController::MATERIAL_TOUCH_REFRESH
-             : MaterialDesignController::MATERIAL_REFRESH;
+  bool material_refresh_enabled = IsMaterialRefreshEnabled();
+  bool touch_optimized_ui_enabled =
+      base::FeatureList::IsEnabled(kTouchOptimizedUi);
+  if (material_refresh_enabled) {
+    return touch_optimized_ui_enabled
+               ? MaterialDesignController::MATERIAL_TOUCH_REFRESH
+               : MaterialDesignController::MATERIAL_REFRESH;
+  }
+
+  return touch_optimized_ui_enabled
+             ? MaterialDesignController::MATERIAL_TOUCH_OPTIMIZED
+             : MaterialDesignController::MATERIAL_HYBRID;
 }
 
 bool HasTouchscreen() {
@@ -84,9 +111,9 @@ MaterialDesignController::Mode MaterialDesignController::mode_ =
 void MaterialDesignController::Initialize() {
   TRACE_EVENT0("startup", "MaterialDesignController::InitializeMode");
   CHECK(!is_mode_initialized_);
+  base::CommandLine* command_line = base::CommandLine::ForCurrentProcess();
   const std::string switch_value =
-      base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
-          switches::kTopChromeMD);
+      command_line->GetSwitchValueASCII(switches::kTopChromeMD);
 
   bool force_material_refresh = false;
 #if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
@@ -123,8 +150,18 @@ void MaterialDesignController::Initialize() {
     SetMode(DefaultMode());
   }
 
+  // Ideally, there would be a more general, "initialize random stuff here"
+  // function into which these things and a call to this function can be placed.
+  // TODO(crbug.com/864544)
   if (IsRefreshUi())
     color_utils::SetDarkestColor(gfx::kGoogleGrey900);
+
+  double animation_duration_scale;
+  if (base::StringToDouble(
+          command_line->GetSwitchValueASCII(switches::kAnimationDurationScale),
+          &animation_duration_scale)) {
+    gfx::LinearAnimation::SetDurationScale(animation_duration_scale);
+  }
 }
 
 // static
@@ -164,11 +201,13 @@ MaterialDesignController::Mode MaterialDesignController::DefaultMode() {
   if (HasTouchscreen())
     return GetDefaultTouchDeviceMode();
 
-  return MATERIAL_REFRESH;
+  return IsMaterialRefreshEnabled() ? MATERIAL_REFRESH : MATERIAL_NORMAL;
 #endif  // defined(OS_CHROMEOS)
 
 #if defined(OS_WIN) || defined(OS_LINUX)
-  return MATERIAL_REFRESH;
+  return IsMaterialRefreshEnabled() ? MATERIAL_REFRESH : MATERIAL_NORMAL;
+#elif defined(OS_MACOSX) && BUILDFLAG(MAC_VIEWS_BROWSER)
+  return features::IsViewsBrowserCocoa() ? MATERIAL_NORMAL : MATERIAL_REFRESH;
 #else
   return MATERIAL_NORMAL;
 #endif

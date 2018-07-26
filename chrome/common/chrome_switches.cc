@@ -220,11 +220,6 @@ const char kDisableExtensionsExcept[] = "disable-extensions-except";
 const char kDisableExtensionsFileAccessCheck[] =
     "disable-extensions-file-access-check";
 
-// Disable the net::URLRequestThrottlerManager functionality for
-// requests originating from extensions.
-const char kDisableExtensionsHttpThrottling[] =
-    "disable-extensions-http-throttling";
-
 // Disable auto-reload of error pages if offline.
 const char kDisableOfflineAutoReload[]      = "disable-offline-auto-reload";
 
@@ -727,6 +722,11 @@ const char kWebAuthenticationUI[] = "enable-web-authentication-ui";
 // If set to 0, the meaning is "no proactive pruning".
 const char kWebRtcRemoteEventLogProactivePruningDelta[] =
     "webrtc-event-log-proactive-pruning-delta";
+
+// WebRTC event logs will only be uploaded if the conditions hold for this
+// many milliseconds.
+const char kWebRtcRemoteEventLogUploadDelayMs[] =
+    "webrtc-event-log-upload-delay-ms";
 
 // Normally, remote-bound WebRTC event logs are uploaded only when no
 // peer connections are active. With this flag, the upload is never suppressed.

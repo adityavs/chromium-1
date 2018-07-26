@@ -119,10 +119,16 @@ class CanvasRenderingContext2DTest : public PageTestBase {
   intptr_t GetCurrentGPUMemoryUsage() const {
     return CanvasElement().GetGPUMemoryUsage();
   }
+  void DrawSomething() {
+    CanvasElement().DidDraw();
+    CanvasElement().FinalizeFrame();
+    // Grabbing an image forces a flush
+    CanvasElement().Snapshot(kBackBuffer, kPreferAcceleration);
+  }
 
-  void CreateContext(OpacityMode,
-                     String color_space = String(),
-                     LinearPixelMathState = kLinearPixelMathDisabled);
+  enum LatencyMode { kNormalLatency, kLowLatency };
+
+  void CreateContext(OpacityMode, LatencyMode = kNormalLatency);
   ScriptState* GetScriptState() {
     return ToScriptStateForMainWorld(canvas_element_->GetFrame());
   }
@@ -178,19 +184,12 @@ CanvasRenderingContext2DTest::CanvasRenderingContext2DTest()
       opaque_bitmap_(IntSize(10, 10), kOpaqueBitmap),
       alpha_bitmap_(IntSize(10, 10), kTransparentBitmap) {}
 
-void CanvasRenderingContext2DTest::CreateContext(
-    OpacityMode opacity_mode,
-    String color_space,
-    LinearPixelMathState LinearPixelMath_state) {
+void CanvasRenderingContext2DTest::CreateContext(OpacityMode opacity_mode,
+                                                 LatencyMode latency_mode) {
   String canvas_type("2d");
   CanvasContextCreationAttributesCore attributes;
   attributes.alpha = opacity_mode == kNonOpaque;
-  if (!color_space.IsEmpty()) {
-    attributes.color_space = color_space;
-    if (LinearPixelMath_state == kLinearPixelMathEnabled) {
-      attributes.pixel_format = "float16";
-    }
-  }
+  attributes.low_latency = latency_mode == kLowLatency;
   canvas_element_->GetCanvasRenderingContext(canvas_type, attributes);
 }
 
@@ -250,7 +249,7 @@ std::unique_ptr<Canvas2DLayerBridge> CanvasRenderingContext2DTest::MakeBridge(
     const IntSize& size,
     Canvas2DLayerBridge::AccelerationMode acceleration_mode) {
   std::unique_ptr<Canvas2DLayerBridge> bridge =
-      std::make_unique<Canvas2DLayerBridge>(size, 0, acceleration_mode,
+      std::make_unique<Canvas2DLayerBridge>(size, acceleration_mode,
                                             CanvasColorParams());
   bridge->SetCanvasResourceHost(canvas_element_);
   return bridge;
@@ -263,7 +262,7 @@ class FakeCanvas2DLayerBridge : public Canvas2DLayerBridge {
   FakeCanvas2DLayerBridge(const IntSize& size,
                           CanvasColorParams color_params,
                           AccelerationHint hint)
-      : Canvas2DLayerBridge(size, 0, kDisableAcceleration, color_params),
+      : Canvas2DLayerBridge(size, kDisableAcceleration, color_params),
         is_accelerated_(hint != kPreferNoAcceleration) {}
   ~FakeCanvas2DLayerBridge() override = default;
   bool IsAccelerated() const override { return is_accelerated_; }
@@ -285,7 +284,6 @@ class MockImageBufferSurfaceForOverwriteTesting : public Canvas2DLayerBridge {
   MockImageBufferSurfaceForOverwriteTesting(const IntSize& size,
                                             CanvasColorParams color_params)
       : Canvas2DLayerBridge(size,
-                            0,
                             Canvas2DLayerBridge::kDisableAcceleration,
                             color_params) {}
   ~MockImageBufferSurfaceForOverwriteTesting() override = default;
@@ -632,12 +630,13 @@ TEST_F(CanvasRenderingContext2DTest, ContextDisposedBeforeCanvas) {
 TEST_F(CanvasRenderingContext2DTest, MAYBE_GetImageDataDisablesAcceleration) {
   ScopedCanvas2dFixedRenderingModeForTest canvas_2d_fixed_rendering_mode(false);
 
+  GetPage().GetSettings().SetAcceleratedCompositingEnabled(true);
   CreateContext(kNonOpaque);
   IntSize size(300, 300);
   std::unique_ptr<Canvas2DLayerBridge> bridge =
       MakeBridge(size, Canvas2DLayerBridge::kForceAccelerationForTesting);
   CanvasElement().SetCanvas2DLayerBridgeForTesting(std::move(bridge), size);
-
+  DrawSomething();  // Lock-in gpu acceleration
   EXPECT_TRUE(CanvasElement().GetCanvas2DLayerBridge()->IsAccelerated());
   EXPECT_EQ(1u, GetGlobalAcceleratedContextCount());
   EXPECT_EQ(720000, GetGlobalGPUMemoryUsage());
@@ -788,7 +787,7 @@ TEST_F(CanvasRenderingContext2DTest,
   CanvasElement().SetCanvas2DLayerBridgeForTesting(
       std::move(fake_accelerate_surface), size);
 
-  FakeCanvasResourceHost host;
+  FakeCanvasResourceHost host(size);
   auto fake_deaccelerate_surface = std::make_unique<FakeCanvas2DLayerBridge>(
       size, CanvasColorParams(), kPreferNoAcceleration);
   fake_deaccelerate_surface->SetCanvasResourceHost(&host);
@@ -1135,6 +1134,7 @@ class CanvasRenderingContext2DTestWithTestingPlatform
 // In these cases, the element should request a compositing update.
 TEST_F(CanvasRenderingContext2DTestWithTestingPlatform,
        ElementRequestsCompositingUpdateOnHibernateAndWakeUp) {
+  GetPage().GetSettings().SetAcceleratedCompositingEnabled(true);
   CreateContext(kNonOpaque);
   IntSize size(300, 300);
   std::unique_ptr<Canvas2DLayerBridge> bridge =
@@ -1147,6 +1147,8 @@ TEST_F(CanvasRenderingContext2DTestWithTestingPlatform,
   // Take a snapshot to trigger lazy resource provider creation
   CanvasElement().GetCanvas2DLayerBridge()->NewImageSnapshot(
       kPreferAcceleration);
+  EXPECT_TRUE(!!CanvasElement().ResourceProvider());
+  EXPECT_TRUE(CanvasElement().ResourceProvider()->IsAccelerated());
   EXPECT_TRUE(CanvasElement().GetLayoutBoxModelObject());
   PaintLayer* layer = CanvasElement().GetLayoutBoxModelObject()->Layer();
   EXPECT_TRUE(layer);
@@ -1159,6 +1161,8 @@ TEST_F(CanvasRenderingContext2DTestWithTestingPlatform,
   // If enabled, hibernation should cause compositing update.
   EXPECT_EQ(!!CANVAS2D_HIBERNATION_ENABLED,
             layer->NeedsCompositingInputsUpdate());
+  EXPECT_EQ(!!CANVAS2D_HIBERNATION_ENABLED,
+            !CanvasElement().ResourceProvider());
 
   GetDocument().View()->UpdateAllLifecyclePhases();
   EXPECT_FALSE(layer->NeedsCompositingInputsUpdate());
@@ -1195,6 +1199,24 @@ TEST_F(CanvasRenderingContext2DTestWithTestingPlatform,
 
   // Never hibernate a canvas with no resource provider
   EXPECT_FALSE(layer->NeedsCompositingInputsUpdate());
+}
+
+TEST_F(CanvasRenderingContext2DTest, LowLatencyIsSingleBuffered) {
+  CreateContext(kNonOpaque, kLowLatency);
+  // No need to set-up the layer bridge when testing low latency mode.
+  DrawSomething();
+  auto frame1_resource =
+      CanvasElement()
+          .GetOrCreateCanvasResourceProvider(kPreferNoAcceleration)
+          ->ProduceFrame();
+  EXPECT_TRUE(!!frame1_resource);
+  DrawSomething();
+  auto frame2_resource =
+      CanvasElement()
+          .GetOrCreateCanvasResourceProvider(kPreferNoAcceleration)
+          ->ProduceFrame();
+  EXPECT_TRUE(!!frame2_resource);
+  EXPECT_EQ(frame1_resource.get(), frame2_resource.get());
 }
 
 }  // namespace blink

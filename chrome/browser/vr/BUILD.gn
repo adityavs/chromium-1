@@ -20,6 +20,18 @@ buildflag_header("vr_build_features") {
   flags = [ "USE_VR_ASSETS_COMPONENT=$use_vr_assets_component" ]
 }
 
+source_set("vr_gl_utils") {
+  sources = [
+    "vr_gl_util.cc",
+    "vr_gl_util.h",
+  ]
+
+  deps = [
+    "//skia",
+    "//ui/gl/init",
+  ]
+}
+
 component("vr_common") {
   sources = [
     "animation.cc",
@@ -136,6 +148,8 @@ component("vr_common") {
     "gesture_detector.h",
     "graphics_delegate.cc",
     "graphics_delegate.h",
+    "input_event.cc",
+    "input_event.h",
     "keyboard_delegate.h",
     "keyboard_ui_interface.h",
     "macros.h",
@@ -224,21 +238,25 @@ component("vr_common") {
     "ui_browser_interface.h",
     "ui_element_renderer.cc",
     "ui_element_renderer.h",
+    "ui_initial_state.cc",
+    "ui_initial_state.h",
     "ui_input_manager.cc",
     "ui_input_manager.h",
+    "ui_interface.h",
     "ui_renderer.cc",
     "ui_renderer.h",
     "ui_scene.cc",
     "ui_scene.h",
     "ui_scene_creator.cc",
     "ui_scene_creator.h",
+    "ui_support.cc",
+    "ui_support.h",
     "ui_test_input.cc",
     "ui_test_input.h",
     "ui_unsupported_mode.h",
     "vr_export.h",
-    "vr_features.h",
-    "vr_gl_util.cc",
-    "vr_gl_util.h",
+    "vr_geometry_util.cc",
+    "vr_geometry_util.h",
   ]
 
   public_deps = [
@@ -247,6 +265,7 @@ component("vr_common") {
 
   deps = [
     ":vr_build_features",
+    ":vr_gl_utils",
     "//base",
     "//cc/animation",
     "//cc/paint",
@@ -254,15 +273,18 @@ component("vr_common") {
     "//chrome/browser/vr/vector_icons",
     "//chrome/common:constants",
     "//components/omnibox/browser",
+    "//components/rappor/public:public",
     "//components/security_state/core",
     "//components/strings",
     "//components/toolbar",
+    "//components/toolbar:vector_icons",
     "//components/ukm/content",
     "//components/url_formatter",
     "//components/vector_icons",
     "//content/public/browser",
     "//content/public/common",
     "//device/vr",
+    "//device/vr/buildflags:buildflags",
     "//device/vr/public/mojom",
     "//media",
     "//net",
@@ -273,7 +295,10 @@ component("vr_common") {
     "//ui/gl/init",
   ]
 
-  defines = [ "VR_IMPLEMENTATION" ]
+  defines = [
+    "VR_IMPLEMENTATION",
+    "VR_UI_IMPLEMENTATION",
+  ]
 }
 
 test("vr_common_unittests") {
@@ -308,7 +333,7 @@ test("vr_common_unittests") {
     "fps_meter_unittest.cc",
     "gesture_detector_unittest.cc",
     "model/text_input_info_unittest.cc",
-    "pose_util_unittest.cc",
+    "platform_ui_input_delegate_unittest.cc",
     "service/vr_device_manager_unittest.cc",
     "sliding_average_unittest.cc",
     "speech_recognizer_unittest.cc",
@@ -320,7 +345,7 @@ test("vr_common_unittests") {
     "ui_input_manager_unittest.cc",
     "ui_scene_unittest.cc",
     "ui_unittest.cc",
-    "vr_gl_util_unittest.cc",
+    "vr_geometry_util_unittest.cc",
   ]
 
   # TODO(mthiesse, crbug.com/769373): The dependency on device/vr:fakes requires
@@ -411,7 +436,7 @@ source_set("vr_test_support") {
     "//components/security_state/core",
     "//components/toolbar:vector_icons",
     "//content/test:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//skia",
     "//testing/gtest",
     "//ui/accessibility:ax_enums_mojo",

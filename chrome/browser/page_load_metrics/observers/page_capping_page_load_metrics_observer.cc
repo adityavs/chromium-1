@@ -252,7 +252,8 @@ void PageCappingPageLoadMetricsObserver::WriteToSavings(int64_t bytes_saved) {
 
   data_reduction_proxy_settings->data_reduction_proxy_service()
       ->UpdateContentLengths(0, bytes_saved, data_saver_enabled,
-                             data_reduction_proxy::HTTPS, "text/html");
+                             data_reduction_proxy::HTTPS, "text/html", true,
+                             data_use_measurement::DataUseUserData::OTHER, 0);
 }
 
 int64_t PageCappingPageLoadMetricsObserver::GetFuzzingOffset() const {
@@ -292,7 +293,13 @@ bool PageCappingPageLoadMetricsObserver::IsBlacklisted() {
   if (blacklisted_)
     return blacklisted_.value();
 
+  DCHECK_EQ(PageCappingState::kInfoBarNotShown, page_capping_state_);
   auto* blacklist = GetPageLoadCappingBlacklist();
+  // Treat incognito profiles as blacklisted.
+  if (!blacklist) {
+    blacklisted_ = true;
+    return true;
+  }
   std::vector<blacklist::BlacklistReason> passed_reasons;
   auto blacklist_reason = blacklist->IsLoadedAndAllowed(
       url_host_,
@@ -307,7 +314,20 @@ bool PageCappingPageLoadMetricsObserver::IsBlacklisted() {
 
 PageLoadCappingBlacklist*
 PageCappingPageLoadMetricsObserver::GetPageLoadCappingBlacklist() const {
-  return PageLoadCappingServiceFactory::GetForBrowserContext(
-             web_contents_->GetBrowserContext())
-      ->page_load_capping_blacklist();
+  auto* data_reduction_proxy_settings =
+      DataReductionProxyChromeSettingsFactory::GetForBrowserContext(
+          web_contents_->GetBrowserContext());
+
+  if (!data_reduction_proxy_settings ||
+      !data_reduction_proxy_settings->IsDataReductionProxyEnabled()) {
+    return nullptr;
+  }
+
+  auto* page_capping_service =
+      PageLoadCappingServiceFactory::GetForBrowserContext(
+          web_contents_->GetBrowserContext());
+  if (!page_capping_service)
+    return nullptr;
+
+  return page_capping_service->page_load_capping_blacklist();
 }

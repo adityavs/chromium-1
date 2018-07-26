@@ -38,10 +38,10 @@ class PLATFORM_EXPORT WorkerThreadScheduler
       public IdleHelper::Delegate,
       public base::sequence_manager::TaskTimeObserver {
  public:
-  WorkerThreadScheduler(WebThreadType thread_type,
-                        std::unique_ptr<base::sequence_manager::SequenceManager>
-                            task_queue_manager,
-                        WorkerSchedulerProxy* proxy);
+  WorkerThreadScheduler(
+      WebThreadType thread_type,
+      std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager,
+      WorkerSchedulerProxy* proxy);
   ~WorkerThreadScheduler() override;
 
   // WebThreadScheduler implementation:
@@ -53,15 +53,15 @@ class PLATFORM_EXPORT WorkerThreadScheduler
   void AddTaskObserver(base::MessageLoop::TaskObserver* task_observer) override;
   void RemoveTaskObserver(
       base::MessageLoop::TaskObserver* task_observer) override;
+  void AddRAILModeObserver(WebRAILModeObserver*) override {}
   void Shutdown() override;
 
   // NonMainThreadSchedulerImpl implementation:
   scoped_refptr<NonMainThreadTaskQueue> DefaultTaskQueue() override;
   void OnTaskCompleted(NonMainThreadTaskQueue* worker_task_queue,
                        const base::sequence_manager::TaskQueue::Task& task,
-                       base::TimeTicks start,
-                       base::TimeTicks end,
-                       base::Optional<base::TimeDelta> thread_time) override;
+                       const base::sequence_manager::TaskQueue::TaskTiming&
+                           task_timing) override;
 
   // TaskTimeObserver implementation:
   void WillProcessTask(base::TimeTicks start_time) override;

@@ -50,6 +50,7 @@ import org.robolectric.shadows.ShadowResources;
 
 import org.chromium.base.Callback;
 import org.chromium.base.test.BaseRobolectricTestRunner;
+import org.chromium.base.test.asynctask.CustomShadowAsyncTask;
 import org.chromium.base.test.util.Feature;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeFeatureList;
@@ -80,7 +81,6 @@ import org.chromium.components.signin.AccountManagerFacade;
 import org.chromium.components.signin.test.util.AccountHolder;
 import org.chromium.components.signin.test.util.FakeAccountManagerDelegate;
 import org.chromium.net.NetworkChangeNotifier;
-import org.chromium.testing.local.CustomShadowAsyncTask;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -97,7 +97,8 @@ import java.util.Locale;
 @Config(manifest = Config.NONE, shadows = {CustomShadowAsyncTask.class})
 @DisableFeatures({ChromeFeatureList.CONTENT_SUGGESTIONS_SCROLL_TO_LOAD,
         ChromeFeatureList.NTP_ARTICLE_SUGGESTIONS_EXPANDABLE_HEADER,
-        ChromeFeatureList.SIMPLIFIED_NTP, ChromeFeatureList.CHROME_DUPLEX})
+        ChromeFeatureList.SIMPLIFIED_NTP, ChromeFeatureList.CHROME_DUET,
+        ChromeFeatureList.UNIFIED_CONSENT})
 public class NewTabPageAdapterTest {
     @Rule
     public DisableHistogramsRule mDisableHistogramsRule = new DisableHistogramsRule();
@@ -989,7 +990,7 @@ public class NewTabPageAdapterTest {
     public void testSigninPromoDismissal() {
         final String signInPromoText = "sign in";
         when(MyShadowResources.sResources.getText(
-                     R.string.signin_promo_description_ntp_content_suggestions))
+                     R.string.signin_promo_description_ntp_content_suggestions_legacy))
                 .thenReturn(signInPromoText);
 
         when(mMockSigninManager.isSignInAllowed()).thenReturn(true);

@@ -23,6 +23,7 @@ import org.chromium.base.ThreadUtils;
 import org.chromium.base.VisibleForTesting;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.JNINamespace;
+import org.chromium.base.library_loader.LibraryLoader;
 import org.chromium.base.library_loader.Linker;
 import org.chromium.base.process_launcher.ChildConnectionAllocator;
 import org.chromium.base.process_launcher.ChildProcessConnection;
@@ -122,7 +123,7 @@ public final class ChildProcessLauncherHelperImpl {
                             ContentChildProcessConstants.EXTRA_CPU_COUNT, CpuFeatures.getCount());
                     connectionBundle.putLong(
                             ContentChildProcessConstants.EXTRA_CPU_FEATURES, CpuFeatures.getMask());
-                    if (Linker.isUsed()) {
+                    if (LibraryLoader.useCrazyLinker()) {
                         connectionBundle.putBundle(Linker.EXTRA_LINKER_SHARED_RELROS,
                                 Linker.getInstance().getSharedRelros());
                     }
@@ -195,13 +196,6 @@ public final class ChildProcessLauncherHelperImpl {
     private static ChildProcessLauncherHelperImpl createAndStart(
             long nativePointer, String[] commandLine, FileDescriptorInfo[] filesToBeMapped) {
         assert LauncherThread.runningOnLauncherThread();
-
-        // Experiment that disables binding management if site isolation is enabled.
-        if (getBindingManager() != null && nativeIsSiteIsolationEnabled()) {
-            getBindingManager().removeAllConnections();
-            sBindingManager = null;
-        }
-
         String processType =
                 ContentSwitchUtils.getSwitchValue(commandLine, ContentSwitches.SWITCH_PROCESS_TYPE);
 
@@ -459,7 +453,7 @@ public final class ChildProcessLauncherHelperImpl {
         int newEffectiveImportance;
         if ((foreground && frameDepth == 0) || importance == ChildProcessImportance.IMPORTANT) {
             newEffectiveImportance = ChildProcessImportance.IMPORTANT;
-        } else if ((foreground && frameDepth > 0)
+        } else if ((foreground && frameDepth > 0) || boostForPendingViews
                 || importance == ChildProcessImportance.MODERATE) {
             newEffectiveImportance = ChildProcessImportance.MODERATE;
         } else {
@@ -541,7 +535,7 @@ public final class ChildProcessLauncherHelperImpl {
     private static void initLinker() {
         assert LauncherThread.runningOnLauncherThread();
         if (sLinkerInitialized) return;
-        if (Linker.isUsed()) {
+        if (LibraryLoader.useCrazyLinker()) {
             sLinkerLoadAddress = Linker.getInstance().getBaseLoadAddress();
             if (sLinkerLoadAddress == 0) {
                 Log.i(TAG, "Shared RELRO support disabled!");
@@ -663,5 +657,4 @@ public final class ChildProcessLauncherHelperImpl {
     private static native void nativeSetTerminationInfo(long termiantionInfoPtr,
             @ChildBindingState int bindingState, boolean killedByUs, int remainingStrong,
             int remainingModerate, int remainingWaived);
-    private static native boolean nativeIsSiteIsolationEnabled();
 }

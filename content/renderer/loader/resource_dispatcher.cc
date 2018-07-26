@@ -23,6 +23,7 @@
 #include "build/build_config.h"
 #include "content/common/inter_process_time_ticks_converter.h"
 #include "content/common/navigation_params.h"
+#include "content/common/net/record_load_histograms.h"
 #include "content/common/throttling_url_loader.h"
 #include "content/public/common/browser_side_navigation_policy.h"
 #include "content/public/common/resource_load_info.mojom.h"
@@ -39,7 +40,6 @@
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
 #include "net/base/request_priority.h"
-#include "net/cert/cert_status_flags.h"
 #include "net/http/http_response_headers.h"
 #include "services/network/public/cpp/features.h"
 #include "services/network/public/cpp/resource_request.h"
@@ -100,14 +100,16 @@ void NotifyResourceLoadStarted(
     scoped_refptr<base::SingleThreadTaskRunner> thread_task_runner,
     int render_frame_id,
     int request_id,
-    const network::ResourceResponseHead& response_head) {
+    const network::ResourceResponseHead& response_head,
+    content::ResourceType resource_type) {
   if (!thread_task_runner)
     return;
 
   if (!thread_task_runner->BelongsToCurrentThread()) {
     thread_task_runner->PostTask(
         FROM_HERE, base::BindOnce(NotifyResourceLoadStarted, thread_task_runner,
-                                  render_frame_id, request_id, response_head));
+                                  render_frame_id, request_id, response_head,
+                                  resource_type));
     return;
   }
 
@@ -116,7 +118,7 @@ void NotifyResourceLoadStarted(
   if (!render_frame)
     return;
 
-  render_frame->DidStartResponse(request_id, response_head);
+  render_frame->DidStartResponse(request_id, response_head, resource_type);
 }
 
 void NotifyResourceLoadComplete(
@@ -310,7 +312,8 @@ void ResourceDispatcher::OnReceivedResponse(
   auto deep_copied_response = resource_response->DeepCopy();
   NotifyResourceLoadStarted(RenderThreadImpl::DeprecatedGetMainTaskRunner(),
                             request_info->render_frame_id, request_id,
-                            deep_copied_response->head);
+                            deep_copied_response->head,
+                            request_info->resource_type);
 }
 
 void ResourceDispatcher::OnReceivedCachedMetadata(
@@ -401,7 +404,7 @@ void ResourceDispatcher::OnRequestComplete(
     return;
   request_info->buffer.reset();
   request_info->buffer_size = 0;
-  request_info->did_request_complete = true;
+  request_info->net_error = status.error_code;
 
   auto resource_load_info = mojom::ResourceLoadInfo::New();
   resource_load_info->url = request_info->response_url;
@@ -477,10 +480,14 @@ bool ResourceDispatcher::RemovePendingRequest(
   if (it == pending_requests_.end())
     return false;
 
-  if (!it->second->did_request_complete) {
+  if (it->second->net_error == net::ERR_IO_PENDING) {
+    it->second->net_error = net::ERR_ABORTED;
     NotifyResourceLoadCancel(RenderThreadImpl::DeprecatedGetMainTaskRunner(),
                              it->second->render_frame_id, request_id);
   }
+
+  RecordLoadHistograms(it->second->response_url, it->second->resource_type,
+                       it->second->net_error);
 
   // Cancel loading.
   it->second->url_loader = nullptr;

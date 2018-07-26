@@ -69,14 +69,13 @@ class ProfileSyncServiceMock : public ProfileSyncService {
   MOCK_CONST_METHOD0(GetRegisteredDataTypes, syncer::ModelTypeSet());
   MOCK_CONST_METHOD0(GetLastCycleSnapshot, syncer::SyncCycleSnapshot());
 
-  MOCK_METHOD1(QueryDetailedSyncStatus,
-               bool(syncer::SyncEngine::Status* result));
+  MOCK_CONST_METHOD0(GetDisableReasons, int());
+  MOCK_CONST_METHOD0(GetState, State());
+  MOCK_CONST_METHOD1(QueryDetailedSyncStatus,
+                     bool(syncer::SyncEngine::Status* result));
   MOCK_CONST_METHOD0(GetAuthError, const GoogleServiceAuthError&());
-  MOCK_CONST_METHOD0(IsFirstSetupInProgress, bool());
+  MOCK_CONST_METHOD0(IsSetupInProgress, bool());
   MOCK_CONST_METHOD0(GetLastSyncedTime, base::Time());
-  MOCK_CONST_METHOD0(HasUnrecoverableError, bool());
-  MOCK_CONST_METHOD0(IsSyncActive, bool());
-  MOCK_CONST_METHOD0(IsEngineInitialized, bool());
   MOCK_CONST_METHOD0(IsSyncConfirmationNeeded, bool());
   MOCK_METHOD1(OnActionableError, void(const syncer::SyncProtocolError&));
   MOCK_CONST_METHOD1(IsDataTypeControllerRunning, bool(syncer::ModelType));
@@ -90,9 +89,6 @@ class ProfileSyncServiceMock : public ProfileSyncService {
   MOCK_METHOD1(OnConfigureDone,
                void(const syncer::DataTypeManager::ConfigureResult&));
   MOCK_METHOD0(OnConfigureStart, void());
-
-  MOCK_CONST_METHOD0(CanSyncStart, bool());
-  MOCK_CONST_METHOD0(IsManaged, bool());
 
   MOCK_CONST_METHOD0(IsPassphraseRequired, bool());
   MOCK_CONST_METHOD0(IsPassphraseRequiredForDecryption, bool());

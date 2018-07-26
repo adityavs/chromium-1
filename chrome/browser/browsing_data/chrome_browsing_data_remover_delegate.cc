@@ -17,6 +17,7 @@
 #include "base/metrics/user_metrics.h"
 #include "base/task_scheduler/post_task.h"
 #include "build/build_config.h"
+#include "chrome/browser/android/feed/feed_host_service_factory.h"
 #include "chrome/browser/autofill/personal_data_manager_factory.h"
 #include "chrome/browser/bookmarks/bookmark_model_factory.h"
 #include "chrome/browser/browser_process.h"
@@ -56,6 +57,7 @@
 #include "chrome/browser/search_engines/template_url_service_factory.h"
 #include "chrome/browser/sessions/tab_restore_service_factory.h"
 #include "chrome/browser/web_data_service_factory.h"
+#include "chrome/browser/webauthn/chrome_authenticator_request_delegate.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/url_constants.h"
@@ -72,6 +74,8 @@
 #include "components/data_reduction_proxy/core/browser/data_reduction_proxy_settings.h"
 #include "components/device_event_log/device_event_log.h"
 #include "components/domain_reliability/service.h"
+#include "components/feed/core/feed_host_service.h"
+#include "components/feed/core/feed_scheduler_host.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/language/core/browser/url_language_histogram.h"
 #include "components/nacl/browser/nacl_browser.h"
@@ -104,6 +108,7 @@
 #include "chrome/browser/android/webapps/webapp_registry.h"
 #include "chrome/browser/media/android/cdm/media_drm_license_manager.h"
 #include "chrome/browser/offline_pages/offline_page_model_factory.h"
+#include "components/feed/buildflags.h"
 #include "components/offline_pages/core/offline_page_feature.h"
 #include "components/offline_pages/core/offline_page_model.h"
 #include "sql/connection.h"
@@ -122,12 +127,16 @@
 
 #if defined(OS_CHROMEOS)
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
-#include "chromeos/attestation/attestation_constants.h"
 #include "chromeos/cryptohome/cryptohome_parameters.h"
+#include "chromeos/dbus/attestation_constants.h"
 #include "chromeos/dbus/cryptohome_client.h"
 #include "chromeos/dbus/dbus_thread_manager.h"
 #include "components/user_manager/user.h"
 #endif  // defined(OS_CHROMEOS)
+
+#if defined(OS_MACOSX)
+#include "device/fido/mac/browsing_data_deletion.h"
+#endif  // defined(OS_MACOSX)
 
 #if BUILDFLAG(ENABLE_PLUGINS)
 #include "chrome/browser/browsing_data/browsing_data_flash_lso_helper.h"
@@ -402,6 +411,16 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
       ntp_snippets::RemoveLastVisitedDatesBetween(delete_begin_, delete_end_,
                                                   filter, bookmark_model);
     }
+
+#if defined(OS_ANDROID)
+#if BUILDFLAG(ENABLE_FEED_IN_CHROME)
+    feed::FeedHostService* feed_host_service =
+        feed::FeedHostServiceFactory::GetForBrowserContext(profile_);
+    if (feed_host_service) {
+      feed_host_service->GetSchedulerHost()->OnHistoryCleared();
+    }
+#endif  // BUILDFLAG(ENABLE_FEED_IN_CHROME)
+#endif  // defined(OS_ANDROID)
 
     language::UrlLanguageHistogram* language_histogram =
         UrlLanguageHistogramFactory::GetForBrowserContext(profile_);
@@ -782,6 +801,14 @@ void ChromeBrowsingDataRemoverDelegate::RemoveEmbedderData(
         ->GetNetworkContext()
         ->ClearHttpAuthCache(delete_begin_,
                              CreatePendingTaskCompletionClosureForMojo());
+
+#if defined(OS_MACOSX)
+    auto authenticator_config = ChromeAuthenticatorRequestDelegate::
+        TouchIdAuthenticatorConfigForProfile(profile_);
+    device::fido::mac::DeleteWebAuthnCredentials(
+        authenticator_config.keychain_access_group,
+        authenticator_config.metadata_secret, delete_begin_, delete_end_);
+#endif  // defined(OS_MACOSX)
   }
 
   if (remove_mask & content::BrowsingDataRemover::DATA_TYPE_COOKIES) {

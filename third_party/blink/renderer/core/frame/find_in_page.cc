@@ -35,11 +35,28 @@
 #include "third_party/blink/public/web/web_local_frame_client.h"
 #include "third_party/blink/public/web/web_plugin.h"
 #include "third_party/blink/public/web/web_plugin_document.h"
+#include "third_party/blink/public/web/web_widget_client.h"
 #include "third_party/blink/renderer/core/editing/finder/text_finder.h"
 #include "third_party/blink/renderer/core/frame/web_local_frame_impl.h"
 #include "third_party/blink/renderer/core/layout/layout_view.h"
 
 namespace blink {
+
+FindInPage::FindInPage(WebLocalFrameImpl& frame,
+                       InterfaceRegistry* interface_registry)
+    : ContextLifecycleObserver(
+          frame.GetFrame() ? frame.GetFrame()->GetDocument() : nullptr),
+      frame_(&frame),
+      binding_(this) {
+  // TODO(rakina): Use InterfaceRegistry of |frame| directly rather than passing
+  // both of them.
+  if (!interface_registry)
+    return;
+  // TODO(crbug.com/800641): Use InterfaceValidator when it works for associated
+  // interfaces.
+  interface_registry->AddAssociatedInterface(
+      WTF::BindRepeating(&FindInPage::BindToRequest, WrapWeakPersistent(this)));
+}
 
 void WebLocalFrameImpl::RequestFind(int identifier,
                                     const WebString& search_text,
@@ -52,8 +69,8 @@ void FindInPage::RequestFind(int identifier,
                              const WebFindOptions& options) {
   // Send "no results" if this frame has no visible content.
   if (!frame_->HasVisibleContent() && !options.force) {
-    frame_->Client()->ReportFindInPageMatchCount(identifier, 0 /* count */,
-                                                 true /* finalUpdate */);
+    frame_->ReportFindInPageMatchCount(identifier, 0 /* count */,
+                                       true /* finalUpdate */);
     return;
   }
 
@@ -71,8 +88,8 @@ void FindInPage::RequestFind(int identifier,
   if (result && !options.find_next) {
     // Indicate that at least one match has been found. 1 here means
     // possibly more matches could be coming.
-    frame_->Client()->ReportFindInPageMatchCount(identifier, 1 /* count */,
-                                                 false /* finalUpdate */);
+    frame_->ReportFindInPageMatchCount(identifier, 1 /* count */,
+                                       false /* final_update */);
   }
 
   // There are three cases in which scoping is needed:
@@ -181,9 +198,8 @@ WebFloatRect FindInPage::ActiveFindMatchRect() {
   return WebFloatRect();
 }
 
-void FindInPage::ActivateNearestFindResult(
-    const WebFloatPoint& point,
-    ActivateNearestFindResultCallback callback) {
+void FindInPage::ActivateNearestFindResult(int request_id,
+                                           const WebFloatPoint& point) {
   WebRect active_match_rect;
   const int ordinal =
       EnsureTextFinder().SelectNearestFindMatch(point, &active_match_rect);
@@ -192,16 +208,18 @@ void FindInPage::ActivateNearestFindResult(
     // the current match count) in case the host is waiting for a response due
     // to rate-limiting.
     int number_of_matches = EnsureTextFinder().TotalMatchCount();
-    std::move(callback).Run(WebRect(), number_of_matches,
-                            -1 /* active_match_ordinal */,
-                            !EnsureTextFinder().FrameScoping() ||
-                                !number_of_matches /* final_reply */);
+    mojom::blink::FindMatchUpdateType update_type =
+        mojom::blink::FindMatchUpdateType::kMoreUpdatesComing;
+    if (!EnsureTextFinder().FrameScoping() || !number_of_matches)
+      update_type = mojom::blink::FindMatchUpdateType::kFinalUpdate;
+    client_->SetNumberOfMatches(request_id, number_of_matches, update_type);
     return;
   }
-  // Call callback with current active match's rect and its ordinal,
-  // and don't update total number of matches.
-  std::move(callback).Run(active_match_rect, -1 /* number_of_matches */,
-                          ordinal, true /* final_reply*/);
+  client_->SetActiveMatch(request_id, active_match_rect, ordinal);
+}
+
+void FindInPage::SetClient(mojom::blink::FindInPageClientPtr client) {
+  client_ = std::move(client);
 }
 
 void FindInPage::GetNearestFindResult(const WebFloatPoint& point,
@@ -285,6 +303,30 @@ void FindInPage::BindToRequest(
 
 void FindInPage::Dispose() {
   binding_.Close();
+}
+
+void FindInPage::ContextDestroyed(ExecutionContext* context) {
+  binding_.Close();
+}
+
+void WebLocalFrameImpl::ReportFindInPageMatchCount(int request_id,
+                                                   int count,
+                                                   bool final_update) {
+  if (!Client())
+    return;
+  Client()->SendFindReply(request_id, count, -1 /* active_match_ordinal */,
+                          WebRect(), final_update);
+}
+
+void WebLocalFrameImpl::ReportFindInPageSelection(
+    int request_id,
+    int active_match_ordinal,
+    const blink::WebRect& selection_rect,
+    bool final_update) {
+  if (!Client())
+    return;
+  Client()->SendFindReply(request_id, -1 /* match_count */,
+                          active_match_ordinal, selection_rect, final_update);
 }
 
 }  // namespace blink

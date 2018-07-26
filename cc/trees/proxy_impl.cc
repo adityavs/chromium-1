@@ -145,11 +145,6 @@ void ProxyImpl::InitializeLayerTreeFrameSinkOnImpl(
     scheduler_->DidCreateAndInitializeLayerTreeFrameSink();
 }
 
-void ProxyImpl::MainThreadHasStoppedFlingingOnImpl() {
-  DCHECK(IsImplThread());
-  host_impl_->MainThreadHasStoppedFlinging();
-}
-
 void ProxyImpl::SetInputThrottledUntilCommitOnImpl(bool is_throttled) {
   DCHECK(IsImplThread());
   if (is_throttled == input_throttled_until_commit_)
@@ -360,6 +355,20 @@ void ProxyImpl::PostAnimationEventsToMainThreadOnImplThread(
                                 proxy_main_weak_ptr_, base::Passed(&events)));
 }
 
+void ProxyImpl::OnMemoryPressureOnImplThread(
+    base::MemoryPressureListener::MemoryPressureLevel level) {
+  TRACE_EVENT0("cc", "ProxyImpl::OnMemoryPressureOnImplThread");
+  DCHECK(IsImplThread());
+  switch (level) {
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+      break;
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+      host_impl_->OnPurgeMemory();
+      break;
+  }
+}
+
 size_t ProxyImpl::CompositedAnimationsCount() const {
   return host_impl_->mutator_host()->CompositedAnimationsCount();
 }
@@ -403,9 +412,8 @@ void ProxyImpl::RenewTreePriority() {
   if (smoothness_priority_expiration_notifier_.HasPendingNotification())
     tree_priority = SMOOTHNESS_TAKES_PRIORITY;
 
-  // New content always takes priority when there is an invalid viewport size or
-  // ui resources have been evicted.
-  if (host_impl_->active_tree()->ViewportSizeInvalid() ||
+  // New content always takes priority when ui resources have been evicted.
+  if (host_impl_->active_tree()->GetDeviceViewport().size().IsEmpty() ||
       host_impl_->EvictedUIResourcesExist() || input_throttled_until_commit_) {
     // Once we enter NEW_CONTENTS_TAKES_PRIORITY mode, visible tiles on active
     // tree might be freed. We need to set RequiresHighResToDraw to ensure that
@@ -717,16 +725,7 @@ base::SingleThreadTaskRunner* ProxyImpl::MainThreadTaskRunner() {
 
 void ProxyImpl::SetURLForUkm(const GURL& url) {
   DCHECK(IsImplThread());
-  if (!host_impl_->ukm_manager())
-    return;
-
-  // The active tree might still be from content for the previous page when the
-  // recorder is updated here, since new content will be pushed with the next
-  // main frame. But we should only get a few impl frames wrong here in that
-  // case. Also, since checkerboard stats are only recorded with user
-  // interaction, it must be in progress when the navigation commits for this
-  // case to occur.
-  host_impl_->ukm_manager()->SetSourceURL(url);
+  host_impl_->SetActiveURL(url);
 }
 
 void ProxyImpl::ClearHistory() {

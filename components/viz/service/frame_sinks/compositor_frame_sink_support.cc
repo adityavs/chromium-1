@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "base/stl_util.h"
+#include "base/time/time.h"
 #include "components/viz/common/frame_sinks/begin_frame_source.h"
 #include "components/viz/common/quads/compositor_frame.h"
 #include "components/viz/common/surfaces/surface_info.h"
@@ -119,13 +120,43 @@ void CompositorFrameSinkSupport::OnSurfaceActivated(Surface* surface) {
     last_activated_surface_id_ = surface->surface_id();
   }
 
-  DCHECK(surface->active_referenced_surfaces());
-  UpdateSurfaceReferences(surface->surface_id().local_surface_id(),
-                          *surface->active_referenced_surfaces());
+  DCHECK(surface->HasActiveFrame());
+  surface->UpdateSurfaceReferences();
+
+  // Check if this is a display root surface and the SurfaceId is changing.
+  if (is_root_ && (!referenced_local_surface_id_ ||
+                   *referenced_local_surface_id_ !=
+                       surface->surface_id().local_surface_id())) {
+    UpdateDisplayRootReference(surface);
+  }
 }
 
 void CompositorFrameSinkSupport::OnFrameTokenChanged(uint32_t frame_token) {
   frame_sink_manager_->OnFrameTokenChanged(frame_sink_id_, frame_token);
+}
+
+void CompositorFrameSinkSupport::OnSurfaceProcessed(Surface* surface) {
+  DidReceiveCompositorFrameAck();
+}
+
+void CompositorFrameSinkSupport::OnSurfaceAggregatedDamage(
+    Surface* surface,
+    const LocalSurfaceId& local_surface_id,
+    const CompositorFrame& frame,
+    const gfx::Rect& damage_rect,
+    base::TimeTicks expected_display_time) {
+  DCHECK(!damage_rect.IsEmpty());
+
+  const gfx::Size& frame_size_in_pixels = frame.size_in_pixels();
+  if (aggregated_damage_callback_) {
+    aggregated_damage_callback_.Run(local_surface_id, frame_size_in_pixels,
+                                    damage_rect, expected_display_time);
+  }
+
+  for (CapturableFrameSink::Client* client : capture_clients_) {
+    client->OnFrameDamaged(frame_size_in_pixels, damage_rect,
+                           expected_display_time, frame.metadata);
+  }
 }
 
 void CompositorFrameSinkSupport::OnSurfaceDiscarded(Surface* surface) {
@@ -239,6 +270,7 @@ void CompositorFrameSinkSupport::SubmitCompositorFrame(
     uint64_t submit_time) {
   const auto result = MaybeSubmitCompositorFrame(
       local_surface_id, std::move(frame), std::move(hit_test_region_list),
+      submit_time,
       mojom::CompositorFrameSink::SubmitCompositorFrameSyncCallback());
   DCHECK_EQ(result, ACCEPTED);
 }
@@ -265,14 +297,32 @@ CompositorFrameSinkSupport::MaybeSubmitCompositorFrame(
     const LocalSurfaceId& local_surface_id,
     CompositorFrame frame,
     base::Optional<HitTestRegionList> hit_test_region_list,
+    uint64_t submit_time,
     mojom::CompositorFrameSink::SubmitCompositorFrameSyncCallback callback) {
   TRACE_EVENT1("viz", "CompositorFrameSinkSupport::MaybeSubmitCompositorFrame",
                "FrameSinkId", frame_sink_id_.ToString());
+
   TRACE_EVENT_WITH_FLOW1(
       "viz,benchmark", "Graphics.Pipeline",
       TRACE_ID_GLOBAL(frame.metadata.begin_frame_ack.trace_id),
       TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "step",
       "ReceiveCompositorFrame");
+
+  TRACE_EVENT_FLOW_END0(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
+                        "SubmitCompositorFrame", local_surface_id.hash());
+
+  bool tracing_enabled;
+  TRACE_EVENT_CATEGORY_GROUP_ENABLED(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
+                                     &tracing_enabled);
+  if (tracing_enabled) {
+    base::TimeDelta elapsed = base::TimeTicks::Now().since_origin() -
+                              base::TimeDelta::FromMicroseconds(submit_time);
+    TRACE_EVENT_INSTANT1(TRACE_DISABLED_BY_DEFAULT("cc.debug.ipc"),
+                         "SubmitCompositorFrame::TimeElapsed",
+                         TRACE_EVENT_SCOPE_THREAD,
+                         "elapsed time:", elapsed.InMicroseconds());
+  }
+
   DCHECK(local_surface_id.is_valid());
   DCHECK(!frame.render_pass_list.empty());
   DCHECK(!frame.size_in_pixels().IsEmpty());
@@ -327,6 +377,14 @@ CompositorFrameSinkSupport::MaybeSubmitCompositorFrame(
       local_surface_id == last_created_surface_id_.local_surface_id()) {
     current_surface = prev_surface;
   } else {
+    TRACE_EVENT_WITH_FLOW2(
+        TRACE_DISABLED_BY_DEFAULT("viz.surface_id_flow"),
+        "LocalSurfaceId.Submission.Flow",
+        TRACE_ID_GLOBAL(local_surface_id.submission_trace_id()),
+        TRACE_EVENT_FLAG_FLOW_IN | TRACE_EVENT_FLAG_FLOW_OUT, "step",
+        "ReceiveCompositorFrame", "local_surface_id",
+        local_surface_id.ToString());
+
     SurfaceId surface_id(frame_sink_id_, local_surface_id);
     SurfaceInfo surface_info(surface_id, frame.device_scale_factor(),
                              frame.size_in_pixels());
@@ -366,10 +424,6 @@ CompositorFrameSinkSupport::MaybeSubmitCompositorFrame(
 
   bool result = current_surface->QueueFrame(
       std::move(frame), frame_index, std::move(frame_rejected_callback),
-      base::BindOnce(&CompositorFrameSinkSupport::DidReceiveCompositorFrameAck,
-                     weak_factory_.GetWeakPtr()),
-      base::BindRepeating(&CompositorFrameSinkSupport::OnAggregatedDamage,
-                          weak_factory_.GetWeakPtr()),
       frame.metadata.request_presentation_feedback
           ? base::BindOnce(
                 &CompositorFrameSinkSupport::DidPresentCompositorFrame,
@@ -384,49 +438,6 @@ CompositorFrameSinkSupport::MaybeSubmitCompositorFrame(
     begin_frame_source_->DidFinishFrame(this);
 
   return ACCEPTED;
-}
-
-void CompositorFrameSinkSupport::UpdateSurfaceReferences(
-    const LocalSurfaceId& local_surface_id,
-    const std::vector<SurfaceId>& active_referenced_surfaces) {
-  SurfaceId surface_id(frame_sink_id_, local_surface_id);
-
-  const base::flat_set<SurfaceId>& existing_referenced_surfaces =
-      surface_manager_->GetSurfacesReferencedByParent(surface_id);
-
-  base::flat_set<SurfaceId> new_referenced_surfaces(
-      active_referenced_surfaces.begin(), active_referenced_surfaces.end(),
-      base::KEEP_FIRST_OF_DUPES);
-
-  // Populate list of surface references to add and remove by getting the
-  // difference between existing surface references and surface references for
-  // latest activated CompositorFrame.
-  std::vector<SurfaceReference> references_to_add;
-  std::vector<SurfaceReference> references_to_remove;
-  GetSurfaceReferenceDifference(surface_id, existing_referenced_surfaces,
-                                new_referenced_surfaces, &references_to_add,
-                                &references_to_remove);
-
-  // Check if this is a display root surface and the SurfaceId is changing.
-  if (is_root_ && (!referenced_local_surface_id_.has_value() ||
-                   referenced_local_surface_id_.value() != local_surface_id)) {
-    // Make the new SurfaceId reachable from the top-level root.
-    references_to_add.push_back(MakeTopLevelRootReference(surface_id));
-
-    // Make the old SurfaceId unreachable from the top-level root if applicable.
-    if (referenced_local_surface_id_.has_value()) {
-      references_to_remove.push_back(MakeTopLevelRootReference(
-          SurfaceId(frame_sink_id_, referenced_local_surface_id_.value())));
-    }
-
-    referenced_local_surface_id_ = local_surface_id;
-  }
-
-  // Modify surface references stored in SurfaceManager.
-  if (!references_to_add.empty())
-    surface_manager_->AddSurfaceReferences(references_to_add);
-  if (!references_to_remove.empty())
-    surface_manager_->RemoveSurfaceReferences(references_to_remove);
 }
 
 SurfaceReference CompositorFrameSinkSupport::MakeTopLevelRootReference(
@@ -484,6 +495,21 @@ void CompositorFrameSinkSupport::DidRejectCompositorFrame(
     DidPresentCompositorFrame(presentation_token,
                               gfx::PresentationFeedback::Failure());
   }
+}
+
+void CompositorFrameSinkSupport::UpdateDisplayRootReference(
+    const Surface* surface) {
+  // Make the new SurfaceId reachable from the top-level root.
+  surface_manager_->AddSurfaceReferences(
+      {MakeTopLevelRootReference(surface->surface_id())});
+
+  // Make the old SurfaceId unreachable from the top-level root if applicable.
+  if (referenced_local_surface_id_) {
+    surface_manager_->RemoveSurfaceReferences({MakeTopLevelRootReference(
+        SurfaceId(frame_sink_id_, *referenced_local_surface_id_))});
+  }
+
+  referenced_local_surface_id_ = surface->surface_id().local_surface_id();
 }
 
 void CompositorFrameSinkSupport::OnBeginFrame(const BeginFrameArgs& args) {
@@ -617,25 +643,6 @@ const char* CompositorFrameSinkSupport::GetSubmitResultAsString(
   }
   NOTREACHED();
   return nullptr;
-}
-
-void CompositorFrameSinkSupport::OnAggregatedDamage(
-    const LocalSurfaceId& local_surface_id,
-    const CompositorFrame& frame,
-    const gfx::Rect& damage_rect,
-    base::TimeTicks expected_display_time) const {
-  DCHECK(!damage_rect.IsEmpty());
-
-  const gfx::Size& frame_size_in_pixels = frame.size_in_pixels();
-  if (aggregated_damage_callback_) {
-    aggregated_damage_callback_.Run(local_surface_id, frame_size_in_pixels,
-                                    damage_rect, expected_display_time);
-  }
-
-  for (CapturableFrameSink::Client* client : capture_clients_) {
-    client->OnFrameDamaged(frame_size_in_pixels, damage_rect,
-                           expected_display_time, frame.metadata);
-  }
 }
 
 int64_t CompositorFrameSinkSupport::ComputeTraceId() {

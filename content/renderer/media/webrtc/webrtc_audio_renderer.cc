@@ -11,6 +11,7 @@
 #include "base/location.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/stl_util.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
 #include "build/build_config.h"
@@ -93,8 +94,7 @@ class SharedAudioRenderer : public MediaStreamAudioRenderer {
 
   void Play() override {
     DCHECK(thread_checker_.CalledOnValidThread());
-    DCHECK(started_);
-    if (playing_state_.playing())
+    if (!started_ || playing_state_.playing())
       return;
     playing_state_.set_playing(true);
     on_play_state_changed_.Run(media_stream_, &playing_state_);
@@ -102,8 +102,7 @@ class SharedAudioRenderer : public MediaStreamAudioRenderer {
 
   void Pause() override {
     DCHECK(thread_checker_.CalledOnValidThread());
-    DCHECK(started_);
-    if (!playing_state_.playing())
+    if (!started_ || !playing_state_.playing())
       return;
     playing_state_.set_playing(false);
     on_play_state_changed_.Run(media_stream_, &playing_state_);
@@ -549,7 +548,7 @@ bool WebRtcAudioRenderer::AddPlayingState(
   DCHECK(state->playing());
   // Look up or add the |source| to the map.
   PlayingStates& array = source_playing_states_[source];
-  if (std::find(array.begin(), array.end(), state) != array.end())
+  if (base::ContainsValue(array, state))
     return false;
 
   array.push_back(state);

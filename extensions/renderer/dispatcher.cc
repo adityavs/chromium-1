@@ -243,6 +243,10 @@ Dispatcher::Dispatcher(std::unique_ptr<DispatcherDelegate> delegate)
   WebSecurityPolicy::RegisterURLSchemeAsFirstPartyWhenTopLevel(
       extension_scheme);
 
+  // Disallow running javascript URLs on the chrome-extension scheme.
+  WebSecurityPolicy::RegisterURLSchemeAsNotAllowingJavascriptURLs(
+      extension_scheme);
+
   // For extensions, we want to ensure we call the IdleHandler every so often,
   // even if the extension keeps up activity.
   if (set_idle_notifications_) {
@@ -1126,6 +1130,11 @@ void Dispatcher::OnUnloaded(const std::string& id) {
   // Invalidates the messages map for the extension in case the extension is
   // reloaded with a new messages map.
   EraseL10nMessagesMap(id);
+
+  // Update the origin access map so that any content scripts injected are no
+  // longer allowlisted for extra origins.
+  WebSecurityPolicy::RemoveAllOriginAccessWhitelistEntriesForOrigin(
+      Extension::GetBaseURLFromExtensionId(id));
 
   // We don't do anything with existing platform-app stylesheets. They will
   // stay resident, but the URL pattern corresponding to the unloaded

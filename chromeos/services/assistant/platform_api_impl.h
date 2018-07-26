@@ -34,9 +34,9 @@ namespace assistant {
 // Platform API required by the voice assistant.
 class PlatformApiImpl : public assistant_client::PlatformApi {
  public:
-  PlatformApiImpl(const std::string& config,
-                  service_manager::Connector* connector,
-                  device::mojom::BatteryMonitorPtr battery_monitor);
+  PlatformApiImpl(service_manager::Connector* connector,
+                  device::mojom::BatteryMonitorPtr battery_monitor,
+                  bool enable_hotword);
   ~PlatformApiImpl() override;
 
   // assistant_client::PlatformApi overrides
@@ -47,6 +47,9 @@ class PlatformApiImpl : public assistant_client::PlatformApi {
   assistant_client::NetworkProvider& GetNetworkProvider() override;
   assistant_client::ResourceProvider& GetResourceProvider() override;
   assistant_client::SystemProvider& GetSystemProvider() override;
+
+  // Called when the mic state associated with the interaction is changed.
+  void SetMicState(bool mic_open);
 
  private:
   // ChromeOS does not use auth manager, so we don't yet need to implement a

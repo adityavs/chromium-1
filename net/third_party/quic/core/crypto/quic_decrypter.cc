@@ -4,7 +4,6 @@
 
 #include "net/third_party/quic/core/crypto/quic_decrypter.h"
 
-#include "crypto/hkdf.h"
 #include "net/third_party/quic/core/crypto/aes_128_gcm_12_decrypter.h"
 #include "net/third_party/quic/core/crypto/aes_128_gcm_decrypter.h"
 #include "net/third_party/quic/core/crypto/aes_256_gcm_decrypter.h"
@@ -12,8 +11,8 @@
 #include "net/third_party/quic/core/crypto/chacha20_poly1305_tls_decrypter.h"
 #include "net/third_party/quic/core/crypto/crypto_protocol.h"
 #include "net/third_party/quic/core/crypto/null_decrypter.h"
+#include "net/third_party/quic/core/crypto/quic_hkdf.h"
 #include "net/third_party/quic/platform/api/quic_bug_tracker.h"
-#include "net/third_party/quic/platform/api/quic_hkdf.h"
 #include "net/third_party/quic/platform/api/quic_logging.h"
 #include "net/third_party/quic/platform/api/quic_ptr_util.h"
 #include "net/third_party/quic/platform/api/quic_string.h"

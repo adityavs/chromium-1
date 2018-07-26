@@ -13,7 +13,6 @@
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/resource_coordinator/page_signal_receiver.h"
 #include "chrome/browser/resource_coordinator/tab_load_tracker.h"
-#include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/resource_coordinator/tab_memory_metrics_reporter.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
@@ -29,6 +28,7 @@
 
 #if !defined(OS_ANDROID)
 #include "chrome/browser/resource_coordinator/local_site_characteristics_webcontents_observer.h"
+#include "chrome/browser/resource_coordinator/tab_manager.h"
 #endif
 
 DEFINE_WEB_CONTENTS_USER_DATA_KEY(
@@ -100,6 +100,11 @@ void ResourceCoordinatorTabHelper::DidFailLoad(
     int error_code,
     const base::string16& error_description) {
   TabLoadTracker::Get()->DidFailLoad(web_contents());
+}
+
+void ResourceCoordinatorTabHelper::RenderProcessGone(
+    base::TerminationStatus status) {
+  TabLoadTracker::Get()->RenderProcessGone(web_contents(), status);
 }
 
 void ResourceCoordinatorTabHelper::OnVisibilityChanged(

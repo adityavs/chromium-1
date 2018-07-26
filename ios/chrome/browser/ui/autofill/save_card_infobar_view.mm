@@ -9,6 +9,7 @@
 #import "ios/chrome/browser/procedural_block_types.h"
 #import "ios/chrome/browser/ui/autofill/save_card_infobar_view_delegate.h"
 #import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
+#import "ios/chrome/browser/ui/infobars/infobar_constants.h"
 #import "ios/chrome/browser/ui/infobars/infobar_view_sizing_delegate.h"
 #include "ios/chrome/browser/ui/ui_util.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
@@ -158,31 +159,31 @@ UIFont* InfoBarMessageFont() {
 - (void)layoutSubviews {
   [super layoutSubviews];
 
-  // Return early if no subviews have been added yet.
-  if (!self.subviews.count)
-    return;
-
-  // Set a bottom margin equal to the height of the secondary toolbar, if any.
-  // Deduct the bottom safe area inset as it is already included in the height
-  // of the secondary toolbar.
-  NamedGuide* layoutGuide =
-      [NamedGuide guideWithName:kSecondaryToolbar view:self];
-  CGFloat bottomSafeAreaInset = SafeAreaInsetsForView(self).bottom;
-  self.footerViewBottomAnchorConstraint.constant =
-      layoutGuide.constrained
-          ? layoutGuide.layoutFrame.size.height - bottomSafeAreaInset
-          : 0;
-
   [self.sizingDelegate didSetInfoBarTargetHeight:CGRectGetHeight(self.frame)];
 }
 
 - (void)setFrame:(CGRect)frame {
   [super setFrame:frame];
 
+  // Updates layout of subviews immediately, if layout updates are pending,
+  // rather than waiting for the next update cycle. Otherwise, the layout breaks
+  // on iPhone X.
+  // TODO(crbug.com/862688): Investigate why this is happening.
   [self layoutIfNeeded];
 }
 
 - (CGSize)sizeThatFits:(CGSize)size {
+  // Set a bottom margin equal to the height of the secondary toolbar, if any.
+  // Deduct the bottom safe area inset as it is already included in the height
+  // of the secondary toolbar.
+  NamedGuide* layoutGuide =
+      [NamedGuide guideWithName:kSecondaryToolbarGuide view:self];
+  CGFloat bottomSafeAreaInset = SafeAreaInsetsForView(self).bottom;
+  self.footerViewBottomAnchorConstraint.constant =
+      layoutGuide.constrained
+          ? layoutGuide.layoutFrame.size.height - bottomSafeAreaInset
+          : 0;
+
   CGSize computedSize = [self systemLayoutSizeFittingSize:size];
   return CGSizeMake(size.width, computedSize.height);
 }
@@ -191,7 +192,11 @@ UIFont* InfoBarMessageFont() {
 
 - (void)setupSubviews {
   [self setAccessibilityViewIsModal:YES];
-  [self setBackgroundColor:[UIColor whiteColor]];
+  if (IsUIRefreshPhase1Enabled()) {
+    self.backgroundColor = UIColorFromRGB(kInfobarBackgroundColor);
+  } else {
+    self.backgroundColor = [UIColor whiteColor];
+  }
   id<LayoutGuideProvider> safeAreaLayoutGuide =
       SafeAreaLayoutGuideForView(self);
 

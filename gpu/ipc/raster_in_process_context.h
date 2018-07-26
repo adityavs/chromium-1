@@ -10,6 +10,7 @@
 #include "base/macros.h"
 #include "base/memory/scoped_refptr.h"
 #include "base/single_thread_task_runner.h"
+#include "gpu/ipc/command_buffer_task_executor.h"
 #include "gpu/ipc/in_process_command_buffer.h"
 
 namespace base {
@@ -40,12 +41,14 @@ class RasterInProcessContext {
   // pairs. |gpu_channel_manager| should be non-null when used in the GPU
   // process.
   ContextResult Initialize(
-      scoped_refptr<InProcessCommandBuffer::Service> service,
+      scoped_refptr<CommandBufferTaskExecutor> task_executor,
       const ContextCreationAttribs& attribs,
       const SharedMemoryLimits& memory_limits,
       GpuMemoryBufferManager* gpu_memory_buffer_manager,
       ImageFactory* image_factory,
-      GpuChannelManagerDelegate* gpu_channel_manager_delegate);
+      GpuChannelManagerDelegate* gpu_channel_manager_delegate,
+      gpu::raster::GrShaderCache* gr_shader_cache,
+      GpuProcessActivityFlags* activity_flags);
 
   const Capabilities& GetCapabilities() const;
   const GpuFeatureInfo& GetGpuFeatureInfo() const;
@@ -59,6 +62,7 @@ class RasterInProcessContext {
   // Test only functions.
   ServiceTransferCache* GetTransferCacheForTest() const;
   InProcessCommandBuffer* GetCommandBufferForTest() const;
+  int GetRasterDecoderIdForTest() const;
 
  private:
   std::unique_ptr<CommandBufferHelper> helper_;

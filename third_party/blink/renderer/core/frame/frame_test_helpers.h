@@ -37,12 +37,13 @@
 #include <string>
 
 #include "base/macros.h"
-#include "content/renderer/gpu/render_widget_compositor.h"
-#include "content/test/fake_compositor_dependencies.h"
-#include "content/test/stub_render_widget_compositor_delegate.h"
+#include "cc/test/test_task_graph_runner.h"
+#include "content/renderer/gpu/layer_tree_view.h"
+#include "content/test/stub_layer_tree_view_delegate.h"
 #include "services/service_manager/public/cpp/interface_provider.h"
 #include "third_party/blink/public/platform/modules/fetch/fetch_api_request.mojom-shared.h"
 #include "third_party/blink/public/platform/platform.h"
+#include "third_party/blink/public/platform/scheduler/test/fake_renderer_scheduler.h"
 #include "third_party/blink/public/platform/web_mouse_event.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url_request.h"
@@ -54,9 +55,9 @@
 #include "third_party/blink/public/web/web_view_client.h"
 #include "third_party/blink/renderer/core/exported/web_view_impl.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/testing/use_mock_scrollbar_settings.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scroll/scrollbar_theme.h"
-#include "third_party/blink/renderer/platform/testing/use_mock_scrollbar_settings.h"
 
 #define EXPECT_FLOAT_POINT_EQ(expected, actual)    \
   do {                                             \
@@ -110,7 +111,7 @@ void ReloadFrameBypassingCache(WebLocalFrame*);
 
 // Pumps pending resource requests while waiting for a frame to load. Consider
 // using one of the above helper methods whenever possible.
-void PumpPendingRequestsForFrameToLoad(WebFrame*);
+void PumpPendingRequestsForFrameToLoad();
 
 WebMouseEvent CreateMouseEvent(WebInputEvent::Type,
                                WebMouseEvent::Button,
@@ -161,16 +162,20 @@ WebRemoteFrameImpl* CreateRemoteChild(WebRemoteFrame& parent,
                                       scoped_refptr<SecurityOrigin> = nullptr,
                                       TestWebRemoteFrameClient* = nullptr);
 
-// A class that constructs and owns a content::RenderWidgetCompositor for blink
+// A class that constructs and owns a LayerTreeView for blink
 // unit tests.
-class RenderWidgetCompositorFactory {
+class LayerTreeViewFactory {
  public:
-  content::RenderWidgetCompositor* Initialize();
+  // Use this to make a LayerTreeView with a stub delegate.
+  content::LayerTreeView* Initialize();
+  // Use this to specify a delegate instead of using a stub.
+  content::LayerTreeView* Initialize(content::LayerTreeViewDelegate*);
 
  private:
-  content::StubRenderWidgetCompositorDelegate delegate_;
-  content::FakeCompositorDependencies compositor_deps_;
-  std::unique_ptr<content::RenderWidgetCompositor> compositor_;
+  content::StubLayerTreeViewDelegate delegate_;
+  cc::TestTaskGraphRunner test_task_graph_runner_;
+  blink::scheduler::FakeRendererScheduler fake_renderer_scheduler_;
+  std::unique_ptr<content::LayerTreeView> layer_tree_view_;
 };
 
 class TestWebWidgetClient : public WebWidgetClient {
@@ -181,26 +186,30 @@ class TestWebWidgetClient : public WebWidgetClient {
   WebLayerTreeView* InitializeLayerTreeView() override;
 
  private:
-  RenderWidgetCompositorFactory compositor_factory_;
+  LayerTreeViewFactory layer_tree_view_factory_;
 };
 
-class TestWebViewClient : public WebViewClient {
+class TestWebViewClient : public WebViewClient, public WebWidgetClient {
  public:
   ~TestWebViewClient() override = default;
 
-  content::RenderWidgetCompositor* compositor() { return compositor_; }
+  content::LayerTreeView* layer_tree_view() { return layer_tree_view_; }
 
-  // WebViewClient:
+  // WebWidgetClient:
   WebLayerTreeView* InitializeLayerTreeView() override;
   void ScheduleAnimation() override { animation_scheduled_ = true; }
-  bool AnimationScheduled() { return animation_scheduled_; }
-  void ClearAnimationScheduled() { animation_scheduled_ = false; }
+
+  // WebViewClient:
   bool CanHandleGestureEvent() override { return true; }
   bool CanUpdateLayout() override { return true; }
+  WebWidgetClient* WidgetClient() override { return this; }
+
+  bool AnimationScheduled() { return animation_scheduled_; }
+  void ClearAnimationScheduled() { animation_scheduled_ = false; }
 
  private:
-  content::RenderWidgetCompositor* compositor_ = nullptr;
-  RenderWidgetCompositorFactory compositor_factory_;
+  content::LayerTreeView* layer_tree_view_ = nullptr;
+  LayerTreeViewFactory layer_tree_view_factory_;
   bool animation_scheduled_ = false;
 };
 
@@ -258,11 +267,12 @@ class WebViewHelper {
   void Reset();
 
   WebViewImpl* GetWebView() const { return web_view_; }
+  content::LayerTreeView* GetLayerTreeView() const {
+    return test_web_view_client_->layer_tree_view();
+  }
 
   WebLocalFrameImpl* LocalMainFrame() const;
   WebRemoteFrameImpl* RemoteMainFrame() const;
-
-  void SetViewportSize(const WebSize& size);
 
  private:
   void InitializeWebView(TestWebViewClient*, class WebView* opener);

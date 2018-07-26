@@ -33,10 +33,12 @@
 #include "third_party/blink/renderer/core/frame/settings.h"
 #include "third_party/blink/renderer/core/frame/use_counter.h"
 #include "third_party/blink/renderer/core/html/anchor_element_metrics.h"
+#include "third_party/blink/renderer/core/html/anchor_element_metrics_sender.h"
 #include "third_party/blink/renderer/core/html/html_image_element.h"
 #include "third_party/blink/renderer/core/html/parser/html_parser_idioms.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
 #include "third_party/blink/renderer/core/loader/frame_load_request.h"
+#include "third_party/blink/renderer/core/loader/navigation_policy.h"
 #include "third_party/blink/renderer/core/loader/ping_loader.h"
 #include "third_party/blink/renderer/core/page/chrome_client.h"
 #include "third_party/blink/renderer/core/page/page.h"
@@ -332,11 +334,7 @@ void HTMLAnchorElement::HandleClick(Event* event) {
                       WebFeature::kAnchorClickDispatchForNonConnectedNode);
   }
 
-  auto anchor_metrics = AnchorElementMetrics::CreateFrom(this);
-  if (anchor_metrics.has_value()) {
-    anchor_metrics.value().SendMetricsToBrowser();
-    anchor_metrics.value().RecordMetrics();
-  }
+  AnchorElementMetrics::MaybeReportClickedMetricsOnClick(this);
 
   StringBuilder url;
   url.Append(StripLeadingAndTrailingHTMLSpaces(FastGetAttribute(hrefAttr)));
@@ -357,8 +355,7 @@ void HTMLAnchorElement::HandleClick(Event* event) {
       !HasRel(kRelationNoReferrer)) {
     UseCounter::Count(GetDocument(),
                       WebFeature::kHTMLAnchorElementReferrerPolicyAttribute);
-    request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
-        policy, completed_url, GetDocument().OutgoingReferrer()));
+    request.SetReferrerPolicy(policy);
   }
 
   if (hasAttribute(downloadAttr)) {
@@ -371,13 +368,16 @@ void HTMLAnchorElement::HandleClick(Event* event) {
               : WebFeature::
                     kHTMLAnchorElementDownloadInSandboxWithoutUserGesture);
     }
-    if (GetDocument().GetSecurityOrigin()->CanReadContent(completed_url)) {
-      // TODO(jochen): Handle cross origin server redirects.
+    // Ignore the download attribute if we either can't read the content, or
+    // the event is an alt-click or similar.
+    if (NavigationPolicyFromEvent(event) != kNavigationPolicyDownload &&
+        GetDocument().GetSecurityOrigin()->CanReadContent(completed_url)) {
       request.SetSuggestedFilename(
           static_cast<String>(FastGetAttribute(downloadAttr)));
       request.SetRequestContext(WebURLRequest::kRequestContextDownload);
       request.SetRequestorOrigin(SecurityOrigin::Create(GetDocument().Url()));
-      frame->Client()->DownloadURL(request);
+      frame->Client()->DownloadURL(request,
+                                   DownloadCrossOriginRedirects::kNavigate);
       return;
     }
   }
@@ -430,6 +430,11 @@ Node::InsertionNotificationRequest HTMLAnchorElement::InsertedInto(
   InsertionNotificationRequest request =
       HTMLElement::InsertedInto(insertion_point);
   LogAddElementIfIsolatedWorldAndInDocument("a", hrefAttr);
+
+  Document& top_document = GetDocument().TopDocument();
+  if (AnchorElementMetricsSender::HasAnchorElementMetricsSender(top_document))
+    AnchorElementMetricsSender::From(top_document)->AddAnchorElement(*this);
+
   return request;
 }
 

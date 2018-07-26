@@ -41,12 +41,14 @@ RasterInProcessContext::~RasterInProcessContext() {
 }
 
 ContextResult RasterInProcessContext::Initialize(
-    scoped_refptr<InProcessCommandBuffer::Service> service,
+    scoped_refptr<CommandBufferTaskExecutor> task_executor,
     const ContextCreationAttribs& attribs,
     const SharedMemoryLimits& memory_limits,
     GpuMemoryBufferManager* gpu_memory_buffer_manager,
     ImageFactory* image_factory,
-    GpuChannelManagerDelegate* gpu_channel_manager_delegate) {
+    GpuChannelManagerDelegate* gpu_channel_manager_delegate,
+    gpu::raster::GrShaderCache* gr_shader_cache,
+    GpuProcessActivityFlags* activity_flags) {
   DCHECK(attribs.enable_raster_interface);
   if (!attribs.enable_raster_interface) {
     return ContextResult::kFatalFailure;
@@ -57,11 +59,13 @@ ContextResult RasterInProcessContext::Initialize(
   }
 
   client_task_runner_ = base::MakeRefCounted<base::TestSimpleTaskRunner>();
-  command_buffer_ = std::make_unique<InProcessCommandBuffer>(service);
+  command_buffer_ =
+      std::make_unique<InProcessCommandBuffer>(std::move(task_executor));
   auto result = command_buffer_->Initialize(
       nullptr /* surface */, true /* is_offscreen */, kNullSurfaceHandle,
       attribs, nullptr /* share_command_buffer */, gpu_memory_buffer_manager,
-      image_factory, gpu_channel_manager_delegate, client_task_runner_);
+      image_factory, gpu_channel_manager_delegate, client_task_runner_,
+      gr_shader_cache, activity_flags);
   if (result != ContextResult::kSuccess) {
     DLOG(ERROR) << "Failed to initialize InProcessCommmandBuffer";
     return result;
@@ -119,6 +123,10 @@ ServiceTransferCache* RasterInProcessContext::GetTransferCacheForTest() const {
 InProcessCommandBuffer* RasterInProcessContext::GetCommandBufferForTest()
     const {
   return command_buffer_.get();
+}
+
+int RasterInProcessContext::GetRasterDecoderIdForTest() const {
+  return command_buffer_->GetRasterDecoderIdForTest();
 }
 
 }  // namespace gpu

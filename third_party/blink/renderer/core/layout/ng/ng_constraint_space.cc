@@ -39,7 +39,7 @@ NGConstraintSpace::NGConstraintSpace(
     NGFloatTypes adjoining_floats,
     const NGMarginStrut& margin_strut,
     const NGBfcOffset& bfc_offset,
-    const base::Optional<NGBfcOffset>& floats_bfc_offset,
+    const base::Optional<LayoutUnit>& floats_bfc_block_offset,
     const NGExclusionSpace& exclusion_space,
     LayoutUnit clearance_offset,
     Vector<NGBaselineRequest>& baseline_requests)
@@ -68,7 +68,7 @@ NGConstraintSpace::NGConstraintSpace(
       direction_(static_cast<unsigned>(direction)),
       margin_strut_(margin_strut),
       bfc_offset_(bfc_offset),
-      floats_bfc_offset_(floats_bfc_offset),
+      floats_bfc_block_offset_(floats_bfc_block_offset),
       exclusion_space_(std::make_unique<NGExclusionSpace>(exclusion_space)),
       clearance_offset_(clearance_offset) {
   baseline_requests_.swap(baseline_requests);
@@ -157,7 +157,7 @@ scoped_refptr<NGConstraintSpace> NGConstraintSpace::CreateFromLayoutObject(
 
   NGConstraintSpaceBuilder builder(writing_mode, initial_containing_block_size);
 
-  if (!box.IsWritingModeRoot()) {
+  if (!box.IsWritingModeRoot() || box.IsGridItem()) {
     // Add all types because we don't know which baselines will be requested.
     FontBaseline baseline_type = box.StyleRef().GetFontBaseline();
     bool synthesize_inline_block_baseline =
@@ -235,7 +235,7 @@ bool NGConstraintSpace::operator==(const NGConstraintSpace& other) const {
          direction_ == other.direction_ &&
          margin_strut_ == other.margin_strut_ &&
          bfc_offset_ == other.bfc_offset_ &&
-         floats_bfc_offset_ == other.floats_bfc_offset_ &&
+         floats_bfc_block_offset_ == other.floats_bfc_block_offset_ &&
          clearance_offset_ == other.clearance_offset_ &&
          baseline_requests_ == other.baseline_requests_;
 }

@@ -6,11 +6,11 @@
 
 #include "base/logging.h"
 #include "base/run_loop.h"
-#include "base/strings/stringprintf.h"
+#include "base/strings/string_util.h"
 #include "net/http/http_status_code.h"
-#include "net/http/http_util.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/resource_request_body.h"
+#include "services/network/test/test_utils.h"
 
 namespace network {
 
@@ -34,13 +34,15 @@ void TestURLLoaderFactory::AddResponse(const GURL& url,
                                        const ResourceResponseHead& head,
                                        const std::string& content,
                                        const URLLoaderCompletionStatus& status,
-                                       const Redirects& redirects) {
+                                       const Redirects& redirects,
+                                       ResponseProduceFlags flags) {
   Response response;
   response.url = url;
   response.redirects = redirects;
   response.head = head;
   response.content = content;
   response.status = status;
+  response.flags = flags;
   responses_[url] = response;
 
   for (auto it = pending_requests_.begin(); it != pending_requests_.end();) {
@@ -124,46 +126,94 @@ bool TestURLLoaderFactory::CreateLoaderAndStartInternal(
   if (it == responses_.end())
     return false;
 
-  SimulateResponseImpl(client, it->second.redirects, it->second.head,
-                       it->second.content, it->second.status);
+  SimulateResponse(client, it->second.redirects, it->second.head,
+                   it->second.content, it->second.status, it->second.flags);
   return true;
+}
+
+bool TestURLLoaderFactory::SimulateResponseForPendingRequest(
+    const GURL& url,
+    const network::URLLoaderCompletionStatus& completion_status,
+    const ResourceResponseHead& response_head,
+    const std::string& content,
+    ResponseMatchFlags flags) {
+  if (pending_requests_.empty())
+    return false;
+
+  const bool url_match_prefix = flags & kUrlMatchPrefix;
+  const bool reverse = flags & kMostRecentMatch;
+
+  // Give any cancellations a chance to happen...
+  base::RunLoop().RunUntilIdle();
+
+  bool found_request = false;
+  network::TestURLLoaderFactory::PendingRequest request;
+  for (int i = (reverse ? static_cast<int>(pending_requests_.size()) - 1 : 0);
+       reverse ? i >= 0 : i < static_cast<int>(pending_requests_.size());
+       reverse ? --i : ++i) {
+    // Skip already cancelled.
+    if (pending_requests_[i].client.encountered_error())
+      continue;
+
+    if (pending_requests_[i].request.url == url ||
+        (url_match_prefix &&
+         base::StartsWith(pending_requests_[i].request.url.spec(), url.spec(),
+                          base::CompareCase::INSENSITIVE_ASCII))) {
+      request = std::move(pending_requests_[i]);
+      pending_requests_.erase(pending_requests_.begin() + i);
+      found_request = true;
+      break;
+    }
+  }
+  if (!found_request)
+    return false;
+
+  // |decoded_body_length| must be set to the right size or the SimpleURLLoader
+  // will fail.
+  network::URLLoaderCompletionStatus status(completion_status);
+  status.decoded_body_length = content.size();
+
+  SimulateResponse(request.client.get(), TestURLLoaderFactory::Redirects(),
+                   response_head, content, status, kResponseDefault);
+  base::RunLoop().RunUntilIdle();
+
+  return true;
+}
+
+void TestURLLoaderFactory::SimulateResponseWithoutRemovingFromPendingList(
+    PendingRequest* request,
+    const ResourceResponseHead& head,
+    std::string content,
+    const URLLoaderCompletionStatus& completion_status) {
+  URLLoaderCompletionStatus status(completion_status);
+  status.decoded_body_length = content.size();
+  SimulateResponse(request->client.get(), TestURLLoaderFactory::Redirects(),
+                   head, content, status, kResponseDefault);
+  base::RunLoop().RunUntilIdle();
+}
+
+void TestURLLoaderFactory::SimulateResponseWithoutRemovingFromPendingList(
+    PendingRequest* request,
+    std::string content) {
+  URLLoaderCompletionStatus completion_status(net::OK);
+  ResourceResponseHead head = CreateResourceResponseHead(net::HTTP_OK);
+  SimulateResponseWithoutRemovingFromPendingList(request, head, content,
+                                                 completion_status);
 }
 
 // static
 void TestURLLoaderFactory::SimulateResponse(
-    TestURLLoaderFactory::PendingRequest request,
-    std::string content,
-    int net_error,
-    net::HttpStatusCode http_status) {
-  network::URLLoaderCompletionStatus status(net_error);
-  ResourceResponseHead head = CreateResourceResponseHead(http_status);
-  status.decoded_body_length = content.size();
-  SimulateResponseImpl(request.client.get(), TestURLLoaderFactory::Redirects(),
-                       head, content, status);
-  base::RunLoop().RunUntilIdle();
-}
-
-// static
-ResourceResponseHead TestURLLoaderFactory::CreateResourceResponseHead(
-    net::HttpStatusCode http_status) {
-  ResourceResponseHead head;
-  std::string headers(base::StringPrintf(
-      "HTTP/1.1 %d %s\nContent-type: text/html\n\n",
-      static_cast<int>(http_status), net::GetHttpReasonPhrase(http_status)));
-  head.headers = new net::HttpResponseHeaders(
-      net::HttpUtil::AssembleRawHeaders(headers.c_str(), headers.size()));
-  return head;
-}
-
-// static
-void TestURLLoaderFactory::SimulateResponseImpl(
     mojom::URLLoaderClient* client,
     TestURLLoaderFactory::Redirects redirects,
     ResourceResponseHead head,
     std::string content,
-    URLLoaderCompletionStatus status) {
+    URLLoaderCompletionStatus status,
+    ResponseProduceFlags response_flags) {
   for (const auto& redirect : redirects)
     client->OnReceiveRedirect(redirect.first, redirect.second);
+
+  if (response_flags & kResponseOnlyRedirectsNoDestination)
+    return;
 
   if (status.error_code == net::OK) {
     client->OnReceiveResponse(head);

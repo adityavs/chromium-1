@@ -32,7 +32,6 @@ using blink::WebCursorInfo;
 using blink::WebDragData;
 using blink::WebDragOperationsMask;
 using blink::WebFrameWidget;
-using blink::WebImage;
 using blink::WebLocalFrame;
 using blink::WebMouseEvent;
 using blink::WebPlugin;
@@ -172,7 +171,7 @@ void WebViewPlugin::Paint(cc::PaintCanvas* canvas, const WebRect& rect) {
       SkFloatToScalar(1.0 / container_->DeviceScaleFactor());
   canvas->scale(inverse_scale, inverse_scale);
 
-  web_view()->Paint(canvas, paint_rect);
+  web_view()->PaintContent(canvas, paint_rect);
 
   canvas->restore();
 }
@@ -255,9 +254,10 @@ void WebViewPlugin::DidFailLoading(const WebURLError& error) {
 WebViewPlugin::WebViewHelper::WebViewHelper(WebViewPlugin* plugin,
                                             const WebPreferences& preferences)
     : plugin_(plugin) {
-  web_view_ = WebView::Create(/* client = */ this,
+  web_view_ = WebView::Create(/*client=*/this,
+                              /*widget_client=*/this,
                               blink::mojom::PageVisibilityState::kVisible,
-                              /* opener = */ nullptr);
+                              /*opener=*/nullptr);
   // ApplyWebPreferences before making a WebLocalFrame so that the frame sees a
   // consistent view of our preferences.
   content::RenderView::ApplyWebPreferences(preferences, web_view_);
@@ -289,6 +289,10 @@ bool WebViewPlugin::WebViewHelper::CanUpdateLayout() {
   return true;
 }
 
+blink::WebWidgetClient* WebViewPlugin::WebViewHelper::WidgetClient() {
+  return this;
+}
+
 void WebViewPlugin::WebViewHelper::SetToolTipText(
     const WebString& text,
     blink::WebTextDirection hint) {
@@ -299,7 +303,7 @@ void WebViewPlugin::WebViewHelper::SetToolTipText(
 void WebViewPlugin::WebViewHelper::StartDragging(blink::WebReferrerPolicy,
                                                  const WebDragData&,
                                                  WebDragOperationsMask,
-                                                 const WebImage&,
+                                                 const SkBitmap&,
                                                  const WebPoint&) {
   // Immediately stop dragging.
   main_frame()->FrameWidget()->DragSourceSystemDragEnded();

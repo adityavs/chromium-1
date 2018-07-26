@@ -26,7 +26,6 @@ class FocusClient;
 enum class WindowEmbedType {
   NONE,
   EMBED_IN_OWNER,
-  TOP_LEVEL_IN_WM,
 };
 
 // Alphabetical sort.
@@ -76,10 +75,6 @@ AURA_EXPORT extern const WindowProperty<bool>* const kDrawAttentionKey;
 
 // A property key to store the focus client on the window.
 AURA_EXPORT extern const WindowProperty<FocusClient*>* const kFocusClientKey;
-
-// A bool property key to specify if the window has a icon set for displaying in
-// overivew mode.
-AURA_EXPORT extern const WindowProperty<bool>* const kHasOverviewIcon;
 
 // A property key to store the host window of a window. This lets
 // WebContentsViews find the windows that should constrain NPAPI plugins.
@@ -147,9 +142,6 @@ AURA_EXPORT extern const WindowProperty<bool>* const kTitleShownKey;
 // view is the tab strip for tabbed browser windows, the toolbar for popups,
 // the web contents for app windows and varies for fullscreen windows.
 AURA_EXPORT extern const WindowProperty<int>* const kTopViewInset;
-
-// The color of the window header.
-AURA_EXPORT extern const WindowProperty<SkColor>* const kTopViewColor;
 
 // A property key to store the window icon, typically 16x16 for title bars.
 AURA_EXPORT extern const WindowProperty<gfx::ImageSkia*>* const kWindowIconKey;

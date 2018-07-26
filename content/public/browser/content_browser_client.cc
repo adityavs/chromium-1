@@ -118,6 +118,11 @@ bool ContentBrowserClient::LogWebUIUrl(const GURL& web_ui_url) const {
   return false;
 }
 
+bool ContentBrowserClient::IsWebUIAllowedToMakeNetworkRequests(
+    const url::Origin& origin) {
+  return false;
+}
+
 bool ContentBrowserClient::IsHandledURL(const GURL& url) {
   return false;
 }
@@ -265,6 +270,10 @@ bool ContentBrowserClient::IsDataSaverEnabled(BrowserContext* context) {
   return false;
 }
 
+void ContentBrowserClient::UpdateRendererPreferencesForWorker(
+    BrowserContext* browser_context,
+    RendererPreferences* out_prefs) {}
+
 bool ContentBrowserClient::AllowGetCookie(const GURL& url,
                                           const GURL& first_party,
                                           const net::CookieList& cookie_list,
@@ -365,10 +374,9 @@ ContentBrowserClient::OverrideSystemLocationProvider() {
   return nullptr;
 }
 
-void ContentBrowserClient::GetGeolocationRequestContext(
-    base::OnceCallback<void(scoped_refptr<net::URLRequestContextGetter>)>
-        callback) {
-  std::move(callback).Run(scoped_refptr<net::URLRequestContextGetter>(nullptr));
+scoped_refptr<network::SharedURLLoaderFactory>
+ContentBrowserClient::GetSystemSharedURLLoaderFactory() {
+  return nullptr;
 }
 
 std::string ContentBrowserClient::GetGeolocationApiKey() {
@@ -452,6 +460,10 @@ std::string ContentBrowserClient::GetDefaultDownloadName() {
 }
 
 base::FilePath ContentBrowserClient::GetShaderDiskCacheDirectory() {
+  return base::FilePath();
+}
+
+base::FilePath ContentBrowserClient::GetGrShaderDiskCacheDirectory() {
   return base::FilePath();
 }
 

@@ -79,6 +79,7 @@ namespace content {
 class BrowserPluginEmbedder;
 class BrowserPluginGuest;
 class DateTimeChooserAndroid;
+class DisplayCutoutHostImpl;
 class FindRequestManager;
 class InterstitialPageImpl;
 class JavaScriptDialogManager;
@@ -86,6 +87,7 @@ class LoaderIOThreadNotifier;
 class ManifestManagerHost;
 class MediaWebContentsObserver;
 class PluginContentOriginWhitelist;
+class RenderFrameHost;
 class RenderViewHost;
 class RenderViewHostDelegateView;
 class RenderWidgetHostImpl;
@@ -226,9 +228,6 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   ScreenOrientationProvider* GetScreenOrientationProviderForTesting() const {
     return screen_orientation_provider_.get();
   }
-
-  // Broadcasts the mode change to all frames.
-  void SetAccessibilityMode(ui::AXMode mode);
 
   // Adds the given accessibility mode to the current accessibility mode
   // bitmap.
@@ -517,10 +516,13 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   WebContents* GetAsWebContents() override;
   bool IsNeverVisible() override;
   ui::AXMode GetAccessibilityMode() const override;
+  // Broadcasts the mode change to all frames.
+  void SetAccessibilityMode(ui::AXMode mode) override;
   void AccessibilityEventReceived(
       const AXEventNotificationDetails& details) override;
   void AccessibilityLocationChangesReceived(
       const std::vector<AXLocationChangeNotificationDetails>& details) override;
+  base::string16 DumpAccessibilityTree(bool internal) override;
   RenderFrameHost* GetGuestByInstanceID(
       RenderFrameHost* render_frame_host,
       int browser_plugin_instance_id) override;
@@ -691,7 +693,6 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
 #if !defined(OS_ANDROID)
   double GetPendingPageZoomLevel() const override;
-  bool UsesTemporaryZoomLevel() const override;
 #endif  // !defined(OS_ANDROID)
 
   KeyboardEventProcessingResult PreHandleKeyboardEvent(
@@ -784,8 +785,8 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
                                       RenderFrameHost* new_host,
                                       bool is_main_frame) override;
   void NotifyMainFrameSwappedFromRenderManager(
-      RenderViewHost* old_host,
-      RenderViewHost* new_host) override;
+      RenderFrameHost* old_host,
+      RenderFrameHost* new_host) override;
   NavigationControllerImpl& GetControllerForRenderManager() override;
   NavigationEntry* GetLastCommittedNavigationEntryForRenderManager() override;
   InterstitialPageImpl* GetInterstitialForRenderManager() override;
@@ -971,6 +972,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   friend class WebContentsObserver;
   friend class WebContents;  // To implement factory methods.
 
+  friend class RenderFrameHostImplBeforeUnloadBrowserTest;
   friend class WebContentsImplBrowserTest;
 
   FRIEND_TEST_ALL_PREFIXES(WebContentsImplTest, NoJSMessageOnInterstitials);
@@ -1221,6 +1223,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void OnUpdateFaviconURL(RenderFrameHostImpl* source,
                           const std::vector<FaviconURL>& candidates);
   void OnFirstVisuallyNonEmptyPaint(RenderViewHostImpl* source);
+  void OnCommitAndDrawCompositorFrame(RenderViewHostImpl* source);
   void OnShowValidationMessage(RenderViewHostImpl* source,
                                const gfx::Rect& anchor_in_root_view,
                                const base::string16& main_text,
@@ -1320,7 +1323,9 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
 
   // Helper functions for sending notifications.
   void NotifyViewSwapped(RenderViewHost* old_host, RenderViewHost* new_host);
-  void NotifyFrameSwapped(RenderFrameHost* old_host, RenderFrameHost* new_host);
+  void NotifyFrameSwapped(RenderFrameHost* old_host,
+                          RenderFrameHost* new_host,
+                          bool is_main_frame);
   void NotifyDisconnected();
 
   void SetEncoding(const std::string& encoding);
@@ -1342,7 +1347,7 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   // |delegate_|.
   void OnPreferredSizeChanged(const gfx::Size& old_size);
 
-  void OnUserInteraction(const blink::WebInputEvent::Type type);
+  void SendUserGestureForResourceDispatchHost();
 
   // Internal helper to create WebUI objects associated with |this|. |url| is
   // used to determine which WebUI should be created (if any).
@@ -1385,6 +1390,10 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   void RecursiveRequestAXTreeSnapshotOnFrame(FrameTreeNode* root_node,
                                              AXTreeSnapshotCombiner* combiner,
                                              ui::AXMode ax_mode);
+
+  // Notify observers that the viewport fit value changed. This is called by
+  // |DisplayCutoutHostImpl|.
+  void NotifyViewportFitChanged(blink::mojom::ViewportFit value);
 
   // Data for core operation ---------------------------------------------------
 
@@ -1749,7 +1758,6 @@ class CONTENT_EXPORT WebContentsImpl : public WebContents,
   bool should_override_user_agent_in_new_tabs_ = false;
 
   // Gets notified about changes in viewport fit events.
-  class DisplayCutoutHostImpl;
   std::unique_ptr<DisplayCutoutHostImpl> display_cutout_host_impl_;
 
   // Stores a set of FrameTreeNode ids that are fullscreen.

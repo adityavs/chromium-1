@@ -417,12 +417,8 @@ Blob* XMLHttpRequest::ResponseBlob() {
     blob_data->SetContentType(FinalResponseMIMETypeWithFallback().LowerASCII());
     size_t size = 0;
     if (binary_response_builder_ && binary_response_builder_->size()) {
-      binary_response_builder_->ForEachSegment(
-          [&blob_data](const char* segment, size_t segment_size,
-                       size_t segment_offset) -> bool {
-            blob_data->AppendBytes(segment, segment_size);
-            return true;
-          });
+      for (const auto& span : *binary_response_builder_)
+        blob_data->AppendBytes(span.data(), span.size());
       size = binary_response_builder_->size();
       binary_response_builder_ = nullptr;
       ReportMemoryUsageToV8();
@@ -481,7 +477,10 @@ void XMLHttpRequest::setTimeout(unsigned timeout,
     return;
   }
 
-  timeout_milliseconds_ = timeout;
+  if (timeout)
+    timeout_ = TimeDelta::FromMilliseconds(timeout);
+  else
+    timeout_ = base::nullopt;
 
   // From http://www.w3.org/TR/XMLHttpRequest/#the-timeout-attribute:
   // Note: This implies that the timeout attribute can be set while fetching is
@@ -690,7 +689,7 @@ void XMLHttpRequest::open(const AtomicString& method,
     }
 
     // Similarly, timeouts are disabled for synchronous requests as well.
-    if (timeout_milliseconds_ > 0) {
+    if (timeout_) {
       exception_state.ThrowDOMException(
           DOMExceptionCode::kInvalidAccessError,
           "Synchronous requests must not set a timeout.");
@@ -1078,9 +1077,6 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
   if (request_headers_.size() > 0)
     request.AddHTTPHeaderFields(request_headers_);
 
-  ThreadableLoaderOptions options;
-  options.timeout_milliseconds = timeout_milliseconds_;
-
   ResourceLoaderOptions resource_loader_options;
   resource_loader_options.security_origin = GetSecurityOrigin();
   resource_loader_options.initiator_info.name =
@@ -1128,8 +1124,8 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
     // TODO(yhirano): Turn this CHECK into DCHECK: see https://crbug.com/570946.
     CHECK(!loader_);
     DCHECK(send_flag_);
-    loader_ = ThreadableLoader::Create(execution_context, this, options,
-                                       resource_loader_options);
+    loader_ = new ThreadableLoader(execution_context, this,
+                                   resource_loader_options, timeout_);
     loader_->Start(request);
 
     return;
@@ -1147,8 +1143,11 @@ void XMLHttpRequest::CreateRequest(scoped_refptr<EncodedFormData> http_body,
       syncxhr_pagedismissal_histogram.Count(pagedismissal);
     }
   }
-  ThreadableLoader::LoadResourceSynchronously(execution_context, request, *this,
-                                              options, resource_loader_options);
+
+  resource_loader_options.synchronous_policy = kRequestSynchronously;
+  loader_ = new ThreadableLoader(execution_context, this,
+                                 resource_loader_options, timeout_);
+  loader_->Start(request);
 
   ThrowForLoadFailureIfNeeded(exception_state, String());
 }
@@ -1227,7 +1226,7 @@ bool XMLHttpRequest::InternalAbort() {
   if (!loader_)
     return true;
 
-  // Cancelling the ThreadableLoader m_loader may result in calling
+  // Cancelling the ThreadableLoader loader_ may result in calling
   // window.onload synchronously. If such an onload handler contains open()
   // call on the same XMLHttpRequest object, reentry happens.
   //
@@ -1757,6 +1756,9 @@ void XMLHttpRequest::DidReceiveResponse(
     unsigned long identifier,
     const ResourceResponse& response,
     std::unique_ptr<WebDataConsumerHandle> handle) {
+  // TODO(yhirano): Remove this CHECK: see https://crbug.com/570946.
+  CHECK(&response);
+
   ALLOW_UNUSED_LOCAL(handle);
   DCHECK(!handle);
   NETWORK_DVLOG(1) << this << " didReceiveResponse(" << identifier << ")";

@@ -6,7 +6,9 @@
 
 #import "base/logging.h"
 #include "base/metrics/user_metrics.h"
+#include "ios/chrome/browser/ui/animation_util.h"
 #import "ios/chrome/browser/ui/commands/browser_commands.h"
+#import "ios/chrome/browser/ui/popup_menu/public/popup_menu_long_press_delegate.h"
 #import "ios/chrome/browser/ui/toolbar/adaptive/adaptive_toolbar_view.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button.h"
 #import "ios/chrome/browser/ui/toolbar/buttons/toolbar_button_factory.h"
@@ -17,12 +19,21 @@
 #import "ios/chrome/browser/ui/toolbar/public/features.h"
 #import "ios/chrome/browser/ui/toolbar/public/omnibox_focuser.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
+#import "ios/chrome/browser/ui/util/force_touch_long_press_gesture_recognizer.h"
+#import "ios/chrome/common/material_timing.h"
 #import "ios/third_party/material_components_ios/src/components/ProgressView/src/MaterialProgressView.h"
 #import "ios/third_party/material_components_ios/src/components/Typography/src/MaterialTypography.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
 #error "This file requires ARC support."
 #endif
+
+namespace {
+const CGFloat kRotationInRadians = 5.0 / 180 * M_PI;
+// Scale factor for the animation, must be < 1.
+const CGFloat kScaleFactorDiff = 0.25;
+const CGFloat kTabGridAnimationsTotalDuration = 0.5;
+}  // namespace
 
 @interface AdaptiveToolbarViewController ()
 
@@ -39,6 +50,7 @@
 @dynamic view;
 @synthesize buttonFactory = _buttonFactory;
 @synthesize dispatcher = _dispatcher;
+@synthesize longPressDelegate = _longPressDelegate;
 @synthesize loading = _loading;
 @synthesize isNTP = _isNTP;
 
@@ -150,8 +162,41 @@
   [self.view.progressBar setProgress:progress animated:YES completion:nil];
 }
 
-- (void)setTabCount:(int)tabCount {
-  [self.view.tabGridButton setTabCount:tabCount];
+- (void)setTabCount:(int)tabCount addedInBackground:(BOOL)inBackground {
+  if (self.view.tabGridButton.tabCount == tabCount)
+    return;
+
+  CGFloat scaleSign = tabCount > self.view.tabGridButton.tabCount ? 1 : -1;
+  self.view.tabGridButton.tabCount = tabCount;
+
+  CGFloat scaleFactor = 1 + scaleSign * kScaleFactorDiff;
+
+  CGAffineTransform baseTransform =
+      inBackground ? CGAffineTransformMakeRotation(kRotationInRadians)
+                   : CGAffineTransformIdentity;
+
+  auto animations = ^{
+    [UIView addKeyframeWithRelativeStartTime:0
+                            relativeDuration:0.5
+                                  animations:^{
+                                    self.view.tabGridButton.transform =
+                                        CGAffineTransformScale(baseTransform,
+                                                               scaleFactor,
+                                                               scaleFactor);
+                                  }];
+    [UIView addKeyframeWithRelativeStartTime:0.5
+                            relativeDuration:0.5
+                                  animations:^{
+                                    self.view.tabGridButton.transform =
+                                        CGAffineTransformIdentity;
+                                  }];
+  };
+
+  [UIView animateKeyframesWithDuration:kTabGridAnimationsTotalDuration
+                                 delay:0
+                               options:UIViewAnimationCurveEaseInOut
+                            animations:animations
+                            completion:nil];
 }
 
 - (void)setPageBookmarked:(BOOL)bookmarked {
@@ -324,29 +369,36 @@
 
 // Adds a LongPressGesture to the |view|, with target on -|handleLongPress:|.
 - (void)addLongPressGestureToView:(UIView*)view {
-  UILongPressGestureRecognizer* navigationHistoryLongPress =
-      [[UILongPressGestureRecognizer alloc]
+  ForceTouchLongPressGestureRecognizer* gestureRecognizer =
+      [[ForceTouchLongPressGestureRecognizer alloc]
           initWithTarget:self
-                  action:@selector(handleLongPress:)];
-  [view addGestureRecognizer:navigationHistoryLongPress];
+                  action:@selector(handleGestureRecognizer:)];
+  gestureRecognizer.forceThreshold = 0.8;
+  [view addGestureRecognizer:gestureRecognizer];
 }
 
-// Handles the long press on the views.
-- (void)handleLongPress:(UILongPressGestureRecognizer*)gesture {
-  if (gesture.state != UIGestureRecognizerStateBegan)
-    return;
-
-  if (gesture.view == self.view.backButton) {
-    [self.dispatcher showNavigationHistoryBackPopupMenu];
-  } else if (gesture.view == self.view.forwardButton) {
-    [self.dispatcher showNavigationHistoryForwardPopupMenu];
-  } else if (gesture.view == self.view.omniboxButton) {
-    [self.dispatcher showSearchButtonPopup];
-  } else if (gesture.view == self.view.tabGridButton) {
-    [self.dispatcher showTabGridButtonPopup];
-  } else if (gesture.view == self.view.toolsMenuButton) {
-    base::RecordAction(base::UserMetricsAction("MobileToolbarShowMenu"));
-    [self.dispatcher showToolsMenuPopup];
+// Handles the gseture recognizer on the views.
+- (void)handleGestureRecognizer:(UILongPressGestureRecognizer*)gesture {
+  if (gesture.state == UIGestureRecognizerStateBegan) {
+    if (gesture.view == self.view.backButton) {
+      [self.dispatcher showNavigationHistoryBackPopupMenu];
+    } else if (gesture.view == self.view.forwardButton) {
+      [self.dispatcher showNavigationHistoryForwardPopupMenu];
+    } else if (gesture.view == self.view.omniboxButton) {
+      [self.dispatcher showSearchButtonPopup];
+    } else if (gesture.view == self.view.tabGridButton) {
+      [self.dispatcher showTabGridButtonPopup];
+    } else if (gesture.view == self.view.toolsMenuButton) {
+      base::RecordAction(base::UserMetricsAction("MobileToolbarShowMenu"));
+      [self.dispatcher showToolsMenuPopup];
+    }
+    TriggerHapticFeedbackForImpact(UIImpactFeedbackStyleHeavy);
+  } else if (gesture.state == UIGestureRecognizerStateEnded) {
+    [self.longPressDelegate
+        longPressEndedAtPoint:[gesture locationOfTouch:0 inView:nil]];
+  } else if (gesture.state == UIGestureRecognizerStateChanged) {
+    [self.longPressDelegate
+        longPressFocusPointChangedTo:[gesture locationOfTouch:0 inView:nil]];
   }
 }
 

@@ -28,11 +28,12 @@ class GvrDevice;
 
 namespace vr {
 
-// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.vr_shell
+// GENERATED_JAVA_ENUM_PACKAGE: org.chromium.chrome.browser.vr
 enum class VrSupportLevel : int {
-  kVrNotAvailable = 0,
-  kVrCardboard = 1,
-  kVrDaydream = 2,  // Supports both Cardboard and Daydream viewer.
+  kVrDisabled = 0,
+  kVrNeedsUpdate = 1,  // VR Support is available, but needs update.
+  kVrCardboard = 2,
+  kVrDaydream = 3,  // Supports both Cardboard and Daydream viewer.
 };
 
 class VrShell;
@@ -67,11 +68,7 @@ class VrShellDelegate : public device::GvrDelegateProvider {
 
   device::GvrDevice* GetDevice();
 
-  void SendRequestPresentReply(
-      bool success,
-      device::mojom::VRSubmitFrameClientRequest request,
-      device::mojom::VRPresentationProviderPtr provider,
-      device::mojom::VRDisplayFrameTransportOptionsPtr);
+  void SendRequestPresentReply(device::mojom::XRSessionPtr session);
 
   // device::GvrDelegateProvider implementation.
   void ExitWebVRPresent() override;
@@ -83,7 +80,7 @@ class VrShellDelegate : public device::GvrDelegateProvider {
   void StartWebXRPresentation(
       device::mojom::VRDisplayInfoPtr display_info,
       device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
-      device::mojom::VRDisplayHost::RequestSessionCallback callback) override;
+      base::OnceCallback<void(device::mojom::XRSessionPtr)> callback) override;
   void OnListeningForActivateChanged(bool listening) override;
 
   void OnActivateDisplayHandled(bool will_not_present);
@@ -91,7 +88,7 @@ class VrShellDelegate : public device::GvrDelegateProvider {
   void OnPresentResult(
       device::mojom::VRDisplayInfoPtr display_info,
       device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
-      device::mojom::VRDisplayHost::RequestSessionCallback callback,
+      base::OnceCallback<void(device::mojom::XRSessionPtr)> callback,
       bool success);
 
   std::unique_ptr<VrCoreInfo> MakeVrCoreInfo(JNIEnv* env);
@@ -107,7 +104,7 @@ class VrShellDelegate : public device::GvrDelegateProvider {
   // Mojo callback waiting for request present response. This is temporarily
   // stored here from OnPresentResult's outgoing ConnectPresentingService call
   // until the reply arguments are received by SendRequestPresentReply.
-  device::mojom::VRDisplayHost::RequestSessionCallback
+  base::OnceCallback<void(device::mojom::XRSessionPtr)>
       request_present_response_callback_;
 
   bool pending_successful_present_request_ = false;

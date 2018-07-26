@@ -37,11 +37,11 @@ class ResourcePoolTest : public testing::Test {
  protected:
   class StubGpuBacking : public ResourcePool::GpuBacking {
    public:
-    base::trace_event::MemoryAllocatorDumpGuid MemoryDumpGuid(
-        uint64_t tracing_process_id) override {
-      return {};
-    }
-    base::UnguessableToken SharedMemoryGuid() override { return {}; }
+    void OnMemoryDump(
+        base::trace_event::ProcessMemoryDump* pmd,
+        const base::trace_event::MemoryAllocatorDumpGuid& buffer_dump_guid,
+        uint64_t tracing_process_id,
+        int importance) const override {}
   };
 
   void SetBackingOnResource(const ResourcePool::InUsePoolResource& resource) {
@@ -704,7 +704,6 @@ TEST_F(ResourcePoolTest, MetadataSentToDisplayCompositor) {
   EXPECT_EQ(transfer[0].mailbox_holder.sync_token, sync_token);
   EXPECT_EQ(transfer[0].mailbox_holder.texture_target, target);
   EXPECT_EQ(transfer[0].format, format);
-  EXPECT_EQ(transfer[0].buffer_format, viz::BufferFormat(format));
   EXPECT_TRUE(transfer[0].read_lock_fences_enabled);
   EXPECT_TRUE(transfer[0].is_overlay_candidate);
 

@@ -15,6 +15,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/browser/about_flags.h"
+#include "chrome/browser/accessibility/accessibility_ui.h"
 #include "chrome/browser/devtools/devtools_ui_bindings.h"
 #include "chrome/browser/dom_distiller/dom_distiller_service_factory.h"
 #include "chrome/browser/engagement/site_engagement_service.h"
@@ -59,6 +60,7 @@
 #include "chrome/browser/ui/webui/sync_internals_ui.h"
 #include "chrome/browser/ui/webui/task_scheduler_internals/task_scheduler_internals_ui.h"
 #include "chrome/browser/ui/webui/translate_internals/translate_internals_ui.h"
+#include "chrome/browser/ui/webui/ukm/ukm_internals_ui.h"
 #include "chrome/browser/ui/webui/usb_internals/usb_internals_ui.h"
 #include "chrome/browser/ui/webui/user_actions/user_actions_ui.h"
 #include "chrome/browser/ui/webui/version_ui.h"
@@ -180,7 +182,7 @@
 #endif
 
 #if defined(OS_WIN)
-#include "chrome/browser/ui/webui/conflicts_ui.h"
+#include "chrome/browser/ui/webui/conflicts/conflicts_ui.h"
 #include "chrome/browser/ui/webui/set_as_default_browser_ui_win.h"
 #include "chrome/browser/ui/webui/welcome_win10_ui.h"
 #endif
@@ -348,6 +350,8 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
   // All platform builds of Chrome will need to have a cloud printing
   // dialog as backup.  It's just that on Chrome OS, it's the only
   // print dialog.
+  if (url.host_piece() == chrome::kChromeUIAccessibilityHost)
+    return &NewWebUI<AccessibilityUI>;
   if (url.host_piece() == chrome::kChromeUIBluetoothInternalsHost)
     return &NewWebUI<BluetoothInternalsUI>;
   if (url.host_piece() == chrome::kChromeUIComponentsHost)
@@ -408,6 +412,8 @@ WebUIFactoryFunction GetWebUIFactoryFunction(WebUI* web_ui,
     return &NewWebUI<TaskSchedulerInternalsUI>;
   if (url.host_piece() == chrome::kChromeUITranslateInternalsHost)
     return &NewWebUI<TranslateInternalsUI>;
+  if (url.host_piece() == chrome::kChromeUIUkmHost)
+    return &NewWebUI<UkmInternalsUI>;
   if (url.host_piece() == chrome::kChromeUIUsbInternalsHost)
     return &NewWebUI<UsbInternalsUI>;
   if (url.host_piece() == chrome::kChromeUIUserActionsHost)
@@ -778,6 +784,26 @@ void ChromeWebUIControllerFactory::GetFaviconForURL(
 // static
 ChromeWebUIControllerFactory* ChromeWebUIControllerFactory::GetInstance() {
   return base::Singleton<ChromeWebUIControllerFactory>::get();
+}
+
+// static
+bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
+    const url::Origin& origin) {
+  // Whitelist to work around exceptional cases.
+  //
+  // If you are adding a new host to this list, please file a corresponding bug
+  // to track its removal. See https://crbug.com/829412 for the metabug.
+  return
+#if BUILDFLAG(ENABLE_PRINT_PREVIEW)
+      // https://crbug.com/829414
+      origin.host() == chrome::kChromeUIPrintHost ||
+#endif
+      // https://crbug.com/831812
+      origin.host() == chrome::kChromeUISyncConfirmationHost ||
+      // https://crbug.com/831813
+      origin.host() == chrome::kChromeUIInspectHost ||
+      // https://crbug.com/859345
+      origin.host() == chrome::kChromeUIDownloadsHost;
 }
 
 ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() {

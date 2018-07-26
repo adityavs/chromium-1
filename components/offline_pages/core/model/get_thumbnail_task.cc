@@ -52,7 +52,8 @@ GetThumbnailTask::~GetThumbnailTask() = default;
 void GetThumbnailTask::Run() {
   store_->Execute(base::BindOnce(GetThumbnailSync, std::move(offline_id_)),
                   base::BindOnce(&GetThumbnailTask::Complete,
-                                 weak_ptr_factory_.GetWeakPtr()));
+                                 weak_ptr_factory_.GetWeakPtr()),
+                  std::unique_ptr<OfflinePageThumbnail>());
 }
 
 void GetThumbnailTask::Complete(std::unique_ptr<OfflinePageThumbnail> result) {

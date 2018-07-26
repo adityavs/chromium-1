@@ -399,34 +399,18 @@ const AtomicString& MediaStream::InterfaceName() const {
   return EventTargetNames::MediaStream;
 }
 
-void MediaStream::AddTrackByComponent(MediaStreamComponent* component) {
+void MediaStream::AddTrackByComponentAndFireEvents(
+    MediaStreamComponent* component) {
   DCHECK(component);
   if (!GetExecutionContext())
     return;
-
   MediaStreamTrack* track =
       MediaStreamTrack::Create(GetExecutionContext(), component);
-  switch (component->Source()->GetType()) {
-    case MediaStreamSource::kTypeAudio:
-      audio_tracks_.push_back(track);
-      break;
-    case MediaStreamSource::kTypeVideo:
-      video_tracks_.push_back(track);
-      break;
-  }
-  track->RegisterMediaStream(this);
-  descriptor_->AddComponent(component);
-
-  ScheduleDispatchEvent(
-      MediaStreamTrackEvent::Create(EventTypeNames::addtrack, track));
-
-  if (!active() && !track->Ended()) {
-    descriptor_->SetActive(true);
-    ScheduleDispatchEvent(Event::Create(EventTypeNames::active));
-  }
+  AddTrackAndFireEvents(track);
 }
 
-void MediaStream::RemoveTrackByComponent(MediaStreamComponent* component) {
+void MediaStream::RemoveTrackByComponentAndFireEvents(
+    MediaStreamComponent* component) {
   DCHECK(component);
   if (!GetExecutionContext())
     return;
@@ -463,6 +447,33 @@ void MediaStream::RemoveTrackByComponent(MediaStreamComponent* component) {
     descriptor_->SetActive(false);
     ScheduleDispatchEvent(Event::Create(EventTypeNames::inactive));
   }
+}
+
+void MediaStream::AddTrackAndFireEvents(MediaStreamTrack* track) {
+  DCHECK(track);
+  switch (track->Component()->Source()->GetType()) {
+    case MediaStreamSource::kTypeAudio:
+      audio_tracks_.push_back(track);
+      break;
+    case MediaStreamSource::kTypeVideo:
+      video_tracks_.push_back(track);
+      break;
+  }
+  track->RegisterMediaStream(this);
+  descriptor_->AddComponent(track->Component());
+
+  ScheduleDispatchEvent(
+      MediaStreamTrackEvent::Create(EventTypeNames::addtrack, track));
+
+  if (!active() && !track->Ended()) {
+    descriptor_->SetActive(true);
+    ScheduleDispatchEvent(Event::Create(EventTypeNames::active));
+  }
+}
+
+void MediaStream::RemoveTrackAndFireEvents(MediaStreamTrack* track) {
+  DCHECK(track);
+  RemoveTrackByComponentAndFireEvents(track->Component());
 }
 
 void MediaStream::ScheduleDispatchEvent(Event* event) {

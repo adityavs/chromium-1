@@ -7,6 +7,7 @@
 #import <XCTest/XCTest.h>
 #include <vector>
 
+#include "base/ios/ios_util.h"
 #include "base/strings/sys_string_conversions.h"
 #import "base/test/ios/wait_util.h"
 #include "base/test/scoped_feature_list.h"
@@ -19,6 +20,7 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/experimental_flags.h"
 #include "ios/chrome/browser/pref_names.h"
+#import "ios/chrome/browser/ui/authentication/signin_earl_grey_ui.h"
 #import "ios/chrome/browser/ui/authentication/signin_earlgrey_utils.h"
 #import "ios/chrome/browser/ui/authentication/signin_promo_view.h"
 #import "ios/chrome/browser/ui/bookmarks/bookmark_path_cache.h"
@@ -41,7 +43,6 @@
 #import "ios/chrome/test/earl_grey/chrome_test_case.h"
 #import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
 #import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
-#import "ios/testing/wait_util.h"
 #import "ios/web/public/test/http_server/http_server.h"
 #include "ios/web/public/test/http_server/http_server_util.h"
 #include "ui/base/l10n/l10n_util.h"
@@ -107,14 +108,24 @@ id<GREYMatcher> BookmarksDeleteSwipeButton() {
 // UI.
 id<GREYMatcher> NavigateBackButtonTo(NSString* previousViewControllerLabel) {
   if (experimental_flags::IsBookmarksUIRebootEnabled()) {
+    // When using the stock UINavigationBar back button item, the button's label
+    // may be truncated to the word "Back", or to nothing at all.  It is not
+    // possible to know which label will be used, as the OS makes that decision,
+    // so try to search for any of them.
+    id<GREYMatcher> buttonLabelMatcher =
+        grey_anyOf(grey_accessibilityLabel(previousViewControllerLabel),
+                   grey_accessibilityLabel(@"Back"), nil);
+
     if (@available(iOS 11, *)) {
-      return grey_allOf(grey_kindOfClass([UIButton class]),
-                        grey_accessibilityLabel(previousViewControllerLabel),
-                        nil);
+      return grey_allOf(
+          grey_kindOfClass([UIButton class]),
+          grey_ancestor(grey_kindOfClass([UINavigationBar class])),
+          buttonLabelMatcher, nil);
     } else {
-      return grey_allOf(grey_accessibilityTrait(UIAccessibilityTraitButton),
-                        grey_accessibilityLabel(previousViewControllerLabel),
-                        nil);
+      return grey_allOf(
+          grey_accessibilityTrait(UIAccessibilityTraitButton),
+          grey_ancestor(grey_kindOfClass([UINavigationBar class])),
+          buttonLabelMatcher, nil);
     }
   } else {
     return grey_allOf(grey_accessibilityLabel(l10n_util::GetNSString(
@@ -1245,7 +1256,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
                     error:&error];
     return error == nil;
   };
-  GREYAssert(testing::WaitUntilConditionOrTimeout(10, condition),
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
              @"Waiting for bookmark to go away");
 }
 
@@ -1259,7 +1270,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
                     error:&error];
     return error == nil;
   };
-  GREYAssert(testing::WaitUntilConditionOrTimeout(10, condition),
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
              @"Waiting for undo toast to go away");
 }
 
@@ -1268,8 +1279,8 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
   bookmarks::BookmarkModel* bookmarkModel =
       ios::BookmarkModelFactory::GetForBrowserState(
           chrome_test_util::GetOriginalBrowserState());
-  GREYAssert(testing::WaitUntilConditionOrTimeout(
-                 testing::kWaitForUIElementTimeout,
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(
+                 base::test::ios::kWaitForUIElementTimeout,
                  ^{
                    return bookmarkModel->loaded() == loaded;
                  }),
@@ -2085,7 +2096,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
     return !![[UIPasteboard generalPasteboard].string
         containsString:@"www.a.fr"];
   };
-  GREYAssert(testing::WaitUntilConditionOrTimeout(10, condition),
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
              @"Waiting for URL to be copied to pasteboard.");
 
   // Verify edit mode is closed (context bar back to default state).
@@ -2654,7 +2665,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
                     error:&error];
     return error == nil;
   };
-  GREYAssert(testing::WaitUntilConditionOrTimeout(10, condition),
+  GREYAssert(base::test::ios::WaitUntilConditionOrTimeout(10, condition),
              @"Waiting for bookmark to go away");
 
   // Press undo
@@ -2802,14 +2813,14 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
   }];
   // Check that sign-in promo view is visible.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeColdState];
 
   // Go to child node.
   [BookmarksTestCase openMobileBookmarks];
 
   // Wait until promo is gone.
-  [SigninEarlGreyUtils checkSigninPromoNotVisible];
+  [SigninEarlGreyUI checkSigninPromoNotVisible];
 
   // Check that the promo already seen state is not updated.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
@@ -2835,7 +2846,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
   }];
   // Check that sign-in promo view is visible.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeColdState];
 
   // Tap the dismiss button.
@@ -2844,7 +2855,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
       performAction:grey_tap()];
 
   // Wait until promo is gone.
-  [SigninEarlGreyUtils checkSigninPromoNotVisible];
+  [SigninEarlGreyUI checkSigninPromoNotVisible];
 
   // Check that the promo already seen state is updated.
   [BookmarksTestCase verifyPromoAlreadySeen:YES];
@@ -2858,7 +2869,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 
   // Check that sign-in promo view are visible.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeColdState];
 
   // Tap the primary button.
@@ -2873,7 +2884,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 
   // Check that the bookmarks UI reappeared and the cell is still here.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeColdState];
 }
 
@@ -2891,7 +2902,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 
   // Check that promo is visible.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeWarmState];
 
   // Tap the Sign in button.
@@ -2908,7 +2919,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
                      uppercaseString])] performAction:grey_tap()];
 
   // Check that the bookmarks UI reappeared and the cell is still here.
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeWarmState];
 
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
@@ -2927,7 +2938,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 
   // Check that sign-in promo view are visible.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeWarmState];
 
   // Tap the secondary button.
@@ -2944,7 +2955,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
 
   // Check that the bookmarks UI reappeared and the cell is still here.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeWarmState];
 }
 
@@ -2956,7 +2967,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
   prefs->SetInteger(prefs::kIosBookmarkSigninPromoDisplayedCount, 19);
   [BookmarksTestCase openBookmarks];
   // Check the sign-in promo view is visible.
-  [SigninEarlGreyUtils
+  [SigninEarlGreyUI
       checkSigninPromoVisibleWithMode:SigninPromoViewModeColdState];
   // Check the sign-in promo already-seen state didn't change.
   [BookmarksTestCase verifyPromoAlreadySeen:NO];
@@ -2969,7 +2980,7 @@ id<GREYMatcher> TappableBookmarkNodeWithLabel(NSString* label) {
   [BookmarksTestCase openBookmarks];
   [[GREYUIThreadExecutor sharedInstance] drainUntilIdle];
   // Check that the sign-in promo is not visible anymore.
-  [SigninEarlGreyUtils checkSigninPromoNotVisible];
+  [SigninEarlGreyUI checkSigninPromoNotVisible];
 }
 
 @end

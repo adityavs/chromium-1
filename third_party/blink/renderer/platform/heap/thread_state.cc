@@ -37,6 +37,7 @@
 
 #include "base/atomicops.h"
 #include "base/location.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/trace_event/process_memory_dump.h"
 #include "build/build_config.h"
 #include "third_party/blink/public/platform/platform.h"
@@ -88,8 +89,8 @@ const size_t kDefaultAllocatedObjectSizeThreshold = 100 * 1024;
 
 // Duration of one incremental marking step. Should be short enough that it
 // doesn't cause jank even though it is scheduled as a normal task.
-constexpr TimeDelta kIncrementalMarkingStepDuration =
-    TimeDelta::FromMilliseconds(1);
+constexpr TimeDelta kDefaultIncrementalMarkingStepDuration =
+    TimeDelta::FromMilliseconds(2);
 
 constexpr size_t kMaxTerminationGCLoops = 20;
 
@@ -178,6 +179,7 @@ ThreadState::ThreadState()
       gc_state_(kNoGCScheduled),
       gc_phase_(GCPhase::kNone),
       reason_for_scheduled_gc_(BlinkGC::GCReason::kMaxValue),
+      should_optimize_for_load_time_(false),
       isolate_(nullptr),
       trace_dom_wrappers_(nullptr),
       invalidate_dead_objects_in_wrappers_marking_deque_(nullptr),
@@ -210,6 +212,16 @@ ThreadState::~ThreadState() {
 void ThreadState::AttachMainThread() {
   thread_specific_ = new WTF::ThreadSpecific<ThreadState*>();
   new (main_thread_state_storage_) ThreadState();
+
+  // PpapiThread doesn't set the current thread.
+  WebThread* current_thread = Platform::Current()->CurrentThread();
+  if (current_thread) {
+    ThreadScheduler* scheduler = current_thread->Scheduler();
+    // Some binaries do not have a scheduler (e.g.
+    // v8_context_snapshot_generator)
+    if (scheduler)
+      scheduler->AddRAILModeObserver(MainThreadState());
+  }
 }
 
 void ThreadState::AttachCurrentThread() {
@@ -527,9 +539,19 @@ void ThreadState::ScheduleV8FollowupGCIfNeeded(BlinkGC::V8GCType gc_type) {
 
   if ((gc_type == BlinkGC::kV8MajorGC && ShouldForceMemoryPressureGC()) ||
       ShouldScheduleV8FollowupGC()) {
-    VLOG(2) << "[state:" << this << "] "
-            << "ScheduleV8FollowupGCIfNeeded: Scheduled precise GC";
-    SchedulePreciseGC();
+    // When we want to optimize for load time, we should prioritize throughput
+    // over latency and not do incremental marking.
+    if (RuntimeEnabledFeatures::HeapIncrementalMarkingEnabled() &&
+        !should_optimize_for_load_time_) {
+      VLOG(2) << "[state:" << this << "] "
+              << "ScheduleV8FollowupGCIfNeeded: Scheduled incremental v8 "
+                 "followup GC";
+      ScheduleIncrementalGC(BlinkGC::GCReason::kIncrementalV8FollowupGC);
+    } else {
+      VLOG(2) << "[state:" << this << "] "
+              << "ScheduleV8FollowupGCIfNeeded: Scheduled precise GC";
+      SchedulePreciseGC();
+    }
     return;
   }
   if (gc_type == BlinkGC::kV8MajorGC && ShouldScheduleIdleGC()) {
@@ -599,6 +621,8 @@ void ThreadState::ScheduleFullGC() {
 void ThreadState::ScheduleGCIfNeeded() {
   VLOG(2) << "[state:" << this << "] ScheduleGCIfNeeded";
   DCHECK(CheckThread());
+
+  UpdateIncrementalMarkingStepDuration();
 
   // Allocation is allowed during sweeping, but those allocations should not
   // trigger nested GCs.
@@ -1092,40 +1116,28 @@ void UpdateHistograms(const ThreadHeapStatsCollector::Event& event) {
   UMA_HISTOGRAM_ENUMERATION("BlinkGC.GCReason", event.reason);
 
   // TODO(mlippautz): Update name of this histogram.
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, marking_time_histogram,
-                      ("BlinkGC.CollectGarbage", 0, 10 * 1000, 50));
-  marking_time_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.CollectGarbage",
+      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]);
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, atomic_phase_marking_histogram,
-                      ("BlinkGC.AtomicPhaseMarking", 0, 10 * 1000, 50));
-  atomic_phase_marking_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.AtomicPhaseMarking",
+      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]);
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, complete_sweep_histogram,
-                      ("BlinkGC.CompleteSweep", 1, 10 * 1000, 50));
-  complete_sweep_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kCompleteSweep]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.CompleteSweep",
+      event.scope_data[ThreadHeapStatsCollector::kCompleteSweep]);
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, time_for_sweep_histogram,
-                      ("BlinkGC.TimeForSweepingAllObjects", 1, 10 * 1000, 50));
-  time_for_sweep_histogram.Count(event.sweeping_time_in_ms());
+  UMA_HISTOGRAM_TIMES("BlinkGC.TimeForSweepingAllObjects",
+                      event.sweeping_time());
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, pre_finalizers_histogram,
-      ("BlinkGC.TimeForInvokingPreFinalizers", 1, 10 * 1000, 50));
-  pre_finalizers_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kInvokePreFinalizers]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.TimeForInvokingPreFinalizers",
+      event.scope_data[ThreadHeapStatsCollector::kInvokePreFinalizers]);
 
-  DEFINE_STATIC_LOCAL(CustomCountHistogram, time_for_heap_compaction_histogram,
-                      ("BlinkGC.TimeForHeapCompaction", 1, 10 * 1000, 50));
-  time_for_heap_compaction_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseCompaction]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.TimeForHeapCompaction",
+      event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseCompaction]);
 
   DEFINE_STATIC_LOCAL(
       CustomCountHistogram, object_size_freed_by_heap_compaction,
@@ -1133,12 +1145,9 @@ void UpdateHistograms(const ThreadHeapStatsCollector::Event& event) {
   object_size_freed_by_heap_compaction.Count(
       CappedSizeInKB(event.compaction_freed_bytes));
 
-  DEFINE_STATIC_LOCAL(
-      CustomCountHistogram, weak_processing_time_histogram,
-      ("BlinkGC.TimeForGlobalWeakProcessing", 1, 10 * 1000, 50));
-  weak_processing_time_histogram.Count(
-      event.scope_data[ThreadHeapStatsCollector::kMarkWeakProcessing]
-          .InMilliseconds());
+  UMA_HISTOGRAM_TIMES(
+      "BlinkGC.TimeForGlobalWeakProcessing",
+      event.scope_data[ThreadHeapStatsCollector::kMarkWeakProcessing]);
 
   DEFINE_STATIC_LOCAL(CustomCountHistogram, object_size_before_gc_histogram,
                       ("BlinkGC.ObjectSizeBeforeGC", 1, 4 * 1024 * 1024, 50));
@@ -1158,12 +1167,9 @@ void UpdateHistograms(const ThreadHeapStatsCollector::Event& event) {
   switch (event.reason) {
 #define COUNT_BY_GC_REASON(reason)                                        \
   case BlinkGC::GCReason::k##reason: {                                    \
-    DEFINE_STATIC_LOCAL(                                                  \
-        CustomCountHistogram, atomic_marking_phase_histogram,             \
-        ("BlinkGC.AtomicPhaseMarking_" #reason, 0, 10000, 50));           \
-    atomic_marking_phase_histogram.Count(                                 \
-        event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]   \
-            .InMilliseconds());                                           \
+    UMA_HISTOGRAM_TIMES(                                                  \
+        "BlinkGC.AtomicPhaseMarking_" #reason,                            \
+        event.scope_data[ThreadHeapStatsCollector::kAtomicPhaseMarking]); \
     DEFINE_STATIC_LOCAL(CustomCountHistogram, collection_rate_histogram,  \
                         ("BlinkGC.CollectionRate_" #reason, 1, 100, 20)); \
     collection_rate_histogram.Count(collection_rate_percent);             \
@@ -1449,8 +1455,12 @@ void ThreadState::IncrementalMarkingStart(BlinkGC::GCReason reason) {
   {
     ThreadHeapStatsCollector::Scope stats_scope(
         Heap().stats_collector(),
-        ThreadHeapStatsCollector::kIncrementalMarkingStartMarking);
+        ThreadHeapStatsCollector::kIncrementalMarkingStartMarking, "reason",
+        GcReasonString(reason));
     AtomicPauseScope atomic_pause_scope(this);
+    next_incremental_marking_step_duration_ =
+        kDefaultIncrementalMarkingStepDuration;
+    previous_incremental_marking_time_left_ = TimeDelta::Max();
     MarkPhasePrologue(BlinkGC::kNoHeapPointersOnStack,
                       BlinkGC::kIncrementalMarking, reason);
     MarkPhaseVisitRoots();
@@ -1468,8 +1478,8 @@ void ThreadState::IncrementalMarkingStep() {
           << "IncrementalMarking: Step";
   AtomicPauseScope atomic_pause_scope(this);
   DCHECK(IsMarkingInProgress());
-  bool complete = MarkPhaseAdvanceMarking(CurrentTimeTicks() +
-                                          kIncrementalMarkingStepDuration);
+  bool complete = MarkPhaseAdvanceMarking(
+      CurrentTimeTicks() + next_incremental_marking_step_duration_);
   if (complete)
     ScheduleIncrementalMarkingFinalize();
   else
@@ -1529,19 +1539,14 @@ void ThreadState::CollectGarbage(BlinkGC::StackState stack_state,
 
   const TimeDelta total_collect_garbage_time =
       WTF::CurrentTimeTicks() - start_total_collect_garbage_time;
-  DEFINE_THREAD_SAFE_STATIC_LOCAL(
-      CustomCountHistogram, time_for_total_collect_garbage_histogram,
-      ("BlinkGC.TimeForTotalCollectGarbage", 1, 10 * 1000, 50));
-  time_for_total_collect_garbage_histogram.Count(
-      total_collect_garbage_time.InMilliseconds());
+  UMA_HISTOGRAM_TIMES("BlinkGC.TimeForTotalCollectGarbage",
+                      total_collect_garbage_time);
 
-#define COUNT_BY_GC_REASON(reason)                                      \
-  case BlinkGC::GCReason::k##reason: {                                  \
-    DEFINE_THREAD_SAFE_STATIC_LOCAL(                                    \
-        CustomCountHistogram, histogram,                                \
-        ("BlinkGC.TimeForTotalCollectGarbage_" #reason, 0, 10000, 50)); \
-    histogram.Count(total_collect_garbage_time.InMilliseconds());       \
-    break;                                                              \
+#define COUNT_BY_GC_REASON(reason)                                     \
+  case BlinkGC::GCReason::k##reason: {                                 \
+    UMA_HISTOGRAM_TIMES("BlinkGC.TimeForTotalCollectGarbage_" #reason, \
+                        total_collect_garbage_time);                   \
+    break;                                                             \
   }
 
   switch (reason) {
@@ -1756,6 +1761,19 @@ void ThreadState::CollectAllGarbage() {
       break;
     previous_live_objects = live_objects;
   }
+}
+
+void ThreadState::UpdateIncrementalMarkingStepDuration() {
+  if (!IsIncrementalMarking())
+    return;
+  TimeDelta time_left = Heap().stats_collector()->estimated_marking_time() -
+                        Heap().stats_collector()->marking_time_so_far();
+  // Increase step size if estimated time left is increasing.
+  if (previous_incremental_marking_time_left_ < time_left) {
+    constexpr double ratio = 2.0;
+    next_incremental_marking_step_duration_ *= ratio;
+  }
+  previous_incremental_marking_time_left_ = time_left;
 }
 
 }  // namespace blink

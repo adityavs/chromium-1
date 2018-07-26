@@ -139,6 +139,7 @@ class CORE_EXPORT HTMLMediaElement
 
   // network state
   void SetSrc(const AtomicString&);
+  void SetSrc(const USVStringOrTrustedURL&, ExceptionState&);
   const KURL& currentSrc() const { return current_src_; }
   void SetSrcObject(MediaStreamDescriptor*);
   MediaStreamDescriptor* GetSrcObject() const { return src_object_.Get(); }
@@ -216,8 +217,6 @@ class CORE_EXPORT HTMLMediaElement
   bool muted() const;
   void setMuted(bool);
   virtual bool SupportsPictureInPicture() const { return false; }
-  void enterPictureInPicture(WebMediaPlayer::PipWindowOpenedCallback callback);
-  void exitPictureInPicture(WebMediaPlayer::PipWindowClosedCallback callback);
 
   void TogglePlayState();
 
@@ -271,8 +270,6 @@ class CORE_EXPORT HTMLMediaElement
   }
 
   bool IsFullscreen() const;
-  void DidEnterFullscreen();
-  void DidExitFullscreen();
   virtual bool UsesOverlayFullscreenVideo() const { return false; }
 
   bool HasClosedCaptions() const;
@@ -659,8 +656,6 @@ class CORE_EXPORT HTMLMediaElement
   bool tracks_are_ready_ : 1;
   bool processing_preference_change_ : 1;
   bool playing_remotely_ : 1;
-  // Whether this element is in overlay fullscreen mode.
-  bool in_overlay_fullscreen_video_ : 1;
 
   bool mostly_filling_viewport_ : 1;
 

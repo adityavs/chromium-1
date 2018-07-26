@@ -13,12 +13,15 @@
            background-color: rgba(255, 255, 255, 0.75) for the inner dialog's
            backdrop. See context at crbug.com/827397 */
         --cr-dialog-close-image: {
-          -webkit-margin-end: 7px;
+          margin-inline-end: 7px;
           background-image: url(chrome://theme/IDR_CLOSE_DIALOG);
           margin-top: 10px;
         };
         --cr-dialog-close-image-active: {
           background-image: url(chrome://theme/IDR_CLOSE_DIALOG_P);
+        };
+        --cr-dialog-close-image-focus: {
+          background-image: url(chrome://theme/IDR_CLOSE_DIALOG_H);
         };
         --cr-dialog-close-image-hover: {
           background-image: url(chrome://theme/IDR_CLOSE_DIALOG_H);
@@ -31,14 +34,14 @@
         --cr-icon-ripple-size: 14px;
         --cr-icon-size: 14px;
         --cr-dialog-title: {
-          -webkit-padding-end: 16px;
-          -webkit-padding-start: 16px;
+          padding-inline-end: 16px;
+          padding-inline-start: 16px;
           padding-bottom: 16px;
           padding-top: 16px;
         };
         --cr-dialog-body: {
-          -webkit-padding-end: 16px;
-          -webkit-padding-start: 16px;
+          padding-inline-end: 16px;
+          padding-inline-start: 16px;
           box-sizing: border-box;
           padding-bottom: 12px;
           padding-top: 0;
@@ -52,8 +55,8 @@
         --cr-dialog-close-ripple: {
           display: none;
         };
-        --primary-text-color: #333;
-        --secondary-text-color: #333;
+        --cr-primary-text-color: #333;
+        --cr-secondary-text-color: #333;
       }
 
       #searchBox {
@@ -66,7 +69,7 @@
       }
 
       #dialog button {
-        -webkit-margin-start: 10px;
+        margin-inline-start: 10px;
       }
     </style>
   </template>

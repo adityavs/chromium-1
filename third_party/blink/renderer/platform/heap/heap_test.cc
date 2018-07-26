@@ -6882,4 +6882,83 @@ TEST(HeapTest, PersistentHeapVectorCopyAssignment) {
   PreciselyCollectGarbage();
 }
 
+TEST(HeapTest, PromptlyFreeStackAllocatedHeapVector) {
+  NormalPageArena* normal_arena;
+  Address before;
+  {
+    HeapVector<Member<IntWrapper>> vector;
+    vector.push_back(new IntWrapper(0));
+    NormalPage* normal_page =
+        static_cast<NormalPage*>(PageFromObject(vector.data()));
+    normal_arena = normal_page->ArenaForNormalPage();
+    CHECK(normal_arena);
+    before = normal_arena->CurrentAllocationPoint();
+  }
+  Address after = normal_arena->CurrentAllocationPoint();
+  // We check the allocation point to see if promptly freed
+  EXPECT_NE(after, before);
+}
+
+TEST(HeapTest, PromptlyFreeStackAllocatedHeapDeque) {
+  NormalPageArena* normal_arena;
+  Address before;
+  {
+    HeapDeque<Member<IntWrapper>> deque;
+    deque.push_back(new IntWrapper(0));
+    NormalPage* normal_page =
+        static_cast<NormalPage*>(PageFromObject(&deque.front()));
+    normal_arena = normal_page->ArenaForNormalPage();
+    CHECK(normal_arena);
+    before = normal_arena->CurrentAllocationPoint();
+  }
+  Address after = normal_arena->CurrentAllocationPoint();
+  // We check the allocation point to see if promptly freed
+  EXPECT_NE(after, before);
+}
+
+TEST(HeapTest, PromptlyFreeStackAllocatedHeapHashSet) {
+  NormalPageArena* normal_arena = static_cast<NormalPageArena*>(
+      ThreadState::Current()->Heap().Arena(BlinkGC::kHashTableArenaIndex));
+  CHECK(normal_arena);
+  Address before;
+  {
+    HeapHashSet<Member<IntWrapper>> hash_set;
+    hash_set.insert(new IntWrapper(0));
+    before = normal_arena->CurrentAllocationPoint();
+  }
+  Address after = normal_arena->CurrentAllocationPoint();
+  // We check the allocation point to see if promptly freed
+  EXPECT_NE(after, before);
+}
+
+TEST(HeapTest, PromptlyFreeStackAllocatedHeapListHashSet) {
+  NormalPageArena* normal_arena = static_cast<NormalPageArena*>(
+      ThreadState::Current()->Heap().Arena(BlinkGC::kHashTableArenaIndex));
+  CHECK(normal_arena);
+  Address before;
+  {
+    HeapListHashSet<Member<IntWrapper>> list_hash_set;
+    list_hash_set.insert(new IntWrapper(0));
+    before = normal_arena->CurrentAllocationPoint();
+  }
+  Address after = normal_arena->CurrentAllocationPoint();
+  // We check the allocation point to see if promptly freed
+  EXPECT_NE(after, before);
+}
+
+TEST(HeapTest, PromptlyFreeStackAllocatedHeapLinkedHashSet) {
+  NormalPageArena* normal_arena = static_cast<NormalPageArena*>(
+      ThreadState::Current()->Heap().Arena(BlinkGC::kHashTableArenaIndex));
+  CHECK(normal_arena);
+  Address before;
+  {
+    HeapLinkedHashSet<Member<IntWrapper>> linked_hash_set;
+    linked_hash_set.insert(new IntWrapper(0));
+    before = normal_arena->CurrentAllocationPoint();
+  }
+  Address after = normal_arena->CurrentAllocationPoint();
+  // We check the allocation point to see if promptly freed
+  EXPECT_NE(after, before);
+}
+
 }  // namespace blink

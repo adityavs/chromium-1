@@ -30,10 +30,10 @@ namespace sequence_manager {
 
 class LazyNow;
 class TimeDomain;
-class TaskQueueManagerImpl;
 
 namespace internal {
 
+class SequenceManagerImpl;
 class WorkQueue;
 class WorkQueueSets;
 
@@ -69,9 +69,9 @@ struct IncomingImmediateWorkList {
 // queue is selected, it round-robins between the |immediate_work_queue| and
 // |delayed_work_queue|.  The reason for this is we want to make sure delayed
 // tasks (normally the most common type) don't starve out immediate work.
-class PLATFORM_EXPORT TaskQueueImpl {
+class BASE_EXPORT TaskQueueImpl {
  public:
-  TaskQueueImpl(TaskQueueManagerImpl* task_queue_manager,
+  TaskQueueImpl(SequenceManagerImpl* sequence_manager,
                 TimeDomain* time_domain,
                 const TaskQueue::Spec& spec);
 
@@ -104,7 +104,7 @@ class PLATFORM_EXPORT TaskQueueImpl {
     }
   };
 
-  class PLATFORM_EXPORT Task : public TaskQueue::Task {
+  class BASE_EXPORT Task : public TaskQueue::Task {
    public:
     Task(TaskQueue::PostedTask task,
          TimeTicks desired_run_time,
@@ -164,7 +164,7 @@ class PLATFORM_EXPORT TaskQueueImpl {
   enum class WorkQueueType { kImmediate, kDelayed };
 
   // Non-nestable tasks may get deferred but such queue is being maintained on
-  // TaskQueueManager side, so we need to keep information how to requeue it.
+  // SequenceManager side, so we need to keep information how to requeue it.
   struct DeferredNonNestableTask {
     internal::TaskQueueImpl::Task task;
     internal::TaskQueueImpl* task_queue;
@@ -173,9 +173,11 @@ class PLATFORM_EXPORT TaskQueueImpl {
 
   using OnNextWakeUpChangedCallback = RepeatingCallback<void(TimeTicks)>;
   using OnTaskStartedHandler =
-      RepeatingCallback<void(const TaskQueue::Task&, TimeTicks)>;
-  using OnTaskCompletedHandler = RepeatingCallback<
-      void(const TaskQueue::Task&, TimeTicks, TimeTicks, Optional<TimeDelta>)>;
+      RepeatingCallback<void(const TaskQueue::Task&,
+                             const TaskQueue::TaskTiming&)>;
+  using OnTaskCompletedHandler =
+      RepeatingCallback<void(const TaskQueue::Task&,
+                             const TaskQueue::TaskTiming&)>;
 
   // TaskQueue implementation.
   const char* GetName() const;
@@ -243,7 +245,7 @@ class PLATFORM_EXPORT TaskQueueImpl {
     return main_thread_only().immediate_work_queue.get();
   }
 
-  // Protected by TaskQueueManagerImpl's AnyThread lock.
+  // Protected by SequenceManagerImpl's AnyThread lock.
   IncomingImmediateWorkList* immediate_work_list_storage() {
     return &immediate_work_list_storage_;
   }
@@ -291,15 +293,14 @@ class PLATFORM_EXPORT TaskQueueImpl {
   // Allows wrapping TaskQueue to set a handler to subscribe for notifications
   // about started and completed tasks.
   void SetOnTaskStartedHandler(OnTaskStartedHandler handler);
-  void OnTaskStarted(const TaskQueue::Task& task, TimeTicks start);
+  void OnTaskStarted(const TaskQueue::Task& task,
+                     const TaskQueue::TaskTiming& task_timing);
   void SetOnTaskCompletedHandler(OnTaskCompletedHandler handler);
   void OnTaskCompleted(const TaskQueue::Task& task,
-                       TimeTicks start,
-                       TimeTicks end,
-                       Optional<TimeDelta> thread_time);
+                       const TaskQueue::TaskTiming& task_timing);
   bool RequiresTaskTiming() const;
 
-  WeakPtr<TaskQueueManagerImpl> GetTaskQueueManagerWeakPtr();
+  WeakPtr<SequenceManagerImpl> GetSequenceManagerWeakPtr();
 
   scoped_refptr<GracefulQueueShutdownHelper> GetGracefulQueueShutdownHelper();
 
@@ -319,37 +320,36 @@ class PLATFORM_EXPORT TaskQueueImpl {
   friend class WorkQueueTest;
 
   struct AnyThread {
-    AnyThread(TaskQueueManagerImpl* task_queue_manager,
-              TimeDomain* time_domain);
+    AnyThread(SequenceManagerImpl* sequence_manager, TimeDomain* time_domain);
     ~AnyThread();
 
-    // TaskQueueManagerImpl, TimeDomain and Observer are maintained in two
+    // SequenceManagerImpl, TimeDomain and Observer are maintained in two
     // copies: inside AnyThread and inside MainThreadOnly. They can be changed
     // only from main thread, so it should be locked before accessing from other
     // threads.
-    TaskQueueManagerImpl* task_queue_manager;
+    SequenceManagerImpl* sequence_manager;
     TimeDomain* time_domain;
     // Callback corresponding to TaskQueue::Observer::OnQueueNextChanged.
     OnNextWakeUpChangedCallback on_next_wake_up_changed_callback;
   };
 
   struct MainThreadOnly {
-    MainThreadOnly(TaskQueueManagerImpl* task_queue_manager,
+    MainThreadOnly(SequenceManagerImpl* sequence_manager,
                    TaskQueueImpl* task_queue,
                    TimeDomain* time_domain);
     ~MainThreadOnly();
 
-    // Another copy of TaskQueueManagerImpl, TimeDomain and Observer
+    // Another copy of SequenceManagerImpl, TimeDomain and Observer
     // for lock-free access from the main thread.
     // See description inside struct AnyThread for details.
-    TaskQueueManagerImpl* task_queue_manager;
+    SequenceManagerImpl* sequence_manager;
     TimeDomain* time_domain;
     // Callback corresponding to TaskQueue::Observer::OnQueueNextChanged.
     OnNextWakeUpChangedCallback on_next_wake_up_changed_callback;
 
     std::unique_ptr<WorkQueue> delayed_work_queue;
     std::unique_ptr<WorkQueue> immediate_work_queue;
-    std::priority_queue<Task> delayed_incoming_queue;
+    std::priority_queue<TaskQueueImpl::Task> delayed_incoming_queue;
     ObserverList<MessageLoop::TaskObserver> task_observers;
     size_t set_index;
     HeapHandle heap_handle;
@@ -455,7 +455,7 @@ class PLATFORM_EXPORT TaskQueueImpl {
     return immediate_incoming_queue_;
   }
 
-  // Protected by TaskQueueManagerImpl's AnyThread lock.
+  // Protected by SequenceManagerImpl's AnyThread lock.
   IncomingImmediateWorkList immediate_work_list_storage_;
 
   const bool should_monitor_quiescence_;

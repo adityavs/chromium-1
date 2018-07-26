@@ -174,6 +174,8 @@ DesktopWindowTreeHostWin::CreateDragDropClient(
 }
 
 void DesktopWindowTreeHostWin::Close() {
+  content_window()->Hide();
+
   // TODO(beng): Move this entire branch to DNWA so it can be shared with X11.
   if (should_animate_window_close_) {
     pending_close_ = true;
@@ -447,7 +449,7 @@ void DesktopWindowTreeHostWin::SetOpacity(float opacity) {
   content_window()->layer()->SetOpacity(opacity);
 }
 
-void DesktopWindowTreeHostWin::SetAspectRatio(const gfx::Size& aspect_ratio) {
+void DesktopWindowTreeHostWin::SetAspectRatio(const gfx::SizeF& aspect_ratio) {
   // TODO(apacible): Implement for Windows. https://crbug.com/853276.
 }
 

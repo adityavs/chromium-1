@@ -38,8 +38,6 @@ const CGFloat kTableViewSeparatorColor = 0xC8C7CC;
 @synthesize styler = _styler;
 @synthesize tableViewModel = _tableViewModel;
 
-#pragma mark - Public Interface
-
 - (instancetype)initWithTableViewStyle:(UITableViewStyle)style
                            appBarStyle:
                                (ChromeTableViewControllerStyle)appBarStyle {
@@ -59,10 +57,23 @@ const CGFloat kTableViewSeparatorColor = 0xC8C7CC;
                           appBarStyle:ChromeTableViewControllerStyleNoAppBar];
 }
 
+#pragma mark - Accessors
+
 - (void)setStyler:(ChromeTableViewStyler*)styler {
   DCHECK(![self isViewLoaded]);
   _styler = styler;
 }
+
+- (void)setEmptyView:(TableViewEmptyView*)emptyView {
+  if (_emptyView == emptyView)
+    return;
+  _emptyView = emptyView;
+  self.tableView.backgroundView = _emptyView;
+  // Since this would replace any loadingView, set it to nil.
+  self.loadingView = nil;
+}
+
+#pragma mark - Public
 
 - (void)loadModel {
   _tableViewModel = [[TableViewModel alloc] init];
@@ -125,14 +136,17 @@ const CGFloat kTableViewSeparatorColor = 0xC8C7CC;
 }
 
 - (void)addEmptyTableViewWithMessage:(NSString*)message image:(UIImage*)image {
-  if (!self.emptyView) {
-    self.emptyView = [[TableViewEmptyView alloc] initWithFrame:self.view.bounds
-                                                       message:message
-                                                         image:image];
-    self.tableView.backgroundView = self.emptyView;
-    // Since this would replace any loadingView, set it to nil.
-    self.loadingView = nil;
-  }
+  self.emptyView = [[TableViewEmptyView alloc] initWithFrame:self.view.bounds
+                                                     message:message
+                                                       image:image];
+}
+
+- (void)addEmptyTableViewWithAttributedMessage:
+            (NSAttributedString*)attributedMessage
+                                         image:(UIImage*)image {
+  self.emptyView = [[TableViewEmptyView alloc] initWithFrame:self.view.bounds
+                                           attributedMessage:attributedMessage
+                                                       image:image];
 }
 
 - (void)removeEmptyTableView {
@@ -142,6 +156,20 @@ const CGFloat kTableViewSeparatorColor = 0xC8C7CC;
     DCHECK(self.tableView.backgroundView == self.emptyView);
     self.tableView.backgroundView = nil;
     self.emptyView = nil;
+  }
+}
+
+- (void)performBatchTableViewUpdates:(void (^)(void))updates
+                          completion:(void (^)(BOOL finished))completion {
+  if (@available(iOS 11, *)) {
+    [self.tableView performBatchUpdates:updates completion:completion];
+  } else {
+    [self.tableView beginUpdates];
+    if (updates)
+      updates();
+    [self.tableView endUpdates];
+    if (completion)
+      completion(YES);
   }
 }
 

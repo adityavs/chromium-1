@@ -12,6 +12,7 @@
 #include "third_party/blink/public/platform/web_thread_type.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/common/metrics_helper.h"
+#include "third_party/blink/renderer/platform/scheduler/common/total_duration_metric_reporter.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/use_case.h"
 #include "third_party/blink/renderer/platform/scheduler/renderer/frame_status.h"
@@ -30,15 +31,15 @@ class MainThreadSchedulerImpl;
 class PLATFORM_EXPORT MainThreadMetricsHelper : public MetricsHelper {
  public:
   MainThreadMetricsHelper(MainThreadSchedulerImpl* main_thread_scheduler,
+                          bool has_cpu_timing_for_each_task,
                           base::TimeTicks now,
                           bool renderer_backgrounded);
   ~MainThreadMetricsHelper();
 
-  void RecordTaskMetrics(MainThreadTaskQueue* queue,
-                         const base::sequence_manager::TaskQueue::Task& task,
-                         base::TimeTicks start_time,
-                         base::TimeTicks end_time,
-                         base::Optional<base::TimeDelta> thread_time);
+  void RecordTaskMetrics(
+      MainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
   void OnRendererForegrounded(base::TimeTicks now);
   void OnRendererBackgrounded(base::TimeTicks now);
@@ -121,8 +122,14 @@ class PLATFORM_EXPORT MainThreadMetricsHelper : public MetricsHelper {
       foreground_per_task_type_duration_reporter_;
   TaskDurationPerTaskTypeMetricReporter
       background_per_task_type_duration_reporter_;
+  TaskDurationPerTaskTypeMetricReporter
+      background_after_fifth_minute_per_task_type_duration_reporter_;
+  TaskDurationPerTaskTypeMetricReporter
+      background_after_tenth_minute_per_task_type_duration_reporter_;
 
   TaskDurationMetricReporter<UseCase> per_task_use_case_duration_reporter_;
+
+  TotalDurationMetricReporter total_task_time_reporter_;
 
   MainThreadTaskLoadState main_thread_task_load_state_;
 

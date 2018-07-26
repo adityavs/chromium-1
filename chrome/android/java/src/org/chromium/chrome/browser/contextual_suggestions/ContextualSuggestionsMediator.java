@@ -24,6 +24,7 @@ import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.toolbar.ToolbarManager;
 import org.chromium.chrome.browser.util.MathUtils;
 import org.chromium.chrome.browser.widget.ListMenuButton;
+import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheet.StateChangeReason;
 import org.chromium.chrome.browser.widget.bottomsheet.BottomSheetObserver;
 import org.chromium.chrome.browser.widget.bottomsheet.EmptyBottomSheetObserver;
@@ -71,8 +72,10 @@ class ContextualSuggestionsMediator
     private @Nullable TextBubble mHelpBubble;
     private @Nullable WebContents mCurrentWebContents;
 
+    private boolean mSuggestionsSetOnBottomSheet;
     private boolean mDidSuggestionsShowForTab;
     private boolean mHasRecordedPeekEventForTab;
+    private boolean mHasRecordedButtonShownForTab;
 
     private boolean mHasReachedTargetScrollPercentage;
     private boolean mHasPeekDelayPassed;
@@ -140,24 +143,28 @@ class ContextualSuggestionsMediator
                     }
                 }
             };
-
-            fullscreenManager.addListener(new FullscreenListener() {
-                @Override
-                public void onContentOffsetChanged(float offset) {}
-
-                @Override
-                public void onControlsOffsetChanged(
-                        float topOffset, float bottomOffset, boolean needsAnimate) {
-                    maybeShowContentInSheet();
-                }
-
-                @Override
-                public void onToggleOverlayVideoMode(boolean enabled) {}
-
-                @Override
-                public void onBottomControlsHeightChanged(int bottomControlsHeight) {}
-            });
         }
+
+        fullscreenManager.addListener(new FullscreenListener() {
+            @Override
+            public void onContentOffsetChanged(float offset) {}
+
+            @Override
+            public void onControlsOffsetChanged(
+                    float topOffset, float bottomOffset, boolean needsAnimate) {
+                if (!mToolbarButtonEnabled) {
+                    maybeShowContentInSheet();
+                } else {
+                    reportToolbarButtonShown();
+                }
+            }
+
+            @Override
+            public void onToggleOverlayVideoMode(boolean enabled) {}
+
+            @Override
+            public void onBottomControlsHeightChanged(int bottomControlsHeight) {}
+        });
     }
 
     /** Destroys the mediator. */
@@ -256,11 +263,11 @@ class ContextualSuggestionsMediator
             prepareModel(clusters, suggestionsResult.getPeekText());
 
             if (mToolbarButtonEnabled) {
-                mToolbarManager.enableExperimentalButton(view -> {
-                    maybeShowContentInSheet();
-                    mCoordinator.showSuggestions(mSuggestionsSource);
-                    mCoordinator.expandBottomSheet();
-                }, R.drawable.btn_star_filled, R.string.contextual_suggestions_button_description);
+                mToolbarManager.enableExperimentalButton(
+                        view -> onToolbarButtonClicked(),
+                        R.drawable.contextual_suggestions,
+                        R.string.contextual_suggestions_button_description);
+                reportToolbarButtonShown();
             } else {
                 setPeekConditions(suggestionsResult);
                 // If the controls are already off-screen, show the suggestions immediately so they
@@ -268,6 +275,14 @@ class ContextualSuggestionsMediator
                 maybeShowContentInSheet();
             }
         });
+    }
+
+    private void onToolbarButtonClicked() {
+        if (mSuggestionsSetOnBottomSheet) return;
+
+        maybeShowContentInSheet();
+        mCoordinator.showSuggestions(mSuggestionsSource);
+        mCoordinator.expandBottomSheet();
     }
 
     private void setPeekConditions(ContextualSuggestionsResult suggestionsResult) {
@@ -301,6 +316,21 @@ class ContextualSuggestionsMediator
         }
     }
 
+    private void reportToolbarButtonShown() {
+        assert mToolbarButtonEnabled;
+
+        if (mHasRecordedButtonShownForTab || areBrowserControlsHidden()
+                || mSuggestionsSource == null || !mModel.hasSuggestions()) {
+            return;
+        }
+
+        mHasRecordedButtonShownForTab = true;
+        reportEvent(ContextualSuggestionsEvent.UI_BUTTON_SHOWN);
+        TrackerFactory.getTrackerForProfile(mProfile).notifyEvent(
+                EventConstants.CONTEXTUAL_SUGGESTIONS_BUTTON_SHOWN);
+        maybeShowHelpBubble();
+    }
+
     @Override
     public void clearState() {
         clearSuggestions();
@@ -318,9 +348,14 @@ class ContextualSuggestionsMediator
     @Override
     public ListMenuButton.Item[] getItems() {
         final Context context = ContextUtils.getApplicationContext();
-        return new ListMenuButton.Item[] {
-                new ListMenuButton.Item(context, R.string.menu_preferences, true),
-                new ListMenuButton.Item(context, R.string.menu_send_feedback, true)};
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.CONTEXTUAL_SUGGESTIONS_OPT_OUT)) {
+            return new ListMenuButton.Item[] {
+                    new ListMenuButton.Item(context, R.string.menu_preferences, true),
+                    new ListMenuButton.Item(context, R.string.menu_send_feedback, true)};
+        } else {
+            return new ListMenuButton.Item[] {
+                    new ListMenuButton.Item(context, R.string.menu_send_feedback, true)};
+        }
     }
 
     @Override
@@ -334,6 +369,25 @@ class ContextualSuggestionsMediator
         }
     }
 
+    private void removeSuggestionsFromSheet() {
+        if (mSheetObserver != null) {
+            mCoordinator.removeBottomSheetObserver(mSheetObserver);
+            mSheetObserver = null;
+        }
+        mCoordinator.removeSuggestions();
+
+        // Wait until suggestions are fully removed to reset {@code mSuggestionsSetOnBottomSheet}.
+        mCoordinator.addBottomSheetObserver(new EmptyBottomSheetObserver() {
+            @Override
+            public void onSheetContentChanged(@Nullable BottomSheet.BottomSheetContent newContent) {
+                if (!(newContent instanceof ContextualSuggestionsBottomSheetContent)) {
+                    mSuggestionsSetOnBottomSheet = false;
+                    mCoordinator.removeBottomSheetObserver(this);
+                }
+            }
+        });
+    }
+
     /**
      * Called when suggestions are cleared either due to the user explicitly dismissing
      * suggestions via the close button or due to the FetchHelper signaling state should
@@ -342,13 +396,9 @@ class ContextualSuggestionsMediator
     private void clearSuggestions() {
         // TODO(twellington): Does this signal need to go back to FetchHelper?
 
-        // Call remove suggestions before clearing model state so that views don't respond to model
+        // Remove suggestions before clearing model state so that views don't respond to model
         // changes while suggestions are hiding. See https://crbug.com/840579.
-        if (mSheetObserver != null) {
-            mCoordinator.removeBottomSheetObserver(mSheetObserver);
-            mSheetObserver = null;
-        }
-        mCoordinator.removeSuggestions();
+        removeSuggestionsFromSheet();
 
         if (mToolbarButtonEnabled) {
             mToolbarManager.disableExperimentalButton();
@@ -356,6 +406,7 @@ class ContextualSuggestionsMediator
 
         mDidSuggestionsShowForTab = false;
         mHasRecordedPeekEventForTab = false;
+        mHasRecordedButtonShownForTab = false;
         mHasSheetBeenOpened = false;
         mHandler.removeCallbacksAndMessages(null);
         mHasReachedTargetScrollPercentage = false;
@@ -400,7 +451,7 @@ class ContextualSuggestionsMediator
                                         : ContextualSuggestionsEvent.UI_DISMISSED_WITHOUT_OPEN;
             reportEvent(openedEvent);
             if (mToolbarButtonEnabled) {
-                mCoordinator.removeSuggestions();
+                removeSuggestionsFromSheet();
             } else {
                 clearSuggestions();
 
@@ -421,17 +472,19 @@ class ContextualSuggestionsMediator
     }
 
     private void maybeShowContentInSheet() {
+        if (!mModel.hasSuggestions() || mSuggestionsSource == null) return;
+
         // For the auto-peeking UX, when the controls scroll completely off-screen, the suggestions
         // are "shown" but remain hidden since their offset from the bottom of the screen is
         // determined by the top controls.
         if (!mToolbarButtonEnabled
-                && (mDidSuggestionsShowForTab || !mModel.hasSuggestions()
-                           || mSuggestionsSource == null || !areBrowserControlsHidden()
+                && (mDidSuggestionsShowForTab || !areBrowserControlsHidden()
                            || !mHasReachedTargetScrollPercentage || !mHasPeekDelayPassed
                            || !hasRemainingPeek())) {
             return;
         }
 
+        mSuggestionsSetOnBottomSheet = true;
         mDidSuggestionsShowForTab = true;
         mUpdateRemainingCountOnNextPeek = true;
 
@@ -489,7 +542,7 @@ class ContextualSuggestionsMediator
             @Override
             public void onSheetClosed(int reason) {
                 mModel.setMenuButtonVisibility(false);
-                if (mToolbarButtonEnabled) mCoordinator.removeSuggestions();
+                if (mToolbarButtonEnabled) removeSuggestionsFromSheet();
             }
 
             @Override
@@ -514,22 +567,35 @@ class ContextualSuggestionsMediator
             return;
         }
 
-        int extraInset = mModel.isSlimPeekEnabled()
-                ? mIphParentView.getResources().getDimensionPixelSize(
-                          R.dimen.contextual_suggestions_slim_peek_inset)
-                : 0;
+        ViewRectProvider rectProvider;
+        if (!mToolbarButtonEnabled) {
+            int extraInset = mModel.isSlimPeekEnabled()
+                    ? mIphParentView.getResources().getDimensionPixelSize(
+                              R.dimen.contextual_suggestions_slim_peek_inset)
+                    : 0;
 
-        ViewRectProvider rectProvider = new ViewRectProvider(mIphParentView);
-        rectProvider.setInsetPx(0,
-                mIphParentView.getResources().getDimensionPixelSize(R.dimen.toolbar_shadow_height)
-                        + extraInset,
-                0, 0);
-        if (mModel.isSlimPeekEnabled()) {
+            rectProvider = new ViewRectProvider(mIphParentView);
+            rectProvider.setInsetPx(0,
+                    mIphParentView.getResources().getDimensionPixelSize(
+                            R.dimen.toolbar_shadow_height)
+                            + extraInset,
+                    0, 0);
+        } else {
+            rectProvider = new ViewRectProvider(
+                    mIphParentView.getRootView().findViewById(R.id.experimental_toolbar_button));
+            rectProvider.setInsetPx(0, 0, 0,
+                    mIphParentView.getResources().getDimensionPixelOffset(
+                            R.dimen.text_bubble_menu_anchor_y_inset));
+        }
+
+        if (mModel.isSlimPeekEnabled() || mToolbarButtonEnabled) {
             mHelpBubble = new ImageTextBubble(mIphParentView.getContext(), mIphParentView,
                     R.string.contextual_suggestions_in_product_help,
                     R.string.contextual_suggestions_in_product_help, true, rectProvider,
                     R.drawable.ic_logo_googleg_24dp);
-            mModel.setToolbarArrowTintResourceId(R.color.google_blue_500);
+            if (!mToolbarButtonEnabled) {
+                mModel.setToolbarArrowTintResourceId(R.color.default_icon_color_blue);
+            }
         } else {
             mHelpBubble = new TextBubble(mIphParentView.getContext(), mIphParentView,
                     R.string.contextual_suggestions_in_product_help,
@@ -540,7 +606,9 @@ class ContextualSuggestionsMediator
         mHelpBubble.addOnDismissListener(() -> {
             tracker.dismissed(FeatureConstants.CONTEXTUAL_SUGGESTIONS_FEATURE);
             mHelpBubble = null;
-            mModel.setToolbarArrowTintResourceId(R.color.dark_mode_tint);
+            if (!mToolbarButtonEnabled) {
+                mModel.setToolbarArrowTintResourceId(R.color.dark_mode_tint);
+            }
         });
 
         mHelpBubble.show();

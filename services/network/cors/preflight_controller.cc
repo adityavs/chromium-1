@@ -124,11 +124,11 @@ std::unique_ptr<PreflightResult> CreatePreflightResult(
     const ResourceResponseHead& head,
     const ResourceRequest& original_request,
     bool tainted,
-    base::Optional<mojom::CORSError>* detected_error) {
-  DCHECK(detected_error);
+    base::Optional<CORSErrorStatus>* detected_error_status) {
+  DCHECK(detected_error_status);
 
   // TODO(toyoshim): Reflect --allow-file-access-from-files flag.
-  *detected_error = CheckPreflightAccess(
+  *detected_error_status = CheckPreflightAccess(
       final_url, head.headers->response_code(),
       GetHeaderString(head.headers,
                       cors::header_names::kAccessControlAllowOrigin),
@@ -137,43 +137,44 @@ std::unique_ptr<PreflightResult> CreatePreflightResult(
       original_request.fetch_credentials_mode,
       tainted ? url::Origin() : *original_request.request_initiator,
       false /* allow_file_origin */);
-  if (*detected_error)
+  if (*detected_error_status)
     return nullptr;
 
-  *detected_error = CheckPreflight(head.headers->response_code());
-  if (*detected_error)
+  base::Optional<mojom::CORSError> error;
+  error = CheckPreflight(head.headers->response_code());
+  if (error) {
+    *detected_error_status = CORSErrorStatus(*error);
     return nullptr;
+  }
 
   if (original_request.is_external_request) {
-    *detected_error = CheckExternalPreflight(GetHeaderString(
+    *detected_error_status = CheckExternalPreflight(GetHeaderString(
         head.headers, header_names::kAccessControlAllowExternal));
-    if (*detected_error)
+    if (*detected_error_status)
       return nullptr;
   }
 
-  return PreflightResult::Create(
+  auto result = PreflightResult::Create(
       original_request.fetch_credentials_mode,
       GetHeaderString(head.headers, header_names::kAccessControlAllowMethods),
       GetHeaderString(head.headers, header_names::kAccessControlAllowHeaders),
       GetHeaderString(head.headers, header_names::kAccessControlMaxAge),
-      detected_error);
+      &error);
+
+  if (error)
+    *detected_error_status = CORSErrorStatus(*error);
+  return result;
 }
 
 base::Optional<CORSErrorStatus> CheckPreflightResult(
     PreflightResult* result,
     const ResourceRequest& original_request) {
-  base::Optional<mojom::CORSError> error =
+  base::Optional<CORSErrorStatus> status =
       result->EnsureAllowedCrossOriginMethod(original_request.method);
-  if (error)
-    return CORSErrorStatus(*error, original_request.method);
+  if (status)
+    return status;
 
-  std::string detected_error_header;
-  error = result->EnsureAllowedCrossOriginHeaders(original_request.headers,
-                                                  &detected_error_header);
-  if (error)
-    return CORSErrorStatus(*error, detected_error_header);
-
-  return base::nullopt;
+  return result->EnsureAllowedCrossOriginHeaders(original_request.headers);
 }
 
 // TODO(toyoshim): Remove this class once the Network Service is enabled.
@@ -275,7 +276,8 @@ class PreflightController::PreflightLoader final {
     FinalizeLoader();
 
     std::move(completion_callback_)
-        .Run(CORSErrorStatus(mojom::CORSError::kPreflightDisallowedRedirect));
+        .Run(net::ERR_FAILED,
+             CORSErrorStatus(mojom::CORSError::kPreflightDisallowedRedirect));
 
     RemoveFromController();
     // |this| is deleted here.
@@ -285,19 +287,15 @@ class PreflightController::PreflightLoader final {
                             const ResourceResponseHead& head) {
     FinalizeLoader();
 
-    base::Optional<mojom::CORSError> detected_error;
-    std::unique_ptr<PreflightResult> result = CreatePreflightResult(
-        final_url, head, original_request_, tainted_, &detected_error);
-
     base::Optional<CORSErrorStatus> detected_error_status;
+    std::unique_ptr<PreflightResult> result = CreatePreflightResult(
+        final_url, head, original_request_, tainted_, &detected_error_status);
+
     if (result) {
       // Preflight succeeded. Check |original_request_| with |result|.
-      DCHECK(!detected_error);
+      DCHECK(!detected_error_status);
       detected_error_status =
           CheckPreflightResult(result.get(), original_request_);
-    } else {
-      DCHECK(detected_error);
-      detected_error_status = CORSErrorStatus(*detected_error);
     }
 
     // TODO(toyoshim): Check the spec if we cache |result| regardless of
@@ -307,7 +305,9 @@ class PreflightController::PreflightLoader final {
                                  original_request_.url, std::move(result));
     }
 
-    std::move(completion_callback_).Run(detected_error_status);
+    std::move(completion_callback_)
+        .Run(detected_error_status ? net::ERR_FAILED : net::OK,
+             detected_error_status);
 
     RemoveFromController();
     // |this| is deleted here.
@@ -318,8 +318,12 @@ class PreflightController::PreflightLoader final {
     // unknown hosts, unreachable remote, reset by peer, and so on.
     // See https://crbug.com/826868 for related discussion.
     DCHECK(!response_body);
+    const int error = loader_->NetError();
+    DCHECK_NE(error, net::OK);
     FinalizeLoader();
+    std::move(completion_callback_).Run(error, base::nullopt);
     RemoveFromController();
+    // |this| is deleted here.
   }
 
   void FinalizeLoader() {
@@ -385,7 +389,7 @@ void PreflightController::PerformPreflightCheck(
       cache_.CheckIfRequestCanSkipPreflight(
           request.request_initiator->Serialize(), request.url,
           request.fetch_credentials_mode, request.method, request.headers)) {
-    std::move(callback).Run(base::nullopt);
+    std::move(callback).Run(net::OK, base::nullopt);
     return;
   }
 

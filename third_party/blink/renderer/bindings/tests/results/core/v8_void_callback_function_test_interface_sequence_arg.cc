@@ -11,6 +11,7 @@
 
 #include "third_party/blink/renderer/bindings/tests/results/core/v8_void_callback_function_test_interface_sequence_arg.h"
 
+#include "base/stl_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
@@ -109,13 +110,11 @@ void V8VoidCallbackFunctionTestInterfaceSequenceArg::InvokeAndReportException(Sc
   ALLOW_UNUSED_LOCAL(maybe_result);
 }
 
-CORE_TEMPLATE_EXPORT
 v8::Maybe<void> V8PersistentCallbackFunction<V8VoidCallbackFunctionTestInterfaceSequenceArg>::Invoke(ScriptWrappable* callback_this_value, const HeapVector<Member<TestInterfaceImplementation>>& arg) {
   return Proxy()->Invoke(
       callback_this_value, arg);
 }
 
-CORE_TEMPLATE_EXPORT
 void V8PersistentCallbackFunction<V8VoidCallbackFunctionTestInterfaceSequenceArg>::InvokeAndReportException(ScriptWrappable* callback_this_value, const HeapVector<Member<TestInterfaceImplementation>>& arg) {
   Proxy()->InvokeAndReportException(
       callback_this_value, arg);

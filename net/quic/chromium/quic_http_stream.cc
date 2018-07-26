@@ -21,10 +21,10 @@
 #include "net/quic/chromium/quic_http_utils.h"
 #include "net/spdy/spdy_http_utils.h"
 #include "net/ssl/ssl_info.h"
-#include "net/third_party/quic/core/quic_client_promised_info.h"
+#include "net/third_party/quic/core/http/quic_client_promised_info.h"
+#include "net/third_party/quic/core/http/spdy_utils.h"
 #include "net/third_party/quic/core/quic_stream_sequencer.h"
 #include "net/third_party/quic/core/quic_utils.h"
-#include "net/third_party/quic/core/spdy_utils.h"
 #include "net/third_party/quic/platform/api/quic_string_piece.h"
 #include "net/third_party/spdy/core/spdy_frame_builder.h"
 #include "net/third_party/spdy/core/spdy_framer.h"
@@ -82,10 +82,6 @@ HttpResponseInfo::ConnectionInfo QuicHttpStream::ConnectionInfoFromQuicVersion(
       return HttpResponseInfo::CONNECTION_INFO_QUIC_UNKNOWN_VERSION;
     case quic::QUIC_VERSION_35:
       return HttpResponseInfo::CONNECTION_INFO_QUIC_35;
-    case quic::QUIC_VERSION_37:
-      return HttpResponseInfo::CONNECTION_INFO_QUIC_37;
-    case quic::QUIC_VERSION_38:
-      return HttpResponseInfo::CONNECTION_INFO_QUIC_38;
     case quic::QUIC_VERSION_39:
       return HttpResponseInfo::CONNECTION_INFO_QUIC_39;
     case quic::QUIC_VERSION_41:
@@ -554,8 +550,9 @@ int QuicHttpStream::DoRequestStreamComplete(int rv) {
     return GetResponseStatus();
   }
 
-  if (request_info_->load_flags & LOAD_DISABLE_CONNECTION_MIGRATION) {
-    stream_->DisableConnectionMigration();
+  if (request_info_->load_flags &
+      LOAD_DISABLE_CONNECTION_MIGRATION_TO_CELLULAR) {
+    stream_->DisableConnectionMigrationToCellularNetwork();
   }
 
   if (response_info_) {

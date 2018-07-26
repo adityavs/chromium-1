@@ -1024,7 +1024,9 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
                                        GLbitfield flags);
 
   // Callback for async SwapBuffers.
-  void FinishAsyncSwapBuffers(uint64_t swap_id, gfx::SwapResult result);
+  void FinishAsyncSwapBuffers(uint64_t swap_id,
+                              gfx::SwapResult result,
+                              std::unique_ptr<gfx::GpuFence>);
   void FinishSwapBuffers(gfx::SwapResult result);
 
   void DoCommitOverlayPlanes(uint64_t swap_id, GLbitfield flags);
@@ -1640,6 +1642,9 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
   // Wrapper for glFlush.
   void DoFlush();
 
+  // Wrapper for glFramebufferParameteri.
+  void DoFramebufferParameteri(GLenum target, GLenum pname, GLint param);
+
   // Wrapper for glFramebufferRenderbufffer.
   void DoFramebufferRenderbuffer(
       GLenum target, GLenum attachment, GLenum renderbuffertarget,
@@ -2184,9 +2189,6 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
                                            TextureRef* source_texture_ref,
                                            TextureRef* dest_texture_ref);
   bool CanUseCopyTextureCHROMIUMInternalFormat(GLenum dest_internal_format);
-  bool ValidateCopyTextureCHROMIUMInternalFormats(const char* function_name,
-                                                  GLenum source_internal_format,
-                                                  GLenum dest_internal_format);
   bool ValidateCompressedCopyTextureCHROMIUM(const char* function_name,
                                              TextureRef* source_texture_ref,
                                              TextureRef* dest_texture_ref);
@@ -2362,6 +2364,9 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
 
   void ReadBackBuffersIntoShadowCopies(
       base::flat_set<scoped_refptr<Buffer>> buffers_to_shadow_copy);
+
+  // Compiles the given shader and exits command processing early.
+  void CompileShaderAndExitCommandProcessingEarly(Shader* shader);
 
   // Generate a member function prototype for each command in an automated and
   // typesafe way.
@@ -4090,6 +4095,9 @@ Capabilities GLES2DecoderImpl::GetCapabilities() {
       feature_info_->feature_flags().separate_stencil_ref_mask_writemask;
   caps.chromium_nonblocking_readback =
       feature_info_->context_type() == CONTEXT_TYPE_WEBGL2;
+  caps.num_surface_buffers = surface_->GetBufferCount();
+  caps.mesa_framebuffer_flip_y =
+      feature_info_->feature_flags().mesa_framebuffer_flip_y;
 
   return caps;
 }
@@ -7926,6 +7934,18 @@ void GLES2DecoderImpl::DoClearBufferfi(
   api()->glClearBufferfiFn(buffer, drawbuffer, depth, stencil);
 }
 
+void GLES2DecoderImpl::DoFramebufferParameteri(GLenum target,
+                                               GLenum pname,
+                                               GLint param) {
+  const char* func_name = "glFramebufferParameteri";
+  Framebuffer* framebuffer = GetFramebufferInfoForTarget(target);
+  if (!framebuffer) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, func_name, "no framebuffer bound");
+    return;
+  }
+  api()->glFramebufferParameteriFn(target, pname, param);
+}
+
 void GLES2DecoderImpl::DoFramebufferRenderbuffer(
     GLenum target, GLenum attachment, GLenum renderbuffertarget,
     GLuint client_renderbuffer_id) {
@@ -11032,7 +11052,7 @@ void GLES2DecoderImpl::DoGetShaderiv(GLuint shader_id,
     case GL_COMPILE_STATUS:
     case GL_INFO_LOG_LENGTH:
     case GL_TRANSLATED_SHADER_SOURCE_LENGTH_ANGLE:
-      shader->DoCompile();
+      CompileShaderAndExitCommandProcessingEarly(shader);
       break;
 
     default:
@@ -11098,7 +11118,7 @@ error::Error GLES2DecoderImpl::HandleGetTranslatedShaderSourceANGLE(
   }
 
   // Make sure translator has been utilized in compile.
-  shader->DoCompile();
+  CompileShaderAndExitCommandProcessingEarly(shader);
 
   bucket->SetFromString(shader->translated_source().c_str());
   return error::kNoError;
@@ -11137,7 +11157,7 @@ error::Error GLES2DecoderImpl::HandleGetShaderInfoLog(
   }
 
   // Shader must be compiled in order to get the info log.
-  shader->DoCompile();
+  CompileShaderAndExitCommandProcessingEarly(shader);
 
   bucket->SetFromString(shader->log_info().c_str());
   return error::kNoError;
@@ -14845,6 +14865,8 @@ void GLES2DecoderImpl::DoCopyTexImage2D(
         NOTREACHED();
       }
 
+      if (workarounds().clear_pixel_unpack_buffer_before_copyteximage)
+        state_.PushTextureUnpackState();
       GLuint temp_texture;
       {
         // Copy from the read framebuffer into |temp_texture|.
@@ -14870,6 +14892,8 @@ void GLES2DecoderImpl::DoCopyTexImage2D(
       api()->glFramebufferTexture2DEXTFn(
           framebuffer_target, GL_COLOR_ATTACHMENT0, source_texture_target,
           source_texture_service_id, 0);
+      if (workarounds().clear_pixel_unpack_buffer_before_copyteximage)
+        state_.RestoreUnpackState();
 
       api()->glDeleteTexturesFn(1, &temp_texture);
     } else {
@@ -14883,8 +14907,12 @@ void GLES2DecoderImpl::DoCopyTexImage2D(
         texture_manager()->WorkaroundCopyTexImageCubeMap(&texture_state_,
             &state_, &framebuffer_state_, texture_ref, func_name, args);
       }
+      if (workarounds().clear_pixel_unpack_buffer_before_copyteximage)
+        state_.PushTextureUnpackState();
       api()->glCopyTexImage2DFn(target, level, final_internal_format, x, y,
                                 width, height, border);
+      if (workarounds().clear_pixel_unpack_buffer_before_copyteximage)
+        state_.RestoreUnpackState();
     }
   }
   if (reset_source_texture_base_level_max_level) {
@@ -15982,9 +16010,14 @@ void GLES2DecoderImpl::DoSwapBuffers(uint64_t swap_id, GLbitfield flags) {
   ExitCommandProcessingEarly();
 }
 
-void GLES2DecoderImpl::FinishAsyncSwapBuffers(uint64_t swap_id,
-                                              gfx::SwapResult result) {
+void GLES2DecoderImpl::FinishAsyncSwapBuffers(
+    uint64_t swap_id,
+    gfx::SwapResult result,
+    std::unique_ptr<gfx::GpuFence> gpu_fence) {
   TRACE_EVENT_ASYNC_END0("gpu", "AsyncSwapBuffers", swap_id);
+  // Handling of the out-fence should have already happened before reaching
+  // this function, so we don't expect to get a valid fence here.
+  DCHECK(!gpu_fence);
 
   FinishSwapBuffers(result);
 }
@@ -16018,8 +16051,8 @@ void GLES2DecoderImpl::DoCommitOverlayPlanes(uint64_t swap_id,
   if (supports_async_swap_) {
     client_->OnSwapBuffers(swap_id, flags);
     surface_->CommitOverlayPlanesAsync(
-        base::Bind(&GLES2DecoderImpl::FinishSwapBuffers,
-                   weak_ptr_factory_.GetWeakPtr()),
+        base::Bind(&GLES2DecoderImpl::FinishAsyncSwapBuffers,
+                   weak_ptr_factory_.GetWeakPtr(), swap_id),
         base::DoNothing());
   } else {
     client_->OnSwapBuffers(swap_id, flags);
@@ -17011,105 +17044,6 @@ bool GLES2DecoderImpl::CanUseCopyTextureCHROMIUMInternalFormat(
   }
 }
 
-bool GLES2DecoderImpl::ValidateCopyTextureCHROMIUMInternalFormats(
-    const char* function_name,
-    GLenum source_internal_format,
-    GLenum dest_internal_format) {
-  bool valid_dest_format = false;
-  // TODO(qiankun.miao@intel.com): ALPHA, LUMINANCE and LUMINANCE_ALPHA formats
-  // are not supported on GL core profile. See crbug.com/577144. Enable the
-  // workaround for glCopyTexImage and glCopyTexSubImage in
-  // gles2_cmd_copy_tex_image.cc for glCopyTextureCHROMIUM implementation.
-  switch (dest_internal_format) {
-    case GL_RGB:
-    case GL_RGBA:
-    case GL_RGB8:
-    case GL_RGBA8:
-      valid_dest_format = true;
-      break;
-    case GL_BGRA_EXT:
-    case GL_BGRA8_EXT:
-      valid_dest_format =
-          feature_info_->feature_flags().ext_texture_format_bgra8888;
-      break;
-    case GL_SRGB_EXT:
-    case GL_SRGB_ALPHA_EXT:
-      valid_dest_format = feature_info_->feature_flags().ext_srgb;
-      break;
-    case GL_R8:
-    case GL_R8UI:
-    case GL_RG8:
-    case GL_RG8UI:
-    case GL_SRGB8:
-    case GL_RGB565:
-    case GL_RGB8UI:
-    case GL_SRGB8_ALPHA8:
-    case GL_RGB5_A1:
-    case GL_RGBA4:
-    case GL_RGBA8UI:
-    case GL_RGB10_A2:
-      valid_dest_format = feature_info_->IsWebGL2OrES3Context();
-      break;
-    case GL_RGB9_E5:
-    case GL_R16F:
-    case GL_R32F:
-    case GL_RG16F:
-    case GL_RG32F:
-    case GL_RGB16F:
-    case GL_RGBA16F:
-    case GL_R11F_G11F_B10F:
-      valid_dest_format = feature_info_->ext_color_buffer_float_available();
-      break;
-    case GL_RGB32F:
-      valid_dest_format =
-          feature_info_->ext_color_buffer_float_available() ||
-          feature_info_->feature_flags().chromium_color_buffer_float_rgb;
-      break;
-    case GL_RGBA32F:
-      valid_dest_format =
-          feature_info_->ext_color_buffer_float_available() ||
-          feature_info_->feature_flags().chromium_color_buffer_float_rgba;
-      break;
-    case GL_ALPHA:
-    case GL_LUMINANCE:
-    case GL_LUMINANCE_ALPHA:
-      valid_dest_format = true;
-      break;
-    default:
-      valid_dest_format = false;
-      break;
-  }
-
-  // TODO(aleksandar.stojiljkovic): Use sized internal formats: crbug.com/628064
-  bool valid_source_format =
-      source_internal_format == GL_RED || source_internal_format == GL_ALPHA ||
-      source_internal_format == GL_RGB || source_internal_format == GL_RGBA ||
-      source_internal_format == GL_RGB8 || source_internal_format == GL_RGBA8 ||
-      source_internal_format == GL_LUMINANCE ||
-      source_internal_format == GL_LUMINANCE_ALPHA ||
-      source_internal_format == GL_BGRA_EXT ||
-      source_internal_format == GL_BGRA8_EXT ||
-      source_internal_format == GL_RGB_YCBCR_420V_CHROMIUM ||
-      source_internal_format == GL_RGB_YCBCR_422_CHROMIUM ||
-      source_internal_format == GL_R16_EXT;
-  if (!valid_source_format) {
-    std::string msg = "invalid source internal format " +
-        GLES2Util::GetStringEnum(source_internal_format);
-    LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
-                       msg.c_str());
-    return false;
-  }
-  if (!valid_dest_format) {
-    std::string msg = "invalid dest internal format " +
-        GLES2Util::GetStringEnum(dest_internal_format);
-    LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
-                       msg.c_str());
-    return false;
-  }
-
-  return true;
-}
-
 bool GLES2DecoderImpl::ValidateCompressedCopyTextureCHROMIUM(
     const char* function_name,
     TextureRef* source_texture_ref,
@@ -17203,8 +17137,12 @@ void GLES2DecoderImpl::DoCopyTextureCHROMIUM(
     return;
   }
 
+  std::string output_error_msg;
   if (!ValidateCopyTextureCHROMIUMInternalFormats(
-          kFunctionName, source_internal_format, internal_format)) {
+          GetFeatureInfo(), source_internal_format, internal_format,
+          &output_error_msg)) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, kFunctionName,
+                       output_error_msg.c_str());
     return;
   }
 
@@ -17459,8 +17397,12 @@ void GLES2DecoderImpl::CopySubTextureHelper(const char* function_name,
     return;
   }
 
+  std::string output_error_msg;
   if (!ValidateCopyTextureCHROMIUMInternalFormats(
-          function_name, source_internal_format, dest_internal_format)) {
+          GetFeatureInfo(), source_internal_format, dest_internal_format,
+          &output_error_msg)) {
+    LOCAL_SET_GL_ERROR(GL_INVALID_OPERATION, function_name,
+                       output_error_msg.c_str());
     return;
   }
 
@@ -18340,8 +18282,10 @@ error::Error GLES2DecoderImpl::HandleTraceBeginCHROMIUM(
       *static_cast<const volatile gles2::cmds::TraceBeginCHROMIUM*>(cmd_data);
   Bucket* category_bucket = GetBucket(c.category_bucket_id);
   Bucket* name_bucket = GetBucket(c.name_bucket_id);
+  static constexpr size_t kMaxStrLen = 256;
   if (!category_bucket || category_bucket->size() == 0 ||
-      !name_bucket || name_bucket->size() == 0) {
+      category_bucket->size() > kMaxStrLen || !name_bucket ||
+      name_bucket->size() == 0 || name_bucket->size() > kMaxStrLen) {
     return error::kInvalidArguments;
   }
 
@@ -20277,11 +20221,8 @@ std::unique_ptr<AbstractTexture> GLES2DecoderImpl::CreateAbstractTexture(
       TextureRef::Create(texture_manager(), 0, service_id);
   texture_manager()->SetTarget(texture_ref.get(), target);
   const GLint level = 0;
-  gfx::Rect cleared_rect;
-  // Mark OES textures as cleared, though maybe the client should do this via
-  // a call to AbstractTexture.
-  if (target == GL_TEXTURE_EXTERNAL_OES)
-    cleared_rect = gfx::Rect(width, height);
+  // Mark the texture as "not cleared".
+  gfx::Rect cleared_rect = gfx::Rect();
   texture_manager()->SetLevelInfo(texture_ref.get(), target, level,
                                   internal_format, width, height, depth, border,
                                   format, type, cleared_rect);
@@ -20302,8 +20243,15 @@ void GLES2DecoderImpl::OnAbstractTextureDestroyed(
     scoped_refptr<TextureRef> texture_ref) {
   DCHECK(texture_ref);
   abstract_textures_.erase(abstract_texture);
-  // Keep |texture_ref| until we have a current context to destroy it.
-  texture_refs_pending_destruction_.insert(std::move(texture_ref));
+  // Keep |texture_ref| until we have a current context to destroy it, unless
+  // the context is current.  In that case, clear everything that's pending
+  // destruction and let |texture_ref| go out of scope.
+  // TODO(liberato): Consider moving this to the context group, so that any
+  // context in our group can delete textures sooner.
+  if (context_->IsCurrent(nullptr))
+    texture_refs_pending_destruction_.clear();
+  else
+    texture_refs_pending_destruction_.insert(std::move(texture_ref));
 }
 
 void GLES2DecoderImpl::DoSetReadbackBufferShadowAllocationINTERNAL(
@@ -20328,6 +20276,21 @@ void GLES2DecoderImpl::DoSetReadbackBufferShadowAllocationINTERNAL(
   // All buffers in writes_submitted_but_not_completed_ should have shm
   // allocations.
   writes_submitted_but_not_completed_.insert(buffer);
+}
+
+void GLES2DecoderImpl::CompileShaderAndExitCommandProcessingEarly(
+    Shader* shader) {
+  // No need to call DoCompile or exit command processing early if the call
+  // to DoCompile will be a no-op.
+  if (!shader->CanCompile())
+    return;
+
+  shader->DoCompile();
+
+  // Shader compilation can be very slow (see https://crbug.com/844780), Exit
+  // command processing to allow for context preemption and GPU watchdog
+  // checks.
+  ExitCommandProcessingEarly();
 }
 
 // Include the auto-generated part of this file. We split this because it means

@@ -17,18 +17,6 @@ namespace media_router {
 
 namespace {
 
-class MockButtonListener : public views::ButtonListener {
- public:
-  MockButtonListener() = default;
-  ~MockButtonListener() override = default;
-
-  MOCK_METHOD2(ButtonPressed,
-               void(views::Button* sender, const ui::Event& event));
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(MockButtonListener);
-};
-
 class CastDialogSinkButtonTest : public ChromeViewsTestBase {
  public:
   CastDialogSinkButtonTest() = default;
@@ -49,12 +37,17 @@ void CheckActionTextForState(UIMediaSinkState state,
 }  // namespace
 
 TEST_F(CastDialogSinkButtonTest, GetActionText) {
-  // TODO(crbug.com/826089): Determine what the text should be for other states.
   CheckActionTextForState(
       UIMediaSinkState::AVAILABLE,
       l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_START_CASTING_BUTTON));
   CheckActionTextForState(
+      UIMediaSinkState::CONNECTING,
+      l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_START_CASTING_BUTTON));
+  CheckActionTextForState(
       UIMediaSinkState::CONNECTED,
+      l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_STOP_CASTING_BUTTON));
+  CheckActionTextForState(
+      UIMediaSinkState::DISCONNECTING,
       l10n_util::GetStringUTF16(IDS_MEDIA_ROUTER_STOP_CASTING_BUTTON));
 }
 

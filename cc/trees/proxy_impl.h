@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "base/macros.h"
+#include "base/memory/memory_pressure_listener.h"
 #include "base/memory/weak_ptr.h"
 #include "cc/base/completion_event.h"
 #include "cc/base/delayed_unique_notifier.h"
@@ -38,7 +39,6 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
       LayerTreeFrameSink* layer_tree_frame_sink,
       base::WeakPtr<ProxyMain> proxy_main_frame_sink_bound_weak_ptr);
   void InitializeMutatorOnImpl(std::unique_ptr<LayerTreeMutator> mutator);
-  void MainThreadHasStoppedFlingingOnImpl();
   void SetInputThrottledUntilCommitOnImpl(bool is_throttled);
   void SetDeferCommitsOnImpl(bool defer_commits) const;
   void SetNeedsRedrawOnImpl(const gfx::Rect& damage_rect);
@@ -105,6 +105,8 @@ class CC_EXPORT ProxyImpl : public LayerTreeHostImplClient,
       uint32_t frame_token,
       std::vector<LayerTreeHost::PresentationTimeCallback> callbacks,
       const gfx::PresentationFeedback& feedback) override;
+  void OnMemoryPressureOnImplThread(
+      base::MemoryPressureListener::MemoryPressureLevel level) override;
 
   // SchedulerClient implementation
   bool WillBeginImplFrame(const viz::BeginFrameArgs& args) override;

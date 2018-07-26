@@ -15,6 +15,7 @@
 #include "base/bind.h"
 #include "base/callback_helpers.h"
 #include "base/command_line.h"
+#include "base/debug/alias.h"
 #include "base/feature_list.h"
 #include "base/logging.h"
 #include "base/macros.h"
@@ -62,7 +63,9 @@
 #include "gpu/command_buffer/service/gpu_switches.h"
 #include "gpu/config/gpu_driver_bug_list.h"
 #include "gpu/config/gpu_driver_bug_workaround_type.h"
+#include "gpu/config/gpu_finch_features.h"
 #include "gpu/config/gpu_preferences.h"
+#include "gpu/ipc/common/gpu_client_ids.h"
 #include "gpu/ipc/host/shader_disk_cache.h"
 #include "gpu/ipc/in_process_command_buffer.h"
 #include "media/base/media_switches.h"
@@ -236,7 +239,6 @@ static const char* const kSwitchNames[] = {
     switches::kShowMacOverlayBorders,
 #endif
 #if defined(USE_OZONE)
-    switches::kEnableDrmMojo,
     switches::kOzonePlatform,
     switches::kOzoneDumpFile,
 #endif
@@ -304,7 +306,7 @@ void OzoneRegisterStartupCallbackHelper(
         }
       },
       base::RetainedRef(base::ThreadTaskRunnerHandle::Get()),
-      base::Passed(&io_callback));
+      std::move(io_callback));
   ui::OzonePlatform::RegisterStartupCallback(std::move(bounce_callback));
 }
 #endif  // defined(USE_OZONE)
@@ -827,9 +829,7 @@ void GpuProcessHost::InitOzone() {
   // possible to ensure the latter always has a valid device. crbug.com/608839
   // When running with mus, the OzonePlatform may not have been created yet. So
   // defer the callback until OzonePlatform instance is created.
-  base::CommandLine* browser_command_line =
-      base::CommandLine::ForCurrentProcess();
-  if (browser_command_line->HasSwitch(switches::kEnableDrmMojo)) {
+  if (features::IsOzoneDrmMojo()) {
     // TODO(rjkroege): Remove the legacy IPC code paths when no longer
     // necessary. https://crbug.com/806092
     auto interface_binder = base::BindRepeating(&GpuProcessHost::BindInterface,
@@ -993,10 +993,9 @@ void GpuProcessHost::EstablishGpuChannel(
     return;
   }
 
-  bool oopd_enabled =
-      base::FeatureList::IsEnabled(features::kVizDisplayCompositor);
-  if (oopd_enabled && client_id == gpu::InProcessCommandBuffer::kGpuClientId) {
-    // The display-compositor in the gpu process uses this special client id.
+  if (gpu::IsReservedClientId(client_id)) {
+    // The display-compositor/GrShaderCache in the gpu process uses these
+    // special client ids.
     callback.Run(mojo::ScopedMessagePipeHandle(), gpu::GPUInfo(),
                  gpu::GpuFeatureInfo(),
                  EstablishChannelStatus::GPU_ACCESS_DENIED);
@@ -1006,18 +1005,28 @@ void GpuProcessHost::EstablishGpuChannel(
   DCHECK_EQ(preempts, allow_view_command_buffers);
   DCHECK_EQ(preempts, allow_real_time_streams);
   bool is_gpu_host = preempts;
+  bool cache_shaders_on_disk =
+      GetShaderCacheFactorySingleton()->Get(client_id) != nullptr;
 
   channel_requests_.push(callback);
   gpu_service_ptr_->EstablishGpuChannel(
-      client_id, client_tracing_id, is_gpu_host,
+      client_id, client_tracing_id, is_gpu_host, cache_shaders_on_disk,
       base::BindOnce(&GpuProcessHost::OnChannelEstablished,
                      weak_ptr_factory_.GetWeakPtr(), client_id, callback));
 
   if (!base::CommandLine::ForCurrentProcess()->HasSwitch(
       switches::kDisableGpuShaderDiskCache)) {
     CreateChannelCache(client_id);
+
+    bool oopd_enabled =
+        base::FeatureList::IsEnabled(features::kVizDisplayCompositor);
     if (oopd_enabled)
-      CreateChannelCache(gpu::InProcessCommandBuffer::kGpuClientId);
+      CreateChannelCache(gpu::kInProcessCommandBufferClientId);
+
+    bool oopr_enabled =
+        base::FeatureList::IsEnabled(features::kDefaultEnableOopRasterization);
+    if (oopr_enabled)
+      CreateChannelCache(gpu::kGrShaderCacheClientId);
   }
 }
 
@@ -1076,19 +1085,6 @@ void GpuProcessHost::RequestHDRStatus(RequestHDRStatusCallback request_cb) {
   gpu_service_ptr_->RequestHDRStatus(std::move(request_cb));
 }
 
-#if defined(OS_ANDROID)
-void GpuProcessHost::SendDestroyingVideoSurface(int surface_id,
-                                                const base::Closure& done_cb) {
-  TRACE_EVENT0("gpu", "GpuProcessHost::SendDestroyingVideoSurface");
-  DCHECK(send_destroying_video_surface_done_cb_.is_null());
-  DCHECK(!done_cb.is_null());
-  send_destroying_video_surface_done_cb_ = done_cb;
-  gpu_service_ptr_->DestroyingVideoSurface(
-      surface_id, base::Bind(&GpuProcessHost::OnDestroyingVideoSurfaceAck,
-                             weak_ptr_factory_.GetWeakPtr()));
-}
-#endif
-
 void GpuProcessHost::OnChannelEstablished(
     int client_id,
     const EstablishChannelCallback& callback,
@@ -1145,6 +1141,11 @@ void GpuProcessHost::OnProcessLaunched() {
 }
 
 void GpuProcessHost::OnProcessLaunchFailed(int error_code) {
+  // TODO(crbug.com/849639): Ensure |error_code| is included in crash minidumps.
+  // This is for debugging and should be removed when bug is closed.
+  int process_launch_error_code = error_code;
+  base::debug::Alias(&process_launch_error_code);
+
 #if defined(OS_WIN)
   if (kind_ == GPU_PROCESS_KIND_SANDBOXED)
     RecordAppContainerStatus(error_code, crashed_before_);
@@ -1153,6 +1154,11 @@ void GpuProcessHost::OnProcessLaunchFailed(int error_code) {
 }
 
 void GpuProcessHost::OnProcessCrashed(int exit_code) {
+  // TODO(crbug.com/849639): Ensure |exit_code| is included in crash minidumps.
+  // This is for debugging and should be removed when bug is closed.
+  int process_crash_exit_code = exit_code;
+  base::debug::Alias(&process_crash_exit_code);
+
   // If the GPU process crashed while compiling a shader, we may have invalid
   // cached binaries. Completely clear the shader cache to force shader binaries
   // to be re-created.
@@ -1545,6 +1551,16 @@ void GpuProcessHost::RecordProcessCrash() {
     recent_crash_count = display_compositor_recent_crash_count_;
   }
 
+  // TODO(crbug.com/849639): Ensure crash counts are included in crash
+  // minidumps. This is for debugging and should be removed when bug is closed.
+  int hardware_accelerated_crash_count =
+      hardware_accelerated_recent_crash_count_;
+  base::debug::Alias(&hardware_accelerated_crash_count);
+  int swiftshader_crash_count = swiftshader_recent_crash_count_;
+  base::debug::Alias(&swiftshader_crash_count);
+  int display_compositor_crash_count = display_compositor_recent_crash_count_;
+  base::debug::Alias(&display_compositor_crash_count);
+
   // GPU process initialization failed and fallback already happened.
   if (status_ == FAILURE)
     return;
@@ -1580,7 +1596,8 @@ std::string GpuProcessHost::GetShaderPrefixKey() {
   return shader_prefix_key_;
 }
 
-void GpuProcessHost::LoadedShader(const std::string& key,
+void GpuProcessHost::LoadedShader(int32_t client_id,
+                                  const std::string& key,
                                   const std::string& data) {
   std::string prefix = GetShaderPrefixKey();
   bool prefix_ok = !key.compare(0, prefix.length(), prefix);
@@ -1588,7 +1605,7 @@ void GpuProcessHost::LoadedShader(const std::string& key,
   if (prefix_ok) {
     // Remove the prefix from the key before load.
     std::string key_no_prefix = key.substr(prefix.length() + 1);
-    gpu_service_ptr_->LoadedShader(key_no_prefix, data);
+    gpu_service_ptr_->LoadedShader(client_id, key_no_prefix, data);
   }
 }
 
@@ -1606,7 +1623,8 @@ void GpuProcessHost::CreateChannelCache(int32_t client_id) {
     return;
 
   cache->set_shader_loaded_callback(base::Bind(&GpuProcessHost::LoadedShader,
-                                               weak_ptr_factory_.GetWeakPtr()));
+                                               weak_ptr_factory_.GetWeakPtr(),
+                                               client_id));
 
   client_id_to_shader_cache_[client_id] = cache;
 }

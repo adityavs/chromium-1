@@ -486,9 +486,8 @@ PPB_Gamepad_API* PepperPluginInstanceImpl::GamepadImpl::AsPPB_Gamepad_API() {
 void PepperPluginInstanceImpl::GamepadImpl::Sample(
     PP_Instance instance,
     PP_GamepadsSampleData* data) {
-  device::Gamepads gamepads_data;
-  RenderThreadImpl::current()->SampleGamepads(&gamepads_data);
-  ppapi::ConvertDeviceGamepadData(gamepads_data, data);
+  // This gamepad singleton resource method should not be called
+  NOTREACHED();
 }
 
 PepperPluginInstanceImpl::PepperPluginInstanceImpl(
@@ -1981,7 +1980,7 @@ int PepperPluginInstanceImpl::PrintBegin(const WebPrintParams& print_params) {
 
   if (LoadPdfInterface()) {
     PP_PdfPrintSettings_Dev pdf_print_settings;
-    pdf_print_settings.num_pages_per_sheet = print_params.num_pages_per_sheet;
+    pdf_print_settings.pages_per_sheet = print_params.pages_per_sheet;
     pdf_print_settings.scale_factor = print_params.scale_factor;
 
     num_pages = plugin_pdf_interface_->PrintBegin(
@@ -2656,8 +2655,8 @@ void PepperPluginInstanceImpl::NumberOfFindResultsChanged(
   if (find_identifier_ == -1)
     return;
   if (render_frame_) {
-    render_frame_->ReportFindInPageMatchCount(find_identifier_, total,
-                                              PP_ToBool(final_result));
+    render_frame_->GetWebFrame()->ReportFindInPageMatchCount(
+        find_identifier_, total, PP_ToBool(final_result));
   }
 }
 
@@ -2665,9 +2664,9 @@ void PepperPluginInstanceImpl::SelectedFindResultChanged(PP_Instance instance,
                                                          int32_t index) {
   if (find_identifier_ == -1)
     return;
-  if (render_frame_) {
-    render_frame_->ReportFindInPageSelection(find_identifier_, index + 1,
-                                             blink::WebRect());
+  if (render_frame_ && render_frame_->GetWebFrame()) {
+    render_frame_->GetWebFrame()->ReportFindInPageSelection(
+        find_identifier_, index + 1, blink::WebRect(), false /* final_update*/);
   }
 }
 
@@ -2817,7 +2816,7 @@ PP_Bool PepperPluginInstanceImpl::SetCursor(PP_Instance instance,
   SkBitmap bitmap(image_data->GetMappedBitmap());
   // Make a deep copy, so that the cursor remains valid even after the original
   // image data gets freed.
-  SkBitmap& dst = custom_cursor->custom_image.GetSkBitmap();
+  SkBitmap& dst = custom_cursor->custom_image;
   if (!dst.tryAllocPixels(bitmap.info()) ||
       !bitmap.readPixels(dst.info(), dst.getPixels(), dst.rowBytes(), 0, 0)) {
     return PP_FALSE;

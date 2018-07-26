@@ -65,6 +65,7 @@ class FeaturePodLabelButton : public views::Button {
 
   // views::Button:
   void Layout() override;
+  void OnEnabledChanged() override;
   gfx::Size CalculatePreferredSize() const override;
   std::unique_ptr<views::InkDrop> CreateInkDrop() override;
   std::unique_ptr<views::InkDropRipple> CreateInkDropRipple() const override;
@@ -78,15 +79,10 @@ class FeaturePodLabelButton : public views::Button {
   // Layout |child| in horizontal center with its vertical origin set to |y|.
   void LayoutInCenter(views::View* child, int y);
 
-  // Hide detailed view arrow if there's no space for it.
-  void UpdateDetailedViewArrow();
-
   // Owned by views hierarchy.
   views::Label* const label_;
   views::Label* const sub_label_;
   views::ImageView* const detailed_view_arrow_;
-
-  bool show_detailed_view_arrow_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(FeaturePodLabelButton);
 };
@@ -132,6 +128,7 @@ class ASH_EXPORT FeaturePodButton : public views::View,
   void SetVisible(bool visible) override;
   bool HasFocus() const override;
   void RequestFocus() override;
+  void OnEnabledChanged() override;
 
   // views::ButtonListener:
   void ButtonPressed(views::Button* sender, const ui::Event& event) override;

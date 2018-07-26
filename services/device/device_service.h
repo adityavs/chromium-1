@@ -9,7 +9,6 @@
 #include <string>
 
 #include "base/memory/ref_counted.h"
-#include "base/message_loop/message_loop_current.h"
 #include "build/build_config.h"
 #include "mojo/public/cpp/bindings/binding_set.h"
 #include "services/device/geolocation/geolocation_provider.h"
@@ -52,6 +51,10 @@ namespace base {
 class SingleThreadTaskRunner;
 }
 
+namespace network {
+class SharedURLLoaderFactory;
+}  // namespace network
+
 namespace device {
 
 #if !defined(OS_ANDROID)
@@ -69,8 +72,7 @@ class TimeZoneMonitor;
 std::unique_ptr<service_manager::Service> CreateDeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key,
     bool use_gms_core_location_provider,
     const WakeLockContextCallback& wake_lock_context_callback,
@@ -80,41 +82,31 @@ std::unique_ptr<service_manager::Service> CreateDeviceService(
 std::unique_ptr<service_manager::Service> CreateDeviceService(
     scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-    GeolocationProvider::RequestContextProducer
-        geolocation_request_context_producer,
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
     const std::string& geolocation_api_key,
     const CustomLocationProviderCallback& custom_location_provider_callback);
 #endif
 
-class DeviceService : public service_manager::Service,
-                      public base::MessageLoopCurrent::DestructionObserver {
+class DeviceService : public service_manager::Service {
  public:
 #if defined(OS_ANDROID)
-  DeviceService(scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
-                scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-                GeolocationProvider::RequestContextProducer
-                    geolocation_request_context_producer,
-                const std::string& geolocation_api_key,
-                const WakeLockContextCallback& wake_lock_context_callback,
-                const base::android::JavaRef<jobject>& java_nfc_delegate);
+  DeviceService(
+      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
+      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      const std::string& geolocation_api_key,
+      const WakeLockContextCallback& wake_lock_context_callback,
+      const base::android::JavaRef<jobject>& java_nfc_delegate);
 #else
-  DeviceService(scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
-                scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
-                GeolocationProvider::RequestContextProducer
-                    geolocation_request_context_producer,
-                const std::string& geolocation_api_key);
+  DeviceService(
+      scoped_refptr<base::SingleThreadTaskRunner> file_task_runner,
+      scoped_refptr<base::SingleThreadTaskRunner> io_task_runner,
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory,
+      const std::string& geolocation_api_key);
 #endif
-  // Not guaranteed to run on embedder shutdown; see Shutdown().
   ~DeviceService() override;
 
  private:
-  // base::MessageLoopCurrent::DestructionObserver:
-  void WillDestroyCurrentMessageLoop() override;
-
-  // Any state that *must* be cleaned up when the embedder shuts down should be
-  // placed in this method.
-  void ShutDown();
-
   // service_manager::Service:
   void OnStart() override;
   void OnBindInterface(const service_manager::BindSourceInfo& source_info,
@@ -167,9 +159,8 @@ class DeviceService : public service_manager::Service,
   std::unique_ptr<TimeZoneMonitor> time_zone_monitor_;
   scoped_refptr<base::SingleThreadTaskRunner> file_task_runner_;
   scoped_refptr<base::SingleThreadTaskRunner> io_task_runner_;
+  scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
-  GeolocationProvider::RequestContextProducer
-      geolocation_request_context_producer_;
   const std::string geolocation_api_key_;
   WakeLockContextCallback wake_lock_context_callback_;
 

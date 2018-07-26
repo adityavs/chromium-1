@@ -14,6 +14,7 @@
 #include "base/macros.h"
 #include "base/optional.h"
 #include "base/strings/string16.h"
+#include "content/public/browser/notification_database_data.h"
 #include "content/public/browser/platform_notification_service.h"
 #include "url/gurl.h"
 
@@ -61,6 +62,11 @@ class MockPlatformNotificationService : public PlatformNotificationService {
   void GetDisplayedNotifications(
       BrowserContext* browser_context,
       const DisplayedNotificationsCallback& callback) override;
+  int64_t ReadNextPersistentNotificationId(
+      BrowserContext* browser_context) override;
+  void RecordNotificationUkmEvent(
+      BrowserContext* browser_context,
+      const NotificationDatabaseData& data) override;
 
  private:
   // Structure to represent the information of a persistent notification.
@@ -79,6 +85,8 @@ class MockPlatformNotificationService : public PlatformNotificationService {
 
   // Mapping of titles to notification ids giving test a usable identifier.
   std::unordered_map<std::string, std::string> notification_id_map_;
+
+  int64_t next_persistent_notification_id_ = 1;
 
   DISALLOW_COPY_AND_ASSIGN(MockPlatformNotificationService);
 };

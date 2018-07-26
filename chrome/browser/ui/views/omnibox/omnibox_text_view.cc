@@ -137,7 +137,10 @@ const gfx::FontList& GetFontForType(int text_type) {
 }  // namespace
 
 OmniboxTextView::OmniboxTextView(OmniboxResultView* result_view)
-    : result_view_(result_view), font_height_(0), wrap_text_lines_(false) {}
+    : result_view_(result_view),
+      font_height_(0),
+      use_deemphasized_font_(false),
+      wrap_text_lines_(false) {}
 
 OmniboxTextView::~OmniboxTextView() {}
 
@@ -179,9 +182,8 @@ void OmniboxTextView::OnPaint(gfx::Canvas* canvas) {
   render_text_->Draw(canvas);
 }
 
-void OmniboxTextView::Dim() {
-  render_text_->SetColor(
-      result_view_->GetColor(OmniboxPart::RESULTS_TEXT_DIMMED));
+void OmniboxTextView::ApplyTextColor(OmniboxPart part) {
+  render_text_->SetColor(result_view_->GetColor(part));
 }
 
 const base::string16& OmniboxTextView::text() const {
@@ -191,16 +193,95 @@ const base::string16& OmniboxTextView::text() const {
   return render_text_->text();
 }
 
-void OmniboxTextView::SetText(const base::string16& text) {
+void OmniboxTextView::SetText(const base::string16& text, bool deemphasize) {
+  if (cached_classifications_) {
+    cached_classifications_.reset();
+  } else if (render_text_ && render_text_->text() == text &&
+             deemphasize == use_deemphasized_font_) {
+    // Only exit early if |cached_classifications_| was empty,
+    // i.e. the last time text was set was through this method.
+    return;
+  }
+
+  use_deemphasized_font_ = deemphasize;
   render_text_.reset();
   render_text_ = CreateRenderText(text);
   UpdateLineHeight();
+  SetPreferredSize(CalculatePreferredSize());
 }
 
 void OmniboxTextView::SetText(const base::string16& text,
-                              const ACMatchClassifications& classifications) {
+                              const ACMatchClassifications& classifications,
+                              bool deemphasize) {
+  if (render_text_ && render_text_->text() == text && cached_classifications_ &&
+      classifications == *cached_classifications_ &&
+      deemphasize == use_deemphasized_font_)
+    return;
+
+  use_deemphasized_font_ = deemphasize;
+
+  cached_classifications_ =
+      std::make_unique<ACMatchClassifications>(classifications);
   render_text_ = CreateRenderText(text);
 
+  ReapplyStyling();
+}
+
+void OmniboxTextView::SetText(const SuggestionAnswer::ImageLine& line,
+                              bool deemphasize) {
+  use_deemphasized_font_ = deemphasize;
+  cached_classifications_.reset();
+  wrap_text_lines_ = line.num_text_lines() > 1;
+  render_text_.reset();
+  render_text_ = CreateRenderText(base::string16());
+
+  if (!OmniboxFieldTrial::IsNewAnswerLayoutEnabled()) {
+    // This assumes that the first text type in the line can be used to specify
+    // the font for all the text fields in the line.  For now this works but
+    // eventually it may be necessary to get RenderText to support multiple font
+    // sizes or use multiple RenderTexts.
+    render_text_->SetFontList(GetFontForType(line.text_fields()[0].type()));
+  }
+
+  for (const SuggestionAnswer::TextField& text_field : line.text_fields())
+    AppendText(text_field.text(), text_field.type());
+  if (!line.text_fields().empty()) {
+    constexpr int kMaxDisplayLines = 3;
+    const SuggestionAnswer::TextField& first_field = line.text_fields().front();
+    if (first_field.has_num_lines() && first_field.num_lines() > 1 &&
+        render_text_->MultilineSupported()) {
+      render_text_->SetMultiline(true);
+      render_text_->SetMaxLines(
+          std::min(kMaxDisplayLines, first_field.num_lines()));
+    }
+  }
+
+  // Add the "additional" and "status" text from |line|, if any.
+  // Also updates preferred size.
+  AppendExtraText(line);
+
+  UpdateLineHeight();
+}
+
+void OmniboxTextView::AppendExtraText(const SuggestionAnswer::ImageLine& line) {
+  const base::char16 space(' ');
+  const auto* text_field = line.additional_text();
+  if (text_field) {
+    AppendText(space + text_field->text(), text_field->type());
+  }
+  text_field = line.status_text();
+  if (text_field) {
+    AppendText(space + text_field->text(), text_field->type());
+  }
+  SetPreferredSize(CalculatePreferredSize());
+}
+
+int OmniboxTextView::GetLineHeight() const {
+  return font_height_;
+}
+
+void OmniboxTextView::ReapplyStyling() {
+  const ACMatchClassifications& classifications = *cached_classifications_;
   const size_t text_length = render_text_->text().length();
   for (size_t i = 0; i < classifications.size(); ++i) {
     const size_t text_start = classifications[i].offset;
@@ -230,53 +311,7 @@ void OmniboxTextView::SetText(const base::string16& text,
   }
 
   UpdateLineHeight();
-}
-
-void OmniboxTextView::SetText(const SuggestionAnswer::ImageLine& line) {
-  wrap_text_lines_ = line.num_text_lines() > 1;
-  render_text_.reset();
-  render_text_ = CreateRenderText(base::string16());
-  if (!OmniboxFieldTrial::IsNewAnswerLayoutEnabled()) {
-    // This assumes that the first text type in the line can be used to specify
-    // the font for all the text fields in the line.  For now this works but
-    // eventually it may be necessary to get RenderText to support multiple font
-    // sizes or use multiple RenderTexts.
-    render_text_->SetFontList(GetFontForType(line.text_fields()[0].type()));
-  }
-
-  for (const SuggestionAnswer::TextField& text_field : line.text_fields())
-    AppendText(text_field.text(), text_field.type());
-  if (!line.text_fields().empty()) {
-    constexpr int kMaxDisplayLines = 3;
-    const SuggestionAnswer::TextField& first_field = line.text_fields().front();
-    if (first_field.has_num_lines() && first_field.num_lines() > 1 &&
-        render_text_->MultilineSupported()) {
-      render_text_->SetMultiline(true);
-      render_text_->SetMaxLines(
-          std::min(kMaxDisplayLines, first_field.num_lines()));
-    }
-  }
-
-  // Add the "additional" and "status" text from |line|, if any.
-  AppendExtraText(line);
-
-  UpdateLineHeight();
-}
-
-void OmniboxTextView::AppendExtraText(const SuggestionAnswer::ImageLine& line) {
-  const base::char16 space(' ');
-  const auto* text_field = line.additional_text();
-  if (text_field) {
-    AppendText(space + text_field->text(), text_field->type());
-  }
-  text_field = line.status_text();
-  if (text_field) {
-    AppendText(space + text_field->text(), text_field->type());
-  }
-}
-
-int OmniboxTextView::GetLineHeight() const {
-  return font_height_;
+  SetPreferredSize(CalculatePreferredSize());
 }
 
 std::unique_ptr<gfx::RenderText> OmniboxTextView::CreateRenderText(
@@ -285,14 +320,16 @@ std::unique_ptr<gfx::RenderText> OmniboxTextView::CreateRenderText(
   render_text->SetDisplayRect(gfx::Rect(gfx::Size(INT_MAX, 0)));
   render_text->SetCursorEnabled(false);
   render_text->SetElideBehavior(gfx::ELIDE_TAIL);
-  render_text->SetFontList(
-      views::style::GetFont(CONTEXT_OMNIBOX_PRIMARY, kTextStyle));
+  const gfx::FontList& font = views::style::GetFont(
+      (use_deemphasized_font_ ? CONTEXT_OMNIBOX_DEEMPHASIZED
+                              : CONTEXT_OMNIBOX_PRIMARY),
+      kTextStyle);
+  render_text->SetFontList(font);
   render_text->SetText(text);
   return render_text;
 }
 
-void OmniboxTextView::AppendText(const base::string16& text,
-                                 int text_type) const {
+void OmniboxTextView::AppendText(const base::string16& text, int text_type) {
   if (text.empty())
     return;
   int offset = render_text_->text().length();
@@ -302,6 +339,17 @@ void OmniboxTextView::AppendText(const base::string16& text,
     render_text_->ApplyWeight(gfx::Font::Weight::NORMAL, range);
     render_text_->ApplyColor(
         result_view_->GetColor(OmniboxPart::RESULTS_TEXT_DIMMED), range);
+
+    // Selectively apply baseline style so that weather results will raise °F.
+    // TODO(orinj): Integrate other selected styles like red/green for stocks.
+    if (text_type == SuggestionAnswer::TOP_ALIGNED) {
+      // This usually comes from GetTextStyle (see below) but here it is known.
+      render_text_->ApplyBaselineStyle(gfx::SUPERIOR, range);
+    } else {
+      // Apply normal baseline so that later appends don't carry forward the
+      // previously applied superior baseline.
+      render_text_->ApplyBaselineStyle(gfx::NORMAL_BASELINE, range);
+    }
   } else {
     const TextStyle& text_style = GetTextStyle(text_type);
     // TODO(dschuyler): follow up on the problem of different font sizes within

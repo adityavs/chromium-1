@@ -94,6 +94,19 @@ scoped_refptr<RemoteDevice> GattClientManagerImpl::GetDeviceSync(
   return new_device;
 }
 
+void GattClientManagerImpl::GetConnectedDevices(GetConnectDevicesCallback cb) {
+  MAKE_SURE_IO_THREAD(GetConnectedDevices,
+                      BindToCurrentSequence(std::move(cb)));
+  std::vector<scoped_refptr<RemoteDevice>> devices;
+  for (const auto& device : addr_to_device_) {
+    if (device.second->IsConnected()) {
+      devices.push_back(device.second);
+    }
+  }
+
+  std::move(cb).Run(std::move(devices));
+}
+
 void GattClientManagerImpl::GetNumConnected(
     base::OnceCallback<void(size_t)> cb) const {
   MAKE_SURE_IO_THREAD(GetNumConnected, BindToCurrentSequence(std::move(cb)));
@@ -117,7 +130,11 @@ void GattClientManagerImpl::OnConnectChanged(
     bool connected) {
   MAKE_SURE_IO_THREAD(OnConnectChanged, addr, status, connected);
   auto it = addr_to_device_.find(addr);
-  CHECK_DEVICE_EXISTS_IT(it);
+
+  // Silently ignore devices we aren't keeping track of.
+  if (it == addr_to_device_.end()) {
+    return;
+  }
 
   it->second->SetConnected(connected);
   if (connected) {

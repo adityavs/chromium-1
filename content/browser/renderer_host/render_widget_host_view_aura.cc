@@ -98,6 +98,7 @@
 #include "ui/gfx/skia_util.h"
 #include "ui/touch_selection/touch_selection_controller.h"
 #include "ui/wm/core/coordinate_conversion.h"
+#include "ui/wm/core/window_util.h"
 #include "ui/wm/public/activation_client.h"
 #include "ui/wm/public/scoped_tooltip_disabler.h"
 #include "ui/wm/public/tooltip_client.h"
@@ -894,8 +895,9 @@ void RenderWidgetHostViewAura::DidStopFlinging() {
   selection_controller_client_->OnScrollCompleted();
 }
 
-gfx::Vector2d RenderWidgetHostViewAura::GetOffsetFromRootSurface() {
-  return window_->GetBoundsInRootWindow().OffsetFromOrigin();
+void RenderWidgetHostViewAura::TransformPointToRootSurface(gfx::PointF* point) {
+  aura::Window::ConvertPointToTarget(window_, window_->GetRootWindow(), point);
+  window_->GetRootWindow()->transform().TransformPoint(point);
 }
 
 gfx::Rect RenderWidgetHostViewAura::GetBoundsInRootWindow() {
@@ -1447,12 +1449,14 @@ bool RenderWidgetHostViewAura::IsTextEditCommandEnabled(
 void RenderWidgetHostViewAura::SetTextEditCommandForNextKeyEvent(
     ui::TextEditCommand command) {}
 
-const std::string& RenderWidgetHostViewAura::GetClientSourceInfo() const {
+ukm::SourceId RenderWidgetHostViewAura::GetClientSourceForMetrics() const {
   RenderFrameHostImpl* frame = GetFocusedFrame();
   if (frame) {
-    return frame->GetLastCommittedURL().spec();
+    frame->GetRenderWidgetHost()
+        ->delegate()
+        ->GetUkmSourceIdForLastCommittedSource();
   }
-  return base::EmptyString();
+  return ukm::SourceId();
 }
 
 bool RenderWidgetHostViewAura::ShouldDoLearning() {
@@ -2135,15 +2139,8 @@ void RenderWidgetHostViewAura::SnapToPhysicalPixelBoundary() {
   // to avoid the web contents area looking blurry we translate the web contents
   // in the +x, +y direction to land on the nearest pixel boundary. This may
   // cause the bottom and right edges to be clipped slightly, but that's ok.
-#if defined(OS_CHROMEOS)
-  aura::Window* snapped = window_->GetToplevelWindow();
-#else
-  aura::Window* snapped = window_->GetRootWindow();
-#endif
-
-  if (snapped && snapped != window_)
-    ui::SnapLayerToPhysicalPixelBoundary(snapped->layer(), window_->layer());
-
+  // We want to snap it to the nearest ancestor.
+  wm::SnapWindowToPixelBoundary(window_);
   has_snapped_to_boundary_ = true;
 }
 
@@ -2321,11 +2318,11 @@ void RenderWidgetHostViewAura::OnDidNavigateMainFrameToNewPage() {
   ui::GestureRecognizer::Get()->CancelActiveTouches(window_);
 }
 
-viz::FrameSinkId RenderWidgetHostViewAura::GetFrameSinkId() {
+const viz::FrameSinkId& RenderWidgetHostViewAura::GetFrameSinkId() const {
   return frame_sink_id_;
 }
 
-viz::LocalSurfaceId RenderWidgetHostViewAura::GetLocalSurfaceId() const {
+const viz::LocalSurfaceId& RenderWidgetHostViewAura::GetLocalSurfaceId() const {
   return window_->GetLocalSurfaceId();
 }
 
@@ -2342,11 +2339,14 @@ void RenderWidgetHostViewAura::OnUpdateTextInputStateCalled(
     GetInputMethod()->OnTextInputTypeChanged(this);
 
   const TextInputState* state = text_input_manager_->GetTextInputState();
-  if (state && state->show_ime_if_needed &&
-      state->type != ui::TEXT_INPUT_TYPE_NONE &&
-      state->mode != ui::TEXT_INPUT_MODE_NONE &&
-      GetInputMethod()->GetTextInputClient() == this) {
-    GetInputMethod()->ShowImeIfNeeded();
+  if (state && state->type != ui::TEXT_INPUT_TYPE_NONE &&
+      state->mode != ui::TEXT_INPUT_MODE_NONE) {
+    if (state->show_ime_if_needed &&
+        GetInputMethod()->GetTextInputClient() == this)
+      GetInputMethod()->ShowVirtualKeyboardIfEnabled();
+    // Ensure that accessibility events are fired when the selection location
+    // moves from UI back to content.
+    text_input_manager->NotifySelectionBoundsChanged(updated_view);
   }
 
   if (auto* render_widget_host = updated_view->host()) {

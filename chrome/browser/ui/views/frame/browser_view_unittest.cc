@@ -114,7 +114,9 @@ TEST_F(BrowserViewTest, BrowserViewLayout) {
   EXPECT_EQ(expected_tabstrip_origin.x(), tabstrip->x());
   EXPECT_EQ(expected_tabstrip_origin.y(), tabstrip->y());
   EXPECT_EQ(0, toolbar->x());
-  EXPECT_EQ(tabstrip->bounds().bottom(), toolbar->y());
+  EXPECT_EQ(
+      tabstrip->bounds().bottom() - GetLayoutConstant(TABSTRIP_TOOLBAR_OVERLAP),
+      toolbar->y());
   EXPECT_EQ(0, contents_container->x());
   EXPECT_EQ(toolbar->bounds().bottom(), contents_container->y());
   EXPECT_EQ(top_container->bounds().bottom(), contents_container->y());
@@ -158,7 +160,9 @@ TEST_F(BrowserViewTest, BrowserViewLayout) {
 
   // Bookmark bar layout on NTP.
   EXPECT_EQ(0, bookmark_bar->x());
-  EXPECT_EQ(tabstrip->bounds().bottom() + toolbar->height(), bookmark_bar->y());
+  EXPECT_EQ(tabstrip->bounds().bottom() + toolbar->height() -
+                GetLayoutConstant(TABSTRIP_TOOLBAR_OVERLAP),
+            bookmark_bar->y());
   EXPECT_EQ(toolbar->bounds().bottom(), contents_container->y());
   EXPECT_EQ(bookmark_bar->height(), devtools_web_view->y());
   EXPECT_EQ(bookmark_bar->height(), contents_web_view->y());
@@ -300,8 +304,8 @@ TEST_F(BrowserViewHostedAppTest, Layout) {
 
   // The position of the bottom of the header (the bar with the window
   // controls) in the coordinates of BrowserView.
-  int bottom_of_header = browser_view()->frame()->GetTopInset(false) -
-      header_offset.y();
+  int bottom_of_header =
+      browser_view()->frame()->GetTopInset() - header_offset.y();
 
   // The web contents should be flush with the bottom of the header.
   EXPECT_EQ(bottom_of_header, contents_container->y());
@@ -309,5 +313,5 @@ TEST_F(BrowserViewHostedAppTest, Layout) {
   // The find bar should butt against the 1px header/web-contents separator at
   // the bottom of the header.
   EXPECT_EQ(browser_view()->GetFindBarBoundingBox().y(),
-            browser_view()->frame()->GetTopInset(false));
+            browser_view()->frame()->GetTopInset());
 }

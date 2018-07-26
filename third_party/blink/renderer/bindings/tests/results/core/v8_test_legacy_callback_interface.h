@@ -15,6 +15,7 @@
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/bindings/callback_interface_base.h"
 #include "third_party/blink/renderer/platform/bindings/dom_wrapper_world.h"
+#include "third_party/blink/renderer/platform/bindings/wrapper_type_info.h"
 
 namespace blink {
 
@@ -34,7 +35,7 @@ class CORE_EXPORT V8TestLegacyCallbackInterface final : public CallbackInterface
 
   ~V8TestLegacyCallbackInterface() override = default;
 
-  // TraceWrapperBase overrides:
+  // NameClient overrides:
   const char* NameInHeapSnapshot() const override;
 
   // Performs "call a user object's operation".
@@ -47,14 +48,13 @@ class CORE_EXPORT V8TestLegacyCallbackInterface final : public CallbackInterface
 };
 
 template <>
-class CORE_TEMPLATE_CLASS_EXPORT V8PersistentCallbackInterface<V8TestLegacyCallbackInterface> final : public V8PersistentCallbackInterfaceBase {
+class V8PersistentCallbackInterface<V8TestLegacyCallbackInterface> final : public V8PersistentCallbackInterfaceBase {
   using V8CallbackInterface = V8TestLegacyCallbackInterface;
 
  public:
   ~V8PersistentCallbackInterface() override = default;
 
-  CORE_EXTERN_TEMPLATE_EXPORT
-  v8::Maybe<uint16_t> acceptNode(ScriptWrappable* callback_this_value, Node* node) WARN_UNUSED_RESULT;
+  CORE_EXPORT v8::Maybe<uint16_t> acceptNode(ScriptWrappable* callback_this_value, Node* node) WARN_UNUSED_RESULT;
 
  private:
   explicit V8PersistentCallbackInterface(V8CallbackInterface* callback_interface)

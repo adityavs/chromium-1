@@ -103,16 +103,27 @@ void RenderWidgetHostViewMac::DestroyCompositorForShutdown() {
   Destroy();
 }
 
-bool RenderWidgetHostViewMac::SynchronizeVisualProperties() {
+bool RenderWidgetHostViewMac::SynchronizeVisualProperties(
+    const base::Optional<viz::LocalSurfaceId>&
+        child_allocated_local_surface_id) {
+  if (child_allocated_local_surface_id) {
+    browser_compositor_->UpdateRendererLocalSurfaceIdFromChild(
+        *child_allocated_local_surface_id);
+  } else {
+    browser_compositor_->AllocateNewRendererLocalSurfaceId();
+  }
+
+  if (auto* host = browser_compositor_->GetDelegatedFrameHost()) {
+    host->EmbedSurface(browser_compositor_->GetRendererLocalSurfaceId(),
+                       browser_compositor_->GetRendererSize(),
+                       cc::DeadlinePolicy::UseDefaultDeadline());
+  }
+
   return host()->SynchronizeVisualProperties();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // AcceleratedWidgetMacNSView, public:
-
-NSView* RenderWidgetHostViewMac::AcceleratedWidgetGetNSView() const {
-  return cocoa_view();
-}
 
 void RenderWidgetHostViewMac::AcceleratedWidgetCALayerParamsUpdated() {
   // Set the background color for the root layer from the frame that just
@@ -160,9 +171,9 @@ RenderWidgetHostViewMac::RenderWidgetHostViewMac(RenderWidgetHost* widget,
                                        ? AllocateFrameSinkIdForGuestViewHack()
                                        : host()->GetFrameSinkId();
 
-  browser_compositor_.reset(
-      new BrowserCompositorMac(this, this, host()->is_hidden(),
-                               [cocoa_view() window], display_, frame_sink_id));
+  browser_compositor_.reset(new BrowserCompositorMac(
+      this, this, host()->is_hidden(), display_, frame_sink_id));
+  DCHECK(![cocoa_view() window]);
 
   if (!is_guest_view_hack_)
     host()->SetView(this);
@@ -209,7 +220,7 @@ RenderWidgetHostViewMac::~RenderWidgetHostViewMac() {
 }
 
 void RenderWidgetHostViewMac::SetParentUiLayer(ui::Layer* parent_ui_layer) {
-  if (!display_only_using_parent_ui_layer_) {
+  if (parent_ui_layer && !display_only_using_parent_ui_layer_) {
     // The first time that we display using a parent ui::Layer, permanently
     // switch from drawing using Cocoa to only drawing using ui::Views. Erase
     // the existing content being drawn by Cocoa (which may have been set due
@@ -369,25 +380,44 @@ void RenderWidgetHostViewMac::GetScreenInfo(ScreenInfo* screen_info) const {
 void RenderWidgetHostViewMac::Show() {
   is_visible_ = true;
   ns_view_bridge_->SetVisible(is_visible_);
+  browser_compositor_->SetViewVisible(is_visible_);
   browser_compositor_->SetRenderWidgetHostIsHidden(false);
 
-  host()->WasShown(true /* record_presentation_time */);
-
-  // If there is not a frame being currently drawn, kick one, so that the below
-  // pause will have a frame to wait on.
-  host()->RequestRepaintForTesting();
+  WasUnOccluded();
 }
 
 void RenderWidgetHostViewMac::Hide() {
   is_visible_ = false;
   ns_view_bridge_->SetVisible(is_visible_);
+  browser_compositor_->SetViewVisible(is_visible_);
   host()->WasHidden();
   browser_compositor_->SetRenderWidgetHostIsHidden(true);
 }
 
 void RenderWidgetHostViewMac::WasUnOccluded() {
   browser_compositor_->SetRenderWidgetHostIsHidden(false);
-  host()->WasShown(false /* record_presentation_time */);
+
+  DelegatedFrameHost* delegated_frame_host =
+      browser_compositor_->GetDelegatedFrameHost();
+
+  bool has_saved_frame =
+      delegated_frame_host ? delegated_frame_host->HasSavedFrame() : false;
+
+  // If the primary surface was evicted, we should create a new primary.
+  if (delegated_frame_host && delegated_frame_host->IsPrimarySurfaceEvicted())
+    SynchronizeVisualProperties(base::nullopt);
+
+  const bool renderer_should_record_presentation_time = !has_saved_frame;
+  host()->WasShown(renderer_should_record_presentation_time);
+
+  if (delegated_frame_host) {
+    // If the frame for the renderer is already available, then the
+    // tab-switching time is the presentation time for the browser-compositor.
+    const bool record_presentation_time = has_saved_frame;
+    delegated_frame_host->WasShown(
+        browser_compositor_->GetRendererLocalSurfaceId(),
+        browser_compositor_->GetRendererSize(), record_presentation_time);
+  }
 }
 
 void RenderWidgetHostViewMac::WasOccluded() {
@@ -756,7 +786,7 @@ void RenderWidgetHostViewMac::CopyFromSurface(
 
 void RenderWidgetHostViewMac::EnsureSurfaceSynchronizedForLayoutTest() {
   ++latest_capture_sequence_number_;
-  SynchronizeVisualProperties();
+  SynchronizeVisualProperties(base::nullopt);
 }
 
 void RenderWidgetHostViewMac::SetNeedsBeginFrames(bool needs_begin_frames) {
@@ -1014,10 +1044,8 @@ bool RenderWidgetHostViewMac::RequestRepaintForTesting() {
   return browser_compositor_->RequestRepaintForTesting();
 }
 
-gfx::Vector2d RenderWidgetHostViewMac::GetOffsetFromRootSurface() {
-  if (display_only_using_parent_ui_layer_)
-    return view_bounds_in_window_dip_.OffsetFromOrigin();
-  return gfx::Vector2d();
+void RenderWidgetHostViewMac::TransformPointToRootSurface(gfx::PointF* point) {
+  browser_compositor_->TransformPointToRootSurface(point);
 }
 
 gfx::Rect RenderWidgetHostViewMac::GetBoundsInRootWindow() {
@@ -1126,11 +1154,11 @@ RenderWidgetHostViewMac::CreateSyntheticGestureTarget() {
       new SyntheticGestureTargetMac(host, cocoa_view()));
 }
 
-viz::LocalSurfaceId RenderWidgetHostViewMac::GetLocalSurfaceId() const {
+const viz::LocalSurfaceId& RenderWidgetHostViewMac::GetLocalSurfaceId() const {
   return browser_compositor_->GetRendererLocalSurfaceId();
 }
 
-viz::FrameSinkId RenderWidgetHostViewMac::GetFrameSinkId() {
+const viz::FrameSinkId& RenderWidgetHostViewMac::GetFrameSinkId() const {
   return browser_compositor_->GetDelegatedFrameHost()->frame_sink_id();
 }
 
@@ -1465,15 +1493,13 @@ void RenderWidgetHostViewMac::RouteOrProcessWheelEvent(
   blink::WebMouseWheelEvent web_event = const_web_event;
   ui::LatencyInfo latency_info(ui::SourceEventType::WHEEL);
   latency_info.AddLatencyNumber(ui::INPUT_EVENT_LATENCY_UI_COMPONENT);
-  if (wheel_scroll_latching_enabled()) {
-    mouse_wheel_phase_handler_.AddPhaseIfNeededAndScheduleEndEvent(
-        web_event, ShouldRouteEvent(web_event));
-    if (web_event.phase == blink::WebMouseWheelEvent::kPhaseEnded) {
-      // A wheel end event is scheduled and will get dispatched if momentum
-      // phase doesn't start in 100ms. Don't sent the wheel end event
-      // immediately.
-      return;
-    }
+  mouse_wheel_phase_handler_.AddPhaseIfNeededAndScheduleEndEvent(
+      web_event, ShouldRouteEvent(web_event));
+  if (web_event.phase == blink::WebMouseWheelEvent::kPhaseEnded) {
+    // A wheel end event is scheduled and will get dispatched if momentum
+    // phase doesn't start in 100ms. Don't sent the wheel end event
+    // immediately.
+    return;
   }
   if (ShouldRouteEvent(web_event)) {
     host()->delegate()->GetInputEventRouter()->RouteMouseWheelEvent(
@@ -1495,14 +1521,8 @@ void RenderWidgetHostViewMac::ForwardMouseEvent(
 void RenderWidgetHostViewMac::ForwardWheelEvent(
     const blink::WebMouseWheelEvent& const_web_event) {
   blink::WebMouseWheelEvent web_event = const_web_event;
-  if (wheel_scroll_latching_enabled()) {
-    mouse_wheel_phase_handler_.AddPhaseIfNeededAndScheduleEndEvent(web_event,
-                                                                   false);
-  } else {
-    ui::LatencyInfo latency_info(ui::SourceEventType::WHEEL);
-    latency_info.AddLatencyNumber(ui::INPUT_EVENT_LATENCY_UI_COMPONENT);
-    host()->ForwardWheelEventWithLatencyInfo(web_event, latency_info);
-  }
+  mouse_wheel_phase_handler_.AddPhaseIfNeededAndScheduleEndEvent(web_event,
+                                                                 false);
 }
 
 void RenderWidgetHostViewMac::GestureBegin(blink::WebGestureEvent begin_event,
@@ -1534,11 +1554,9 @@ void RenderWidgetHostViewMac::GestureUpdate(
 
   // Send a GesturePinchBegin event if none has been sent yet.
   if (!gesture_begin_pinch_sent_) {
-    if (wheel_scroll_latching_enabled()) {
-      // Before starting a pinch sequence, send the pending wheel end event to
-      // finish scrolling.
-      mouse_wheel_phase_handler_.DispatchPendingWheelEndEvent();
-    }
+    // Before starting a pinch sequence, send the pending wheel end event to
+    // finish scrolling.
+    mouse_wheel_phase_handler_.DispatchPendingWheelEndEvent();
     WebGestureEvent begin_event(*gesture_begin_event_);
     begin_event.SetType(WebInputEvent::kGesturePinchBegin);
     begin_event.SetSourceDevice(

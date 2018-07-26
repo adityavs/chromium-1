@@ -271,7 +271,7 @@ void TrimElements(const std::set<int> target_ids,
 // don't leak it.
 class ThreatDetailsFactoryImpl : public ThreatDetailsFactory {
  public:
-  ThreatDetails* CreateThreatDetails(
+  scoped_refptr<ThreatDetails> CreateThreatDetails(
       BaseUIManager* ui_manager,
       WebContents* web_contents,
       const security_interstitials::UnsafeResource& unsafe_resource,
@@ -280,10 +280,12 @@ class ThreatDetailsFactoryImpl : public ThreatDetailsFactory {
       ReferrerChainProvider* referrer_chain_provider,
       bool trim_to_ad_tags,
       ThreatDetailsDoneCallback done_callback) override {
-    return new ThreatDetails(ui_manager, web_contents, unsafe_resource,
-                             url_loader_factory, history_service,
-                             referrer_chain_provider, trim_to_ad_tags,
-                             done_callback);
+    auto threat_details = base::WrapRefCounted(new ThreatDetails(
+        ui_manager, web_contents, unsafe_resource, url_loader_factory,
+        history_service, referrer_chain_provider, trim_to_ad_tags,
+        done_callback));
+    threat_details->StartCollection();
+    return threat_details;
   }
 
  private:
@@ -299,7 +301,7 @@ static base::LazyInstance<ThreatDetailsFactoryImpl>::DestructorAtExit
 
 // Create a ThreatDetails for the given tab.
 /* static */
-ThreatDetails* ThreatDetails::NewThreatDetails(
+scoped_refptr<ThreatDetails> ThreatDetails::NewThreatDetails(
     BaseUIManager* ui_manager,
     WebContents* web_contents,
     const UnsafeResource& resource,
@@ -344,7 +346,6 @@ ThreatDetails::ThreatDetails(
   redirects_collector_ = new ThreatDetailsRedirectsCollector(
       history_service ? history_service->AsWeakPtr()
                       : base::WeakPtr<history::HistoryService>());
-  StartCollection();
 }
 
 // TODO(lpz): Consider making this constructor delegate to the parameterized one
@@ -579,6 +580,7 @@ void ThreatDetails::RequestThreatDOMDetails(content::RenderFrameHost* frame) {
   frame->GetRemoteInterfaces()->GetInterface(&threat_reporter);
   safe_browsing::mojom::ThreatReporter* raw_threat_report =
       threat_reporter.get();
+  pending_render_frame_hosts_.insert(frame);
   raw_threat_report->GetThreatDOMDetails(
       base::BindOnce(&ThreatDetails::OnReceivedThreatDOMDetails, this,
                      base::Passed(&threat_reporter), frame));
@@ -589,6 +591,11 @@ void ThreatDetails::OnReceivedThreatDOMDetails(
     mojom::ThreatReporterPtr threat_reporter,
     content::RenderFrameHost* sender,
     std::vector<mojom::ThreatDOMDetailsNodePtr> params) {
+  // If the RenderFrameHost was closed between sending the IPC and this callback
+  // running, |sender| will be invalid.
+  if (pending_render_frame_hosts_.erase(sender) == 0)
+    return;
+
   // Lookup the FrameTreeNode ID of any child frames in the list of DOM nodes.
   const int sender_process_id = sender->GetProcess()->GetID();
   const int sender_frame_tree_node_id = sender->GetFrameTreeNodeId();
@@ -806,4 +813,9 @@ void ThreatDetails::AllDone() {
       content::BrowserThread::UI, FROM_HERE,
       base::Bind(done_callback_, base::Unretained(web_contents())));
 }
+
+void ThreatDetails::FrameDeleted(RenderFrameHost* render_frame_host) {
+  pending_render_frame_hosts_.erase(render_frame_host);
+}
+
 }  // namespace safe_browsing

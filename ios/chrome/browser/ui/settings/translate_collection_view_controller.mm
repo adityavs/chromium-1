@@ -112,7 +112,6 @@ NSString* const kTranslateSettingsCategory = @"ChromeTranslateSettings";
       [[SettingsTextItem alloc] initWithType:ItemTypeResetTranslate];
   resetTranslate.text = l10n_util::GetNSString(IDS_IOS_TRANSLATE_SETTING_RESET);
   resetTranslate.accessibilityTraits |= UIAccessibilityTraitButton;
-  resetTranslate.textFont = [MDCTypography body2Font];
   [model addItem:resetTranslate
       toSectionWithIdentifier:SectionIdentifierTranslate];
 
@@ -120,6 +119,7 @@ NSString* const kTranslateSettingsCategory = @"ChromeTranslateSettings";
   [model addSectionWithIdentifier:SectionIdentifierFooter];
   CollectionViewFooterItem* footer =
       [[CollectionViewFooterItem alloc] initWithType:ItemTypeFooter];
+  footer.cellStyle = CollectionViewCellStyle::kUIKit;
   footer.text = l10n_util::GetNSString(IDS_IOS_TRANSLATE_SETTING_DESCRIPTION);
   footer.linkURL = google_util::AppendGoogleLocaleParam(
       GURL(kTranslateLearnMoreUrl),

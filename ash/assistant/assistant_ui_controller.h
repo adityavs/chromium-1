@@ -8,7 +8,10 @@
 #include "ash/ash_export.h"
 #include "ash/assistant/assistant_controller_observer.h"
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
+#include "ash/assistant/model/assistant_screen_context_model_observer.h"
 #include "ash/assistant/model/assistant_ui_model.h"
+#include "ash/assistant/model/assistant_ui_model_observer.h"
+#include "ash/assistant/ui/assistant_mini_view.h"
 #include "ash/assistant/ui/caption_bar.h"
 #include "ash/assistant/ui/dialog_plate/dialog_plate.h"
 #include "ash/highlighter/highlighter_controller.h"
@@ -31,16 +34,14 @@ namespace ash {
 
 class AssistantContainerView;
 class AssistantController;
-class AssistantInteractionController;
-
-namespace mojom {
-class AssistantSetup;
-}  // namespace mojom
 
 class ASH_EXPORT AssistantUiController
     : public views::WidgetObserver,
       public AssistantControllerObserver,
       public AssistantInteractionModelObserver,
+      public AssistantScreenContextModelObserver,
+      public AssistantUiModelObserver,
+      public AssistantMiniViewDelegate,
       public CaptionBarDelegate,
       public DialogPlateObserver,
       public HighlighterController::Observer {
@@ -50,14 +51,6 @@ class ASH_EXPORT AssistantUiController
 
   // Provides a pointer to the |assistant| owned by AssistantController.
   void SetAssistant(chromeos::assistant::mojom::Assistant* assistant);
-
-  // Provides a pointer to the |assistant_interaction_controller| owned by
-  // AssistantController.
-  void SetAssistantInteractionController(
-      AssistantInteractionController* assistant_interaction_controller);
-
-  // Provides a pointer to the |assistant_setup| owned by AssistantController.
-  void SetAssistantSetup(mojom::AssistantSetup* assistant_setup);
 
   // Returns the underlying model.
   const AssistantUiModel* model() const { return &assistant_ui_model_; }
@@ -76,6 +69,13 @@ class ASH_EXPORT AssistantUiController
   void OnInteractionStateChanged(InteractionState interaction_state) override;
   void OnMicStateChanged(MicState mic_state) override;
 
+  // AssistantScreenContextModelObserver:
+  void OnScreenContextRequestStateChanged(
+      ScreenContextRequestState request_state) override;
+
+  // AssistantMiniViewDelegate:
+  void OnAssistantMiniViewPressed() override;
+
   // CaptionBarDelegate:
   bool OnCaptionButtonPressed(CaptionButtonId id) override;
 
@@ -86,8 +86,15 @@ class ASH_EXPORT AssistantUiController
   void OnHighlighterEnabledChanged(HighlighterEnabledState state) override;
 
   // AssistantControllerObserver:
-  void OnDeepLinkReceived(const GURL& deep_link) override;
+  void OnAssistantControllerConstructed() override;
+  void OnAssistantControllerDestroying() override;
+  void OnDeepLinkReceived(
+      assistant::util::DeepLinkType type,
+      const std::map<std::string, std::string>& params) override;
   void OnUrlOpened(const GURL& url) override;
+
+  // AssistantUiModelObserver:
+  void OnUiVisibilityChanged(bool visible, AssistantSource source) override;
 
   void ShowUi(AssistantSource source);
   void HideUi(AssistantSource source);
@@ -102,12 +109,6 @@ class ASH_EXPORT AssistantUiController
 
   // Owned by AssistantController.
   chromeos::assistant::mojom::Assistant* assistant_ = nullptr;
-
-  // Owned by AssistantController.
-  AssistantInteractionController* assistant_interaction_controller_ = nullptr;
-
-  // Owned by AssistantController.
-  mojom::AssistantSetup* assistant_setup_ = nullptr;
 
   AssistantUiModel assistant_ui_model_;
 

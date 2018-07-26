@@ -16,8 +16,6 @@
 #include "chrome/common/buildflags.h"
 #include "components/services/heap_profiling/heap_profiling_service.h"
 #include "components/services/heap_profiling/public/mojom/constants.mojom.h"
-#include "components/services/patch/patch_service.h"
-#include "components/services/patch/public/interfaces/constants.mojom.h"
 #include "components/services/unzip/public/interfaces/constants.mojom.h"
 #include "components/services/unzip/unzip_service.h"
 #include "content/public/common/content_switches.h"
@@ -33,6 +31,8 @@
 #if !defined(OS_ANDROID)
 #include "chrome/utility/importer/profile_import_impl.h"
 #include "chrome/utility/importer/profile_import_service.h"
+#include "components/services/patch/patch_service.h"  // nogncheck
+#include "components/services/patch/public/interfaces/constants.mojom.h"  // nogncheck
 #include "services/network/url_request_context_builder_mojo.h"
 #include "services/proxy_resolver/proxy_resolver_service.h"  // nogncheck
 #include "services/proxy_resolver/public/mojom/proxy_resolver.mojom.h"  // nogncheck
@@ -81,9 +81,19 @@
 #include "chrome/utility/printing_handler.h"
 #endif
 
+#if BUILDFLAG(ENABLE_PRINTING) && defined(OS_CHROMEOS)
+#include "chrome/services/cups_ipp_validator/cups_ipp_validator_service.h"  // nogncheck
+#include "chrome/services/cups_ipp_validator/public/mojom/constants.mojom.h"  // nogncheck
+#endif
+
 #if defined(FULL_SAFE_BROWSING) || defined(OS_CHROMEOS)
 #include "chrome/services/file_util/file_util_service.h"  // nogncheck
 #include "chrome/services/file_util/public/mojom/constants.mojom.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(ENABLE_SIMPLE_BROWSER_SERVICE)
+#include "services/content/simple_browser/public/mojom/constants.mojom.h"
+#include "services/content/simple_browser/simple_browser_service.h"
 #endif
 
 namespace {
@@ -220,6 +230,16 @@ void ChromeContentUtilityClient::RegisterServices(
   }
 #endif
 
+#if BUILDFLAG(ENABLE_PRINTING) && defined(OS_CHROMEOS)
+  {
+    service_manager::EmbeddedServiceInfo service_info;
+    service_info.factory =
+        base::BindRepeating(&CupsIppValidatorService::CreateService);
+    services->emplace(chrome::mojom::kCupsIppValidatorServiceName,
+                      service_info);
+  }
+#endif
+
 #if defined(FULL_SAFE_BROWSING) || defined(OS_CHROMEOS)
   {
     service_manager::EmbeddedServiceInfo service_info;
@@ -228,12 +248,14 @@ void ChromeContentUtilityClient::RegisterServices(
   }
 #endif
 
+#if !defined(OS_ANDROID)
   {
     service_manager::EmbeddedServiceInfo service_info;
     service_info.factory =
         base::BindRepeating(&patch::PatchService::CreateService);
     services->emplace(patch::mojom::kServiceName, service_info);
   }
+#endif
 
   {
     service_manager::EmbeddedServiceInfo service_info;
@@ -260,6 +282,17 @@ void ChromeContentUtilityClient::RegisterServices(
 #if defined(OS_CHROMEOS)
   // TODO(jamescook): Figure out why we have to do this when not using mash.
   mash_service_factory_->RegisterOutOfProcessServices(services);
+#endif
+
+#if BUILDFLAG(ENABLE_SIMPLE_BROWSER_SERVICE)
+  {
+    service_manager::EmbeddedServiceInfo service_info;
+    service_info.factory =
+        base::BindRepeating([]() -> std::unique_ptr<service_manager::Service> {
+          return std::make_unique<simple_browser::SimpleBrowserService>();
+        });
+    services->emplace(simple_browser::mojom::kServiceName, service_info);
+  }
 #endif
 }
 

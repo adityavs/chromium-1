@@ -12,15 +12,19 @@
 #include "third_party/blink/renderer/core/animation/keyframe_effect_model.h"
 #include "third_party/blink/renderer/core/animation/scroll_timeline.h"
 #include "third_party/blink/renderer/core/animation/timing.h"
+#include "third_party/blink/renderer/core/animation/worklet_animation_controller.h"
 #include "third_party/blink/renderer/core/dom/node.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
+#include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/core/layout/layout_box.h"
+#include "third_party/blink/renderer/modules/animationworklet/css_animation_worklet.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 
 namespace blink {
 
 namespace {
+
 bool ConvertAnimationEffects(
     const AnimationEffectOrAnimationEffectSequence& effects,
     HeapVector<Member<KeyframeEffect>>& keyframe_effects,
@@ -197,21 +201,25 @@ unsigned NextSequenceNumber() {
 }  // namespace
 
 WorkletAnimation* WorkletAnimation::Create(
+    ScriptState* script_state,
     String animator_name,
     const AnimationEffectOrAnimationEffectSequence& effects,
     ExceptionState& exception_state) {
-  return Create(animator_name, effects, DocumentTimelineOrScrollTimeline(),
-                nullptr, exception_state);
+  return Create(script_state, animator_name, effects,
+                DocumentTimelineOrScrollTimeline(), nullptr, exception_state);
 }
 
 WorkletAnimation* WorkletAnimation::Create(
+    ScriptState* script_state,
     String animator_name,
     const AnimationEffectOrAnimationEffectSequence& effects,
     DocumentTimelineOrScrollTimeline timeline,
     ExceptionState& exception_state) {
-  return Create(animator_name, effects, timeline, nullptr, exception_state);
+  return Create(script_state, animator_name, effects, timeline, nullptr,
+                exception_state);
 }
 WorkletAnimation* WorkletAnimation::Create(
+    ScriptState* script_state,
     String animator_name,
     const AnimationEffectOrAnimationEffectSequence& effects,
     DocumentTimelineOrScrollTimeline timeline,
@@ -240,24 +248,31 @@ WorkletAnimation* WorkletAnimation::Create(
     return nullptr;
   }
 
+  AnimationWorklet* worklet =
+      CSSAnimationWorklet::animationWorklet(script_state);
+
+  WorkletAnimationId id = worklet->NextWorkletAnimationId();
+
   Document& document = keyframe_effects.at(0)->target()->GetDocument();
   AnimationTimeline* animation_timeline =
       ConvertAnimationTimeline(document, timeline);
 
   WorkletAnimation* animation =
-      new WorkletAnimation(animator_name, document, keyframe_effects,
+      new WorkletAnimation(id, animator_name, document, keyframe_effects,
                            animation_timeline, std::move(options));
 
   return animation;
 }
 
 WorkletAnimation::WorkletAnimation(
+    WorkletAnimationId id,
     const String& animator_name,
     Document& document,
     const HeapVector<Member<KeyframeEffect>>& effects,
     AnimationTimeline* timeline,
     scoped_refptr<SerializedScriptValue> options)
     : sequence_number_(NextSequenceNumber()),
+      id_(id),
       animator_name_(animator_name),
       play_state_(Animation::kIdle),
       document_(document),
@@ -402,7 +417,7 @@ bool WorkletAnimation::StartOnCompositor(String* failure_message) {
 
   if (!compositor_animation_) {
     compositor_animation_ = CompositorAnimation::CreateWorkletAnimation(
-        animator_name_, ToCompositorScrollTimeline(timeline_),
+        id_, animator_name_, ToCompositorScrollTimeline(timeline_),
         std::move(options_));
     compositor_animation_->SetAnimationDelegate(this);
   }

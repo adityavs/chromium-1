@@ -77,7 +77,7 @@ class CONTENT_EXPORT CrossProcessFrameConnector
   RenderWidgetHostViewBase* GetParentRenderWidgetHostView() override;
   RenderWidgetHostViewBase* GetRootRenderWidgetHostView() override;
   void RenderProcessGone() override;
-  void SetChildFrameSurface(const viz::SurfaceInfo& surface_info) override;
+  void FirstSurfaceActivation(const viz::SurfaceInfo& surface_info) override;
   void SendIntrinsicSizingInfoToParent(
       const blink::WebIntrinsicSizingInfo&) override;
 
@@ -204,11 +204,6 @@ class CONTENT_EXPORT CrossProcessFrameConnector
   // The last zoom level received from parent renderer, which is used to check
   // if a new surface is created in case of zoom level change.
   double last_received_zoom_level_ = 0.0;
-
-  // The last value received from parent renderer for |uses_temporary_zoom|,
-  // which is used to check if a new surface is created when
-  // |uses_temporary_zoom| was toggled.
-  bool last_received_uses_temporary_zoom_ = false;
 
   DISALLOW_COPY_AND_ASSIGN(CrossProcessFrameConnector);
 };

@@ -11,30 +11,31 @@
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/views/frame/browser_non_client_frame_view.h"
 #include "chrome/browser/ui/views/frame/browser_view.h"
+#include "ui/views/widget/util_mac.h"
 #include "ui/views/widget/widget.h"
 
-@interface NSWindow (PrivateAPI)
+@interface NSWindow (PrivateBrowserNativeWidgetAPI)
 + (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle;
-
-// Available in later point releases of 10.10. On 10.11+, use the public
-// -performWindowDragWithEvent: instead.
-- (void)beginWindowDragWithEvent:(NSEvent*)event;
 @end
 
-// Weak lets Chrome launch even if a future macOS doesn't have NSThemeFrame.
-WEAK_IMPORT_ATTRIBUTE
-@interface NSThemeFrame : NSView
+@interface NSThemeFrame (PrivateBrowserNativeWidgetAPI)
 - (CGFloat)_titlebarHeight;
+- (void)setStyleMask:(NSUInteger)styleMask;
 @end
 
-@interface BrowserWindowFrame : NSThemeFrame
+@interface BrowserWindowFrame : NativeWidgetMacNSWindowTitledFrame
 @end
 
-@implementation BrowserWindowFrame
+@implementation BrowserWindowFrame {
+  BOOL _inFullScreen;
+}
 
 // NSThemeFrame overrides.
 
 - (CGFloat)_titlebarHeight {
+  if (_inFullScreen)
+    return [super _titlebarHeight];
+
   if (views::Widget* widget = views::Widget::GetWidgetForNativeView(self)) {
     if (views::NonClientView* nonClientView = widget->non_client_view()) {
       auto* frameView = static_cast<const BrowserNonClientFrameView*>(
@@ -44,6 +45,11 @@ WEAK_IMPORT_ATTRIBUTE
     }
   }
   return [super _titlebarHeight];
+}
+
+- (void)setStyleMask:(NSUInteger)styleMask {
+  _inFullScreen = (styleMask & NSWindowStyleMaskFullScreen) != 0;
+  [super setStyleMask:styleMask];
 }
 
 - (BOOL)_shouldCenterTrafficLights {
@@ -78,20 +84,6 @@ WEAK_IMPORT_ATTRIBUTE
   return NSZeroRect;
 }
 
-// Lets the window be dragged by its title bar on 10.11 and older.
-- (void)mouseDown:(NSEvent*)event {
-  if (@available(macOS 10.12, *))
-    ;  // Not needed on 10.12 and up.
-  else if (@available(macOS 10.11, *))
-    [self.window performWindowDragWithEvent:event];
-  else if ([self.window
-               respondsToSelector:@selector(beginWindowDragWithEvent:)])
-    [self.window beginWindowDragWithEvent:event];
-  else
-    NOTREACHED();
-  [super mouseDown:event];
-}
-
 @end
 
 @implementation BrowserNativeWidgetWindow
@@ -100,10 +92,8 @@ WEAK_IMPORT_ATTRIBUTE
 
 + (Class)frameViewClassForStyleMask:(NSUInteger)windowStyle {
   // - NSThemeFrame and its subclasses will be nil if it's missing at runtime.
-  if ([BrowserWindowFrame class]) {
-    // TODO(crbug/825968): fullscreen should have a reduced titlebar height.
+  if ([BrowserWindowFrame class])
     return [BrowserWindowFrame class];
-  }
   return [super frameViewClassForStyleMask:windowStyle];
 }
 

@@ -8,6 +8,7 @@
 
 #include <utility>
 
+#include "base/bind.h"
 #include "base/command_line.h"
 #include "base/macros.h"
 #include "components/guest_view/browser/guest_view_message_filter.h"

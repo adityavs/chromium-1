@@ -6,9 +6,12 @@
 
 #include "base/mac/foundation_util.h"
 #include "ios/chrome/browser/browsing_data/browsing_data_remove_mask.h"
+#import "ios/chrome/browser/ui/alert_coordinator/action_sheet_coordinator.h"
+#import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/settings/cells/table_view_clear_browsing_data_item.h"
 #include "ios/chrome/browser/ui/settings/clear_browsing_data_local_commands.h"
 #import "ios/chrome/browser/ui/settings/clear_browsing_data_manager.h"
+#import "ios/chrome/browser/ui/settings/settings_collection_view_controller.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_cells_constants.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_text_button_item.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_text_link_item.h"
@@ -31,7 +34,7 @@ class ChromeBrowserState;
 
 @interface ClearBrowsingDataTableViewController ()<
     TableViewTextLinkCellDelegate,
-    TextButtonItemDelegate>
+    ClearBrowsingDataConsumer>
 
 // TODO(crbug.com/850699): remove direct dependency and replace with
 // delegate.
@@ -40,11 +43,21 @@ class ChromeBrowserState;
 // Browser state.
 @property(nonatomic, assign) ios::ChromeBrowserState* browserState;
 
+// Coordinator that managers a UIAlertController to clear browsing data.
+@property(nonatomic, strong) ActionSheetCoordinator* actionSheetCoordinator;
+
+// Reference to clear browsing data button for positioning popover confirmation
+// dialog.
+@property(nonatomic, strong) UIButton* clearBrowsingDataButton;
+
 @end
 
 @implementation ClearBrowsingDataTableViewController
+@synthesize actionSheetCoordinator = _actionSheetCoordinator;
 @synthesize browserState = _browserState;
+@synthesize clearBrowsingDataButton = _clearBrowsingDataButton;
 @synthesize dataManager = _dataManager;
+@synthesize dispatcher = _dispatcher;
 @synthesize localDispatcher = _localDispatcher;
 
 #pragma mark - ViewController Lifecycle.
@@ -57,6 +70,7 @@ class ChromeBrowserState;
     _dataManager = [[ClearBrowsingDataManager alloc]
         initWithBrowserState:browserState
                     listType:ClearBrowsingDataListType::kListTypeTableView];
+    _dataManager.consumer = self;
   }
   return self;
 }
@@ -82,6 +96,7 @@ class ChromeBrowserState;
       initWithBarButtonSystemItem:UIBarButtonSystemItemDone
                            target:self
                            action:@selector(dismiss)];
+  dismissButton.accessibilityIdentifier = kSettingsDoneButtonId;
   self.navigationItem.rightBarButtonItem = dismissButton;
 
   [self loadModel];
@@ -121,7 +136,11 @@ class ChromeBrowserState;
           base::mac::ObjCCastStrict<TableViewTextButtonCell>(cellToReturn);
       tableViewTextButtonCell.selectionStyle =
           UITableViewCellSelectionStyleNone;
-      tableViewTextButtonCell.delegate = self;
+      [tableViewTextButtonCell.button
+                 addTarget:self
+                    action:@selector(showClearBrowsingDataAlertController:)
+          forControlEvents:UIControlEventTouchUpInside];
+      self.clearBrowsingDataButton = tableViewTextButtonCell.button;
       break;
     }
     case ItemTypeDataTypeBrowsingHistory:
@@ -178,9 +197,25 @@ class ChromeBrowserState;
   [self.localDispatcher openURL:copiedURL];
 }
 
-#pragma mark - TextButtonItemDelegate
+#pragma mark - ClearBrowsingDataConsumer
 
-- (void)performButtonAction {
+- (void)updateCellsForItem:(ListItem*)item {
+  [self reconfigureCellsForItems:@[ item ]];
+}
+
+- (void)removeBrowsingDataForBrowserState:(ios::ChromeBrowserState*)browserState
+                               timePeriod:(browsing_data::TimePeriod)timePeriod
+                               removeMask:(BrowsingDataRemoveMask)removeMask
+                          completionBlock:(ProceduralBlock)completionBlock {
+  [self.dispatcher removeBrowsingDataForBrowserState:browserState
+                                          timePeriod:timePeriod
+                                          removeMask:removeMask
+                                     completionBlock:completionBlock];
+}
+
+#pragma mark - Private Helpers
+
+- (void)showClearBrowsingDataAlertController:(id)sender {
   BrowsingDataRemoveMask dataTypeMaskToRemove =
       BrowsingDataRemoveMask::REMOVE_NOTHING;
   NSArray* dataTypeItems = [self.tableViewModel
@@ -191,10 +226,18 @@ class ChromeBrowserState;
       dataTypeMaskToRemove = dataTypeMaskToRemove | dataTypeItem.dataTypeMask;
     }
   }
-  UIAlertController* alertController = [self.dataManager
-      alertControllerWithDataTypesToRemove:dataTypeMaskToRemove];
-  if (alertController) {
-    [self presentViewController:alertController animated:YES completion:nil];
+  // Get button's position in coordinate system of table view.
+  DCHECK_EQ(self.clearBrowsingDataButton, sender);
+  CGRect clearBrowsingDataButtonRect = [self.clearBrowsingDataButton
+      convertRect:self.clearBrowsingDataButton.bounds
+           toView:self.tableView];
+  self.actionSheetCoordinator = [self.dataManager
+      actionSheetCoordinatorWithDataTypesToRemove:dataTypeMaskToRemove
+                               baseViewController:self
+                                       sourceRect:clearBrowsingDataButtonRect
+                                       sourceView:self.tableView];
+  if (self.actionSheetCoordinator) {
+    [self.actionSheetCoordinator start];
   }
 }
 

@@ -48,6 +48,10 @@ int GetIconForAutocompleteMatchType(AutocompleteMatchType::Type type,
       // never sent to the search provider.
       DCHECK(!is_incognito);
       return IDR_IOS_OMNIBOX_CALCULATOR;
+    case AutocompleteMatchType::DOCUMENT_SUGGESTION:
+      // Document suggeestions aren't yet supported on mobile.
+      NOTREACHED();
+      return IDR_IOS_OMNIBOX_HTTP;
     case AutocompleteMatchType::EXTENSION_APP_DEPRECATED:
     case AutocompleteMatchType::NUM_TYPES:
       NOTREACHED();
@@ -69,6 +73,7 @@ std::string GetResourceNameForAutocompleteMatchType(
     case AutocompleteMatchType::PHYSICAL_WEB_DEPRECATED:
     case AutocompleteMatchType::PHYSICAL_WEB_OVERFLOW_DEPRECATED:
     case AutocompleteMatchType::URL_WHAT_YOU_TYPED:
+    case AutocompleteMatchType::DOCUMENT_SUGGESTION:
       return "omnibox_completion_default_favicon";
     case AutocompleteMatchType::HISTORY_BODY:
     case AutocompleteMatchType::HISTORY_KEYWORD:
@@ -122,9 +127,7 @@ base::string16 GetUIRefreshIconNameForSecurityState(
       return base::ASCIIToUTF16("location_bar_insecure");
     case security_state::EV_SECURE:
     case security_state::SECURE:
-      return base::ASCIIToUTF16("location_bar_secure");
     case security_state::SECURE_WITH_POLICY_INSTALLED_CERT:
-      // TODO(crbug.com/848732): update this icon.
       return base::ASCIIToUTF16("location_bar_secure");
     case security_state::DANGEROUS:
       return base::ASCIIToUTF16("location_bar_dangerous");

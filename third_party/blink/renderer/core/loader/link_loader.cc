@@ -352,7 +352,8 @@ static Resource* PreloadIfNeeded(const LinkLoadParameters& params,
                                  Document& document,
                                  const KURL& base_url,
                                  LinkCaller caller,
-                                 ViewportDescription* viewport_description) {
+                                 ViewportDescription* viewport_description,
+                                 ParserDisposition parser_disposition) {
   if (!document.Loader() || !params.rel.IsLinkPreload())
     return nullptr;
 
@@ -410,16 +411,14 @@ static Resource* PreloadIfNeeded(const LinkLoadParameters& params,
   resource_request.SetRequestContext(ResourceFetcher::DetermineRequestContext(
       resource_type.value(), ResourceFetcher::kImageNotImageSet, false));
 
-  if (params.referrer_policy != kReferrerPolicyDefault) {
-    resource_request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
-        params.referrer_policy, url, document.OutgoingReferrer()));
-  }
+  resource_request.SetReferrerPolicy(params.referrer_policy);
 
   resource_request.SetFetchImportanceMode(
       GetFetchImportanceAttributeValue(params.importance));
 
   ResourceLoaderOptions options;
   options.initiator_info.name = FetchInitiatorTypeNames::link;
+  options.parser_disposition = parser_disposition;
   FetchParameters link_fetch_params(resource_request, options);
   link_fetch_params.SetCharset(document.Encoding());
 
@@ -502,7 +501,8 @@ static void ModulePreloadIfNeeded(const LinkLoadParameters& params,
   // |document| is the node document here, and its context document is the
   // relevant settings object.
   Document* context_document = document.ContextDocument();
-  FetchClientSettingsObjectSnapshot settings_object(*context_document);
+  auto* settings_object =
+      new FetchClientSettingsObjectSnapshot(*context_document);
 
   Modulator* modulator =
       Modulator::From(ToScriptStateForMainWorld(context_document->GetFrame()));
@@ -574,24 +574,13 @@ static Resource* PrefetchIfNeeded(const LinkLoadParameters& params,
     UseCounter::Count(document, WebFeature::kLinkRelPrefetch);
 
     ResourceRequest resource_request(params.href);
-    if (params.referrer_policy != kReferrerPolicyDefault) {
-      resource_request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
-          params.referrer_policy, params.href, document.OutgoingReferrer()));
-    }
+    resource_request.SetReferrerPolicy(params.referrer_policy);
 
     resource_request.SetFetchImportanceMode(
         GetFetchImportanceAttributeValue(params.importance));
 
     ResourceLoaderOptions options;
     options.initiator_info.name = FetchInitiatorTypeNames::link;
-    auto* service = document.GetFrame()->PrefetchURLLoaderService();
-    if (service) {
-      network::mojom::blink::URLLoaderFactoryPtr prefetch_url_loader_factory;
-      service->GetFactory(mojo::MakeRequest(&prefetch_url_loader_factory));
-      options.url_loader_factory = base::MakeRefCounted<
-          base::RefCountedData<network::mojom::blink::URLLoaderFactoryPtr>>(
-          std::move(prefetch_url_loader_factory));
-    }
 
     FetchParameters link_fetch_params(resource_request, options);
     if (params.cross_origin != kCrossOriginAttributeNotSet) {
@@ -644,7 +633,7 @@ void LinkLoader::LoadLinksFromHeader(
               : nullptr;
 
       PreloadIfNeeded(params, *document, base_url, kLinkCalledFromHeader,
-                      viewport_description);
+                      viewport_description, kNotParserInserted);
       PrefetchIfNeeded(params, *document);
       ModulePreloadIfNeeded(params, *document, viewport_description, nullptr);
     }
@@ -671,8 +660,9 @@ bool LinkLoader::LoadLink(
   PreconnectIfNeeded(params, &document, document.GetFrame(),
                      network_hints_interface, kLinkCalledFromMarkup);
 
-  Resource* resource = PreloadIfNeeded(params, document, NullURL(),
-                                       kLinkCalledFromMarkup, nullptr);
+  Resource* resource = PreloadIfNeeded(
+      params, document, NullURL(), kLinkCalledFromMarkup, nullptr,
+      client_->IsLinkCreatedByParser() ? kParserInserted : kNotParserInserted);
   if (!resource) {
     resource = PrefetchIfNeeded(params, document);
   }
@@ -706,11 +696,7 @@ void LinkLoader::LoadStylesheet(const LinkLoadParameters& params,
                                 Document& document,
                                 ResourceClient* link_client) {
   ResourceRequest resource_request(document.CompleteURL(params.href));
-  ReferrerPolicy referrer_policy = params.referrer_policy;
-  if (referrer_policy != kReferrerPolicyDefault) {
-    resource_request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
-        referrer_policy, params.href, document.OutgoingReferrer()));
-  }
+  resource_request.SetReferrerPolicy(params.referrer_policy);
 
   mojom::FetchImportanceMode importance_mode =
       GetFetchImportanceAttributeValue(params.importance);

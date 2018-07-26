@@ -194,7 +194,7 @@ AccountInfo MakePrimaryAccountAvailable(
   return account_info;
 }
 
-void ClearPrimaryAccount(SigninManagerForTest* signin_manager,
+void ClearPrimaryAccount(SigninManagerBase* signin_manager,
                          IdentityManager* identity_manager) {
 #if defined(OS_CHROMEOS)
   // TODO(blundell): If we ever need this functionality on ChromeOS (which seems
@@ -202,12 +202,17 @@ void ClearPrimaryAccount(SigninManagerForTest* signin_manager,
   // synchronously with IdentityManager.
   NOTREACHED();
 #else
+  DCHECK(identity_manager->HasPrimaryAccount());
+
   base::RunLoop run_loop;
   OneShotIdentityManagerObserver signout_observer(
       identity_manager, run_loop.QuitClosure(),
       IdentityManagerEvent::PRIMARY_ACCOUNT_CLEARED);
 
-  signin_manager->ForceSignOut();
+  SigninManager* real_signin_manager =
+      SigninManager::FromSigninManagerBase(signin_manager);
+  real_signin_manager->SignOut(signin_metrics::SIGNOUT_TEST,
+                               signin_metrics::SignoutDelete::IGNORE_METRIC);
 
   run_loop.Run();
 #endif
@@ -251,6 +256,8 @@ void SetInvalidRefreshTokenForAccount(ProfileOAuth2TokenService* token_service,
 void RemoveRefreshTokenForAccount(ProfileOAuth2TokenService* token_service,
                                   IdentityManager* identity_manager,
                                   const std::string& account_id) {
+  DCHECK(identity_manager->HasAccountWithRefreshToken(account_id));
+
   base::RunLoop run_loop;
   OneShotIdentityManagerObserver token_updated_observer(
       identity_manager, run_loop.QuitClosure(),

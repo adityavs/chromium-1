@@ -60,6 +60,7 @@
 #include "third_party/blink/renderer/platform/fonts/font_selector.h"
 #include "third_party/blink/renderer/platform/geometry/float_rounded_rect.h"
 #include "third_party/blink/renderer/platform/graphics/graphics_context.h"
+#include "third_party/blink/renderer/platform/graphics/path.h"
 #include "third_party/blink/renderer/platform/length_functions.h"
 #include "third_party/blink/renderer/platform/text/capitalize.h"
 #include "third_party/blink/renderer/platform/transforms/rotate_transform_operation.h"
@@ -818,6 +819,9 @@ void ComputedStyle::UpdatePropertySpecificDifferences(
   if (has_clip != other_has_clip ||
       (has_clip && Clip() != other.Clip()))
     diff.SetCSSClipChanged();
+
+  if (GetBlendMode() != other.GetBlendMode())
+    diff.SetBlendModeChanged();
 
   if (HasCurrentTransformAnimation() != other.HasCurrentTransformAnimation() ||
       HasCurrentOpacityAnimation() != other.HasCurrentOpacityAnimation() ||

@@ -87,10 +87,13 @@ class ThirdPartyConflictsManager
     // The initialization failed because there was no Module List version
     // available to install.
     kNoModuleListAvailableFailure,
-    // The instance is initialized. If their respective feature is enabled, the
-    // |incompatible_applications_updater_| & |module_blacklist_cache_updater_|
-    // instances are initialized.
-    kInitialized,
+    // Only the IncompatibleApplicationsWarning feature is enabled and active.
+    kWarningInitialized,
+    // Only the ThirdPartyModulesBlocking feature is enabled and active.
+    kBlockingInitialized,
+    // Both the IncompatibleApplicationsWarning and ThirdPartyModulesBlocking
+    // features are enabled and active.
+    kWarningAndBlockingInitialized,
     // The instance is about to be deleted.
     kDestroyed,
   };
@@ -101,6 +104,18 @@ class ThirdPartyConflictsManager
 
   // ComponentUpdateService::Observer:
   void OnEvent(Events event, const std::string& component_id) override;
+
+  // Returns the IncompatibleApplicationsUpdater instance. Returns null if the
+  // corresponding feature is disabled (IncompatibleApplicationsWarning).
+  IncompatibleApplicationsUpdater* incompatible_applications_updater() {
+    return incompatible_applications_updater_.get();
+  }
+
+  // Returns the ModuleBlacklistCacheUpdater instance. Returns null if the
+  // corresponding feature is disabled (ThirdPartyModulesBlocking).
+  ModuleBlacklistCacheUpdater* module_blacklist_cache_updater() {
+    return module_blacklist_cache_updater_.get();
+  }
 
  private:
   // Called when |exe_certificate_info_| finishes its initialization.
@@ -173,14 +188,14 @@ class ThirdPartyConflictsManager
   // Retrieves the list of installed applications.
   std::unique_ptr<InstalledApplications> installed_applications_;
 
+  // Maintains the module blacklist cache. This member is only initialized when
+  // the ThirdPartyModuleBlocking feature is enabled.
+  std::unique_ptr<ModuleBlacklistCacheUpdater> module_blacklist_cache_updater_;
+
   // Maintains the cache of incompatible applications. This member is only
   // initialized when the IncompatibleApplicationsWarning feature is enabled.
   std::unique_ptr<IncompatibleApplicationsUpdater>
       incompatible_applications_updater_;
-
-  // Maintains the module blacklist cache. This member is only initialized when
-  // the ThirdPartyModuleBlocking feature is enabled.
-  std::unique_ptr<ModuleBlacklistCacheUpdater> module_blacklist_cache_updater_;
 
   // The final state of this instance.
   base::Optional<State> terminal_state_;

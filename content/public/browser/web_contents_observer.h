@@ -328,9 +328,8 @@ class CONTENT_EXPORT WebContentsObserver : public IPC::Listener {
   // signalled through this callback includes:
   // 1) any mouse down event (blink::WebInputEvent::MouseDown);
   // 2) the start of a scroll (blink::WebInputEvent::GestureScrollBegin);
-  // 3) any raw key down event (blink::WebInputEvent::RawKeyDown);
-  // 4) any touch event (inc. scrolls) (blink::WebInputEvent::TouchStart); and
-  // 5) a browser navigation or reload (blink::WebInputEvent::Undefined).
+  // 3) any raw key down event (blink::WebInputEvent::RawKeyDown); and
+  // 4) any touch event (inc. scrolls) (blink::WebInputEvent::TouchStart).
   virtual void DidGetUserInteraction(const blink::WebInputEvent::Type type) {}
 
   // This method is invoked when a RenderViewHost of this WebContents was
@@ -464,7 +463,24 @@ class CONTENT_EXPORT WebContentsObserver : public IPC::Listener {
     bool has_video;
     bool has_audio;
   };
-  using MediaPlayerId = std::pair<RenderFrameHost*, int>;
+
+  struct CONTENT_EXPORT MediaPlayerId {
+   public:
+    static MediaPlayerId createMediaPlayerIdForTests();
+
+    MediaPlayerId(RenderFrameHost* render_frame_host, int delegate_id);
+
+    bool operator==(const MediaPlayerId& other) const;
+    bool operator!=(const MediaPlayerId& other) const;
+    bool operator<(const MediaPlayerId& other) const;
+
+    RenderFrameHost* render_frame_host = nullptr;
+    int delegate_id = 0;
+
+   private:
+    MediaPlayerId() = default;
+  };
+
   virtual void MediaStartedPlaying(const MediaPlayerInfo& video_type,
                                    const MediaPlayerId& id) {}
   enum class MediaStoppedReason {
@@ -519,6 +535,11 @@ class CONTENT_EXPORT WebContentsObserver : public IPC::Listener {
       RenderFrameHost* render_frame_host,
       const std::string& interface_name,
       mojo::ScopedMessagePipeHandle* interface_pipe) {}
+
+  // Notifies that the RenderWidgetCompositor has issued a draw command. An
+  // observer can use this method to detect when Chrome visually updated a
+  // tab.
+  virtual void DidCommitAndDrawCompositorFrame() {}
 
   // IPC::Listener implementation.
   // DEPRECATED: Use (i.e. override) the other overload instead:

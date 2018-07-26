@@ -27,17 +27,17 @@
 //
 // Expected Use:
 //  QuicStreamSequencerBuffer buffer(2.5 * 8 * 1024);
-//  std::string source(1024, 'a');
-//  QuicStringPiece std::string_piece(source.data(), source.size());
+//  QuicString source(1024, 'a');
+//  QuicStringPiece string_piece(source.data(), source.size());
 //  size_t written = 0;
-//  buffer.OnStreamData(800, std::string_piece, GetEpollClockNow(), &written);
-//  source = std::string{800, 'b'};
-//  QuicStringPiece std::string_piece1(source.data(), 800);
+//  buffer.OnStreamData(800, string_piece, GetEpollClockNow(), &written);
+//  source = QuicString{800, 'b'};
+//  QuicStringPiece string_piece1(source.data(), 800);
 //  // Try to write to [1, 801), but should fail due to overlapping,
 //  // res should be QUIC_INVALID_STREAM_DATA
-//  auto res = buffer.OnStreamData(1, std::string_piece1, &written));
+//  auto res = buffer.OnStreamData(1, string_piece1, &written));
 //  // write to [0, 800), res should be QUIC_NO_ERROR
-//  auto res = buffer.OnStreamData(0, std::string_piece1, GetEpollClockNow(),
+//  auto res = buffer.OnStreamData(0, string_piece1, GetEpollClockNow(),
 //                                  &written);
 //
 //  // Read into a iovec array with total capacity of 120 bytes.
@@ -88,6 +88,9 @@ class QUIC_EXPORT_PRIVATE QuicStreamSequencerBuffer {
   };
 
   explicit QuicStreamSequencerBuffer(size_t max_capacity_bytes);
+  QuicStreamSequencerBuffer(const QuicStreamSequencerBuffer&) = delete;
+  QuicStreamSequencerBuffer& operator=(const QuicStreamSequencerBuffer&) =
+      delete;
   ~QuicStreamSequencerBuffer();
 
   // Free the space used to buffer data.
@@ -223,15 +226,8 @@ class QUIC_EXPORT_PRIVATE QuicStreamSequencerBuffer {
   // Number of bytes in buffer.
   size_t num_bytes_buffered_;
 
-  // For debugging use after free, assigned to 123456 in constructor and 654321
-  // in destructor. As long as it's not 123456, this means either use after free
-  // or memory corruption.
-  int32_t destruction_indicator_;
-
   // Currently received data.
   QuicIntervalSet<QuicStreamOffset> bytes_received_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuicStreamSequencerBuffer);
 };
 }  // namespace quic
 

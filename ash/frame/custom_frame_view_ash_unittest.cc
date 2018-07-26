@@ -478,10 +478,10 @@ TEST_F(CustomFrameViewAshTest, BackButton) {
 
   // Back button is disabled, so clicking on it should not should
   // generate back key sequence.
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.MoveMouseTo(
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->MoveMouseTo(
       header_view->GetBackButton()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+  generator->ClickLeftButton();
   EXPECT_EQ(0, target_back_press.accelerator_count());
   EXPECT_EQ(0, target_back_release.accelerator_count());
 
@@ -492,9 +492,10 @@ TEST_F(CustomFrameViewAshTest, BackButton) {
 
   // Back button is now enabled, so clicking on it should generate
   // back key sequence.
-  generator.MoveMouseTo(
+  generator->MoveMouseTo(
       header_view->GetBackButton()->GetBoundsInScreen().CenterPoint());
-  generator.ClickLeftButton();
+
+  generator->ClickLeftButton();
   EXPECT_EQ(1, target_back_press.accelerator_count());
   EXPECT_EQ(1, target_back_release.accelerator_count());
 
@@ -617,6 +618,7 @@ TEST_F(CustomFrameViewAshTest, WideFrame) {
   CustomFrameViewAsh* custom_frame_view = delegate->custom_frame_view();
   HeaderView* header_view =
       static_cast<HeaderView*>(custom_frame_view->GetHeaderView());
+  widget->Maximize();
 
   WideFrameView* wide_frame_view = WideFrameView::Create(widget.get());
   wide_frame_view->GetWidget()->Show();
@@ -653,19 +655,19 @@ TEST_F(CustomFrameViewAshTest, WideFrame) {
   // Make sure the frame can be revaled outside of the target window.
   EXPECT_FALSE(ImmersiveFullscreenControllerTestApi(&controller)
                    .IsTopEdgeHoverTimerRunning());
-  ui::test::EventGenerator& generator = GetEventGenerator();
-  generator.MoveMouseTo(gfx::Point(10, 0));
-  generator.MoveMouseBy(1, 0);
+  ui::test::EventGenerator* generator = GetEventGenerator();
+  generator->MoveMouseTo(gfx::Point(10, 0));
+  generator->MoveMouseBy(1, 0);
   EXPECT_TRUE(ImmersiveFullscreenControllerTestApi(&controller)
                   .IsTopEdgeHoverTimerRunning());
 
-  generator.MoveMouseTo(gfx::Point(10, 10));
-  generator.MoveMouseBy(1, 0);
+  generator->MoveMouseTo(gfx::Point(10, 10));
+  generator->MoveMouseBy(1, 0);
   EXPECT_FALSE(ImmersiveFullscreenControllerTestApi(&controller)
                    .IsTopEdgeHoverTimerRunning());
 
-  generator.MoveMouseTo(gfx::Point(600, 0));
-  generator.MoveMouseBy(1, 0);
+  generator->MoveMouseTo(gfx::Point(600, 0));
+  generator->MoveMouseBy(1, 0);
   EXPECT_TRUE(ImmersiveFullscreenControllerTestApi(&controller)
                   .IsTopEdgeHoverTimerRunning());
 
@@ -680,6 +682,13 @@ TEST_F(CustomFrameViewAshTest, WideFrame) {
   UpdateDisplay("1234x800");
   EXPECT_EQ(1234,
             wide_frame_view->GetWidget()->GetWindowBoundsInScreen().width());
+
+  // Double Click
+  EXPECT_TRUE(widget->IsMaximized());
+  generator->MoveMouseToCenterOf(
+      wide_header_view->GetWidget()->GetNativeWindow());
+  generator->DoubleClickLeftButton();
+  EXPECT_FALSE(widget->IsMaximized());
 }
 
 TEST_F(CustomFrameViewAshTest, WideFrameButton) {

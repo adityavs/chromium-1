@@ -32,7 +32,9 @@ namespace syncer {
 struct ModelTypeInfo {
   ModelType model_type;
   // Model Type notification string.
-  // This needs to match the corresponding proto message name in sync.proto
+  // This needs to match the corresponding proto message name in sync.proto. It
+  // is also used to identify the model type in the SyncModelType
+  // histogram_suffix in histograms.xml. Must always be kept in sync.
   const char* notification_type;
   // Root tag for Model Type
   // This should be the same as the model type but all lowercase.
@@ -49,8 +51,10 @@ struct ModelTypeInfo {
 };
 
 // Below struct entries are in the same order as their definition in the
-// ModelType enum. Don't forget to update the ModelType enum when you make
-// changes to this list.
+// ModelType enum. When making changes to this list, don't forget to
+//  - update the ModelType enum,
+//  - update the SyncModelTypes enum in enums.xml, and
+//  - update the SyncModelType histogram suffix in histograms.xml.
 // Struct field values should be unique across the entire map.
 const ModelTypeInfo kModelTypeInfoMap[] = {
     {UNSPECIFIED, "", "", "Unspecified", -1, 0},
@@ -121,8 +125,8 @@ const ModelTypeInfo kModelTypeInfoMap[] = {
     {DEPRECATED_SUPERVISED_USER_SHARED_SETTINGS, "MANAGED_USER_SHARED_SETTING",
      "managed_user_shared_settings", "Managed User Shared Settings",
      sync_pb::EntitySpecifics::kManagedUserSharedSettingFieldNumber, 30},
-    {ARTICLES, "ARTICLE", "articles", "Articles",
-     sync_pb::EntitySpecifics::kArticleFieldNumber, 28},
+    {DEPRECATED_ARTICLES, "ARTICLE", "deprecated_articles",
+     "Deprecated Articles", sync_pb::EntitySpecifics::kArticleFieldNumber, 28},
     {APP_LIST, "APP_LIST", "app_list", "App List",
      sync_pb::EntitySpecifics::kAppListFieldNumber, 29},
     {WIFI_CREDENTIALS, "WIFI_CREDENTIAL", "wifi_credentials",
@@ -250,7 +254,7 @@ void AddDefaultFieldValue(ModelType type, sync_pb::EntitySpecifics* specifics) {
     case DEPRECATED_SUPERVISED_USER_SHARED_SETTINGS:
       specifics->mutable_managed_user_shared_setting();
       break;
-    case ARTICLES:
+    case DEPRECATED_ARTICLES:
       specifics->mutable_article();
       break;
     case APP_LIST:
@@ -325,10 +329,6 @@ FullModelTypeSet ToFullModelTypeSet(ModelTypeSet in) {
 // Note: keep this consistent with GetModelType in entry.cc!
 ModelType GetModelType(const sync_pb::SyncEntity& sync_entity) {
   DCHECK(!IsRoot(sync_entity));  // Root shouldn't ever go over the wire.
-
-  // Backwards compatibility with old (pre-specifics) protocol.
-  if (sync_entity.has_bookmarkdata())
-    return BOOKMARKS;
 
   ModelType specifics_type = GetModelTypeFromSpecifics(sync_entity.specifics());
   if (specifics_type != UNSPECIFIED)
@@ -407,7 +407,7 @@ ModelType GetModelTypeFromSpecifics(const sync_pb::EntitySpecifics& specifics) {
   if (specifics.has_managed_user_shared_setting())
     return DEPRECATED_SUPERVISED_USER_SHARED_SETTINGS;
   if (specifics.has_article())
-    return ARTICLES;
+    return DEPRECATED_ARTICLES;
   if (specifics.has_app_list())
     return APP_LIST;
   if (specifics.has_wifi_credential())
@@ -494,6 +494,17 @@ const char* ModelTypeToString(ModelType model_type) {
   if (model_type >= UNSPECIFIED && model_type < MODEL_TYPE_COUNT)
     return kModelTypeInfoMap[model_type].model_type_string;
   NOTREACHED() << "No known extension for model type.";
+  return "Invalid";
+}
+
+const char* ModelTypeToHistogramSuffix(ModelType model_type) {
+  if (model_type >= UNSPECIFIED && model_type < MODEL_TYPE_COUNT) {
+    // We use the same string that is used for notification types because they
+    // satisfy all we need (being stable and explanatory).
+    return kModelTypeInfoMap[model_type].notification_type;
+  }
+  NOTREACHED() << "No known suffix for model type "
+               << static_cast<int>(model_type) << ".";
   return "Invalid";
 }
 

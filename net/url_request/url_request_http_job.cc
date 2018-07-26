@@ -443,6 +443,8 @@ void URLRequestHttpJob::Start() {
 
   request_info_.token_binding_referrer = request_->token_binding_referrer();
 
+  // This should be kept in sync with the corresponding code in
+  // URLRequest::GetUserAgent.
   request_info_.extra_headers.SetHeaderIfMissing(
       HttpRequestHeaders::kUserAgent,
       http_user_agent_settings_ ?
@@ -953,7 +955,14 @@ void URLRequestHttpJob::ProcessNetworkErrorLoggingHeader() {
     return;
   }
 
-  service->OnHeader(url::Origin::Create(request_info_.url), value);
+  IPEndPoint endpoint;
+  if (!GetRemoteEndpoint(&endpoint)) {
+    NetworkErrorLoggingService::RecordHeaderDiscardedForMissingRemoteEndpoint();
+    return;
+  }
+
+  service->OnHeader(url::Origin::Create(request_info_.url), endpoint.address(),
+                    value);
 }
 #endif  // BUILDFLAG(ENABLE_REPORTING)
 

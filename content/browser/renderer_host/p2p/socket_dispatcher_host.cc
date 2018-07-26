@@ -14,7 +14,6 @@
 #include "content/browser/renderer_host/p2p/socket_host.h"
 #include "content/common/p2p_messages.h"
 #include "content/public/browser/browser_thread.h"
-#include "content/public/browser/resource_context.h"
 #include "net/base/address_list.h"
 #include "net/base/completion_callback.h"
 #include "net/base/net_errors.h"
@@ -26,6 +25,7 @@
 #include "net/socket/client_socket_factory.h"
 #include "net/socket/datagram_client_socket.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "net/url_request/url_request_context.h"
 #include "net/url_request/url_request_context_getter.h"
 #include "services/network/proxy_resolving_client_socket_factory.h"
 
@@ -81,8 +81,8 @@ class P2PSocketDispatcherHost::DnsRequest {
     net::HostResolver::RequestInfo info(net::HostPortPair(host_name_, 0));
     int result = resolver_->Resolve(
         info, net::DEFAULT_PRIORITY, &addresses_,
-        base::Bind(&P2PSocketDispatcherHost::DnsRequest::OnDone,
-                   base::Unretained(this)),
+        base::BindOnce(&P2PSocketDispatcherHost::DnsRequest::OnDone,
+                       base::Unretained(this)),
         &request_, net::NetLogWithSource());
     if (result != net::ERR_IO_PENDING)
       OnDone(result);
@@ -119,10 +119,8 @@ class P2PSocketDispatcherHost::DnsRequest {
 };
 
 P2PSocketDispatcherHost::P2PSocketDispatcherHost(
-    content::ResourceContext* resource_context,
     net::URLRequestContextGetter* url_context)
     : BrowserMessageFilter(P2PMsgStart),
-      resource_context_(resource_context),
       url_context_(url_context),
       monitoring_networks_(false),
       dump_incoming_rtp_packet_(false),
@@ -140,6 +138,8 @@ void P2PSocketDispatcherHost::OnChannelClosing() {
     net::NetworkChangeNotifier::RemoveNetworkChangeObserver(this);
     monitoring_networks_ = false;
   }
+
+  proxy_resolving_socket_factory_.reset();
 }
 
 void P2PSocketDispatcherHost::OnDestruct() const {
@@ -241,7 +241,7 @@ void P2PSocketDispatcherHost::OnStopNetworkNotifications() {
 void P2PSocketDispatcherHost::OnGetHostAddress(const std::string& host_name,
                                                int32_t request_id) {
   std::unique_ptr<DnsRequest> request = std::make_unique<DnsRequest>(
-      request_id, resource_context_->GetHostResolver());
+      request_id, url_context_->GetURLRequestContext()->host_resolver());
   DnsRequest* request_ptr = request.get();
   dns_requests_.insert(std::move(request));
   request_ptr->Resolve(host_name,

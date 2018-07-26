@@ -19,7 +19,8 @@ class HardwareDisplayPlaneManagerLegacy : public HardwareDisplayPlaneManager {
 
   // HardwareDisplayPlaneManager:
   bool Commit(HardwareDisplayPlaneList* plane_list,
-              scoped_refptr<PageFlipRequest> page_flip_request) override;
+              scoped_refptr<PageFlipRequest> page_flip_request,
+              std::unique_ptr<gfx::GpuFence>* out_fence) override;
   bool DisableOverlayPlanes(HardwareDisplayPlaneList* plane_list) override;
 
   bool SetColorCorrectionOnAllCrtcPlanes(
@@ -34,6 +35,7 @@ class HardwareDisplayPlaneManagerLegacy : public HardwareDisplayPlaneManager {
       base::OnceCallback<void(DrmOverlayPlaneList)> callback) override;
 
  protected:
+  bool InitializePlanes(DrmDevice* drm) override;
   bool SetPlaneData(HardwareDisplayPlaneList* plane_list,
                     HardwareDisplayPlane* hw_plane,
                     const DrmOverlayPlane& overlay,

@@ -6,7 +6,6 @@ package org.chromium.chrome.browser.init;
 
 import android.app.Activity;
 import android.content.Context;
-import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -18,6 +17,7 @@ import com.squareup.leakcanary.LeakCanary;
 import org.chromium.base.ActivityState;
 import org.chromium.base.ApplicationStatus;
 import org.chromium.base.ApplicationStatus.ActivityStateListener;
+import org.chromium.base.AsyncTask;
 import org.chromium.base.CommandLine;
 import org.chromium.base.ContentUriUtils;
 import org.chromium.base.ContextUtils;
@@ -35,7 +35,6 @@ import org.chromium.chrome.browser.AppHooks;
 import org.chromium.chrome.browser.ChromeApplication;
 import org.chromium.chrome.browser.ChromeStrictMode;
 import org.chromium.chrome.browser.ChromeSwitches;
-import org.chromium.chrome.browser.ClassRegister;
 import org.chromium.chrome.browser.FileProviderHelper;
 import org.chromium.chrome.browser.crash.LogcatExtractionRunnable;
 import org.chromium.chrome.browser.download.DownloadManagerService;
@@ -87,18 +86,27 @@ public class ChromeBrowserInitializer {
 
     /**
      * This class is an application specific object that orchestrates the app initialization.
-     * @param context The context to get the application context from.
      * @return The singleton instance of {@link ChromeBrowserInitializer}.
      */
-    public static ChromeBrowserInitializer getInstance(Context context) {
+    public static ChromeBrowserInitializer getInstance() {
         if (sChromeBrowserInitializer == null) {
-            sChromeBrowserInitializer = new ChromeBrowserInitializer(context);
+            sChromeBrowserInitializer = new ChromeBrowserInitializer();
         }
         return sChromeBrowserInitializer;
     }
 
-    private ChromeBrowserInitializer(Context context) {
-        mApplication = (ChromeApplication) context.getApplicationContext();
+    /**
+     * This class is an application specific object that orchestrates the app initialization.
+     * @deprecated Use getInstance with no arguments instead.
+     * @param context The context to get the application context from.
+     * @return The singleton instance of {@link ChromeBrowserInitializer}.
+     */
+    public static ChromeBrowserInitializer getInstance(Context context) {
+        return getInstance();
+    }
+
+    private ChromeBrowserInitializer() {
+        mApplication = (ChromeApplication) ContextUtils.getApplicationContext();
         mHandler = new Handler(Looper.getMainLooper());
         initLeakCanary();
     }
@@ -202,7 +210,7 @@ public class ChromeBrowserInitializer {
                     ContextUtils.getAppSharedPreferences();
                     DocumentTabModelImpl.warmUpSharedPrefs(mApplication);
                     ActivityAssigner.warmUpSharedPrefs(mApplication);
-                    DownloadManagerService.warmUpSharedPrefs(mApplication);
+                    DownloadManagerService.warmUpSharedPrefs();
                     return null;
                 }
             }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
@@ -210,7 +218,7 @@ public class ChromeBrowserInitializer {
             ContextUtils.getAppSharedPreferences();
             DocumentTabModelImpl.warmUpSharedPrefs(mApplication);
             ActivityAssigner.warmUpSharedPrefs(mApplication);
-            DownloadManagerService.warmUpSharedPrefs(mApplication);
+            DownloadManagerService.warmUpSharedPrefs();
         }
     }
 
@@ -399,7 +407,6 @@ public class ChromeBrowserInitializer {
         AppHooks.get().registerPolicyProviders(CombinedPolicyProvider.get());
 
         SpeechRecognition.initialize(mApplication);
-        ClassRegister.get().registerContentClassFactory();
     }
 
     private void onFinishNativeInitialization() {

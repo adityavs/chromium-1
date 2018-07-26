@@ -11,6 +11,7 @@
 
 #include "third_party/blink/renderer/bindings/tests/results/core/v8_void_callback_function_enum_arg.h"
 
+#include "base/stl_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
@@ -128,13 +129,11 @@ void V8VoidCallbackFunctionEnumArg::InvokeAndReportException(ScriptWrappable* ca
   ALLOW_UNUSED_LOCAL(maybe_result);
 }
 
-CORE_TEMPLATE_EXPORT
 v8::Maybe<void> V8PersistentCallbackFunction<V8VoidCallbackFunctionEnumArg>::Invoke(ScriptWrappable* callback_this_value, const String& arg) {
   return Proxy()->Invoke(
       callback_this_value, arg);
 }
 
-CORE_TEMPLATE_EXPORT
 void V8PersistentCallbackFunction<V8VoidCallbackFunctionEnumArg>::InvokeAndReportException(ScriptWrappable* callback_this_value, const String& arg) {
   Proxy()->InvokeAndReportException(
       callback_this_value, arg);

@@ -16,10 +16,6 @@
 #include "media/base/audio_codecs.h"
 #include "mojo/public/cpp/bindings/binding.h"
 
-#if defined(CHROMECAST_BUILD)
-#include <string>
-#endif
-
 namespace extensions {
 class ExtensionsClient;
 class ExtensionsGuestViewContainerDispatcher;
@@ -70,7 +66,7 @@ class CastContentRendererClient
   bool DeferMediaLoad(content::RenderFrame* render_frame,
                       bool render_frame_has_played_media_before,
                       base::OnceClosure closure) override;
-  bool AllowIdleMediaSuspend() override;
+  bool IsIdleMediaSuspendEnabled() override;
   void SetRuntimeFeaturesDefaultsBeforeBlinkInitialization() override;
 
  protected:

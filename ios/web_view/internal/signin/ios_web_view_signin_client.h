@@ -51,15 +51,12 @@ class IOSWebViewSigninClient : public SigninClient,
       content_settings::Observer* observer) override;
   void RemoveContentSettingsObserver(
       content_settings::Observer* observer) override;
-  std::unique_ptr<CookieChangeSubscription> AddCookieChangeCallback(
-      const GURL& url,
-      const std::string& name,
-      net::CookieChangeCallback callback) override;
   void DelayNetworkCall(const base::Closure& callback) override;
   std::unique_ptr<GaiaAuthFetcher> CreateGaiaAuthFetcher(
       GaiaAuthConsumer* consumer,
       const std::string& source,
-      net::URLRequestContextGetter* getter) override;
+      scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory)
+      override;
 
   // SigninErrorController::Observer implementation.
   void OnErrorChanged() override;

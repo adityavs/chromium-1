@@ -12,6 +12,9 @@
 #include "base/message_loop/message_loop.h"
 #include "base/run_loop.h"
 #include "base/single_thread_task_runner.h"
+#include "base/task/sequence_manager/test/fake_task.h"
+#include "base/task/sequence_manager/test/sequence_manager_for_test.h"
+#include "base/test/bind_test_util.h"
 #include "base/test/metrics/histogram_tester.h"
 #include "base/test/scoped_feature_list.h"
 #include "base/test/simple_test_tick_clock.h"
@@ -23,8 +26,6 @@
 #include "third_party/blink/public/common/page/launching_process_state.h"
 #include "third_party/blink/public/platform/web_mouse_wheel_event.h"
 #include "third_party/blink/public/platform/web_touch_event.h"
-#include "third_party/blink/renderer/platform/scheduler/base/real_time_domain.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/task_queue_manager_for_test.h"
 #include "third_party/blink/renderer/platform/scheduler/child/features.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/budget_pool.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/auto_advancing_virtual_time_domain.h"
@@ -40,6 +41,8 @@ namespace main_thread_scheduler_impl_unittest {
 
 using testing::Mock;
 using InputEventState = WebThreadScheduler::InputEventState;
+using base::sequence_manager::FakeTask;
+using base::sequence_manager::FakeTaskTiming;
 
 class FakeInputEvent : public blink::WebInputEvent {
  public:
@@ -251,6 +254,13 @@ class MainThreadSchedulerImplForTest : public MainThreadSchedulerImpl {
     }
   }
 
+  void OnQueueingTimeForWindowEstimated(base::TimeDelta queueing_time,
+                                        bool is_disjoint_window) override {
+    MainThreadSchedulerImpl::OnQueueingTimeForWindowEstimated(
+        queueing_time, is_disjoint_window);
+    expected_queueing_times_.push_back(queueing_time);
+  }
+
   void EnsureUrgentPolicyUpdatePostedOnMainThread() {
     base::AutoLock lock(any_thread_lock_);
     MainThreadSchedulerImpl::EnsureUrgentPolicyUpdatePostedOnMainThread(
@@ -266,6 +276,10 @@ class MainThreadSchedulerImplForTest : public MainThreadSchedulerImpl {
     return any_thread().begin_main_frame_on_critical_path;
   }
 
+  void RemoveRAILModeObserver(WebRAILModeObserver const* observer) {
+    main_thread_only().rail_mode_observers.RemoveObserver(observer);
+  }
+
   bool waiting_for_meaningful_paint() const {
     base::AutoLock lock(any_thread_lock_);
     return any_thread().waiting_for_meaningful_paint;
@@ -275,8 +289,13 @@ class MainThreadSchedulerImplForTest : public MainThreadSchedulerImpl {
     return main_thread_only().virtual_time_policy;
   }
 
+  const std::vector<base::TimeDelta>& expected_queueing_times() const {
+    return expected_queueing_times_;
+  }
+
   int update_policy_count_;
   std::vector<std::string> use_cases_;
+  std::vector<base::TimeDelta> expected_queueing_times_;
 };
 
 // Lets gtest print human readable Policy values.
@@ -287,14 +306,12 @@ class MainThreadSchedulerImplForTest : public MainThreadSchedulerImpl {
 class MainThreadSchedulerImplTest : public testing::Test {
  public:
   MainThreadSchedulerImplTest(std::vector<base::Feature> features_to_enable,
-                              std::vector<base::Feature> features_to_disable)
-      : fake_task_(TaskQueue::PostedTask(base::BindOnce([] {}), FROM_HERE),
-                   base::TimeTicks()) {
+                              std::vector<base::Feature> features_to_disable) {
     feature_list_.InitWithFeatures(features_to_enable, features_to_disable);
   }
 
   MainThreadSchedulerImplTest()
-      : MainThreadSchedulerImplTest({kHighPriorityInput},
+      : MainThreadSchedulerImplTest({kHighPriorityInputOnMainThread},
                                     {kPrioritizeCompositingAfterInput}) {}
 
   ~MainThreadSchedulerImplTest() override = default;
@@ -302,7 +319,7 @@ class MainThreadSchedulerImplTest : public testing::Test {
   void SetUp() override {
     CreateTestTaskRunner();
     Initialize(std::make_unique<MainThreadSchedulerImplForTest>(
-        base::sequence_manager::TaskQueueManagerForTest::Create(
+        base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, test_task_runner_, test_task_runner_->GetMockTickClock()),
         base::nullopt));
   }
@@ -359,6 +376,12 @@ class MainThreadSchedulerImplTest : public testing::Test {
     CHECK(test_task_runner_);
     CHECK_LE(Now(), time);
     test_task_runner_->AdvanceMockTickClock(time - Now());
+  }
+
+  void AdvanceMockTickClockBy(base::TimeDelta delta) {
+    CHECK(test_task_runner_);
+    CHECK_LE(base::TimeDelta(), delta);
+    test_task_runner_->AdvanceMockTickClock(delta);
   }
 
   void DoMainFrame() {
@@ -602,18 +625,28 @@ class MainThreadSchedulerImplTest : public testing::Test {
     return scheduler_->any_thread().have_seen_a_blocking_gesture;
   }
 
-  void AdvanceTimeWithTask(double duration) {
+  void AdvanceTimeWithTask(double duration_seconds) {
+    base::TimeDelta duration = base::TimeDelta::FromSecondsD(duration_seconds);
+    RunTask(base::BindOnce(
+        [](scoped_refptr<base::TestMockTimeTaskRunner> test_task_runner,
+           base::TimeDelta duration) {
+          test_task_runner->AdvanceMockTickClock(duration);
+        },
+        test_task_runner_, duration));
+  }
+
+  void RunTask(base::OnceClosure task) {
     scoped_refptr<MainThreadTaskQueue> fake_queue =
         scheduler_->NewLoadingTaskQueue(
             MainThreadTaskQueue::QueueType::kFrameLoading, nullptr);
 
     base::TimeTicks start = Now();
-    scheduler_->OnTaskStarted(fake_queue.get(), fake_task_, start);
-    test_task_runner_->AdvanceMockTickClock(
-        base::TimeDelta::FromSecondsD(duration));
+    scheduler_->OnTaskStarted(fake_queue.get(), FakeTask(),
+                              FakeTaskTiming(start, base::TimeTicks()));
+    std::move(task).Run();
     base::TimeTicks end = Now();
-    scheduler_->OnTaskCompleted(fake_queue.get(), fake_task_, start, end,
-                                base::nullopt);
+    scheduler_->OnTaskCompleted(fake_queue.get(), FakeTask(),
+                                FakeTaskTiming(start, end));
   }
 
   void RunSlowCompositorTask() {
@@ -737,8 +770,11 @@ class MainThreadSchedulerImplTest : public testing::Test {
     return scheduler->ThrottleableTaskQueue();
   }
 
+  QueueingTimeEstimator* queueing_time_estimator() {
+    return &scheduler_->queueing_time_estimator_;
+  }
+
   base::test::ScopedFeatureList feature_list_;
-  TaskQueue::Task fake_task_;
 
   scoped_refptr<base::TestMockTimeTaskRunner> test_task_runner_;
 
@@ -2097,7 +2133,7 @@ class MainThreadSchedulerImplWithMessageLoopTest
   void SetUp() override {
     clock_.Advance(base::TimeDelta::FromMilliseconds(5));
     Initialize(std::make_unique<MainThreadSchedulerImplForTest>(
-        base::sequence_manager::TaskQueueManagerForTest::Create(
+        base::sequence_manager::SequenceManagerForTest::Create(
             message_loop_.get(), message_loop_->task_runner(), &clock_),
         base::nullopt));
   }
@@ -2960,7 +2996,7 @@ class PageSchedulerImplForTest : public PageSchedulerImpl {
     return interventions_;
   }
 
-  MOCK_METHOD1(RequestBeginMainFrameNotExpected, void(bool));
+  MOCK_METHOD1(RequestBeginMainFrameNotExpected, bool(bool));
 
  private:
   std::vector<std::string> interventions_;
@@ -3322,37 +3358,37 @@ TEST_F(MainThreadSchedulerImplTest, MAIN_THREAD_GESTURE) {
   EXPECT_EQ(279u, run_order.size());
 }
 
-class MockRAILModeObserver : public WebThreadScheduler::RAILModeObserver {
+class MockRAILModeObserver : public WebRAILModeObserver {
  public:
   MOCK_METHOD1(OnRAILModeChanged, void(v8::RAILMode rail_mode));
 };
 
 TEST_F(MainThreadSchedulerImplTest, TestResponseRAILMode) {
   MockRAILModeObserver observer;
-  scheduler_->SetRAILModeObserver(&observer);
+  scheduler_->AddRAILModeObserver(&observer);
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_RESPONSE));
 
   scheduler_->SetHaveSeenABlockingGestureForTesting(true);
   ForceBlockingInputToBeExpectedSoon();
   EXPECT_EQ(UseCase::kNone, ForceUpdatePolicyAndGetCurrentUseCase());
   EXPECT_EQ(v8::PERFORMANCE_RESPONSE, GetRAILMode());
-  scheduler_->SetRAILModeObserver(nullptr);
+  scheduler_->RemoveRAILModeObserver(&observer);
 }
 
 TEST_F(MainThreadSchedulerImplTest, TestAnimateRAILMode) {
   MockRAILModeObserver observer;
-  scheduler_->SetRAILModeObserver(&observer);
+  scheduler_->AddRAILModeObserver(&observer);
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_ANIMATION)).Times(0);
 
   EXPECT_FALSE(BeginFrameNotExpectedSoon());
   EXPECT_EQ(UseCase::kNone, ForceUpdatePolicyAndGetCurrentUseCase());
   EXPECT_EQ(v8::PERFORMANCE_ANIMATION, GetRAILMode());
-  scheduler_->SetRAILModeObserver(nullptr);
+  scheduler_->RemoveRAILModeObserver(&observer);
 }
 
 TEST_F(MainThreadSchedulerImplTest, TestIdleRAILMode) {
   MockRAILModeObserver observer;
-  scheduler_->SetRAILModeObserver(&observer);
+  scheduler_->AddRAILModeObserver(&observer);
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_ANIMATION));
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_IDLE));
 
@@ -3362,12 +3398,12 @@ TEST_F(MainThreadSchedulerImplTest, TestIdleRAILMode) {
   scheduler_->SetAllRenderWidgetsHidden(false);
   EXPECT_EQ(UseCase::kNone, ForceUpdatePolicyAndGetCurrentUseCase());
   EXPECT_EQ(v8::PERFORMANCE_ANIMATION, GetRAILMode());
-  scheduler_->SetRAILModeObserver(nullptr);
+  scheduler_->RemoveRAILModeObserver(&observer);
 }
 
 TEST_F(MainThreadSchedulerImplTest, TestLoadRAILMode) {
   MockRAILModeObserver observer;
-  scheduler_->SetRAILModeObserver(&observer);
+  scheduler_->AddRAILModeObserver(&observer);
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_ANIMATION));
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_LOAD));
 
@@ -3377,12 +3413,12 @@ TEST_F(MainThreadSchedulerImplTest, TestLoadRAILMode) {
   scheduler_->OnFirstMeaningfulPaint();
   EXPECT_EQ(UseCase::kNone, ForceUpdatePolicyAndGetCurrentUseCase());
   EXPECT_EQ(v8::PERFORMANCE_ANIMATION, GetRAILMode());
-  scheduler_->SetRAILModeObserver(nullptr);
+  scheduler_->RemoveRAILModeObserver(&observer);
 }
 
 TEST_F(MainThreadSchedulerImplTest, InputTerminatesLoadRAILMode) {
   MockRAILModeObserver observer;
-  scheduler_->SetRAILModeObserver(&observer);
+  scheduler_->AddRAILModeObserver(&observer);
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_ANIMATION));
   EXPECT_CALL(observer, OnRAILModeChanged(v8::PERFORMANCE_LOAD));
 
@@ -3398,7 +3434,7 @@ TEST_F(MainThreadSchedulerImplTest, InputTerminatesLoadRAILMode) {
   EXPECT_EQ(UseCase::kCompositorGesture,
             ForceUpdatePolicyAndGetCurrentUseCase());
   EXPECT_EQ(v8::PERFORMANCE_ANIMATION, GetRAILMode());
-  scheduler_->SetRAILModeObserver(nullptr);
+  scheduler_->RemoveRAILModeObserver(&observer);
 }
 
 TEST_F(MainThreadSchedulerImplTest, UnthrottledTaskRunner) {
@@ -3787,14 +3823,17 @@ TEST_F(MainThreadSchedulerImplTest, RequestBeginMainFrameNotExpected) {
   scheduler_->AddPageScheduler(page_scheduler.get());
 
   scheduler_->OnPendingTasksChanged(true);
-  EXPECT_CALL(*page_scheduler, RequestBeginMainFrameNotExpected(true)).Times(1);
+  EXPECT_CALL(*page_scheduler, RequestBeginMainFrameNotExpected(true))
+      .Times(1)
+      .WillRepeatedly(testing::Return(true));
   base::RunLoop().RunUntilIdle();
 
   Mock::VerifyAndClearExpectations(page_scheduler.get());
 
   scheduler_->OnPendingTasksChanged(false);
   EXPECT_CALL(*page_scheduler, RequestBeginMainFrameNotExpected(false))
-      .Times(1);
+      .Times(1)
+      .WillRepeatedly(testing::Return(true));
   base::RunLoop().RunUntilIdle();
 
   Mock::VerifyAndClearExpectations(page_scheduler.get());
@@ -3809,7 +3848,9 @@ TEST_F(MainThreadSchedulerImplTest,
   scheduler_->OnPendingTasksChanged(true);
   scheduler_->OnPendingTasksChanged(true);
   // Multiple calls should result in only one call.
-  EXPECT_CALL(*page_scheduler, RequestBeginMainFrameNotExpected(true)).Times(1);
+  EXPECT_CALL(*page_scheduler, RequestBeginMainFrameNotExpected(true))
+      .Times(1)
+      .WillRepeatedly(testing::Return(true));
   base::RunLoop().RunUntilIdle();
 
   Mock::VerifyAndClearExpectations(page_scheduler.get());
@@ -3840,7 +3881,7 @@ class MainThreadSchedulerImplWithInitalVirtualTimeTest
   void SetUp() override {
     CreateTestTaskRunner();
     Initialize(std::make_unique<MainThreadSchedulerImplForTest>(
-        base::sequence_manager::TaskQueueManagerForTest::Create(
+        base::sequence_manager::SequenceManagerForTest::Create(
             nullptr, test_task_runner_, test_task_runner_->GetMockTickClock()),
         base::Time::FromJsTime(1000000.0)));
   }
@@ -3879,7 +3920,7 @@ class CompositingExperimentWithExplicitSignalsTest
  public:
   CompositingExperimentWithExplicitSignalsTest()
       : MainThreadSchedulerImplTest(
-            {kHighPriorityInput, kPrioritizeCompositingAfterInput,
+            {kHighPriorityInputOnMainThread, kPrioritizeCompositingAfterInput,
              kUseExplicitSignalForTriggeringCompositingPrioritization,
              kUseWillBeginMainFrameForCompositingPrioritization},
             {}) {}
@@ -3921,7 +3962,7 @@ class CompositingExperimentWithImplicitSignalsTest
  public:
   CompositingExperimentWithImplicitSignalsTest()
       : MainThreadSchedulerImplTest(
-            {kHighPriorityInput, kPrioritizeCompositingAfterInput},
+            {kHighPriorityInputOnMainThread, kPrioritizeCompositingAfterInput},
             {kHighestPriorityForCompositingAfterInput,
              kUseExplicitSignalForTriggeringCompositingPrioritization,
              kUseWillBeginMainFrameForCompositingPrioritization}) {}
@@ -3936,6 +3977,45 @@ TEST_F(CompositingExperimentWithImplicitSignalsTest, CompositingAfterInput) {
               testing::ElementsAre(std::string("P1"), std::string("P2"),
                                    std::string("C1"), std::string("T1"),
                                    std::string("C2")));
+}
+
+TEST_F(MainThreadSchedulerImplTest, EQTWithNestedLoop) {
+  AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(100));
+
+  RunTask(base::BindLambdaForTesting([&] {
+    // After running a task for 10ms, start running a nested loop.
+    // This contributes to the first step EQT by 1ms ((10ms)^2 / 2 / 50ms), and
+    // the window EQT by 50us (1ms / 20).
+    AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(10));
+    scheduler_->OnBeginNestedRunLoop();
+
+    // Leave the loop idle for 20ms.
+    AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(20));
+
+    RunTask(base::BindLambdaForTesting([&] {
+      // Run a 30ms task in the nested loop.
+      // This contributes to the first step EQT by 8ms ((30ms + 10ms) * 20ms / 2
+      // / 50ms), and the window EQT by 400us (8ms / 20). Also, contributes to
+      // the second step EQT by 1ms ((10ms)^2 / 2 / 50ms), and the window EQT by
+      // 50us (1ms / 20).
+      AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(30));
+    }));
+
+    // After 40ms idle duration, exit the nested loop.
+    AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(40));
+    scheduler_->OnExitNestedRunLoop();
+
+    // The outer task ends after extra 50ms work.
+    // This contributes to the third step EQT by 25ms ((50ms)^2 / 2 / 50ms), and
+    // the window EQT by 1250us (25ms / 20).
+    AdvanceMockTickClockBy(base::TimeDelta::FromMilliseconds(50));
+  }));
+
+  EXPECT_THAT(scheduler_->expected_queueing_times(),
+              testing::ElementsAre(
+                  base::TimeDelta::FromMicroseconds(400 + 50),
+                  base::TimeDelta::FromMicroseconds(400 + 50 + 50),
+                  base::TimeDelta::FromMicroseconds(400 + 50 + 50 + 1250)));
 }
 
 }  // namespace main_thread_scheduler_impl_unittest

@@ -170,7 +170,6 @@ IPC_STRUCT_TRAITS_BEGIN(content::VisualProperties)
   IPC_STRUCT_TRAITS_MEMBER(display_mode)
   IPC_STRUCT_TRAITS_MEMBER(capture_sequence_number)
   IPC_STRUCT_TRAITS_MEMBER(zoom_level)
-  IPC_STRUCT_TRAITS_MEMBER(uses_temporary_zoom)
 IPC_STRUCT_TRAITS_END()
 
 IPC_STRUCT_TRAITS_BEGIN(content::MenuItem)
@@ -686,6 +685,9 @@ IPC_MESSAGE_ROUTED1(ViewHostMsg_FocusedNodeTouched,
 // Sent once a paint happens after the first non empty layout. In other words,
 // after the frame widget has painted something.
 IPC_MESSAGE_ROUTED0(ViewHostMsg_DidFirstVisuallyNonEmptyPaint)
+
+// Sent once the RenderWidgetCompositor issues a draw command.
+IPC_MESSAGE_ROUTED0(ViewHostMsg_DidCommitAndDrawCompositorFrame)
 
 // Sent in reply to ViewMsg_WaitForNextFrameForTests.
 IPC_MESSAGE_ROUTED0(ViewHostMsg_WaitForNextFrameForTests_ACK)

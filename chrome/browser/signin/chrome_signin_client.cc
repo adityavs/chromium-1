@@ -22,7 +22,6 @@
 #include "chrome/browser/profiles/profile_attributes_storage.h"
 #include "chrome/browser/profiles/profile_manager.h"
 #include "chrome/browser/profiles/profile_metrics.h"
-#include "chrome/browser/profiles/profile_window.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/signin/force_signin_verifier.h"
 #include "chrome/browser/signin/local_auth.h"
@@ -41,7 +40,6 @@
 #include "components/signin/core/browser/profile_management_switches.h"
 #include "components/signin/core/browser/profile_oauth2_token_service.h"
 #include "components/signin/core/browser/signin_buildflags.h"
-#include "components/signin/core/browser/signin_cookie_change_subscription.h"
 #include "components/signin/core/browser/signin_header_helper.h"
 #include "components/signin/core/browser/signin_pref_names.h"
 #include "components/signin/core/browser/signin_switches.h"
@@ -61,12 +59,15 @@
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
 #include "components/user_manager/known_user.h"
 #include "components/user_manager/user_manager.h"
-#else
-#include "chrome/browser/ui/user_manager.h"
 #endif
 
 #if !defined(OS_ANDROID)
 #include "chrome/browser/first_run/first_run.h"
+#include "chrome/browser/profiles/profile_window.h"
+#endif
+
+#if !defined(OS_ANDROID) && !defined(OS_CHROMEOS)
+#include "chrome/browser/ui/user_manager.h"
 #endif
 
 ChromeSigninClient::ChromeSigninClient(
@@ -247,18 +248,6 @@ void ChromeSigninClient::RemoveContentSettingsObserver(
       ->RemoveObserver(observer);
 }
 
-std::unique_ptr<SigninClient::CookieChangeSubscription>
-ChromeSigninClient::AddCookieChangeCallback(
-    const GURL& url,
-    const std::string& name,
-    net::CookieChangeCallback callback) {
-  scoped_refptr<net::URLRequestContextGetter> context_getter =
-      profile_->GetRequestContext();
-  DCHECK(context_getter.get());
-  return std::make_unique<SigninCookieChangeSubscription>(
-      context_getter, url, name, std::move(callback));
-}
-
 void ChromeSigninClient::OnSignedIn(const std::string& account_id,
                                     const std::string& gaia_id,
                                     const std::string& username,
@@ -425,8 +414,9 @@ void ChromeSigninClient::DelayNetworkCall(const base::Closure& callback) {
 std::unique_ptr<GaiaAuthFetcher> ChromeSigninClient::CreateGaiaAuthFetcher(
     GaiaAuthConsumer* consumer,
     const std::string& source,
-    net::URLRequestContextGetter* getter) {
-  return std::make_unique<GaiaAuthFetcher>(consumer, source, getter);
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+  return std::make_unique<GaiaAuthFetcher>(consumer, source,
+                                           url_loader_factory);
 }
 
 void ChromeSigninClient::VerifySyncToken() {

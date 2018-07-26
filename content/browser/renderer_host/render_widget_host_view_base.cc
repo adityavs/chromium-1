@@ -27,7 +27,6 @@
 #include "content/browser/renderer_host/render_widget_host_view_child_frame.h"
 #include "content/browser/renderer_host/text_input_manager.h"
 #include "content/common/content_switches_internal.h"
-#include "content/public/common/content_features.h"
 #include "ui/base/layout.h"
 #include "ui/base/ui_base_types.h"
 #include "ui/display/screen.h"
@@ -52,8 +51,6 @@ RenderWidgetHostViewBase::RenderWidgetHostViewBase(RenderWidgetHost* host)
       current_device_scale_factor_(0),
       current_display_rotation_(display::Display::ROTATE_0),
       text_input_manager_(nullptr),
-      wheel_scroll_latching_enabled_(base::FeatureList::IsEnabled(
-          features::kTouchpadAndWheelScrollLatching)),
       web_contents_accessibility_(nullptr),
       is_currently_scrolling_viewport_(false),
       use_viz_hit_test_(features::IsVizHitTestingEnabled()),
@@ -224,6 +221,18 @@ base::string16 RenderWidgetHostViewBase::GetSelectedText() {
   return GetTextInputManager()->GetTextSelection(this)->selected_text();
 }
 
+base::string16 RenderWidgetHostViewBase::GetSurroundingText() {
+  if (!GetTextInputManager())
+    return base::string16();
+  return GetTextInputManager()->GetTextSelection(this)->text();
+}
+
+gfx::Range RenderWidgetHostViewBase::GetSelectedRange() {
+  if (!GetTextInputManager())
+    return gfx::Range();
+  return GetTextInputManager()->GetTextSelection(this)->range();
+}
+
 void RenderWidgetHostViewBase::SetBackgroundColor(SkColor color) {
   DCHECK(SkColorGetA(color) == SK_AlphaOPAQUE ||
          SkColorGetA(color) == SK_AlphaTRANSPARENT);
@@ -302,17 +311,39 @@ void RenderWidgetHostViewBase::ForwardTouchpadPinchIfNecessary(
   if (!event.NeedsWheelEvent())
     return;
 
-  if (event.GetType() == blink::WebInputEvent::kGesturePinchUpdate &&
-      (ack_result == INPUT_EVENT_ACK_STATE_CONSUMED ||
-       event.data.pinch_update.zoom_disabled))
-    return;
-
-  // Now that the synthetic wheel event has gone unconsumed, we have the pinch
-  // event actually change the page scale.
-  blink::WebGestureEvent pinch_event(event);
-  pinch_event.SetNeedsWheelEvent(false);
-
-  host()->ForwardGestureEvent(pinch_event);
+  switch (event.GetType()) {
+    case blink::WebInputEvent::kGesturePinchBegin:
+      // Don't send the begin event until we get the first unconsumed update, so
+      // that we elide pinch gesture steams consisting of only a begin and end.
+      pending_touchpad_pinch_begin_ = event;
+      pending_touchpad_pinch_begin_->SetNeedsWheelEvent(false);
+      break;
+    case blink::WebInputEvent::kGesturePinchUpdate:
+      if (ack_result != INPUT_EVENT_ACK_STATE_CONSUMED &&
+          !event.data.pinch_update.zoom_disabled) {
+        if (pending_touchpad_pinch_begin_) {
+          host()->ForwardGestureEvent(*pending_touchpad_pinch_begin_);
+          pending_touchpad_pinch_begin_.reset();
+        }
+        // Now that the synthetic wheel event has gone unconsumed, we have the
+        // pinch event actually change the page scale.
+        blink::WebGestureEvent pinch_event(event);
+        pinch_event.SetNeedsWheelEvent(false);
+        host()->ForwardGestureEvent(pinch_event);
+      }
+      break;
+    case blink::WebInputEvent::kGesturePinchEnd:
+      if (pending_touchpad_pinch_begin_) {
+        pending_touchpad_pinch_begin_.reset();
+      } else {
+        blink::WebGestureEvent pinch_end_event(event);
+        pinch_end_event.SetNeedsWheelEvent(false);
+        host()->ForwardGestureEvent(pinch_end_event);
+      }
+      break;
+    default:
+      NOTREACHED();
+  }
 }
 
 void RenderWidgetHostViewBase::SetPopupType(blink::WebPopupType popup_type) {
@@ -487,6 +518,10 @@ CursorManager* RenderWidgetHostViewBase::GetCursorManager() {
   return nullptr;
 }
 
+void RenderWidgetHostViewBase::TransformPointToRootSurface(gfx::PointF* point) {
+  return;
+}
+
 void RenderWidgetHostViewBase::OnDidNavigateMainFrameToNewPage() {
 }
 
@@ -494,14 +529,6 @@ void RenderWidgetHostViewBase::OnFrameTokenChangedForView(
     uint32_t frame_token) {
   if (host())
     host()->DidProcessFrame(frame_token);
-}
-
-viz::FrameSinkId RenderWidgetHostViewBase::GetFrameSinkId() {
-  return viz::FrameSinkId();
-}
-
-viz::LocalSurfaceId RenderWidgetHostViewBase::GetLocalSurfaceId() const {
-  return viz::LocalSurfaceId();
 }
 
 viz::FrameSinkId RenderWidgetHostViewBase::FrameSinkIdAtPoint(
@@ -518,6 +545,8 @@ viz::FrameSinkId RenderWidgetHostViewBase::FrameSinkIdAtPoint(
       gfx::ConvertPointToPixel(device_scale_factor, point);
   viz::SurfaceId surface_id = GetCurrentSurfaceId();
   if (!surface_id.is_valid()) {
+    // Force a query of the renderer if we don't have a surface id yet.
+    *out_query_renderer = true;
     return GetFrameSinkId();
   }
   viz::SurfaceHittest hittest(delegate,

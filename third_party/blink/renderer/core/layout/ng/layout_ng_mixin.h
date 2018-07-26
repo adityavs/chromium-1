@@ -25,7 +25,7 @@ struct NGInlineNodeData;
 // LayoutBlockFlow.
 
 template <typename Base>
-class CORE_TEMPLATE_CLASS_EXPORT LayoutNGMixin : public Base {
+class LayoutNGMixin : public Base {
  public:
   explicit LayoutNGMixin(Element* element);
   ~LayoutNGMixin() override;
@@ -42,7 +42,7 @@ class CORE_TEMPLATE_CLASS_EXPORT LayoutNGMixin : public Base {
 
   void InvalidateDisplayItemClients(PaintInvalidationReason) const override;
 
-  void Paint(const PaintInfo&, const LayoutPoint&) const override;
+  void Paint(const PaintInfo&) const override;
 
   bool NodeAtPoint(HitTestResult&,
                    const HitTestLocation& location_in_container,
@@ -68,8 +68,10 @@ class CORE_TEMPLATE_CLASS_EXPORT LayoutNGMixin : public Base {
   NGPaintFragment* PaintFragment() const override {
     return paint_fragment_.get();
   }
-  void SetPaintFragment(scoped_refptr<const NGPhysicalFragment>) override;
-  void ClearPaintFragment() override;
+  void SetPaintFragment(scoped_refptr<const NGPhysicalFragment>) final;
+  void UpdatePaintFragmentFromCachedLayoutResult(
+      scoped_refptr<const NGPhysicalFragment>) final;
+  void ClearPaintFragment() final;
 
  protected:
   bool IsOfType(LayoutObject::LayoutObjectType) const override;

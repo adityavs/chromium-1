@@ -18,16 +18,19 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/web_contents.h"
+#include "content/public/common/content_features.h"
 #include "content/public/common/url_loader_throttle.h"
 #include "mojo/public/cpp/system/string_data_pipe_producer.h"
 #include "net/base/io_buffer.h"
 #include "net/base/load_flags.h"
 #include "net/base/net_errors.h"
+#include "net/cert/asn1_util.h"
 #include "net/cert/cert_status_flags.h"
 #include "net/cert/cert_verifier.h"
 #include "net/cert/ct_policy_enforcer.h"
 #include "net/cert/ct_verifier.h"
 #include "net/cert/x509_certificate.h"
+#include "net/cert/x509_util.h"
 #include "net/filter/source_stream.h"
 #include "net/http/transport_security_state.h"
 #include "net/ssl/ssl_config.h"
@@ -44,7 +47,7 @@ namespace content {
 
 namespace {
 
-constexpr char kMiHeader[] = "MI";
+constexpr char kMiHeader[] = "MI-Draft2";
 
 net::CertVerifier* g_cert_verifier_for_testing = nullptr;
 
@@ -331,6 +334,19 @@ void SignedExchangeHandler::OnCertReceived(
     OnCertVerifyComplete(result);
 }
 
+bool SignedExchangeHandler::CheckCertExtension(
+    const net::X509Certificate* verified_cert) {
+  if (base::FeatureList::IsEnabled(
+          features::kAllowSignedHTTPExchangeCertsWithoutExtension))
+    return true;
+
+  // https://wicg.github.io/webpackage/draft-yasskin-http-origin-signed-responses.html#cross-origin-trust
+  // Step 6.2. Validate that main-certificate has the CanSignHttpExchanges
+  // extension (Section 4.2). [spec text]
+  return net::asn1::HasCanSignHttpExchangesDraftExtension(
+      net::x509_util::CryptoBufferAsStringPiece(verified_cert->cert_buffer()));
+}
+
 bool SignedExchangeHandler::CheckOCSPStatus(
     const net::OCSPVerifyResult& ocsp_result) {
   // https://wicg.github.io/webpackage/draft-yasskin-http-origin-signed-responses.html#cross-origin-trust
@@ -383,7 +399,7 @@ int SignedExchangeHandler::VerifyCT(net::ct::CTVerifyResult* ct_verify_result) {
       request_context->ct_policy_enforcer()->CheckCompliance(
           verified_cert, verified_scts, net_log_);
 
-  // TODO(https://crbug.com/803774): We should determine whether EV & HTXG
+  // TODO(https://crbug.com/803774): We should determine whether EV & SXG
   // should be a thing (due to the online/offline signing difference)
   if (cert_verify_result_.cert_status & net::CERT_STATUS_IS_EV &&
       ct_verify_result->policy_compliance !=
@@ -450,6 +466,18 @@ void SignedExchangeHandler::OnCertVerifyComplete(int result) {
     return;
   }
 
+  if (!CheckCertExtension(cert_verify_result_.verified_cert.get())) {
+    signed_exchange_utils::ReportErrorAndTraceEvent(
+        devtools_proxy_.get(),
+        "Certificate must have CanSignHttpExchangesDraft extension. To ignore "
+        "this error for testing, enable "
+        "chrome://flags/#allow-sxg-certs-without-extension.",
+        std::make_pair(0 /* signature_index */,
+                       SignedExchangeError::Field::kSignatureCertUrl));
+    RunErrorCallback(net::ERR_INVALID_SIGNED_EXCHANGE);
+    return;
+  }
+
   if (!CheckOCSPStatus(cert_verify_result_.ocsp_result)) {
     signed_exchange_utils::ReportErrorAndTraceEvent(
         devtools_proxy_.get(),
@@ -496,7 +524,7 @@ void SignedExchangeHandler::OnCertVerifyComplete(int result) {
   if (!response_head.headers->EnumerateHeader(nullptr, kMiHeader,
                                               &mi_header_value)) {
     signed_exchange_utils::ReportErrorAndTraceEvent(
-        devtools_proxy_.get(), "Signed exchange has no MI: header");
+        devtools_proxy_.get(), "Signed exchange has no MI-Draft2: header");
     RunErrorCallback(net::ERR_INVALID_SIGNED_EXCHANGE);
     return;
   }

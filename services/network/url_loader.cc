@@ -43,7 +43,8 @@ namespace network {
 namespace {
 constexpr size_t kDefaultAllocationSize = 512 * 1024;
 
-// Cannot use 0, because this means "default" in mojo::edk::Core::CreateDataPipe
+// Cannot use 0, because this means "default" in
+// mojo::core::Core::CreateDataPipe
 constexpr size_t kBlockedBodyAllocationSize = 1;
 
 // TODO: this duplicates some of PopulateResourceResponse in
@@ -230,7 +231,8 @@ class SSLPrivateKeyInternal : public net::SSLPrivateKey {
       : algorithm_perferences_(algorithm_perferences),
         ssl_private_key_(std::move(ssl_private_key)) {
     ssl_private_key_.set_connection_error_handler(
-        base::BindOnce(&SSLPrivateKeyInternal::HandleSSLPrivateKeyError, this));
+        base::BindOnce(&SSLPrivateKeyInternal::HandleSSLPrivateKeyError,
+                       base::Unretained(this)));
   }
 
   // net::SSLPrivateKey:
@@ -642,12 +644,6 @@ void URLLoader::OnResponseStarted(net::URLRequest* url_request, int net_error) {
 
   // Do not account header bytes when reporting received body bytes to client.
   reported_total_encoded_bytes_ = url_request_->GetTotalReceivedBytes();
-
-  if (resource_scheduler_client_ && url_request->was_fetched_via_proxy() &&
-      url_request->was_fetched_via_spdy() &&
-      url_request->url().SchemeIs(url::kHttpScheme)) {
-    resource_scheduler_client_->OnReceivedSpdyProxiedHttpResponse();
-  }
 
   if (upload_progress_tracker_) {
     upload_progress_tracker_->OnUploadCompleted();

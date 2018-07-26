@@ -11,6 +11,19 @@ suite('cr-dialog', function() {
     PolymerTest.clearBody();
   });
 
+  test('cr-dialog-open event fires when opened', function() {
+    document.body.innerHTML = `
+      <cr-dialog>
+        <div slot="title">title</div>
+        <div slot="body">body</div>
+      </cr-dialog>`;
+
+    const dialog = document.body.querySelector('cr-dialog');
+    const whenFired = test_util.eventToPromise('cr-dialog-open', dialog);
+    dialog.showModal();
+    return whenFired;
+  });
+
   test('close event bubbles', function() {
     document.body.innerHTML = `
       <cr-dialog>
@@ -27,7 +40,47 @@ suite('cr-dialog', function() {
     });
   });
 
-  test('cancel event bubbles', function() {
+  // cr-dialog has to catch and re-fire 'close' events fired from it's native
+  // <dialog> child to force them to bubble in Shadow DOM V1. Ensure that this
+  // mechanism does not interfere with nested <cr-dialog> 'close' events.
+  test('close events not fired from <dialog> are not affected', function() {
+    document.body.innerHTML = `
+      <cr-dialog id="outer">
+        <div slot="title">outer dialog title</div>
+        <div slot="body">
+          <cr-dialog id="inner">
+            <div slot="title">inner dialog title</div>
+            <div slot="body">body</div>
+          </cr-dialog>
+        </div>
+      </cr-dialog>`;
+
+    const outer = document.body.querySelector('#outer');
+    assertTrue(!!outer);
+    const inner = document.body.querySelector('#inner');
+    assertTrue(!!inner);
+
+    outer.showModal();
+    inner.showModal();
+
+    let whenFired = test_util.eventToPromise('close', window);
+    inner.close();
+
+    return whenFired
+        .then(e => {
+          // Check that the event's target is the inner dialog.
+          assertEquals(inner, e.target);
+          whenFired = test_util.eventToPromise('close', window);
+          outer.close();
+          return whenFired;
+        })
+        .then(e => {
+          // Check that the event's target is the outer dialog.
+          assertEquals(outer, e.target);
+        });
+  });
+
+  test('cancel and close events bubbles when cancelled', function() {
     document.body.innerHTML = `
       <cr-dialog>
         <div slot="title">title</div>
@@ -36,9 +89,10 @@ suite('cr-dialog', function() {
 
     const dialog = document.body.querySelector('cr-dialog');
     dialog.showModal();
-    const whenFired = test_util.eventToPromise('cancel', dialog);
+    const whenCancelFired = test_util.eventToPromise('cancel', dialog);
+    const whenCloseFired = test_util.eventToPromise('close', dialog);
     dialog.cancel();
-    return whenFired.then(() => {
+    return Promise.all([whenCancelFired, whenCloseFired]).then(() => {
       assertEquals('', dialog.getNative().returnValue);
     });
   });

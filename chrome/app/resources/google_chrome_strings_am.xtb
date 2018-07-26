@@ -42,11 +42,9 @@
 <translation id="1874309113135274312">Google Chrome ቅድመ-ይሁነታ (mDNS-In)</translation>
 <translation id="1877026089748256423">Chrome ጊዜው አልፎበታል</translation>
 <translation id="1915828456209461693">ለChrome አዲስ ዝማኔ ይገኛል እና ልክ ዳግም ሲያስጀምሩት ይተገበራል።</translation>
-<translation id="2007150628464581396">{0,plural, =1{Chrome በ1 ደቂቃ ውስጥ ዳግም ይጀመራል}one{Chrome በ# ደቂቃዎች ውስጥ ዳግም ይጀመራል}other{Chrome በ# ደቂቃዎች ውስጥ ዳግም ይጀመራል}}</translation>
 <translation id="2063848847527508675">Chrome OS ዝማኔውን ለመተግበር ዳግም መጀመር አለበት።</translation>
 <translation id="2084710999043359739">ወደ Chrome አክል</translation>
 <translation id="2094919256425865063">የሆነው ሆኖ Chrome ይቁም?</translation>
-<translation id="210890598424854131">{0,plural, =0{Chrome አሁን ዳግም ይጀምራል}=1{Chrome በ1 ሰከንድ ዳግም ይጀምራል}one{Chrome በ# ሰከንዶች ዳግም ይጀምራል}other{Chrome በ# ሰከንዶች ዳግም ይጀምራል}}</translation>
 <translation id="2120620239521071941">ይሄ <ph name="ITEMS_COUNT" /> ንጥሎችን ከዚህ መሣሪያ ይሰርዛል። ውሂብዎን በኋላ ላይ ሰርስረው ለማውጣት እንደ <ph name="USER_EMAIL" /> ሆነው ወደ Chrome ይግቡ።</translation>
 <translation id="2123055963409958220"><ph name="BEGIN_LINK" />የአሁኖቹን ቅንብሮች<ph name="END_LINK" /> ሪፖርት በማድረግ Chromium የተሻለ እንዲሆን ያግዙ።</translation>
 <translation id="216054706567564023">Chromeን በእርስዎ ስልክ ላይ ይጫኑት። አንድ ኤስኤምኤስ ወደ የእርስዎ የመልሶ ማግኛ ስልክ ቁጥር እንልካለን።</translation>
@@ -63,6 +61,7 @@
 <translation id="2348335408836342058">Chrome ለዚህ ጣቢያ የእርስዎን ካሜራ እና ማይክሮፎን ለመድረስ ፈቃድ ያስፈልገዋል</translation>
 <translation id="2397416548179033562">የChrome ምናሌ አሳይ</translation>
 <translation id="2429317896000329049">ማመሳሰል ለጎራዎ ስለማይገኝ Google Chrome ውሂብዎን ማመሳሰል አልቻለም።</translation>
+<translation id="2436117022029368436">አሰሳን እና Chromeን ለማሻሻል ከGoogle ጋር ይገናኛል</translation>
 <translation id="2467438592969358367">Google Chrome የእርስዎን የይለፍ ቃላት ወደ ውጭ መላክ ይፈልጋል። ይህንን ለመፍቀድ የWindows የይለፍ ቃልዎን ይተይቡ።</translation>
 <translation id="2485422356828889247">አራግፍ</translation>
 <translation id="2534507159460261402">Google Pay (ወደ Chrome ተቀድቷል)</translation>
@@ -103,7 +102,6 @@
 <translation id="3479552764303398839">አሁን አይደለም</translation>
 <translation id="3503306920980160878">Chrome አካባቢዎን ለዚህ ጣቢያ ለማጋራት የአካባቢዎ መዳረሻ ያስፈልገዋል</translation>
 <translation id="3582972582564653026">Chromeን በመላ መሣሪያዎችዎ ላይ ያስምሩ እና ግላዊነት ያላብሱ</translation>
-<translation id="3612333635265770873">ተመሳሳይ ስም ያለው አንድ ሞዱል ከGoogle Chrome ጋር የሚጋጭ መሆኑ ይታወቃል።</translation>
 <translation id="3622797965165704966">አሁን Chromeን ከGoogle መለያዎ ጋር እና በተጋሩ ኮምፒውተሮች ላይ መጠቀም ይበልጥ ቀላል ነው።</translation>
 <translation id="3637702109597584617">የGoogle Chrome OS <ph name="TERMS_OF_SERVICE_LINK" />አገልግሎት ውል<ph name="END_TERMS_OF_SERVICE_LINK" /></translation>
 <translation id="3716182511346448902">ይህ ገጽ በጣም ብዙ ማህደረ ትውስታን ይጠቀማል፣ ስለዚህ Chrome ባለበት አቁሞታል።</translation>
@@ -136,6 +134,7 @@
 <translation id="4561051373932531560">Google Chrome ድር ላይ ያለ ስልክ ቁጥር ጠቅ እንዲያደርጉት እና በSkype እንዲደውሉለት ያስችልዎታል!</translation>
 <translation id="4567424176335768812">እንደ <ph name="USER_EMAIL_ADDRESS" /> ሆነው ገብተዋል። አሁን የእርስዎን ዕልባቶች፣ ታሪክ እና ሌሎች ቅንብሮች በመለያ በገቡ ሁሉም መሣሪያዎችዎ ላይ መድረስ ይችላሉ።</translation>
 <translation id="4571503333518166079">ወደ Chrome ማሳወቂያ ቅንብሮች ይሂዱ</translation>
+<translation id="459622048091363950">አንዴ Chrome መዳረሻ ከኖረው በኋላ ድር ጣቢያዎች እርስዎን መዳረሻ መጠየቅ ይችላሉ።</translation>
 <translation id="4600710005438004015">Chrome ወደ የቅርብ ጊዜው ስሪት ሊዘመን አልቻለም፣ ስለዚህ አዲስ ባህሪያት እና የደህንነት ማስተካከያዎች እያመለጠዎት ነው።</translation>
 <translation id="4631713731678262610">በChrome ምናሌ ውስጥ ደብቅ</translation>
 <translation id="4633000520311261472">Chrome ይበልጥ ደህንነቱ የተጠበቀ እንዲሆን ለማድረግ፣ በ<ph name="IDS_EXTENSION_WEB_STORE_TITLE" /> ውስጥ ያልተጠቀሱ እና እርስዎ ሳያውቋቸው የታከሉ ሊሆኑ የሚችሉ የተወሰኑ ዝርዝሮችን አሰናክለናል።</translation>
@@ -147,7 +146,6 @@
 <translation id="4771048833395599659">ይህ ፋይል አደገኛ ሊሆን ስለሚችል Chrome አግዶታል።</translation>
 <translation id="4794050651896644714">ዝርዝሮችን Chrome ውስጥ አስቀምጥ</translation>
 <translation id="4804732725083176494">ወደ Chrome መግባት በዚህ መሣሪያ አስተዳዳሪ ተሰናክሏል።</translation>
-<translation id="4833487314064352405">{0,plural, =1{በአንድ ቀን ውስጥ Chromeን ዳግመኛ አስጀምር}one{በ# ቀናት ውስጥ Chromeን ዳግመኛ አስጀምር}other{በ# ቀናት ውስጥ Chromeን ዳግመኛ አስጀምር}}</translation>
 <translation id="4891791193823137474">Google Chrome በጀርባ ውስጥ ይሂድ</translation>
 <translation id="4895437082222824641">አገናኝ በአዲስ የChrome &amp;ትር ውስጥ ክፈት</translation>
 <translation id="4921569541910214635">ኮምፒውተር ይጋራሉ? አሁን Chromeን ልክ እንደሚፈልጉት አድርገው ማዋቀር ይችላሉ።</translation>
@@ -155,7 +153,6 @@
 <translation id="495931528404527476">በChrome ውስጥ</translation>
 <translation id="4990567037958725628">Google Chrome Canary</translation>
 <translation id="5028489144783860647">Google Chrome የእርስዎን ውሂብ ማመሳሰል አልቻለም። እባክዎ የእርስዎን የማመሳሰያ የይለፍ ሐረግ ያዘምኑ።</translation>
-<translation id="5131923704757666404">{0,plural, =1{በአንድ ሰዓት ውስጥ Chrome እንደገና ይጀመራል}one{በ# ሰዓቶች ውስጥ Chrome እንደገና ይጀመራል}other{በ# ሰዓቶች ውስጥ Chrome እንደገና ይጀመራል}}</translation>
 <translation id="5132929315877954718">ለGoogle Chrome ምርጥ መተግበሪያዎችን፣ ጨዋታዎችን፣ ቅጥያዎችን እና ገጽታዎችን ያግኙ።</translation>
 <translation id="5166975452760862670">Google Chrome በዚህ ቋንቋ እየታየ ነው</translation>
 <translation id="5170938038195470297">መገለጫዎ የአዲስ Google Chrome ስሪት አካል ስለሆነ መጠቀም አይቻልም።
@@ -165,12 +162,10 @@
 <translation id="5204098752394657250">Google Chrome <ph name="TERMS_OF_SERVICE_LINK" />የአገልግሎት ውል<ph name="END_TERMS_OF_SERVICE_LINK" /></translation>
 <translation id="5251420635869119124">እንግዳዎች ምንም ነገር ሳይተዉ Chromeን መጠቀም ይችላሉ።</translation>
 <translation id="532046782124376502">ማስጠንቀቂያ፦ Google Chrome ቅጥያዎች የአሰሳ ታሪክዎን እንዳይመዘግቡ መከልከል አይችልም። ይህን ቅጥያ ማንነት በማያሳውቅ ሁነት ላይ ለማሰናከል ይህን አማራጭ አይምረጡ።</translation>
-<translation id="5334545119300433702">ይህ ሞዱል ከGoogle Chrome ጋር የሚጋጭ መሆኑን ይታወቃል።</translation>
 <translation id="5386244825306882791">እንዲሁም Chromeን ሲጀምሩት ወይም ከኦምኒቦክሱ ሆነው ሲፈልጉ የሚታየውን ገጽ ይቆጣጠራል።</translation>
 <translation id="5430073640787465221">የምርጫዎችዎ ፋይል ተበላሽቷል ወይም ልክ አይደለም ነው።
 
 Google Chrome ቅንጅቶችዎን ማስመለስ አልቻለም።</translation>
-<translation id="5495581687705680288">Google Chrome ላይ የተጫኑ ሞዱሎች</translation>
 <translation id="556024056938947818">Google Chrome የይለፍ ቃላትን ለማሳየት እየሞከረ ነው።</translation>
 <translation id="5566025111015594046">Google Chrome (mDNS-In)</translation>
 <translation id="565744775970812598"><ph name="FILE_NAME" /> አደገኛ ሊሆን ስለሚችል Chrome አግዶታል።</translation>
@@ -253,9 +248,9 @@ Google Chrome ቅንጅቶችዎን ማስመለስ አልቻለም።</translat
 <translation id="8286862437124483331">Google Chrome የይለፍ ቃሎችን ለማሳየት እየሞከረ ነው። ይህንን ለመፍቀድ የእርስዎን Windows የይለፍ ቃል ይተይቡ።</translation>
 <translation id="8290100596633877290">ኧረ ገዳይ! Google Chrome ተሰናክሏል። አሁን እንደገና ይጀመር?</translation>
 <translation id="8342675569599923794">ይህ ፋይል አደገኛ ስለሆነ Chrome አግዶታል።</translation>
+<translation id="8380166467911888159">የሥርዓተ ፊደል አጻጻፍ ስህተቶችን ለማስተካከል፣ Chrome እርስዎ በጽሑፍ መስኮች ውስጥ የሚተይቡትን ጽሑፍ ወደ Google ይልካል</translation>
 <translation id="840084489713044809">Google Chrome የእርስዎን የይለፍ ቃላት ወደ ውጭ መላክ ይፈልጋል።</translation>
 <translation id="8406086379114794905">Chrome የተሻለ እንዲሆን ያግዙ</translation>
-<translation id="8439301513305169426">Chrome ይህን የይለፍ ቃል ከ<ph name="SAVED_PASSWORD_LINK" /> ጋር ያስቀምጠዋል። በቃልዎ ማስታወስ አይጠበቅብዎትም።</translation>
 <translation id="8455999171311319804">ከተፈለገ፦ የምርመራ እና የአጠቃቀም ውሂብ ወደ Google በራስ-ሰር በመላክ Chrome OS የተሻለ እንዲሆን ያግዙ።</translation>
 <translation id="8478823064122749032">Chromeን በእርስዎ ስልክ ላይ ይጫኑት። አንድ ኤስኤምኤስ ወደዚህ የእርስዎ የመልሶ ማግኛ ስልክ ቁጥር እንልካለን፦ <ph name="PHONE_NUMBER" /></translation>
 <translation id="8521348052903287641">የmDNS ትራፊክን ለመፍቀድ የGoogle Chrome ገንቢ የውስጥ ደንብ።</translation>
@@ -263,7 +258,6 @@ Google Chrome ቅንጅቶችዎን ማስመለስ አልቻለም።</translat
 <translation id="8547799825197623713">የChrome መተግበሪያ አስጀማሪ Canary</translation>
 <translation id="8556340503434111824">አዲስ የGoogle Chrome ስሪት አለ፣ እና ከመቼውም በበለጠ ፈጣን ነው።</translation>
 <translation id="8568392309447938879">መተግበሪያዎችን ለመጠቀም ወደ Chrome በመለያ መግባት አለብዎት። ይህ Chrome መተግበሪያዎችዎን፣ ዕልባቶችዎን፣ ታሪክዎን፣ የይለፍ ቃላትዎን እና ሌሎች ቅንብሮችዎን በተለያዩ መሣሪያዎች ላይ እንዲያመሳስል ያስችለዋል።</translation>
-<translation id="859960207076826247">{0,plural, =0{የChrome ዝማኔ ይገኛል}=1{የChrome ዝማኔ ይገኛል}one{የChrome ዝማኔ ለ# ቀኖች ያህል ይገኝ ነበር}other{የChrome ዝማኔ ለ# ቀኖች ያህል ይገኝ ነበር}}</translation>
 <translation id="8606668294522778825">Google Chrome የአሰሳ ተሞክሮዎን ለማሻሻል የድር አገልግሎቶችን ሊጠቀም ይችላል። እነዚህን አገልግሎቶች በአማራጭነት ሊያሰናክሏቸው ይችላሉ። <ph name="BEGIN_LINK" />ተጨማሪ ለመረዳት<ph name="END_LINK" /></translation>
 <translation id="8614913330719544658">Google Chrome መልስ አይሰጥም። አሁን ዳግም ይጀምር?</translation>
 <translation id="8667808506758191620">የእርስዎ <ph name="DEVICE_TYPE" /> የተዘመነ ነው።</translation>

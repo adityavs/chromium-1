@@ -20,7 +20,6 @@
 #include "components/password_manager/core/browser/password_manager_constants.h"
 #include "components/password_manager/core/browser/password_manager_metrics_util.h"
 #include "components/password_manager/core/browser/password_store.h"
-#include "components/password_manager/core/browser/password_store_consumer.h"
 #include "components/password_manager/core/browser/password_ui_utils.h"
 #include "components/password_manager/core/common/password_manager_features.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
@@ -32,6 +31,7 @@
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #include "ios/chrome/browser/experimental_flags.h"
 #include "ios/chrome/browser/passwords/ios_chrome_password_store_factory.h"
+#import "ios/chrome/browser/passwords/save_passwords_consumer.h"
 #import "ios/chrome/browser/ui/collection_view/cells/MDCCollectionViewCell+Chrome.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_footer_item.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_item.h"
@@ -85,36 +85,6 @@ std::vector<std::unique_ptr<autofill::PasswordForm>> CopyOf(
 }
 
 }  // namespace
-
-namespace password_manager {
-// A bridge C++ class passing notification about finished password store
-// requests to owning Obj-C class SavePasswordsCollectionViewController.
-class SavePasswordsConsumer : public PasswordStoreConsumer {
- public:
-  explicit SavePasswordsConsumer(
-      SavePasswordsCollectionViewController* delegate);
-  ~SavePasswordsConsumer() override;
-  void OnGetPasswordStoreResults(
-      std::vector<std::unique_ptr<autofill::PasswordForm>> results) override;
-
- private:
-  __weak SavePasswordsCollectionViewController* delegate_ = nil;
-  DISALLOW_COPY_AND_ASSIGN(SavePasswordsConsumer);
-};
-
-SavePasswordsConsumer::SavePasswordsConsumer(
-    SavePasswordsCollectionViewController* delegate)
-    : delegate_(delegate) {}
-
-SavePasswordsConsumer::~SavePasswordsConsumer() {}
-
-void SavePasswordsConsumer::OnGetPasswordStoreResults(
-    std::vector<std::unique_ptr<autofill::PasswordForm>> results) {
-  if (!results.empty())
-    [delegate_ onGetPasswordStoreResults:results];
-}
-
-}  // namespace password_manager
 
 // Use the type of the items to convey the Saved/Blacklisted status.
 @interface SavedFormContentItem : SettingsTextItem
@@ -170,7 +140,8 @@ initWithActivityItems:(NSArray*)activityItems
     PasswordDetailsCollectionViewControllerDelegate,
     SuccessfulReauthTimeAccessor,
     PasswordExporterDelegate,
-    PasswordExportActivityViewControllerDelegate> {
+    PasswordExportActivityViewControllerDelegate,
+    SavePasswordsConsumerDelegate> {
   // The observable boolean that binds to the password manager setting state.
   // Saved passwords are only on if the password manager is enabled.
   PrefBackedBoolean* passwordManagerEnabled_;
@@ -182,12 +153,10 @@ initWithActivityItems:(NSArray*)activityItems
   scoped_refptr<password_manager::PasswordStore> passwordStore_;
   // A helper object for passing data about saved passwords from a finished
   // password store request to the SavePasswordsCollectionViewController.
-  std::unique_ptr<password_manager::SavePasswordsConsumer>
-      savedPasswordsConsumer_;
+  std::unique_ptr<ios::SavePasswordsConsumer> savedPasswordsConsumer_;
   // A helper object for passing data about blacklisted sites from a finished
   // password store request to the SavePasswordsCollectionViewController.
-  std::unique_ptr<password_manager::SavePasswordsConsumer>
-      blacklistPasswordsConsumer_;
+  std::unique_ptr<ios::SavePasswordsConsumer> blacklistPasswordsConsumer_;
   // The list of the user's saved passwords.
   std::vector<std::unique_ptr<autofill::PasswordForm>> savedForms_;
   // The list of the user's blacklisted sites.
@@ -349,6 +318,7 @@ initWithActivityItems:(NSArray*)activityItems
 - (CollectionViewItem*)manageAccountLinkItem {
   CollectionViewFooterItem* footerItem =
       [[CollectionViewFooterItem alloc] initWithType:ItemTypeManageAccount];
+  footerItem.cellStyle = CollectionViewCellStyle::kUIKit;
   footerItem.text =
       l10n_util::GetNSString(IDS_IOS_SAVE_PASSWORDS_MANAGE_ACCOUNT);
   footerItem.linkURL = google_util::AppendGoogleLocaleParam(
@@ -502,16 +472,7 @@ initWithActivityItems:(NSArray*)activityItems
   savePasswordsItem_.on = [passwordManagerEnabled_ value];
 }
 
-#pragma mark - Private methods
-
-- (void)getLoginsFromPasswordStore {
-  savedPasswordsConsumer_.reset(
-      new password_manager::SavePasswordsConsumer(self));
-  passwordStore_->GetAutofillableLogins(savedPasswordsConsumer_.get());
-  blacklistPasswordsConsumer_.reset(
-      new password_manager::SavePasswordsConsumer(self));
-  passwordStore_->GetBlacklistLogins(blacklistPasswordsConsumer_.get());
-}
+#pragma mark - SavePasswordsConsumerDelegate
 
 - (void)onGetPasswordStoreResults:
     (const std::vector<std::unique_ptr<autofill::PasswordForm>>&)result {
@@ -524,15 +485,23 @@ initWithActivityItems:(NSArray*)activityItems
       savedForms_.push_back(std::move(form));
   }
 
+  password_manager::SortEntriesAndHideDuplicates(&savedForms_,
+                                                 &savedPasswordDuplicates_);
   password_manager::SortEntriesAndHideDuplicates(
-      &savedForms_, &savedPasswordDuplicates_,
-      password_manager::PasswordEntryType::SAVED);
-  password_manager::SortEntriesAndHideDuplicates(
-      &blacklistedForms_, &blacklistedPasswordDuplicates_,
-      password_manager::PasswordEntryType::BLACKLISTED);
+      &blacklistedForms_, &blacklistedPasswordDuplicates_);
 
   [self updateEditButton];
   [self reloadData];
+}
+
+#pragma mark - Private methods
+
+// Starts requests for saved and blacklisted passwords to the store.
+- (void)getLoginsFromPasswordStore {
+  savedPasswordsConsumer_.reset(new ios::SavePasswordsConsumer(self));
+  passwordStore_->GetAutofillableLogins(savedPasswordsConsumer_.get());
+  blacklistPasswordsConsumer_.reset(new ios::SavePasswordsConsumer(self));
+  passwordStore_->GetBlacklistLogins(blacklistPasswordsConsumer_.get());
 }
 
 - (void)updateExportPasswordsButton {
@@ -708,15 +677,12 @@ initWithActivityItems:(NSArray*)activityItems
     auto& forms = blacklisted ? blacklistedForms_ : savedForms_;
     auto& duplicates =
         blacklisted ? blacklistedPasswordDuplicates_ : savedPasswordDuplicates_;
-    password_manager::PasswordEntryType entryType =
-        blacklisted ? password_manager::PasswordEntryType::BLACKLISTED
-                    : password_manager::PasswordEntryType::SAVED;
 
     DCHECK_LT(formIndex, forms.size());
     auto formIterator = forms.begin() + formIndex;
 
     std::unique_ptr<autofill::PasswordForm> form = std::move(*formIterator);
-    std::string key = password_manager::CreateSortKey(*form, entryType);
+    std::string key = password_manager::CreateSortKey(*form);
     auto duplicatesRange = duplicates.equal_range(key);
     for (auto iterator = duplicatesRange.first;
          iterator != duplicatesRange.second; ++iterator) {
@@ -799,11 +765,7 @@ initWithActivityItems:(NSArray*)activityItems
   password_manager::DuplicatesMap& duplicates =
       form.blacklisted_by_user ? blacklistedPasswordDuplicates_
                                : savedPasswordDuplicates_;
-  password_manager::PasswordEntryType entryType =
-      form.blacklisted_by_user
-          ? password_manager::PasswordEntryType::BLACKLISTED
-          : password_manager::PasswordEntryType::SAVED;
-  std::string key = password_manager::CreateSortKey(form, entryType);
+  std::string key = password_manager::CreateSortKey(form);
   auto duplicatesRange = duplicates.equal_range(key);
   for (auto iterator = duplicatesRange.first;
        iterator != duplicatesRange.second; ++iterator) {

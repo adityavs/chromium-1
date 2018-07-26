@@ -125,8 +125,7 @@ LocationBarViewMac::LocationBarViewMac(AutocompleteTextField* field,
       base::Bind(&LocationBarViewMac::OnEditBookmarksEnabledChanged,
                  base::Unretained(this)));
 
-  zoom::ZoomEventManager::GetForBrowserContext(profile)
-      ->AddZoomEventManagerObserver(this);
+  zoom::ZoomEventManager::GetForBrowserContext(profile)->AddObserver(this);
 
   [[field_ cell] setIsPopupMode:
       !browser->SupportsWindowFeature(Browser::FEATURE_TABSTRIP)];
@@ -140,8 +139,7 @@ LocationBarViewMac::~LocationBarViewMac() {
   // Disconnect from cell in case it outlives us.
   [[field_ cell] clearDecorations];
 
-  zoom::ZoomEventManager::GetForBrowserContext(profile())
-      ->RemoveZoomEventManagerObserver(this);
+  zoom::ZoomEventManager::GetForBrowserContext(profile())->RemoveObserver(this);
 }
 
 GURL LocationBarViewMac::GetDestinationURL() const {
@@ -203,18 +201,13 @@ void LocationBarViewMac::UpdateSaveCreditCardIcon() {
   OnDecorationsChanged();
 }
 
-void LocationBarViewMac::UpdateFindBarIconVisibility() {
-  // TODO(crbug/651643): Implement for mac.
+void LocationBarViewMac::UpdateLocalCardMigrationIcon() {
+  // TODO(crbug.com/859652): Implement for mac.
   NOTIMPLEMENTED();
 }
 
 void LocationBarViewMac::UpdateBookmarkStarVisibility() {
   star_decoration_->SetVisible(IsStarEnabled());
-}
-
-void LocationBarViewMac::UpdateZoomViewVisibility() {
-  UpdateZoomDecoration(/*default_zoom_changed=*/false);
-  OnChanged();
 }
 
 void LocationBarViewMac::UpdateLocationBarVisibility(bool visible,
@@ -513,11 +506,20 @@ WebContents* LocationBarViewMac::GetWebContents() {
   return browser_->tab_strip_model()->GetActiveWebContents();
 }
 
-void LocationBarViewMac::UpdatePageActionIcon(PageActionIconType) {
+void LocationBarViewMac::UpdatePageActionIcon(PageActionIconType type) {
   // TODO(https://crbug.com/788051): Return page action icons for updating here
   // as update methods are migrated out of LocationBar to the
   // PageActionIconContainer interface.
-  NOTIMPLEMENTED();
+  switch (type) {
+    case PageActionIconType::kFind:
+      // TODO(crbug/651643): Implement for mac.
+      NOTIMPLEMENTED();
+      break;
+    case PageActionIconType::kZoom:
+      UpdateZoomDecoration(/*default_zoom_changed=*/false);
+      OnChanged();
+      break;
+  }
 }
 
 PageInfoVerboseType LocationBarViewMac::GetPageInfoVerboseType() const {

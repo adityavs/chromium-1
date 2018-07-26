@@ -23,7 +23,7 @@ class UnifiedVolumeView : public UnifiedSliderView,
   views::Button* more_button() { return more_button_; }
 
  private:
-  void Update();
+  void Update(bool by_user);
 
   // CrasAudioHandler::AudioObserver:
   void OnOutputNodeVolumeChanged(uint64_t node_id, int volume) override;
@@ -35,7 +35,7 @@ class UnifiedVolumeView : public UnifiedSliderView,
   // UnifiedSliderView:
   void ChildVisibilityChanged(views::View* child) override;
 
-  TopShortcutButton* const more_button_;
+  views::Button* const more_button_;
   const bool is_main_view_;
 
   DISALLOW_COPY_AND_ASSIGN(UnifiedVolumeView);

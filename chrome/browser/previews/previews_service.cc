@@ -8,6 +8,7 @@
 #include "base/files/file_path.h"
 #include "base/sequenced_task_runner.h"
 #include "base/task_scheduler/post_task.h"
+#include "chrome/browser/previews/previews_lite_page_decider.h"
 #include "chrome/common/chrome_constants.h"
 #include "components/blacklist/opt_out_blacklist/opt_out_blacklist_data.h"
 #include "components/blacklist/opt_out_blacklist/opt_out_store.h"
@@ -15,7 +16,7 @@
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_features.h"
 #include "components/data_reduction_proxy/core/common/data_reduction_proxy_params.h"
 #include "components/optimization_guide/optimization_guide_service.h"
-#include "components/previews/content/previews_io_data.h"
+#include "components/previews/content/previews_decider_impl.h"
 #include "components/previews/content/previews_optimization_guide.h"
 #include "components/previews/content/previews_ui_service.h"
 #include "components/previews/core/previews_experiments.h"
@@ -37,10 +38,10 @@ bool IsPreviewsTypeEnabled(previews::PreviewsType type) {
       return server_previews_enabled || previews::params::IsClientLoFiEnabled();
     case previews::PreviewsType::LITE_PAGE:
       return server_previews_enabled;
-    case previews::PreviewsType::AMP_REDIRECTION:
-      return previews::params::IsAMPRedirectionPreviewEnabled();
     case previews::PreviewsType::NOSCRIPT:
       return previews::params::IsNoScriptPreviewsEnabled();
+    case previews::PreviewsType::DEPRECATED_AMP_REDIRECTION:
+      return false;
     case previews::PreviewsType::UNSPECIFIED:
       // Not a real previews type so treat as false.
       return false;
@@ -64,8 +65,6 @@ int GetPreviewsTypeVersion(previews::PreviewsType type) {
       return previews::params::ClientLoFiVersion();
     case previews::PreviewsType::LITE_PAGE:
       return data_reduction_proxy::params::LitePageVersion();
-    case previews::PreviewsType::AMP_REDIRECTION:
-      return previews::params::AMPRedirectionPreviewsVersion();
     case previews::PreviewsType::NOSCRIPT:
       return previews::params::NoScriptPreviewsVersion();
     case previews::PreviewsType::RESOURCE_LOADING_HINTS:
@@ -73,6 +72,7 @@ int GetPreviewsTypeVersion(previews::PreviewsType type) {
     case previews::PreviewsType::NONE:
     case previews::PreviewsType::UNSPECIFIED:
     case previews::PreviewsType::LAST:
+    case previews::PreviewsType::DEPRECATED_AMP_REDIRECTION:
       break;
   }
   NOTREACHED();
@@ -95,7 +95,8 @@ blacklist::BlacklistData::AllowedTypesAndVersions GetAllowedPreviews() {
 
 }  // namespace
 
-PreviewsService::PreviewsService() {
+PreviewsService::PreviewsService()
+    : previews_lite_page_decider_(std::make_unique<PreviewsLitePageDecider>()) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::UI);
 }
 
@@ -104,7 +105,7 @@ PreviewsService::~PreviewsService() {
 }
 
 void PreviewsService::Initialize(
-    previews::PreviewsIOData* previews_io_data,
+    previews::PreviewsDeciderImpl* previews_decider_impl,
     optimization_guide::OptimizationGuideService* optimization_guide_service,
     const scoped_refptr<base::SingleThreadTaskRunner>& io_task_runner,
     const base::FilePath& profile_path) {
@@ -116,7 +117,7 @@ void PreviewsService::Initialize(
           {base::MayBlock(), base::TaskPriority::BACKGROUND});
 
   previews_ui_service_ = std::make_unique<previews::PreviewsUIService>(
-      previews_io_data, io_task_runner,
+      previews_decider_impl, io_task_runner,
       std::make_unique<blacklist::OptOutStoreSQL>(
           io_task_runner, background_task_runner,
           profile_path.Append(chrome::kPreviewsOptOutDBFilename)),

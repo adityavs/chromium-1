@@ -116,8 +116,6 @@ source_set("common") {
     "fileapi/file_system_messages.h",
     "fileapi/webblob_messages.h",
     "font_cache_dispatcher_win.cc",
-    "font_config_ipc_linux.cc",
-    "font_config_ipc_linux.h",
     "font_list.cc",
     "font_list.h",
     "font_list_android.cc",
@@ -211,14 +209,14 @@ source_set("common") {
     "media/media_stream_param_traits.h",
     "media/midi_messages.h",
     "media/peer_connection_tracker_messages.h",
-    "media/surface_view_manager_messages_android.h",
     "media/video_capture.h",
     "navigation_gesture.h",
     "navigation_params.cc",
     "navigation_params.h",
     "navigation_subresource_loader_params.cc",
     "navigation_subresource_loader_params.h",
-    "net/url_fetcher.cc",
+    "net/record_load_histograms.cc",
+    "net/record_load_histograms.h",
     "net/url_request_service_worker_data.cc",
     "net/url_request_service_worker_data.h",
     "net/url_request_user_data.cc",
@@ -244,8 +242,6 @@ source_set("common") {
     "possibly_associated_interface_ptr.h",
     "possibly_associated_interface_ptr_info.h",
     "possibly_associated_wrapper_shared_url_loader_factory.h",
-    "presentation/presentation_struct_traits.cc",
-    "presentation/presentation_struct_traits.h",
     "process_type.cc",
     "render_widget_surface_properties.cc",
     "render_widget_surface_properties.h",
@@ -261,8 +257,6 @@ source_set("common") {
     "service_worker/service_worker_loader_helpers.cc",
     "service_worker/service_worker_loader_helpers.h",
     "service_worker/service_worker_messages.h",
-    "service_worker/service_worker_provider_host_info.cc",
-    "service_worker/service_worker_provider_host_info.h",
     "service_worker/service_worker_types.cc",
     "service_worker/service_worker_types.h",
     "service_worker/service_worker_utils.cc",
@@ -491,7 +485,10 @@ source_set("common") {
       "sandbox_policy_fuchsia.h",
     ]
 
-    deps += [ "//third_party/fuchsia-sdk:fdio" ]
+    deps += [
+      "//third_party/fuchsia-sdk:fdio",
+      "//third_party/fuchsia-sdk:fonts",
+    ]
   }
 }
 
@@ -556,7 +553,6 @@ mojom("mojo_bindings") {
     "service_worker/embedded_worker.mojom",
     "service_worker/service_worker.mojom",
     "service_worker/service_worker_container.mojom",
-    "service_worker/service_worker_event_dispatcher.mojom",
     "service_worker/service_worker_fetch_response_callback.mojom",
     "service_worker/service_worker_provider.mojom",
     "shared_worker/shared_worker.mojom",

@@ -75,9 +75,6 @@ constexpr SkColor kLabelColor = SK_ColorWHITE;
 // Close button color.
 constexpr SkColor kCloseButtonColor = SK_ColorWHITE;
 
-// Label background color once in overview mode.
-constexpr SkColor kLabelBackgroundColor = SkColorSetARGB(25, 255, 255, 255);
-
 // Corner radius for the selection tiles.
 static int kLabelBackgroundRadius = 2;
 
@@ -94,7 +91,7 @@ constexpr float kDimmedItemOpacity = 0.3f;
 constexpr float kClosingItemOpacity = 0.8f;
 
 // Opacity for the item header.
-constexpr float kHeaderOpacity = (SkColorGetA(kLabelBackgroundColor) / 255.f);
+constexpr float kHeaderOpacity = 0.1f;
 
 // Duration it takes for the header to shift from opaque header color to
 // |kLabelBackgroundColor|.
@@ -116,7 +113,7 @@ constexpr float kPreCloseScale = 0.02f;
 
 // The size in dp of the window icon shown on the overview window next to the
 // title.
-constexpr gfx::Size kIconSize = gfx::Size(24, 24);
+constexpr gfx::Size kIconSize{24, 24};
 
 constexpr int kCloseButtonInkDropInsetDp = 2;
 
@@ -126,9 +123,9 @@ constexpr int kCloseButtonOffsetDp = 8;
 
 // The colors of the close button ripple.
 constexpr SkColor kCloseButtonInkDropRippleColor =
-    SkColorSetARGB(0x0F, 0xFF, 0xFF, 0xFF);
+    SkColorSetA(0x0F, kCloseButtonColor);
 constexpr SkColor kCloseButtonInkDropRippleHighlightColor =
-    SkColorSetARGB(0x14, 0xFF, 0xFF, 0xFF);
+    SkColorSetA(0x14, kCloseButtonColor);
 
 // The font delta of the overview window title.
 constexpr int kLabelFontDelta = 2;
@@ -1142,38 +1139,14 @@ float WindowSelectorItem::GetOpacity() {
   return item_widget_->GetNativeWindow()->layer()->opacity();
 }
 
-bool WindowSelectorItem::ShouldAnimateWhenEntering() const {
-  if (!IsNewOverviewAnimationsEnabled())
-    return true;
-  return should_animate_when_entering_;
-}
-
-bool WindowSelectorItem::ShouldAnimateWhenExiting() const {
-  if (!IsNewOverviewAnimationsEnabled())
-    return true;
-  return should_animate_when_exiting_;
-}
-
-bool WindowSelectorItem::ShouldBeObservedWhenExiting() const {
-  if (!IsNewOverviewAnimationsEnabled())
-    return false;
-  return should_be_observed_when_exiting_;
-}
-
-void WindowSelectorItem::ResetAnimationStates() {
-  should_animate_when_entering_ = true;
-  should_animate_when_exiting_ = true;
-  should_be_observed_when_exiting_ = false;
-}
-
 OverviewAnimationType WindowSelectorItem::GetExitOverviewAnimationType() {
-  return ShouldAnimateWhenExiting()
+  return should_animate_when_exiting_
              ? OverviewAnimationType::OVERVIEW_ANIMATION_LAY_OUT_SELECTOR_ITEMS
              : OverviewAnimationType::OVERVIEW_ANIMATION_NONE;
 }
 
 OverviewAnimationType WindowSelectorItem::GetExitTransformAnimationType() {
-  return ShouldAnimateWhenExiting()
+  return should_animate_when_exiting_
              ? OverviewAnimationType::OVERVIEW_ANIMATION_RESTORE_WINDOW
              : OverviewAnimationType::OVERVIEW_ANIMATION_NONE;
 }
@@ -1272,10 +1245,7 @@ void WindowSelectorItem::CreateWindowLabel(const base::string16& title) {
   label_view_->SetHorizontalAlignment(gfx::ALIGN_LEFT);
   label_view_->SetAutoColorReadabilityEnabled(false);
   label_view_->SetEnabledColor(kLabelColor);
-  // Tell the label what color it will be drawn onto. It will use whether the
-  // background color is opaque or transparent to decide whether to use
-  // subpixel rendering. Does not actually set the label's background color.
-  label_view_->SetBackgroundColor(kLabelBackgroundColor);
+  label_view_->SetSubpixelRenderingEnabled(false);
   label_view_->SetFontList(gfx::FontList().Derive(
       kLabelFontDelta, gfx::Font::NORMAL, gfx::Font::Weight::MEDIUM));
 

@@ -6,6 +6,7 @@
 <link rel="import" href="chrome://resources/polymer/v1_0/paper-icon-button/paper-icon-button-light.html">
 <link rel="import" href="../route.html">
 <link rel="import" href="../settings_shared_css.html">
+<link rel="import" href="local_data_browser_proxy.html">
 <link rel="import" href="site_settings_behavior.html">
 
 <dom-module id="site-entry">
@@ -16,45 +17,50 @@
         flex-direction: row;
       }
 
-      /* URLs should always be displayed in a LTR embedding - see
-       * https://url.spec.whatwg.org/#url-rendering. */
-      .url-directionality {
-        direction: ltr;
-        unicode-bidi: embed;
+      #toggleButton {
+        /** Use the minimum row height as the minimum click-target height. */
+        min-height: var(--settings-row-min-height);
       }
 
       .site-representation {
         display: flex;
       }
+
+      #cookies {
+        margin-top: 0.1em;
+      }
     </style>
     <div id="collapseParent">
-      <div class="settings-box list-item">
-        <div id="toggleButton" class="start row-aligned"
-            on-click="toggleCollapsible_" actionable aria-expanded="false">
+      <div class$="settings-box list-item [[getClassForIndex_(listIndex)]]">
+        <div id="toggleButton" class="start row-aligned two-line"
+            on-click="onSiteEntryTap_" actionable aria-expanded="false">
           <div class="favicon-image"
               style$="[[getSiteGroupIcon_(siteGroup)]]">
           </div>
-          <div class="site-representation middle text-elide" id="displayName">
-            <span class="url-directionality">[[displayName_]]</span>
-            <span class="secondary" hidden$="[[!scheme_(siteGroup)]]">
-              &nbsp;$i18nPolymer{siteSettingsSiteRepresentationSeparator}&nbsp;
-            </span>
-            <span class="secondary" hidden$="[[!scheme_(siteGroup)]]">
-              [[scheme_(siteGroup)]]
-            </span>
+          <div class="middle text-elide" id="displayName">
+            <div class="site-representation">
+              <span class="url-directionality">[[displayName_]]</span>
+              <span class="secondary" hidden$="[[!scheme_(siteGroup, -1)]]">
+                &nbsp;$i18nPolymer{siteSettingsSiteRepresentationSeparator}&nbsp;
+              </span>
+              <span class="secondary" hidden$="[[!scheme_(siteGroup, -1)]]">
+                [[scheme_(siteGroup, -1)]]
+              </span>
+            </div>
+            <div id="cookies" class="secondary" hidden$="[[!cookieString_]]">
+              [[cookieString_]]
+            </div>
           </div>
-          <div hidden$="[[!grouped_(siteGroup)]]">
-            <paper-icon-button-light id="expandIcon" class="icon-expand-more">
-              <button aria-label$="[[displayName_]]"
-                  aria-describedby="displayName"></button>
-            </paper-icon-button-light>
-          </div>
-          <div hidden$="[[grouped_(siteGroup)]]">
-            <paper-icon-button-light class="subpage-arrow">
-              <button aria-label$="[[displayName_]]"
-                  aria-describedby="displayName"></button>
-            </paper-icon-button-light>
-          </div>
+          <paper-icon-button-light id="expandIcon" class="icon-expand-more"
+              hidden$="[[!grouped_(siteGroup)]]">
+            <button aria-label$="[[displayName_]]"
+                aria-describedby="displayName"></button>
+          </paper-icon-button-light>
+          <paper-icon-button-light class="subpage-arrow"
+              hidden$="[[grouped_(siteGroup)]]">
+            <button aria-label$="[[displayName_]]"
+                aria-describedby="displayName"></button>
+          </paper-icon-button-light>
         </div>
         <div class="row-aligned" hidden$="[[!grouped_(siteGroup)]]">
           <div class="separator"></div>
@@ -71,8 +77,7 @@
           <template is="dom-repeat" items="[[siteGroup.origins]]">
             <div class="settings-box list-item" on-click="onOriginTap_"
                 actionable>
-              <div class="favicon-image"
-                  style$="[[computeSiteIcon(item)]]">
+              <div class="favicon-image" style$="[[computeSiteIcon(item)]]">
               </div>
               <div class="site-representation middle text-elide">
                 <span class="url-directionality">

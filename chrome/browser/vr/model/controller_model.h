@@ -32,14 +32,13 @@ struct VR_EXPORT ControllerModel {
   bool touching_touchpad = false;
   gfx::PointF touchpad_touch_position;
   float opacity = 1.0f;
-  bool quiescent = false;
   bool resting_in_viewport = false;
   bool recentered = false;
-  bool app_button_long_pressed = false;
   PlatformController::Handedness handedness = PlatformController::kRightHanded;
   base::TimeTicks last_orientation_timestamp;
   base::TimeTicks last_touch_timestamp;
   base::TimeTicks last_button_timestamp;
+  int battery_level = 0;
 };
 
 }  // namespace vr

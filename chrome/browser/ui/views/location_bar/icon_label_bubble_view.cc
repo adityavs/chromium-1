@@ -30,12 +30,17 @@
 
 namespace {
 
-// Amount of space on either side of the separator that appears after the label.
-constexpr int kSpaceBesideSeparator = 8;
+// Amount of space reserved for the separator that appears after the icon or
+// label.
+constexpr int kIconLabelBubbleSeparatorWidth = 1;
+
+// Amount of space on either side of the separator that appears after the icon
+// or label.
+constexpr int kIconLabelBubbleSpaceBesideSeparator = 8;
 
 // The length of the separator's fade animation. These values are empirical.
-constexpr int kFadeInDurationMs = 250;
-constexpr int kFadeOutDurationMs = 175;
+constexpr int kIconLabelBubbleFadeInDurationMs = 250;
+constexpr int kIconLabelBubbleFadeOutDurationMs = 175;
 
 }  // namespace
 
@@ -45,6 +50,9 @@ constexpr int kFadeOutDurationMs = 175;
 IconLabelBubbleView::SeparatorView::SeparatorView(IconLabelBubbleView* owner) {
   DCHECK(owner);
   owner_ = owner;
+
+  SetPaintToLayer();
+  layer()->SetFillsBoundsOpaquely(false);
 }
 
 void IconLabelBubbleView::SeparatorView::OnPaint(gfx::Canvas* canvas) {
@@ -54,19 +62,21 @@ void IconLabelBubbleView::SeparatorView::OnPaint(gfx::Canvas* canvas) {
       plain_text_color, color_utils::IsDark(plain_text_color) ? 0x59 : 0xCC);
   const float x = GetLocalBounds().right() - owner_->GetEndPadding() -
                   1.0f / canvas->image_scale();
-  canvas->Draw1pxLine(gfx::PointF(x, GetLocalBounds().y()),
-                      gfx::PointF(x, GetLocalBounds().bottom()),
-                      separator_color);
-}
-
-void IconLabelBubbleView::SeparatorView::OnImplicitAnimationsCompleted() {
-  if (layer() && layer()->opacity() == 1.0f)
-    DestroyLayer();
+  canvas->DrawLine(gfx::PointF(x, GetLocalBounds().y()),
+                   gfx::PointF(x, GetLocalBounds().bottom()), separator_color);
 }
 
 void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
   if (!visible())
     return;
+
+  // When using focus rings are visible we should hide the separator instantly
+  // when the IconLabelBubbleView is focused. Otherwise we should follow the
+  // inkdrop.
+  if (views::PlatformStyle::kPreferFocusRings && owner_->HasFocus()) {
+    layer()->SetOpacity(0.0f);
+    return;
+  }
 
   views::InkDrop* ink_drop = owner_->GetInkDrop();
   DCHECK(ink_drop);
@@ -75,18 +85,14 @@ void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
   // separator should fade out.
   views::InkDropState state = ink_drop->GetTargetInkDropState();
   float opacity = 0.0f;
-  float duration = kFadeOutDurationMs;
+  float duration = kIconLabelBubbleFadeOutDurationMs;
   if (!ink_drop->IsHighlightFadingInOrVisible() &&
       (state == views::InkDropState::HIDDEN ||
        state == views::InkDropState::ACTION_TRIGGERED ||
        state == views::InkDropState::DEACTIVATED)) {
     opacity = 1.0f;
-    duration = kFadeInDurationMs;
+    duration = kIconLabelBubbleFadeInDurationMs;
   }
-
-  if (!layer())
-    SetPaintToLayer();
-  layer()->SetFillsBoundsOpaquely(false);
 
   if (disable_animation_for_test_) {
     layer()->SetOpacity(opacity);
@@ -95,7 +101,6 @@ void IconLabelBubbleView::SeparatorView::UpdateOpacity() {
     animation.SetTransitionDuration(
         base::TimeDelta::FromMilliseconds(duration));
     animation.SetTweenType(gfx::Tween::Type::EASE_IN);
-    animation.AddObserver(this);
     layer()->SetOpacity(opacity);
   }
 }
@@ -176,6 +181,14 @@ bool IconLabelBubbleView::ShouldShowSeparator() const {
   return ShouldShowLabel();
 }
 
+bool IconLabelBubbleView::ShouldShowExtraEndSpace() const {
+  return false;
+}
+
+bool IconLabelBubbleView::ShouldShowExtraInternalSpace() const {
+  return false;
+}
+
 double IconLabelBubbleView::WidthMultiplier() const {
   return 1.0;
 }
@@ -228,8 +241,12 @@ void IconLabelBubbleView::Layout() {
   separator_bounds.Inset(0, (separator_bounds.height() - separator_height) / 2);
 
   float separator_width = GetPrefixedSeparatorWidth() + GetEndPadding();
-  separator_view_->SetBounds(label_->bounds().right(), separator_bounds.y(),
-                             separator_width, separator_height);
+  int separator_x =
+      ui::MaterialDesignController::IsRefreshUi() && label_->text().empty()
+          ? image_->bounds().right()
+          : label_->bounds().right();
+  separator_view_->SetBounds(separator_x, separator_bounds.y(), separator_width,
+                             separator_height);
 
   gfx::Rect ink_drop_bounds = GetLocalBounds();
   if (ShouldShowSeparator()) {
@@ -241,10 +258,9 @@ void IconLabelBubbleView::Layout() {
   if (focus_ring() && !ink_drop_bounds.IsEmpty()) {
     focus_ring()->Layout();
     int radius = ink_drop_bounds.height() / 2;
-    SkRRect rect =
-        SkRRect::MakeRectXY(gfx::RectToSkRect(ink_drop_bounds), radius, radius);
     SkPath path;
-    path.addRRect(rect);
+    path.addRoundRect(gfx::RectToSkRect(GetMirroredRect(ink_drop_bounds)),
+                      radius, radius);
     focus_ring()->SetPath(path);
   }
 }
@@ -362,6 +378,16 @@ void IconLabelBubbleView::NotifyClick(const ui::Event& event) {
   OnActivate(event);
 }
 
+void IconLabelBubbleView::OnFocus() {
+  separator_view_->UpdateOpacity();
+  Button::OnFocus();
+}
+
+void IconLabelBubbleView::OnBlur() {
+  separator_view_->UpdateOpacity();
+  Button::OnBlur();
+}
+
 void IconLabelBubbleView::OnWidgetDestroying(views::Widget* widget) {
   widget->RemoveObserver(this);
 }
@@ -379,7 +405,11 @@ SkColor IconLabelBubbleView::GetParentBackgroundColor() const {
 }
 
 gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
-  gfx::Size size(GetNonLabelSize());
+  gfx::Size size(image_->GetPreferredSize());
+  size.Enlarge(
+      GetInsets().left() + GetPrefixedSeparatorWidth() + GetEndPadding(),
+      GetInsets().height());
+
   const bool shrinking = IsShrinking();
   // Animation continues for the last few pixels even after the label is not
   // visible in order to slide the icon into its final position. Therefore it
@@ -392,20 +422,10 @@ gfx::Size IconLabelBubbleView::GetSizeForLabelWidth(int label_width) const {
     // enough to show the icon. We don't want to shrink all the way back to
     // zero, since this would mean the view would completely disappear and then
     // pop back to an icon after the animation finishes.
-    const int max_width = size.width() + GetInternalSpacing() + label_width +
-                          GetPrefixedSeparatorWidth();
+    const int max_width = size.width() + GetInternalSpacing() + label_width;
     const int current_width = WidthMultiplier() * max_width;
     size.set_width(shrinking ? std::max(current_width, size.width())
                              : current_width);
-  }
-  return size;
-}
-
-gfx::Size IconLabelBubbleView::GetMaxSizeForLabelWidth(int label_width) const {
-  gfx::Size size(GetNonLabelSize());
-  if (ShouldShowLabel() || IsShrinking()) {
-    size.Enlarge(
-        GetInternalSpacing() + label_width + GetPrefixedSeparatorWidth(), 0);
   }
   return size;
 }
@@ -416,45 +436,27 @@ int IconLabelBubbleView::GetInternalSpacing() const {
 
   // In touch, the icon-to-label spacing is a custom value.
   constexpr int kIconLabelSpacingTouch = 4;
-  return ui::MaterialDesignController::IsTouchOptimizedUiEnabled()
-             ? kIconLabelSpacingTouch
-             : GetLayoutConstant(LOCATION_BAR_ELEMENT_PADDING) +
-                   GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left();
-}
+  const int default_spacing =
+      ui::MaterialDesignController::IsTouchOptimizedUiEnabled()
+          ? kIconLabelSpacingTouch
+          : GetLayoutConstant(LOCATION_BAR_ELEMENT_PADDING) +
+                GetLayoutInsets(LOCATION_BAR_ICON_INTERIOR_PADDING).left();
 
-int IconLabelBubbleView::GetSeparatorLayoutWidth() const {
-  // On scale factors < 2, we reserve 1 DIP for the 1 px separator.  For
-  // higher scale factors, we simply take the separator px out of the
-  // kSpaceBesideSeparator region before the separator, as that results in a
-  // width closer to the desired gap than if we added a whole DIP for the
-  // separator px. (For scale 2, the two methods have equal error: 1 px.)
-  return (GetScaleFactor() >= 2) ? 0 : 1;
+  return default_spacing +
+         (ShouldShowExtraInternalSpace() ? GetPrefixedSeparatorWidth() : 0);
 }
 
 int IconLabelBubbleView::GetPrefixedSeparatorWidth() const {
-  return ShouldShowSeparator()
-             ? kSpaceBesideSeparator + GetSeparatorLayoutWidth()
+  return ShouldShowSeparator() || ShouldShowExtraEndSpace()
+             ? kIconLabelBubbleSeparatorWidth +
+                   kIconLabelBubbleSpaceBesideSeparator
              : 0;
 }
 
 int IconLabelBubbleView::GetEndPadding() const {
   if (ShouldShowSeparator())
-    return kSpaceBesideSeparator;
+    return kIconLabelBubbleSpaceBesideSeparator;
   return GetInsets().right();
-}
-
-gfx::Size IconLabelBubbleView::GetNonLabelSize() const {
-  gfx::Size size(image_->GetPreferredSize());
-  size.Enlarge(GetInsets().left() + GetEndPadding(), GetInsets().height());
-  return size;
-}
-
-float IconLabelBubbleView::GetScaleFactor() const {
-  const views::Widget* widget = GetWidget();
-  // There may be no widget in tests, and in ash there may be no compositor if
-  // the native view of the Widget doesn't have a parent.
-  const ui::Compositor* compositor = widget ? widget->GetCompositor() : nullptr;
-  return compositor ? compositor->device_scale_factor() : 1.0f;
 }
 
 bool IconLabelBubbleView::OnActivate(const ui::Event& event) {

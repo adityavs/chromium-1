@@ -98,7 +98,6 @@
 
           &lt;p&gt;Stellen Sie in der App &lt;strong&gt;Einstellungen&lt;/strong&gt; im Bereich &lt;strong&gt;Allgemein&lt;/strong&gt; Datum und Uhrzeit richtig ein.&lt;/p&gt;</translation>
 <translation id="1583429793053364125">Fehler beim Anzeigen dieser Webseite.</translation>
-<translation id="1590457302292452960">Starkes Passwort generieren...</translation>
 <translation id="1592005682883173041">Zugriff auf lokale Daten</translation>
 <translation id="1594030484168838125">Auswählen</translation>
 <translation id="1620510694547887537">Kamera</translation>
@@ -133,7 +132,6 @@
 <translation id="1787142507584202372">Hier werden Ihre offenen Tabs angezeigt</translation>
 <translation id="1791429645902722292">Google Smart Lock</translation>
 <translation id="1803264062614276815">Name des Karteninhabers</translation>
-<translation id="1806541873155184440">Hinzugefügt: <ph name="ADDED_TO_AUTOFILL_MONTH" /></translation>
 <translation id="1821930232296380041">Anfrage oder Anfrageparameter ungültig</translation>
 <translation id="1826516787628120939">Überprüfung läuft</translation>
 <translation id="1834321415901700177">Diese Website enthält schädliche Programme</translation>
@@ -166,10 +164,10 @@
 <translation id="2064691555167957331">{COUNT,plural, =1{1 Vorschlag}other{# Vorschläge}}</translation>
 <translation id="2079545284768500474">Rückgängig machen</translation>
 <translation id="20817612488360358">Die System-Proxy-Einstellungen sind zur Verwendung angegeben, gleichzeitig wurde aber auch eine explizite Proxy-Konfiguration festgelegt.</translation>
-<translation id="2084558088529668945">Sie haben Ihr Passwort auf einer Website eingegeben, die nicht von <ph name="ORG_NAME" /> verwaltet wird. Um Ihr Konto zu schützen, verwenden Sie nicht dasselbe Passwort für andere Apps und Websites.</translation>
 <translation id="2091887806945687916">Ton</translation>
 <translation id="2094505752054353250">Domains stimmen nicht überein.</translation>
 <translation id="2096368010154057602">Verwaltungsbezirk</translation>
+<translation id="2102134110707549001">Starkes Passwort vorschlagen…</translation>
 <translation id="2108755909498034140">Computer neu starten</translation>
 <translation id="2113977810652731515">Karte</translation>
 <translation id="2114841414352855701">Wird ignoriert, da sie von <ph name="POLICY_NAME" /> außer Kraft gesetzt wurde.</translation>
@@ -285,7 +283,6 @@
 <translation id="2948083400971632585">Sie können alle für eine Verbindung konfigurierten Proxys auf der Seite "Einstellungen" deaktivieren.</translation>
 <translation id="2955913368246107853">Suchleiste schließen</translation>
 <translation id="2958431318199492670">Die Netzwerkkonfiguration stimmt nicht mit dem ONC-Standard überein. Die Konfiguration wird unter Umständen nicht vollständig importiert.</translation>
-<translation id="2966678944701946121">Gültig bis: <ph name="EXPIRATION_DATE_ABBR" />, hinzugefügt: <ph name="ADDED_TO_AUTOFILL_MONTH" /></translation>
 <translation id="2969319727213777354">Zum Herstellen einer sicheren Verbindung muss die Uhrzeit richtig eingestellt sein. Der Grund hierfür ist, dass Websites sich mithilfe von Zertifikaten identifizieren, die nur für einen bestimmten Zeitraum gelten. Da die Uhrzeit Ihres Geräts falsch ist, kann Google Chrome diese Zertifikate nicht bestätigen.</translation>
 <translation id="2972581237482394796">&amp;Wiederholen</translation>
 <translation id="2977665033722899841"><ph name="ROW_NAME" />, aktuell ausgewählt. <ph name="ROW_CONTENT" /></translation>
@@ -341,7 +338,6 @@
 <translation id="3305707030755673451">Ihre Daten wurden am <ph name="TIME" /> mit Ihrer Synchronisierungspassphrase verschlüsselt. Geben Sie diese ein, um die Synchronisierung zu starten.</translation>
 <translation id="3320021301628644560">Rechnungsadresse hinzufügen</translation>
 <translation id="3338095232262050444">Sicher</translation>
-<translation id="3340978935015468852">Einstellungen</translation>
 <translation id="3345135638360864351">Ihre Zugriffsanfrage für diese Website konnte nicht an <ph name="NAME" /> gesendet werden. Bitte versuchen Sie es erneut.</translation>
 <translation id="3355823806454867987">Proxy-Einstellungen ändern...</translation>
 <translation id="3361596688432910856">Chrome <ph name="BEGIN_EMPHASIS" />speichert die folgenden Informationen nicht<ph name="END_EMPHASIS" />:
@@ -375,7 +371,6 @@
 <translation id="3528171143076753409">Serverzertifikat ist nicht vertrauenswürdig.</translation>
 <translation id="3530944546672790857">{COUNT,plural, =0{Mindestens 1 Eintrag auf synchronisierten Geräten}=1{1 Eintrag (und weitere auf synchronisierten Geräten)}other{# Einträge (und weitere auf synchronisierten Geräten)}}</translation>
 <translation id="3539171420378717834">Kopie dieser Karte auf diesem Gerät speichern</translation>
-<translation id="3542684924769048008">Passwort verwenden für:</translation>
 <translation id="3549644494707163724">Alle synchronisierten Daten mit meiner eigenen Synchronisierungspassphrase verschlüsseln</translation>
 <translation id="3556433843310711081">Dein Administrator kann die Blockierung aufheben</translation>
 <translation id="3566021033012934673">Dies ist keine sichere Verbindung</translation>
@@ -460,7 +455,6 @@
 <translation id="4171400957073367226">Ungültige Bestätigungssignatur</translation>
 <translation id="4173827307318847180">{MORE_ITEMS,plural, =1{<ph name="ITEM_COUNT" /> weiteres Element}other{<ph name="ITEM_COUNT" /> weitere Elemente}}</translation>
 <translation id="4179515394835346607"><ph name="ROW_NAME" />: <ph name="ROW_CONTENT" /></translation>
-<translation id="4192549185358213268">Chrome empfiehlt, Ihr Passwort für <ph name="ORG_NAME" /> zurückzusetzen, wenn Sie es auf anderen Websites verwendet haben.</translation>
 <translation id="4196861286325780578">&amp;Verschieben wiederholen</translation>
 <translation id="4203896806696719780"><ph name="BEGIN_LINK" />Firewall und Antivirenkonfiguration prüfen<ph name="END_LINK" /></translation>
 <translation id="4220128509585149162">Abstürze</translation>
@@ -486,7 +480,7 @@
 <translation id="4235360514405112390">Gültig</translation>
 <translation id="4250431568374086873">Die Verbindung zu dieser Website ist nicht uneingeschränkt sicher</translation>
 <translation id="4250680216510889253">Nein</translation>
-<translation id="425582637250725228">Die von Ihnen vorgenommenen Änderungen werden möglicherweise nicht gespeichert.</translation>
+<translation id="425582637250725228">Ihre Änderungen werden eventuell nicht gespeichert.</translation>
 <translation id="4258748452823770588">Fehlerhafte Signatur</translation>
 <translation id="4265872034478892965">Von Ihrem Administrator zugelassen</translation>
 <translation id="4275830172053184480">Gerät neu starten</translation>
@@ -536,8 +530,8 @@
 <translation id="4726672564094551039">Richtlinien neu laden</translation>
 <translation id="4728558894243024398">Plattform</translation>
 <translation id="4736825316280949806">Chromium neu starten</translation>
+<translation id="4742407542027196863">Passwörter verwalten…</translation>
 <translation id="4744603770635761495">Ausführbarer Pfad</translation>
-<translation id="4749685221585524849">Zuletzt verwendet: <ph name="LAST_USED_MONTH" /></translation>
 <translation id="4750917950439032686">Ihre Daten wie Passwörter oder Kreditkartennummern sind privat, wenn Sie sie an diese Website senden.</translation>
 <translation id="4756388243121344051">&amp;Verlauf</translation>
 <translation id="4758311279753947758">Kontaktdaten hinzufügen</translation>
@@ -554,6 +548,7 @@
 <translation id="4850886885716139402">Anzeigen</translation>
 <translation id="4854362297993841467">Diese Lieferoption ist nicht verfügbar. Bitte wählen Sie eine andere Option aus.</translation>
 <translation id="4858792381671956233">Du hast deine Eltern gefragt, ob du diese Website besuchen darfst</translation>
+<translation id="4876305945144899064">Kein Nutzername</translation>
 <translation id="4880827082731008257">Im Verlauf suchen</translation>
 <translation id="4881695831933465202">Öffnen</translation>
 <translation id="4895877746940133817"><ph name="TYPE_1" />, <ph name="TYPE_2" />, <ph name="TYPE_3" /></translation>
@@ -587,6 +582,7 @@
 <translation id="5089810972385038852">Bundesstaat/-land</translation>
 <translation id="5094747076828555589">Dieser Server konnte nicht beweisen, dass er <ph name="DOMAIN" /> ist. Sein Sicherheitszertifikat wird von Chromium als nicht vertrauenswürdig eingestuft. Mögliche Gründe sind eine fehlerhafte Konfiguration oder ein Angreifer, der Ihre Verbindung abfängt.</translation>
 <translation id="5095208057601539847">Provinz</translation>
+<translation id="5098332213681597508">Dieser Name stammt aus Ihrem Google-Konto.</translation>
 <translation id="5115563688576182185">(64-Bit)</translation>
 <translation id="5121084798328133320">Nach erfolgter Bestätigung werden die Kartendetails Ihres Google Payments-Kontos an diese Website weitergegeben.</translation>
 <translation id="5128122789703661928">Die Sitzung mit diesem Namen kann nicht gelöscht werden.</translation>
@@ -630,7 +626,7 @@
 <translation id="5371425731340848620">Karte aktualisieren</translation>
 <translation id="5377026284221673050">"Ihre Uhr geht nach", "Ihre Uhr geht vor" oder "&lt;span class="error-code"&gt;NET::ERR_CERT_DATE_INVALID&lt;/span&gt;"</translation>
 <translation id="5386426401304769735">Die Zertifikatskette für diese Website enthält ein Zertifikat mit SHA-1-Signatur.</translation>
-<translation id="5402410679244714488">Gültig bis: <ph name="EXPIRATION_DATE_ABBR" />, vor über einem Jahr zuletzt verwendet</translation>
+<translation id="5387961145478138773">Schnellen Zugriff auf Ihre bevorzugten Google-Apps erhalten</translation>
 <translation id="540969355065856584">Dieser Server konnte nicht beweisen, dass er <ph name="DOMAIN" /> ist. Sein Sicherheitszertifikat ist zurzeit ungültig. Mögliche Gründe sind eine fehlerhafte Konfiguration oder ein Angreifer, der Ihre Verbindung abfängt.</translation>
 <translation id="5421136146218899937">Browserdaten löschen...</translation>
 <translation id="5430298929874300616">Lesezeichen löschen</translation>
@@ -672,11 +668,13 @@
 <translation id="5633066919399395251">Zurzeit auf <ph name="BEGIN_BOLD" /><ph name="SITE" /><ph name="END_BOLD" /> befindliche Hacker könnten versuchen, gefährliche Programme auf Ihrem Computer zu installieren, um Daten wie Fotos, Passwörter, Nachrichten und Kreditkartendaten zu stehlen oder zu löschen. <ph name="BEGIN_LEARN_MORE_LINK" />Weitere Informationen<ph name="END_LEARN_MORE_LINK" /></translation>
 <translation id="563324245173044180">Betrügerische Inhalte blockiert.</translation>
 <translation id="5659593005791499971">E-Mail-Adresse</translation>
+<translation id="5666899935841546222">Möchten Sie an einem Ort auf alle Ihre Karten zugreifen können?</translation>
 <translation id="5675650730144413517">Diese Seite funktioniert nicht</translation>
 <translation id="5685654322157854305">Versandadresse hinzufügen</translation>
 <translation id="5689199277474810259">Als JSON exportieren</translation>
 <translation id="5689516760719285838">Ort</translation>
 <translation id="570530837424789914">Verwalten…</translation>
+<translation id="57094364128775171">Starkes Passwort vorschlagen…</translation>
 <translation id="5710435578057952990">Die Identität dieser Website wurde nicht verifiziert.</translation>
 <translation id="5719499550583120431">Prepaidkarten werden akzeptiert.</translation>
 <translation id="5720705177508910913">Aktueller Nutzer</translation>
@@ -697,7 +695,6 @@
 <translation id="5869405914158311789">Diese Website ist nicht erreichbar</translation>
 <translation id="5869522115854928033">Gespeicherte Passwörter</translation>
 <translation id="5893752035575986141">Kreditkarten werden akzeptiert.</translation>
-<translation id="5898382028489516745">Chromium empfiehlt, Ihr Passwort für <ph name="ORG_NAME" /> zurückzusetzen, wenn Sie es auf anderen Websites verwendet haben.</translation>
 <translation id="5908541034548427511"><ph name="TYPE_1" /> (synchronisiert)</translation>
 <translation id="5920262536204764679">{NUM_COOKIES,plural, =1{1 wird verwendet}other{# werden verwendet}}</translation>
 <translation id="5939518447894949180">Zurücksetzen</translation>
@@ -746,13 +743,11 @@
 <translation id="6282194474023008486">Postleitzahl</translation>
 <translation id="6290238015253830360">Hier werden Ihre vorgeschlagenen Artikel angezeigt</translation>
 <translation id="6305205051461490394"><ph name="URL" /> ist nicht erreichbar.</translation>
-<translation id="6319915415804115995">Vor über einem Jahr zuletzt verwendet</translation>
 <translation id="6321917430147971392">Überprüfen Sie die DNS-Einstellungen.</translation>
 <translation id="6328639280570009161">Deaktivieren Sie die Netzwerkvorhersage.</translation>
 <translation id="6328786501058569169">Sie befinden sich auf einer betrügerischen Website</translation>
 <translation id="6337133576188860026">Es werden weniger als <ph name="SIZE" /> Speicherplatz freigegeben. Manche Websites werden beim nächsten Öffnen eventuell langsamer geladen.</translation>
 <translation id="6337534724793800597">Richtlinien nach Name filtern</translation>
-<translation id="6342069812937806050">Abgeschlossen</translation>
 <translation id="6355080345576803305">Überschreibung öffentlicher Sitzung</translation>
 <translation id="6358450015545214790">Was bedeuten diese Hinweise?</translation>
 <translation id="6386120369904791316">{COUNT,plural, =1{1 weiterer Vorschlag}other{# weitere Vorschläge}}</translation>
@@ -777,7 +772,6 @@
 <translation id="6529602333819889595">&amp;Löschen wiederholen</translation>
 <translation id="6534179046333460208">Physical Web-Vorschläge</translation>
 <translation id="6550675742724504774">Optionen</translation>
-<translation id="6556915248009097796">Gültig bis: <ph name="EXPIRATION_DATE_ABBR" />, zuletzt verwendet: <ph name="LAST_USED_DATE_NO_DETAIL" /></translation>
 <translation id="6563469144985748109">Der Administrator hat die Berechtigung noch nicht erteilt</translation>
 <translation id="6569060085658103619">Dies ist eine Erweiterungsseite</translation>
 <translation id="6596325263575161958">Verschlüsselungsoptionen</translation>
@@ -807,6 +801,7 @@
 <translation id="6831043979455480757">Übersetzen</translation>
 <translation id="6839929833149231406">Stadtteil</translation>
 <translation id="6852204201400771460">App neu laden?</translation>
+<translation id="6865412394715372076">Diese Karte kann momentan nicht geprüft werden</translation>
 <translation id="6874604403660855544">&amp;Hinzufügen wiederholen</translation>
 <translation id="6886577214605505410"><ph name="LOCATION_TITLE" /> <ph name="SHORT_URL" /></translation>
 <translation id="6891596781022320156">Richtlinienebene wird nicht unterstützt.</translation>
@@ -879,6 +874,7 @@
       &lt;li&gt;Klicken Sie auf &lt;strong&gt;Übernehmen&lt;/strong&gt; und dann auf &lt;strong&gt;OK&lt;/strong&gt;.
       &lt;li&gt;In der &lt;a href="https://support.google.com/chrome/answer/6098869"&gt;Chrome-Hilfe&lt;/a&gt; finden Sie eine Anleitung dazu, wie Sie die Software von Ihrem Computer entfernen.
       &lt;/ol&gt;</translation>
+<translation id="7416351320495623771">Passwörter verwalten…</translation>
 <translation id="7419106976560586862">Profilpfad</translation>
 <translation id="7437289804838430631">Kontaktdaten hinzufügen</translation>
 <translation id="7441627299479586546">Falsche(r) Nutzername/Domain der Richtlinie</translation>
@@ -1042,6 +1038,7 @@
 <translation id="8553075262323480129">Die Übersetzung ist fehlgeschlagen, weil die Sprache der Seite nicht ermittelt werden konnte.</translation>
 <translation id="8557066899867184262">Der CVC befindet sich auf der Rückseite Ihrer Karte.</translation>
 <translation id="8559762987265718583">Es kann keine private Verbindung zu <ph name="BEGIN_BOLD" /><ph name="DOMAIN" /><ph name="END_BOLD" /> hergestellt werden, weil Datum und Uhrzeit Ihres Geräts falsch sind (<ph name="DATE_AND_TIME" />).</translation>
+<translation id="8564985650692024650">Chromium empfiehlt, Ihr Passwort für <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> zurückzusetzen, wenn Sie es auf anderen Websites verwendet haben.</translation>
 <translation id="8571890674111243710">Seite wird in folgende Sprache übersetzt: <ph name="LANGUAGE" />...</translation>
 <translation id="858637041960032120">Weitere Nummer
 </translation>
@@ -1049,12 +1046,11 @@
 <translation id="860043288473659153">Name des Karteninhabers</translation>
 <translation id="8620436878122366504">Deine Eltern haben die Berechtigung noch nicht erteilt</translation>
 <translation id="8625384913736129811">Diese Karte für dieses Gerät speichern</translation>
-<translation id="8639963783467694461">AutoFill-Einstellungen</translation>
 <translation id="8663226718884576429">Bestellübersicht, <ph name="TOTAL_LABEL" />, weitere Details</translation>
 <translation id="8680536109547170164"><ph name="QUERY" />, Antwort, <ph name="ANSWER" /></translation>
 <translation id="8703575177326907206">Die Verbindung zu <ph name="DOMAIN" /> ist nicht verschlüsselt.</translation>
-<translation id="8713137585425162364">Diese Karte kann momentan nicht überprüft werden.</translation>
 <translation id="8718314106902482036">Zahlung nicht abgeschlossen</translation>
+<translation id="8719263113926255150"><ph name="ENTITY" />, <ph name="DESCRIPTION" />, Suchvorschlag</translation>
 <translation id="8725066075913043281">Erneut versuchen</translation>
 <translation id="8728672262656704056">Sie haben den Inkognitomodus aktiviert</translation>
 <translation id="8730621377337864115">Fertig</translation>
@@ -1072,6 +1068,7 @@
 <translation id="884264119367021077">Versandadresse</translation>
 <translation id="884923133447025588">Kein Sperrmechanismus gefunden.</translation>
 <translation id="885730110891505394">Datenfreigabe an Google</translation>
+<translation id="8858065207712248076">Chrome empfiehlt, Ihr Passwort für <ph name="BEGIN_BOLD" /><ph name="ORG_NAME" /><ph name="END_BOLD" /> zurückzusetzen, wenn Sie es auf anderen Websites verwendet haben.</translation>
 <translation id="8866481888320382733">Fehler beim Parsen der Richtlinieneinstellungen</translation>
 <translation id="8870413625673593573">Kürzlich geschlossen</translation>
 <translation id="8874824191258364635">Geben Sie eine gültige Kartennummer ein</translation>
@@ -1111,6 +1108,7 @@
 <translation id="9103872766612412690"><ph name="SITE" /> schützt Ihre Daten in der Regel durch Verschlüsselung. Als Chromium dieses Mal versuchte, eine Verbindung zu <ph name="SITE" /> herzustellen, gab die Website ungewöhnliche und falsche Anmeldedaten zurück. Entweder versucht ein Angreifer, sich als <ph name="SITE" /> auszugeben, oder die Verbindung wurde durch eine WLAN-Anmeldeseite unterbrochen. Da Chromium die Verbindung vor dem Austausch von Daten unterbrochen hat, sind Ihre Informationen weiterhin sicher.</translation>
 <translation id="9106062320799175032">Rechnungsadresse hinzufügen</translation>
 <translation id="910908805481542201">Helfen Sie mir, dieses Problem zu beheben</translation>
+<translation id="9114524666733003316">Karte wird bestätigt…</translation>
 <translation id="9128870381267983090">Mit Netzwerk verbinden</translation>
 <translation id="9137013805542155359">Original anzeigen</translation>
 <translation id="9137248913990643158">Melden Sie sich in Chrome an, bevor Sie diese App nutzen.</translation>

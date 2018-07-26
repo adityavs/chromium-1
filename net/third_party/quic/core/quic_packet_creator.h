@@ -32,6 +32,9 @@ class QUIC_EXPORT_PRIVATE QuicPacketCreator {
       : public QuicConnectionCloseDelegateInterface {
    public:
     ~DelegateInterface() override {}
+    // Get a buffer of kMaxPacketSize bytes to serialize the next packet.
+    // If return nullptr, QuicPacketCreator will serialize on a stack buffer.
+    virtual char* GetPacketBuffer() = 0;
     // Called when a packet is serialized. Delegate does not take the ownership
     // of |serialized_packet|, but takes ownership of any frames it removes
     // from |packet.retransmittable_frames|.
@@ -52,6 +55,8 @@ class QUIC_EXPORT_PRIVATE QuicPacketCreator {
   QuicPacketCreator(QuicConnectionId connection_id,
                     QuicFramer* framer,
                     DelegateInterface* delegate);
+  QuicPacketCreator(const QuicPacketCreator&) = delete;
+  QuicPacketCreator& operator=(const QuicPacketCreator&) = delete;
 
   ~QuicPacketCreator();
 
@@ -325,8 +330,6 @@ class QUIC_EXPORT_PRIVATE QuicPacketCreator {
   // If true, packet_'s transmission type is only set by
   // SetPacketTransmissionType and does not get cleared in ClearPacket.
   bool can_set_transmission_type_;
-
-  DISALLOW_COPY_AND_ASSIGN(QuicPacketCreator);
 };
 
 }  // namespace quic

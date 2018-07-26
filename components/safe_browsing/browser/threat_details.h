@@ -73,7 +73,7 @@ class ThreatDetails : public base::RefCounted<ThreatDetails>,
   typedef security_interstitials::UnsafeResource UnsafeResource;
 
   // Constructs a new ThreatDetails instance, using the factory.
-  static ThreatDetails* NewThreatDetails(
+  static scoped_refptr<ThreatDetails> NewThreatDetails(
       BaseUIManager* ui_manager,
       content::WebContents* web_contents,
       const UnsafeResource& resource,
@@ -101,9 +101,13 @@ class ThreatDetails : public base::RefCounted<ThreatDetails>,
 
   void OnRedirectionCollectionReady();
 
+  // WebContentsObserver implementation:
+  void FrameDeleted(content::RenderFrameHost* render_frame_host) override;
+
  protected:
   friend class ThreatDetailsFactoryImpl;
   friend class TestThreatDetailsFactory;
+  friend class ThreatDetailsTest;
 
   ThreatDetails(
       BaseUIManager* ui_manager,
@@ -130,11 +134,11 @@ class ThreatDetails : public base::RefCounted<ThreatDetails>,
   // Used to get a pointer to the HTTP cache.
   scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory_;
 
- private:
-  friend class base::RefCounted<ThreatDetails>;
-
   // Starts the collection of the report.
   void StartCollection();
+
+ private:
+  friend class base::RefCounted<ThreatDetails>;
 
   // Whether the url is "public" so we can add it to the report.
   bool IsReportableUrl(const GURL& url) const;
@@ -260,6 +264,10 @@ class ThreatDetails : public base::RefCounted<ThreatDetails>,
   // Whether the |done_callback_| has been invoked.
   bool is_all_done_;
 
+  // The set of RenderFrameHosts that have pending requests and haven't been
+  // deleted.
+  std::set<content::RenderFrameHost*> pending_render_frame_hosts_;
+
   FRIEND_TEST_ALL_PREFIXES(ThreatDetailsTest, HistoryServiceUrls);
   FRIEND_TEST_ALL_PREFIXES(ThreatDetailsTest, HttpsResourceSanitization);
   FRIEND_TEST_ALL_PREFIXES(ThreatDetailsTest, HTTPCacheNoEntries);
@@ -279,7 +287,7 @@ class ThreatDetailsFactory {
  public:
   virtual ~ThreatDetailsFactory() {}
 
-  virtual ThreatDetails* CreateThreatDetails(
+  virtual scoped_refptr<ThreatDetails> CreateThreatDetails(
       BaseUIManager* ui_manager,
       content::WebContents* web_contents,
       const security_interstitials::UnsafeResource& unsafe_resource,

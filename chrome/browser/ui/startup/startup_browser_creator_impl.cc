@@ -22,7 +22,7 @@
 #include "base/strings/string_util.h"
 #include "base/task_scheduler/post_task.h"
 #include "build/build_config.h"
-#include "chrome/browser/apps/install_chrome_app.h"
+#include "chrome/browser/apps/platform_apps/install_chrome_app.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry.h"
 #include "chrome/browser/custom_handlers/protocol_handler_registry_factory.h"
@@ -87,7 +87,7 @@
 
 #if defined(OS_WIN)
 #include "base/win/windows_version.h"
-#include "chrome/browser/apps/app_launch_for_metro_restart_win.h"
+#include "chrome/browser/apps/platform_apps/app_launch_for_metro_restart_win.h"
 #if defined(GOOGLE_CHROME_BUILD)
 #include "chrome/browser/conflicts/incompatible_applications_updater_win.h"
 #endif  // defined(GOOGLE_CHROME_BUILD)
@@ -99,6 +99,11 @@
 #if BUILDFLAG(ENABLE_RLZ)
 #include "components/google/core/browser/google_util.h"
 #include "components/rlz/rlz_tracker.h"  // nogncheck
+#endif
+
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && !defined(OS_ANDROID) && \
+    !defined(OS_CHROMEOS)
+#include "chrome/browser/ui/startup/supervised_users_deprecated_infobar_delegate.h"
 #endif
 
 using content::ChildProcessSecurityPolicy;
@@ -924,6 +929,11 @@ void StartupBrowserCreatorImpl::AddInfoBarsIfNecessary(
           !local_state->GetBoolean(prefs::kSuppressUnsupportedOSWarning))
         ObsoleteSystemInfoBarDelegate::Create(infobar_service);
     }
+#if BUILDFLAG(ENABLE_SUPERVISED_USERS) && !defined(OS_ANDROID) && \
+    !defined(OS_CHROMEOS)
+    if (profile_->IsLegacySupervised())
+      SupervisedUsersDeprecatedInfoBarDelegate::Create(infobar_service);
+#endif
 
 #if !defined(OS_CHROMEOS)
     if (!command_line_.HasSwitch(switches::kNoDefaultBrowserCheck)) {

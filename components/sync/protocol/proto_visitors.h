@@ -792,13 +792,6 @@ VISIT_PROTO_FIELDS(const sync_pb::SyncEntity& proto) {
   VISIT(folder);
   VISIT(client_defined_unique_tag);
   VISIT_BYTES(ordinal_in_parent);
-  VISIT(bookmarkdata);
-}
-
-VISIT_PROTO_FIELDS(const sync_pb::SyncEntity::BookmarkData& proto) {
-  VISIT(bookmark_folder);
-  VISIT(bookmark_url);
-  VISIT(bookmark_favicon);
 }
 
 VISIT_PROTO_FIELDS(const sync_pb::SyncedNotificationAppInfoSpecifics& proto) {}
@@ -810,6 +803,7 @@ VISIT_PROTO_FIELDS(
   VISIT(reuse_detected);
   VISIT(reuse_lookup);
   VISIT(dialog_interaction);
+  VISIT(password_captured);
 }
 
 VISIT_PROTO_FIELDS(
@@ -835,6 +829,12 @@ VISIT_PROTO_FIELDS(
   VISIT_ENUM(lookup_result);
   VISIT_ENUM(verdict);
   VISIT(verdict_token);
+}
+
+VISIT_PROTO_FIELDS(
+    const sync_pb::UserEventSpecifics::GaiaPasswordReuse::PasswordCaptured&
+        proto) {
+  VISIT_ENUM(event_trigger);
 }
 
 VISIT_PROTO_FIELDS(const sync_pb::TabNavigation& proto) {
@@ -962,6 +962,12 @@ VISIT_PROTO_FIELDS(
 }
 
 VISIT_PROTO_FIELDS(const sync_pb::UserConsentTypes::SyncConsent& proto) {
+  VISIT_REP(description_grd_ids);
+  VISIT(confirmation_grd_id);
+  VISIT_ENUM(status);
+}
+
+VISIT_PROTO_FIELDS(const sync_pb::UserConsentTypes::UnifiedConsent& proto) {
   VISIT_REP(description_grd_ids);
   VISIT(confirmation_grd_id);
   VISIT_ENUM(status);

@@ -11,6 +11,7 @@
 #include "base/component_export.h"
 #include "base/macros.h"
 #include "mojo/public/cpp/bindings/binding.h"
+#include "services/ui/public/interfaces/screen_provider.mojom.h"
 #include "services/ui/public/interfaces/window_tree.mojom.h"
 #include "services/ui/ws2/window_tree_binding.h"
 
@@ -40,6 +41,7 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTreeBinding {
 
   // See WindowTree for details on parameters and when to use.
   void InitFromFactory(WindowService* window_service,
+                       const std::string& client_name,
                        mojom::WindowTreeRequest window_tree_request,
                        mojom::WindowTreeClientPtr window_tree_client,
                        base::OnceClosure connection_lost_callback);
@@ -52,9 +54,14 @@ class COMPONENT_EXPORT(WINDOW_SERVICE) WindowTreeBinding {
   void CreateBinding(mojom::WindowTreeRequest window_tree_request,
                      base::OnceClosure connection_lost_callback);
 
+  WindowService* window_service_ = nullptr;
   mojom::WindowTreeClientPtr window_tree_client_;
   std::unique_ptr<WindowTree> window_tree_;
+
+  // |binding_| and |screen_provider_observer_| are only created if
+  // |window_tree_client_| is valid.
   std::unique_ptr<mojo::Binding<mojom::WindowTree>> binding_;
+  mojom::ScreenProviderObserverAssociatedPtr screen_provider_observer_;
 
   DISALLOW_COPY_AND_ASSIGN(WindowTreeBinding);
 };

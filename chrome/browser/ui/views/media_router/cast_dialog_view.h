@@ -8,13 +8,20 @@
 #include <memory>
 #include <vector>
 
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/media_router/cast_dialog_controller.h"
+#include "chrome/browser/ui/views/media_router/cast_dialog_metrics.h"
 #include "ui/base/models/simple_menu_model.h"
+#include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_dialog_delegate.h"
 #include "ui/views/controls/button/button.h"
 #include "ui/views/controls/menu/menu_runner.h"
 
 class Browser;
+
+namespace gfx {
+class Canvas;
+}  // namespace gfx
 
 namespace media_router {
 
@@ -29,11 +36,17 @@ class CastDialogView : public views::BubbleDialogDelegateView,
                        public CastDialogController::Observer,
                        public ui::SimpleMenuModel::Delegate {
  public:
-  // Instantiates and shows the singleton dialog. The dialog must not be
-  // currently shown.
-  static void ShowDialog(views::View* anchor_view,
-                         CastDialogController* controller,
-                         Browser* browser);
+  // Shows the singleton dialog anchored to the Cast toolbar icon. Requires that
+  // BrowserActionsContainer exists for |browser|.
+  static void ShowDialogWithToolbarAction(CastDialogController* controller,
+                                          Browser* browser,
+                                          const base::Time& start_time);
+
+  // Shows the singleton dialog anchored to the top-center of the browser
+  // window.
+  static void ShowDialogTopCentered(CastDialogController* controller,
+                                    Browser* browser,
+                                    const base::Time& start_time);
 
   // No-op if the dialog is currently not shown.
   static void HideDialog();
@@ -68,6 +81,7 @@ class CastDialogView : public views::BubbleDialogDelegateView,
 
   // views::View:
   gfx::Size CalculatePreferredSize() const override;
+  void OnPaint(gfx::Canvas* canvas) override;
 
   // ui::SimpleMenuModel::Delegate:
   bool IsCommandIdChecked(int command_id) const override;
@@ -90,9 +104,22 @@ class CastDialogView : public views::BubbleDialogDelegateView,
   }
 
  private:
+  friend class CastDialogViewTest;
+  FRIEND_TEST_ALL_PREFIXES(CastDialogViewTest, ShowAndHideDialog);
+
+  // Instantiates and shows the singleton dialog. The dialog must not be
+  // currently shown.
+  static void ShowDialog(views::View* anchor_view,
+                         views::BubbleBorder::Arrow anchor_position,
+                         CastDialogController* controller,
+                         Browser* browser,
+                         const base::Time& start_time);
+
   CastDialogView(views::View* anchor_view,
+                 views::BubbleBorder::Arrow anchor_position,
                  CastDialogController* controller,
-                 Browser* browser);
+                 Browser* browser,
+                 const base::Time& start_time);
   ~CastDialogView() override;
 
   // views::BubbleDialogDelegateView:
@@ -119,6 +146,13 @@ class CastDialogView : public views::BubbleDialogDelegateView,
   const UIMediaSink& GetSelectedSink() const;
 
   void MaybeSizeToContents();
+
+  // Posts a delayed task to record the number of sinks shown with the metrics
+  // recorder.
+  void RecordSinkCountWithDelay();
+
+  // Records the number of sinks shown with the metrics recorder.
+  void RecordSinkCount();
 
   // The singleton dialog instance. This is a nullptr when a dialog is not
   // shown.
@@ -158,6 +192,11 @@ class CastDialogView : public views::BubbleDialogDelegateView,
   views::Button* sources_button_ = nullptr;
   std::unique_ptr<ui::SimpleMenuModel> sources_menu_model_;
   std::unique_ptr<views::MenuRunner> sources_menu_runner_;
+
+  // Records UMA metrics for the dialog's behavior.
+  CastDialogMetrics metrics_;
+
+  base::WeakPtrFactory<CastDialogView> weak_factory_;
 
   DISALLOW_COPY_AND_ASSIGN(CastDialogView);
 };

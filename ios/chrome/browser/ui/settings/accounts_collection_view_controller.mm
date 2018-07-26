@@ -30,10 +30,11 @@
 #import "ios/chrome/browser/ui/authentication/resized_avatar_cache.h"
 #import "ios/chrome/browser/ui/collection_view/cells/MDCCollectionViewCell+Chrome.h"
 #import "ios/chrome/browser/ui/collection_view/cells/collection_view_account_item.h"
+#import "ios/chrome/browser/ui/collection_view/cells/collection_view_cell_style.h"
 #import "ios/chrome/browser/ui/collection_view/collection_view_model.h"
 #import "ios/chrome/browser/ui/colors/MDCPalette+CrAdditions.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/open_url_command.h"
+#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/icons/chrome_icon.h"
 #import "ios/chrome/browser/ui/settings/cells/settings_text_item.h"
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
@@ -257,6 +258,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)accountItem:(ChromeIdentity*)identity {
   CollectionViewAccountItem* item =
       [[CollectionViewAccountItem alloc] initWithType:ItemTypeAccount];
+  item.cellStyle = CollectionViewCellStyle::kUIKit;
   [self updateAccountItem:item withIdentity:identity];
   return item;
 }
@@ -272,6 +274,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)addAccountItem {
   CollectionViewAccountItem* item =
       [[CollectionViewAccountItem alloc] initWithType:ItemTypeAddAccount];
+  item.cellStyle = CollectionViewCellStyle::kUIKit;
   item.text =
       l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_ADD_ACCOUNT_BUTTON);
   item.accessibilityIdentifier = kSettingsAccountsAddAccountCellId;
@@ -282,6 +285,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)syncItem {
   AccountControlItem* item =
       [[AccountControlItem alloc] initWithType:ItemTypeSync];
+  item.cellStyle = CollectionViewCellStyle::kUIKit;
   item.text = l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_SYNC_TITLE);
   item.accessibilityIdentifier = kSettingsAccountsSyncCellId;
   [self updateSyncItem:item];
@@ -336,6 +340,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)googleActivityControlsItem {
   AccountControlItem* item =
       [[AccountControlItem alloc] initWithType:ItemTypeGoogleActivityControls];
+  item.cellStyle = CollectionViewCellStyle::kUIKit;
   item.text = l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_GOOGLE_TITLE);
   item.detailText =
       l10n_util::GetNSString(IDS_IOS_OPTIONS_ACCOUNTS_GOOGLE_DESCRIPTION);
@@ -652,8 +657,8 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (void)openURL:(NSURL*)url
               view:(UIView*)view
     viewController:(UIViewController*)viewController {
-  OpenUrlCommand* command =
-      [[OpenUrlCommand alloc] initWithURLFromChrome:net::GURLWithNSURL(url)];
+  OpenNewTabCommand* command =
+      [OpenNewTabCommand commandWithURLFromChrome:net::GURLWithNSURL(url)];
   [self.dispatcher closeSettingsUIAndOpenURL:command];
 }
 

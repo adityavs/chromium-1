@@ -230,7 +230,9 @@ const CGFloat kSubtitleMinimunLineHeight = 24.0;
 - (void)createSigninPromoViewIfNeeded {
   if (_signinPromoView)
     return;
-  _signinPromoView = [[SigninPromoView alloc] initWithFrame:CGRectZero];
+  _signinPromoView =
+      [[SigninPromoView alloc] initWithFrame:CGRectZero
+                                       style:SigninPromoViewUILegacy];
   _signinPromoView.translatesAutoresizingMaskIntoConstraints = NO;
   _signinPromoView.textLabel.text =
       l10n_util::GetNSString(IDS_IOS_SIGNIN_PROMO_RECENT_TABS);
@@ -456,7 +458,7 @@ const CGFloat kSubtitleMinimunLineHeight = 24.0;
   UIView* view = base::mac::ObjCCast<UIView>(sender);
   CGPoint center = [view.superview convertPoint:view.center toView:view.window];
   OpenNewTabCommand* command =
-      [[OpenNewTabCommand alloc] initWithIncognito:NO originPoint:center];
+      [OpenNewTabCommand commandWithIncognito:NO originPoint:center];
   [self.dispatcher openNewTab:command];
 }
 
@@ -464,7 +466,7 @@ const CGFloat kSubtitleMinimunLineHeight = 24.0;
   UIView* view = base::mac::ObjCCast<UIView>(sender);
   CGPoint center = [view.superview convertPoint:view.center toView:view.window];
   OpenNewTabCommand* command =
-      [[OpenNewTabCommand alloc] initWithIncognito:YES originPoint:center];
+      [OpenNewTabCommand commandWithIncognito:YES originPoint:center];
   [self.dispatcher openNewTab:command];
 }
 

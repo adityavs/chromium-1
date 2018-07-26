@@ -8,7 +8,6 @@
 #include "base/macros.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
-#include "base/test/scoped_feature_list.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "components/autofill/core/browser/autofill_experiments.h"
@@ -220,18 +219,18 @@ TEST(CreditCardTest, NetworkOrBankNameAndLastFourDigitsStrings) {
 }
 
 TEST(CreditCardTest, AssignmentOperator) {
-  CreditCard a(base::GenerateGUID(), "some origin");
+  CreditCard a(base::GenerateGUID(), test::kEmptyOrigin);
   test::SetCreditCardInfo(&a, "John Dillinger", "123456789012", "01", "2010",
                           "1");
 
   // Result of assignment should be logically equal to the original profile.
-  CreditCard b(base::GenerateGUID(), "some other origin");
+  CreditCard b(base::GenerateGUID(), test::kEmptyOrigin);
   b = a;
-  EXPECT_TRUE(a == b);
+  EXPECT_EQ(a, b);
 
   // Assignment to self should not change the profile value.
   a = *&a;  // The *& defeats Clang's -Wself-assign warning.
-  EXPECT_TRUE(a == b);
+  EXPECT_EQ(a, b);
 }
 
 struct SetExpirationYearFromStringTestCase {
@@ -319,7 +318,7 @@ INSTANTIATE_TEST_CASE_P(
         SetExpirationDateFromStringTestCase{"05_2045", 0, 0}));
 
 TEST(CreditCardTest, Copy) {
-  CreditCard a(base::GenerateGUID(), "https://www.example.com");
+  CreditCard a(base::GenerateGUID(), test::kEmptyOrigin);
   test::SetCreditCardInfo(&a, "John Dillinger", "123456789012", "01", "2010",
                           base::GenerateGUID());
 
@@ -497,7 +496,7 @@ TEST(CreditCardTest, IconResourceId) {
 }
 
 TEST(CreditCardTest, UpdateFromImportedCard) {
-  CreditCard original_card(base::GenerateGUID(), "https://www.example.com");
+  CreditCard original_card(base::GenerateGUID(), test::kEmptyOrigin);
   test::SetCreditCardInfo(&original_card, "John Dillinger", "123456789012",
                           "09", "2017", "1");
 
@@ -506,14 +505,14 @@ TEST(CreditCardTest, UpdateFromImportedCard) {
   // The new card has a different name, expiration date, and origin.
   CreditCard b = a;
   b.set_guid(base::GenerateGUID());
-  b.set_origin("https://www.example.org");
+  b.set_origin(test::kEmptyOrigin);
   b.SetRawInfo(CREDIT_CARD_NAME_FULL, ASCIIToUTF16("J. Dillinger"));
   b.SetRawInfo(CREDIT_CARD_EXP_MONTH, ASCIIToUTF16("08"));
   b.SetRawInfo(CREDIT_CARD_EXP_4_DIGIT_YEAR, ASCIIToUTF16("2019"));
 
   // |a| should be updated with the information from |b|.
   EXPECT_TRUE(a.UpdateFromImportedCard(b, "en-US"));
-  EXPECT_EQ("https://www.example.org", a.origin());
+  EXPECT_EQ(test::kEmptyOrigin, a.origin());
   EXPECT_EQ(ASCIIToUTF16("J. Dillinger"), a.GetRawInfo(CREDIT_CARD_NAME_FULL));
   EXPECT_EQ(ASCIIToUTF16("08"), a.GetRawInfo(CREDIT_CARD_EXP_MONTH));
   EXPECT_EQ(ASCIIToUTF16("2019"), a.GetRawInfo(CREDIT_CARD_EXP_4_DIGIT_YEAR));
@@ -525,7 +524,7 @@ TEST(CreditCardTest, UpdateFromImportedCard) {
   b.SetRawInfo(CREDIT_CARD_NAME_FULL, base::string16());
 
   EXPECT_TRUE(a.UpdateFromImportedCard(b, "en-US"));
-  EXPECT_EQ("https://www.example.org", a.origin());
+  EXPECT_EQ(test::kEmptyOrigin, a.origin());
   EXPECT_EQ(ASCIIToUTF16("John Dillinger"),
             a.GetRawInfo(CREDIT_CARD_NAME_FULL));
   EXPECT_EQ(ASCIIToUTF16("08"), a.GetRawInfo(CREDIT_CARD_EXP_MONTH));
@@ -1200,83 +1199,5 @@ INSTANTIATE_TEST_CASE_P(
         ShouldUpdateExpirationTestCase{
             true, testingTimes.next_year_.month, testingTimes.next_year_.year,
             CreditCard::FULL_SERVER_CARD, CreditCard::EXPIRED}));
-
-// TODO(wuandy): rewriting below test with INSTANTIATE_TEST_CASE_P seems to
-// trigger a complaint on windows compilers. Removing it and revert to
-// original test for now.
-
-// Test that credit card last used date suggestion can be generated correctly
-// in different variations.
-
-
-// TODO(scottmg): Disabling as sheriff. On Android, LastUsedDateForDisplay is
-// returning "Last used over a year ago", rather than "last used Nov 30" as of
-// today, Dec 1. https://crbug.com/791067.
-TEST(CreditCardTest, DISABLED_GetLastUsedDateForDisplay) {
-  const base::Time::Exploded kTestDateTimeExploded = {
-      2016, 12, 6, 10,  // Sat, Dec 10, 2016
-      15,   42, 7, 0    // 15:42:07.000
-  };
-  base::Time kArbitraryTime;
-  EXPECT_TRUE(
-      base::Time::FromLocalExploded(kTestDateTimeExploded, &kArbitraryTime));
-
-  // Test for added to chrome/chromium.
-  CreditCard credit_card0(base::GenerateGUID(), "https://www.example.com");
-  credit_card0.set_use_count(1);
-  credit_card0.set_use_date(kArbitraryTime - base::TimeDelta::FromDays(1));
-  test::SetCreditCardInfo(&credit_card0, "John Dillinger",
-                          "423456789012" /* Visa */, "01", "2021", "1");
-
-  // Test for last used date.
-  CreditCard credit_card1(base::GenerateGUID(), "https://www.example.com");
-  test::SetCreditCardInfo(&credit_card1, "Clyde Barrow",
-                          "347666888555" /* American Express */, "04", "2021",
-                          "1");
-  credit_card1.set_use_count(10);
-  credit_card1.set_use_date(kArbitraryTime - base::TimeDelta::FromDays(10));
-
-  // Test for last used more than one year ago.
-  CreditCard credit_card2(base::GenerateGUID(), "https://www.example.com");
-  credit_card2.set_use_count(5);
-  credit_card2.set_use_date(kArbitraryTime - base::TimeDelta::FromDays(366));
-  test::SetCreditCardInfo(&credit_card2, "Bonnie Parker",
-                          "518765432109" /* Mastercard */, "12", "2021", "1");
-
-  static const struct {
-    const char* show_expiration_date;
-    const std::string& app_locale;
-    base::string16 added_to_autofill_date;
-    base::string16 last_used_date;
-    base::string16 last_used_year_ago;
-  } kTestCases[] = {
-      // only show last used date.
-      {"false", "en_US", ASCIIToUTF16("Added Dec 09"),
-       ASCIIToUTF16("Last used Nov 30"),
-       ASCIIToUTF16("Last used over a year ago")},
-      // show expiration date and last used date.
-      {"true", "en_US", ASCIIToUTF16("Exp: 01/21, added Dec 09"),
-       ASCIIToUTF16("Exp: 04/21, last used Nov 30"),
-       ASCIIToUTF16("Exp: 12/21, last used over a year ago")},
-  };
-
-  variations::testing::VariationParamsManager variation_params_;
-
-  for (const auto& test_case : kTestCases) {
-    variation_params_.SetVariationParamsWithFeatureAssociations(
-        kAutofillCreditCardLastUsedDateDisplay.name,
-        {{kAutofillCreditCardLastUsedDateShowExpirationDateKey,
-          test_case.show_expiration_date}},
-        {kAutofillCreditCardLastUsedDateDisplay.name});
-
-    EXPECT_EQ(test_case.added_to_autofill_date,
-              credit_card0.GetLastUsedDateForDisplay(test_case.app_locale));
-    EXPECT_EQ(test_case.last_used_date,
-              credit_card1.GetLastUsedDateForDisplay(test_case.app_locale));
-    EXPECT_EQ(test_case.last_used_year_ago,
-              credit_card2.GetLastUsedDateForDisplay(test_case.app_locale));
-    variation_params_.ClearAllVariationParams();
-  }
-}
 
 }  // namespace autofill

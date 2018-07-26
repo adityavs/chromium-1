@@ -15,6 +15,7 @@
 #include "base/metrics/histogram.h"
 #include "base/metrics/histogram_functions.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/numerics/safe_conversions.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
@@ -29,15 +30,14 @@
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/blink_resource_coordinator_base.h"
 #include "third_party/blink/renderer/platform/instrumentation/resource_coordinator/renderer_resource_coordinator.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_impl_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_selector.h"
-#include "third_party/blink/renderer/platform/scheduler/base/virtual_time_domain.h"
 #include "third_party/blink/renderer/platform/scheduler/child/features.h"
 #include "third_party/blink/renderer/platform/scheduler/child/process_state.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/task_queue_throttler.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/auto_advancing_virtual_time_domain.h"
+#include "third_party/blink/renderer/platform/scheduler/main_thread/frame_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/renderer/webthread_impl_for_renderer_scheduler.h"
+#include "third_party/blink/renderer/platform/wtf/text/movable_string.h"
 
 namespace blink {
 namespace scheduler {
@@ -71,6 +71,11 @@ const char kWakeUpDurationParam[] = "wake_up_duration_ms";
 
 constexpr base::TimeDelta kDefaultWakeUpDuration =
     base::TimeDelta::FromMilliseconds(3);
+
+// Name of the finch study that enables using resource fetch priorities to
+// schedule tasks on Blink.
+constexpr const char kResourceFetchPriorityExperiment[] =
+    "BlinkSchedulerResourceFetchPriority";
 
 base::TimeDelta GetWakeUpDuration() {
   int duration_ms;
@@ -126,6 +131,8 @@ const char* TaskTypeToString(TaskType task_type) {
       return "UserInteraction";
     case TaskType::kNetworking:
       return "Networking";
+    case TaskType::kNetworkingWithURLLoaderAnnotation:
+      return "NetworkingWithURLLoaderAnnotation";
     case TaskType::kNetworkingControl:
       return "NetworkingControl";
     case TaskType::kHistoryTraversal:
@@ -204,12 +211,16 @@ const char* TaskTypeToString(TaskType task_type) {
       return "InternalIntersectionObserver";
     case TaskType::kCompositorThreadTaskQueueDefault:
       return "CompositorThreadTaskQueueDefault";
+    case TaskType::kCompositorThreadTaskQueueInput:
+      return "CompositorThreadTaskQueueInput";
     case TaskType::kWorkerThreadTaskQueueDefault:
       return "WorkerThreadTaskQueueDefault";
     case TaskType::kWorkerThreadTaskQueueV8:
       return "WorkerThreadTaskQueueV8";
     case TaskType::kWorkerThreadTaskQueueCompositor:
       return "WorkerThreadTaskQueueCompositor";
+    case TaskType::kWorkerAnimation:
+      return "WorkerAnimation";
     case TaskType::kCount:
       return "Count";
   }
@@ -235,6 +246,26 @@ const char* OptionalTaskPriorityToString(
   return TaskQueue::PriorityToString(priority.value());
 }
 
+TaskQueue::QueuePriority StringToTaskQueuePriority(
+    const std::string& priority) {
+  if (priority == "CONTROL") {
+    return TaskQueue::QueuePriority::kControlPriority;
+  } else if (priority == "HIGHEST") {
+    return TaskQueue::QueuePriority::kHighestPriority;
+  } else if (priority == "HIGH") {
+    return TaskQueue::QueuePriority::kHighPriority;
+  } else if (priority == "NORMAL") {
+    return TaskQueue::QueuePriority::kNormalPriority;
+  } else if (priority == "LOW") {
+    return TaskQueue::QueuePriority::kLowPriority;
+  } else if (priority == "BEST_EFFORT") {
+    return TaskQueue::QueuePriority::kBestEffortPriority;
+  } else {
+    NOTREACHED();
+    return TaskQueue::QueuePriority::kQueuePriorityCount;
+  }
+}
+
 bool IsBlockingEvent(const blink::WebInputEvent& web_input_event) {
   blink::WebInputEvent::Type type = web_input_event.GetType();
   DCHECK(type == blink::WebInputEvent::kTouchStart ||
@@ -254,9 +285,9 @@ bool IsBlockingEvent(const blink::WebInputEvent& web_input_event) {
 }  // namespace
 
 MainThreadSchedulerImpl::MainThreadSchedulerImpl(
-    std::unique_ptr<base::sequence_manager::SequenceManager> task_queue_manager,
+    std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager,
     base::Optional<base::Time> initial_virtual_time)
-    : helper_(std::move(task_queue_manager), this),
+    : helper_(std::move(sequence_manager), this),
       idle_helper_(&helper_,
                    this,
                    "MainThreadSchedulerIdlePeriod",
@@ -322,9 +353,6 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
   control_task_runner_ =
       TaskQueueWithTaskType::Create(helper_.ControlMainThreadTaskQueue(),
                                     TaskType::kMainThreadTaskQueueControl);
-  default_task_runner_ =
-      TaskQueueWithTaskType::Create(helper_.DefaultMainThreadTaskQueue(),
-                                    TaskType::kMainThreadTaskQueueDefault);
   input_task_runner_ = TaskQueueWithTaskType::Create(
       input_task_queue_, TaskType::kMainThreadTaskQueueInput);
   ipc_task_runner_ = TaskQueueWithTaskType::Create(
@@ -554,9 +582,12 @@ MainThreadSchedulerImpl::MainThreadOnly::MainThreadOnly(
                                &main_thread_scheduler_impl->tracing_controller_,
                                YesNoStateToString),
       background_status_changed_at(now),
-      rail_mode_observer(nullptr),
       wake_up_budget_pool(nullptr),
-      metrics_helper(main_thread_scheduler_impl, now, renderer_backgrounded),
+      metrics_helper(
+          main_thread_scheduler_impl,
+          main_thread_scheduler_impl->helper_.HasCPUTimingForEachTask(),
+          now,
+          renderer_backgrounded),
       process_type(RendererProcessType::kRenderer,
                    "RendererProcessType",
                    main_thread_scheduler_impl,
@@ -636,7 +667,8 @@ MainThreadSchedulerImpl::AnyThread::AnyThread(
           YesNoStateToString) {}
 
 MainThreadSchedulerImpl::SchedulingSettings::SchedulingSettings() {
-  high_priority_input = base::FeatureList::IsEnabled(kHighPriorityInput);
+  high_priority_input =
+      base::FeatureList::IsEnabled(kHighPriorityInputOnMainThread);
 
   low_priority_background_page =
       base::FeatureList::IsEnabled(kLowPriorityForBackgroundPages);
@@ -654,6 +686,29 @@ MainThreadSchedulerImpl::SchedulingSettings::SchedulingSettings() {
   low_priority_ad_frame = base::FeatureList::IsEnabled(kLowPriorityForAdFrame);
   best_effort_ad_frame =
       base::FeatureList::IsEnabled(kBestEffortPriorityForAdFrame);
+
+  low_priority_cross_origin =
+      base::FeatureList::IsEnabled(kLowPriorityForCrossOrigin);
+
+  use_resource_fetch_priority =
+      base::FeatureList::IsEnabled(kUseResourceFetchPriority);
+
+  if (use_resource_fetch_priority) {
+    std::map<std::string, std::string> params;
+    base::GetFieldTrialParams(kResourceFetchPriorityExperiment, &params);
+    for (size_t net_priority = 0;
+         net_priority < net::RequestPrioritySize::NUM_PRIORITIES;
+         net_priority++) {
+      net_to_blink_priority[net_priority] =
+          TaskQueue::QueuePriority::kNormalPriority;
+      auto iter = params.find(net::RequestPriorityToString(
+          static_cast<net::RequestPriority>(net_priority)));
+      if (iter != params.end()) {
+        net_to_blink_priority[net_priority] =
+            StringToTaskQueuePriority(iter->second);
+      }
+    }
+  }
 
   experiment_only_when_loading =
       base::FeatureList::IsEnabled(kExperimentOnlyWhenLoading);
@@ -687,7 +742,7 @@ void MainThreadSchedulerImpl::Shutdown() {
   task_queue_throttler_.reset();
   idle_helper_.Shutdown();
   helper_.Shutdown();
-  main_thread_only().rail_mode_observer = nullptr;
+  main_thread_only().rail_mode_observers.Clear();
   was_shutdown_ = true;
 }
 
@@ -702,7 +757,7 @@ MainThreadSchedulerImpl::ControlTaskRunner() {
 
 scoped_refptr<base::SingleThreadTaskRunner>
 MainThreadSchedulerImpl::DefaultTaskRunner() {
-  return default_task_runner_;
+  return helper_.DefaultTaskRunner();
 }
 
 scoped_refptr<base::SingleThreadTaskRunner>
@@ -762,8 +817,10 @@ scoped_refptr<MainThreadTaskQueue> MainThreadSchedulerImpl::NewTaskQueue(
   scoped_refptr<MainThreadTaskQueue> task_queue(helper_.NewTaskQueue(params));
 
   std::unique_ptr<TaskQueue::QueueEnabledVoter> voter;
-  if (params.can_be_deferred || params.can_be_paused || params.can_be_frozen)
+  if (params.queue_traits.can_be_deferred ||
+      params.queue_traits.can_be_paused || params.queue_traits.can_be_frozen) {
     voter = task_queue->CreateQueueEnabledVoter();
+  }
 
   auto insert_result =
       task_runners_.insert(std::make_pair(task_queue, std::move(voter)));
@@ -801,13 +858,11 @@ scoped_refptr<MainThreadTaskQueue> MainThreadSchedulerImpl::NewLoadingTaskQueue(
     FrameSchedulerImpl* frame_scheduler) {
   DCHECK_EQ(MainThreadTaskQueue::QueueClassForQueueType(queue_type),
             MainThreadTaskQueue::QueueClass::kLoading);
-  return NewTaskQueue(
-      MainThreadTaskQueue::QueueCreationParams(queue_type)
-          .SetCanBePaused(true)
-          .SetCanBeFrozen(
-              RuntimeEnabledFeatures::StopLoadingInBackgroundEnabled())
-          .SetCanBeDeferred(true)
-          .SetFrameScheduler(frame_scheduler));
+  return NewTaskQueue(MainThreadTaskQueue::QueueCreationParams(queue_type)
+                          .SetCanBePaused(true)
+                          .SetCanBeFrozen(true)
+                          .SetCanBeDeferred(true)
+                          .SetFrameScheduler(frame_scheduler));
 }
 
 scoped_refptr<MainThreadTaskQueue> MainThreadSchedulerImpl::NewTimerTaskQueue(
@@ -1028,6 +1083,15 @@ void MainThreadSchedulerImpl::SetRendererBackgrounded(bool backgrounded) {
     main_thread_only().metrics_helper.OnRendererBackgrounded(now);
   } else {
     main_thread_only().metrics_helper.OnRendererForegrounded(now);
+  }
+
+  auto& movable_string_table = MovableStringTable::Instance();
+  movable_string_table.SetRendererBackgrounded(backgrounded);
+  if (backgrounded) {
+    DefaultTaskRunner()->PostDelayedTask(
+        FROM_HERE,
+        base::BindOnce([]() { MovableStringTable::Instance().MaybeParkAll(); }),
+        base::TimeDelta::FromSeconds(10));
   }
 }
 
@@ -1638,10 +1702,10 @@ void MainThreadSchedulerImpl::UpdatePolicyLocked(UpdateType update_type) {
   }
 
   main_thread_only().rail_mode_for_tracing = new_policy.rail_mode();
-  if (main_thread_only().rail_mode_observer &&
-      new_policy.rail_mode() != main_thread_only().current_policy.rail_mode()) {
-    main_thread_only().rail_mode_observer->OnRAILModeChanged(
-        new_policy.rail_mode());
+  if (new_policy.rail_mode() != main_thread_only().current_policy.rail_mode()) {
+    for (auto& observer : main_thread_only().rail_mode_observers) {
+      observer.OnRAILModeChanged(new_policy.rail_mode());
+    }
   }
 
   if (new_policy.should_disable_throttling() !=
@@ -2277,15 +2341,17 @@ void MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected(
   if (has_tasks ==
       main_thread_only().compositor_will_send_main_frame_not_expected.get())
     return;
-  main_thread_only().compositor_will_send_main_frame_not_expected = has_tasks;
 
   TRACE_EVENT1(
       TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"),
       "MainThreadSchedulerImpl::DispatchRequestBeginMainFrameNotExpected",
       "has_tasks", has_tasks);
+  bool success = false;
   for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
-    page_scheduler->RequestBeginMainFrameNotExpected(has_tasks);
+    success |= page_scheduler->RequestBeginMainFrameNotExpected(has_tasks);
   }
+  main_thread_only().compositor_will_send_main_frame_not_expected =
+      success && has_tasks;
 }
 
 std::unique_ptr<base::SingleSampleMetric>
@@ -2385,8 +2451,10 @@ void MainThreadSchedulerImpl::SetTopLevelBlameContext(
   ipc_task_queue_->SetBlameContext(blame_context);
 }
 
-void MainThreadSchedulerImpl::SetRAILModeObserver(RAILModeObserver* observer) {
-  main_thread_only().rail_mode_observer = observer;
+void MainThreadSchedulerImpl::AddRAILModeObserver(
+    WebRAILModeObserver* observer) {
+  main_thread_only().rail_mode_observers.AddObserver(observer);
+  observer->OnRAILModeChanged(main_thread_only().current_policy.rail_mode());
 }
 
 void MainThreadSchedulerImpl::SetRendererProcessType(RendererProcessType type) {
@@ -2485,11 +2553,16 @@ void MainThreadSchedulerImpl::BroadcastIntervention(
     page_scheduler->ReportIntervention(message);
 }
 
-void MainThreadSchedulerImpl::OnTaskStarted(MainThreadTaskQueue* queue,
-                                            const TaskQueue::Task& task,
-                                            base::TimeTicks start) {
-  main_thread_only().current_task_start_time = start;
-  queueing_time_estimator_.OnTopLevelTaskStarted(start, queue);
+void MainThreadSchedulerImpl::OnTaskStarted(
+    MainThreadTaskQueue* queue,
+    const TaskQueue::Task& task,
+    const TaskQueue::TaskTiming& task_timing) {
+  main_thread_only().running_queues.push(queue);
+  queueing_time_estimator_.OnExecutionStarted(task_timing.start_time(), queue);
+  if (main_thread_only().nested_runloop)
+    return;
+
+  main_thread_only().current_task_start_time = task_timing.start_time();
   main_thread_only().task_description_for_tracing = TaskDescriptionForTracing{
       static_cast<TaskType>(task.task_type()),
       queue
@@ -2505,39 +2578,41 @@ void MainThreadSchedulerImpl::OnTaskStarted(MainThreadTaskQueue* queue,
 void MainThreadSchedulerImpl::OnTaskCompleted(
     MainThreadTaskQueue* queue,
     const TaskQueue::Task& task,
-    base::TimeTicks start,
-    base::TimeTicks end,
-    base::Optional<base::TimeDelta> thread_time) {
-  DCHECK_LE(start, end);
-  queueing_time_estimator_.OnTopLevelTaskCompleted(end);
+    const TaskQueue::TaskTiming& task_timing) {
+  DCHECK_LE(task_timing.start_time(), task_timing.end_time());
+  DCHECK(!main_thread_only().running_queues.empty());
+  DCHECK(!queue || main_thread_only().running_queues.top().get() == queue);
+  main_thread_only().running_queues.pop();
+  queueing_time_estimator_.OnExecutionStopped(task_timing.end_time());
+  if (main_thread_only().nested_runloop)
+    return;
 
-  if (queue)
-    task_queue_throttler()->OnTaskRunTimeReported(queue, start, end);
+  if (queue) {
+    task_queue_throttler()->OnTaskRunTimeReported(
+        queue, task_timing.start_time(), task_timing.end_time());
+  }
 
   main_thread_only().compositing_experiment.OnTaskCompleted(queue);
 
   // TODO(altimin): Per-page metrics should also be considered.
-  main_thread_only().metrics_helper.RecordTaskMetrics(queue, task, start, end,
-                                                      thread_time);
+  main_thread_only().metrics_helper.RecordTaskMetrics(queue, task, task_timing);
   main_thread_only().task_description_for_tracing = base::nullopt;
 
   // Unset the state of |task_priority_for_tracing|.
   main_thread_only().task_priority_for_tracing = base::nullopt;
 
-  RecordTaskUkm(queue, task, start, end, thread_time);
+  RecordTaskUkm(queue, task, task_timing);
 }
 
 void MainThreadSchedulerImpl::RecordTaskUkm(
     MainThreadTaskQueue* queue,
     const TaskQueue::Task& task,
-    base::TimeTicks start,
-    base::TimeTicks end,
-    base::Optional<base::TimeDelta> thread_time) {
-  if (!ShouldRecordTaskUkm(thread_time.has_value()))
+    const TaskQueue::TaskTiming& task_timing) {
+  if (!ShouldRecordTaskUkm(task_timing.has_thread_time()))
     return;
 
   if (queue && queue->GetFrameScheduler()) {
-    RecordTaskUkmImpl(queue, task, start, end, thread_time,
+    RecordTaskUkmImpl(queue, task, task_timing,
                       static_cast<PageSchedulerImpl*>(
                           queue->GetFrameScheduler()->GetPageScheduler()),
                       1);
@@ -2545,7 +2620,7 @@ void MainThreadSchedulerImpl::RecordTaskUkm(
   }
 
   for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
-    RecordTaskUkmImpl(queue, task, start, end, thread_time, page_scheduler,
+    RecordTaskUkmImpl(queue, task, task_timing, page_scheduler,
                       main_thread_only().page_schedulers.size());
   }
 }
@@ -2553,9 +2628,7 @@ void MainThreadSchedulerImpl::RecordTaskUkm(
 void MainThreadSchedulerImpl::RecordTaskUkmImpl(
     MainThreadTaskQueue* queue,
     const TaskQueue::Task& task,
-    base::TimeTicks start,
-    base::TimeTicks end,
-    base::Optional<base::TimeDelta> thread_time,
+    const TaskQueue::TaskTiming& task_timing,
     PageSchedulerImpl* page_scheduler,
     size_t page_schedulers_to_attribute) {
   // Skip tasks which have deleted the page scheduler.
@@ -2581,11 +2654,12 @@ void MainThreadSchedulerImpl::RecordTaskUkmImpl(
       queue ? queue->queue_type() : MainThreadTaskQueue::QueueType::kDetached));
   builder.SetFrameStatus(static_cast<int>(
       GetFrameStatus(queue ? queue->GetFrameScheduler() : nullptr)));
-  builder.SetTaskDuration((end - start).InMicroseconds());
+  builder.SetTaskDuration(task_timing.wall_duration().InMicroseconds());
 
   if (main_thread_only().renderer_backgrounded) {
     base::TimeDelta time_since_backgrounded =
-        (end - main_thread_only().background_status_changed_at);
+        (task_timing.end_time() -
+         main_thread_only().background_status_changed_at);
 
     // Trade off for privacy: Round to seconds for times below 10 minutes and
     // minutes afterwards.
@@ -2600,8 +2674,8 @@ void MainThreadSchedulerImpl::RecordTaskUkmImpl(
     builder.SetSecondsSinceBackgrounded(seconds_since_backgrounded);
   }
 
-  if (thread_time) {
-    builder.SetTaskCPUDuration(thread_time->InMicroseconds());
+  if (task_timing.has_thread_time()) {
+    builder.SetTaskCPUDuration(task_timing.thread_duration().InMicroseconds());
   }
 
   builder.Record(ukm_recorder);
@@ -2635,13 +2709,15 @@ TaskQueue::QueuePriority MainThreadSchedulerImpl::ComputePriority(
 }
 
 void MainThreadSchedulerImpl::OnBeginNestedRunLoop() {
-  queueing_time_estimator_.OnBeginNestedRunLoop();
-
+  queueing_time_estimator_.OnExecutionStopped(real_time_domain()->Now());
   main_thread_only().nested_runloop = true;
   ApplyVirtualTimePolicy();
 }
 
 void MainThreadSchedulerImpl::OnExitNestedRunLoop() {
+  DCHECK(!main_thread_only().running_queues.empty());
+  queueing_time_estimator_.OnExecutionStarted(
+      real_time_domain()->Now(), main_thread_only().running_queues.top().get());
   main_thread_only().nested_runloop = false;
   ApplyVirtualTimePolicy();
 }
@@ -2674,20 +2750,33 @@ void MainThreadSchedulerImpl::OnQueueingTimeForWindowEstimated(
             CreateMaxQueueingTimeMetric();
       }
       main_thread_only().max_queueing_time_metric->SetSample(
-          queueing_time.InMilliseconds());
+          base::saturated_cast<base::HistogramBase::Sample>(
+              queueing_time.InMilliseconds()));
       main_thread_only().max_queueing_time = queueing_time;
     }
   }
 
-  if (!is_disjoint_window || !ContainsLocalMainFrame())
+  if (!is_disjoint_window)
     return;
+
+  if (!ContainsLocalMainFrame()) {
+    UMA_HISTOGRAM_CUSTOM_COUNTS(
+        "RendererScheduler.ExpectedTaskQueueingDurationWithoutMainFrame",
+        base::saturated_cast<base::HistogramBase::Sample>(
+            queueing_time.InMicroseconds()),
+        kMinExpectedQueueingTimeBucket, kMaxExpectedQueueingTimeBucket,
+        kNumberExpectedQueueingTimeBuckets);
+    return;
+  }
 
   UMA_HISTOGRAM_TIMES("RendererScheduler.ExpectedTaskQueueingDuration",
                       queueing_time);
-  UMA_HISTOGRAM_CUSTOM_COUNTS(
-      "RendererScheduler.ExpectedTaskQueueingDuration3",
-      queueing_time.InMicroseconds(), kMinExpectedQueueingTimeBucket,
-      kMaxExpectedQueueingTimeBucket, kNumberExpectedQueueingTimeBuckets);
+  UMA_HISTOGRAM_CUSTOM_COUNTS("RendererScheduler.ExpectedTaskQueueingDuration3",
+                              base::saturated_cast<base::HistogramBase::Sample>(
+                                  queueing_time.InMicroseconds()),
+                              kMinExpectedQueueingTimeBucket,
+                              kMaxExpectedQueueingTimeBucket,
+                              kNumberExpectedQueueingTimeBuckets);
   TRACE_COUNTER1(TRACE_DISABLED_BY_DEFAULT("renderer.scheduler"),
                  "estimated_queueing_time_for_window",
                  queueing_time.InMillisecondsF());
@@ -2705,7 +2794,9 @@ void MainThreadSchedulerImpl::OnReportFineGrainedExpectedQueueingTime(
     return;
 
   base::UmaHistogramCustomCounts(
-      split_description, queueing_time.InMicroseconds(),
+      split_description,
+      base::saturated_cast<base::HistogramBase::Sample>(
+          queueing_time.InMicroseconds()),
       kMinExpectedQueueingTimeBucket, kMaxExpectedQueueingTimeBucket,
       kNumberExpectedQueueingTimeBuckets);
 }

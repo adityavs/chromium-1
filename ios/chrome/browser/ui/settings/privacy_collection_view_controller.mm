@@ -15,7 +15,6 @@
 #import "components/prefs/ios/pref_observer_bridge.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
-#include "components/signin/core/browser/signin_manager.h"
 #include "components/strings/grit/components_strings.h"
 #include "ios/chrome/browser/application_context.h"
 #import "ios/chrome/browser/autofill/autofill_controller.h"
@@ -236,6 +235,7 @@ typedef NS_ENUM(NSInteger, ItemType) {
 - (CollectionViewItem*)showSuggestionsFooterItem {
   CollectionViewFooterItem* showSuggestionsFooterItem =
       [[CollectionViewFooterItem alloc] initWithType:ItemTypeWebServicesFooter];
+  showSuggestionsFooterItem.cellStyle = CollectionViewCellStyle::kUIKit;
   showSuggestionsFooterItem.text =
       l10n_util::GetNSString(IDS_IOS_OPTIONS_PRIVACY_FOOTER);
   showSuggestionsFooterItem.linkURL = google_util::AppendGoogleLocaleParam(

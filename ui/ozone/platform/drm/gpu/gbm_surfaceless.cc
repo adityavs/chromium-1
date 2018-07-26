@@ -115,7 +115,7 @@ void GbmSurfaceless::SwapBuffersAsync(
   TRACE_EVENT0("drm", "GbmSurfaceless::SwapBuffersAsync");
   // If last swap failed, don't try to schedule new ones.
   if (!last_swap_buffers_result_) {
-    completion_callback.Run(gfx::SwapResult::SWAP_FAILED);
+    completion_callback.Run(gfx::SwapResult::SWAP_FAILED, nullptr);
     // Notify the caller, the buffer is never presented on a screen.
     presentation_callback.Run(gfx::PresentationFeedback::Failure());
     return;
@@ -150,7 +150,7 @@ void GbmSurfaceless::SwapBuffersAsync(
   // implemented in GL drivers.
   EGLSyncKHR fence = InsertFence(has_implicit_external_sync_);
   if (!fence) {
-    completion_callback.Run(gfx::SwapResult::SWAP_FAILED);
+    completion_callback.Run(gfx::SwapResult::SWAP_FAILED, nullptr);
     // Notify the caller, the buffer is never presented on a screen.
     presentation_callback.Run(gfx::PresentationFeedback::Failure());
     return;
@@ -242,7 +242,7 @@ void GbmSurfaceless::SubmitFrame() {
         submitted_frame_->ScheduleOverlayPlanes(widget_);
 
     if (!schedule_planes_succeeded) {
-      OnSubmission(gfx::SwapResult::SWAP_FAILED);
+      OnSubmission(gfx::SwapResult::SWAP_FAILED, nullptr);
       OnPresentation(gfx::PresentationFeedback::Failure());
       return;
     }
@@ -269,7 +269,8 @@ void GbmSurfaceless::FenceRetired(PendingFrame* frame) {
   SubmitFrame();
 }
 
-void GbmSurfaceless::OnSubmission(gfx::SwapResult result) {
+void GbmSurfaceless::OnSubmission(gfx::SwapResult result,
+                                  std::unique_ptr<gfx::GpuFence> out_fence) {
   submitted_frame_->swap_result = result;
 }
 
@@ -278,7 +279,7 @@ void GbmSurfaceless::OnPresentation(const gfx::PresentationFeedback& feedback) {
   submitted_frame_->overlays.clear();
 
   gfx::SwapResult result = submitted_frame_->swap_result;
-  std::move(submitted_frame_->completion_callback).Run(result);
+  std::move(submitted_frame_->completion_callback).Run(result, nullptr);
   std::move(submitted_frame_->presentation_callback).Run(feedback);
   submitted_frame_.reset();
 

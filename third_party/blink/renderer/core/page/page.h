@@ -32,7 +32,6 @@
 #include "third_party/blink/renderer/core/frame/hosts_using_features.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/settings_delegate.h"
-#include "third_party/blink/renderer/core/frame/use_counter.h"
 #include "third_party/blink/renderer/core/page/page_animator.h"
 #include "third_party/blink/renderer/core/page/page_visibility_notifier.h"
 #include "third_party/blink/renderer/core/page/page_visibility_observer.h"
@@ -60,6 +59,7 @@ class DragCaret;
 class DragController;
 class FocusController;
 class Frame;
+class LinkHighlights;
 class OverscrollController;
 struct PageScaleConstraints;
 class PageScaleConstraintsSet;
@@ -193,7 +193,6 @@ class CORE_EXPORT Page final : public GarbageCollectedFinalized<Page>,
 
   Settings& GetSettings() const { return *settings_; }
 
-  UseCounter& GetUseCounter() { return use_counter_; }
   Deprecation& GetDeprecation() { return deprecation_; }
   HostsUsingFeatures& GetHostsUsingFeatures() { return hosts_using_features_; }
 
@@ -217,6 +216,8 @@ class CORE_EXPORT Page final : public GarbageCollectedFinalized<Page>,
 
   VisualViewport& GetVisualViewport();
   const VisualViewport& GetVisualViewport() const;
+
+  LinkHighlights& GetLinkHighlights();
 
   OverscrollController& GetOverscrollController();
   const OverscrollController& GetOverscrollController() const;
@@ -309,7 +310,7 @@ class CORE_EXPORT Page final : public GarbageCollectedFinalized<Page>,
 
   // PageScheduler::Delegate implementation.
   void ReportIntervention(const String& message) override;
-  void RequestBeginMainFrameNotExpected(bool new_state) override;
+  bool RequestBeginMainFrameNotExpected(bool new_state) override;
   void SetLifecycleState(PageLifecycleState) override;
   ukm::UkmRecorder* GetUkmRecorder() override;
   int64_t GetUkmSourceId() override;
@@ -334,6 +335,20 @@ class CORE_EXPORT Page final : public GarbageCollectedFinalized<Page>,
 
   void SetPageScheduler(std::unique_ptr<PageScheduler>);
 
+  // Typically, the main frame and Page should both be owned by the embedder,
+  // which must call Page::willBeDestroyed() prior to destroying Page. This
+  // call detaches the main frame and clears this pointer, thus ensuring that
+  // this field only references a live main frame.
+  //
+  // However, there are several locations (InspectorOverlay, SVGImage, and
+  // WebPagePopupImpl) which don't hold a reference to the main frame at all
+  // after creating it. These are still safe because they always create a
+  // Frame with a LocalFrameView. LocalFrameView and Frame hold references to
+  // each other, thus keeping each other alive. The call to willBeDestroyed()
+  // breaks this cycle, so the frame is still properly destroyed once no
+  // longer needed.
+  Member<Frame> main_frame_;
+
   Member<PageAnimator> animator_;
   const Member<AutoscrollController> autoscroll_controller_;
   Member<ChromeClient> chrome_client_;
@@ -351,26 +366,12 @@ class CORE_EXPORT Page final : public GarbageCollectedFinalized<Page>,
       global_root_scroller_controller_;
   const Member<VisualViewport> visual_viewport_;
   const Member<OverscrollController> overscroll_controller_;
-
-  // Typically, the main frame and Page should both be owned by the embedder,
-  // which must call Page::willBeDestroyed() prior to destroying Page. This
-  // call detaches the main frame and clears this pointer, thus ensuring that
-  // this field only references a live main frame.
-  //
-  // However, there are several locations (InspectorOverlay, SVGImage, and
-  // WebPagePopupImpl) which don't hold a reference to the main frame at all
-  // after creating it. These are still safe because they always create a
-  // Frame with a LocalFrameView. LocalFrameView and Frame hold references to
-  // each other, thus keeping each other alive. The call to willBeDestroyed()
-  // breaks this cycle, so the frame is still properly destroyed once no
-  // longer needed.
-  Member<Frame> main_frame_;
+  const Member<LinkHighlights> link_highlights_;
 
   Member<PluginData> plugin_data_;
 
   Member<ValidationMessageClient> validation_message_client_;
 
-  UseCounter use_counter_;
   Deprecation deprecation_;
   HostsUsingFeatures hosts_using_features_;
   WebWindowFeatures window_features_;

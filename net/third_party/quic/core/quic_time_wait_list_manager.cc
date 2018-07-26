@@ -32,6 +32,8 @@ class ConnectionIdCleanUpAlarm : public QuicAlarm::Delegate {
   explicit ConnectionIdCleanUpAlarm(
       QuicTimeWaitListManager* time_wait_list_manager)
       : time_wait_list_manager_(time_wait_list_manager) {}
+  ConnectionIdCleanUpAlarm(const ConnectionIdCleanUpAlarm&) = delete;
+  ConnectionIdCleanUpAlarm& operator=(const ConnectionIdCleanUpAlarm&) = delete;
 
   void OnAlarm() override {
     time_wait_list_manager_->CleanUpOldConnectionIds();
@@ -40,8 +42,6 @@ class ConnectionIdCleanUpAlarm : public QuicAlarm::Delegate {
  private:
   // Not owned.
   QuicTimeWaitListManager* time_wait_list_manager_;
-
-  DISALLOW_COPY_AND_ASSIGN(ConnectionIdCleanUpAlarm);
 };
 
 // This class stores pending public reset packets to be sent to clients.
@@ -59,6 +59,8 @@ class QuicTimeWaitListManager::QueuedPacket {
       : server_address_(server_address),
         client_address_(client_address),
         packet_(std::move(packet)) {}
+  QueuedPacket(const QueuedPacket&) = delete;
+  QueuedPacket& operator=(const QueuedPacket&) = delete;
 
   const QuicSocketAddress& server_address() const { return server_address_; }
   const QuicSocketAddress& client_address() const { return client_address_; }
@@ -68,20 +70,18 @@ class QuicTimeWaitListManager::QueuedPacket {
   const QuicSocketAddress server_address_;
   const QuicSocketAddress client_address_;
   std::unique_ptr<QuicEncryptedPacket> packet_;
-
-  DISALLOW_COPY_AND_ASSIGN(QueuedPacket);
 };
 
 QuicTimeWaitListManager::QuicTimeWaitListManager(
     QuicPacketWriter* writer,
     Visitor* visitor,
-    QuicConnectionHelperInterface* helper,
+    const QuicClock* clock,
     QuicAlarmFactory* alarm_factory)
     : time_wait_period_(
           QuicTime::Delta::FromSeconds(FLAGS_quic_time_wait_list_seconds)),
       connection_id_clean_up_alarm_(
           alarm_factory->CreateAlarm(new ConnectionIdCleanUpAlarm(this))),
-      clock_(helper->GetClock()),
+      clock_(clock),
       writer_(writer),
       visitor_(visitor) {
   SetConnectionIdCleanUpAlarm();
@@ -244,6 +244,13 @@ bool QuicTimeWaitListManager::WriteToWire(QueuedPacket* queued_packet) {
       queued_packet->packet()->data(), queued_packet->packet()->length(),
       queued_packet->server_address().host(), queued_packet->client_address(),
       nullptr);
+
+  // If using a batch writer and the packet is buffered, flush it.
+  if (writer_->IsBatchMode() && result.status == WRITE_STATUS_OK &&
+      result.bytes_written == 0) {
+    result = writer_->Flush();
+  }
+
   if (result.status == WRITE_STATUS_BLOCKED) {
     // If blocked and unbuffered, return false to retry sending.
     DCHECK(writer_->IsWriteBlocked());

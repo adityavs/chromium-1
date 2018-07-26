@@ -50,7 +50,7 @@ class ARCoreGl {
 
   void ProduceFrame(const gfx::Size& frame_size,
                     display::Display::Rotation display_rotation,
-                    mojom::VRMagicWindowProvider::GetFrameDataCallback);
+                    mojom::XRFrameDataProvider::GetFrameDataCallback);
   void Pause();
   void Resume();
 
@@ -58,17 +58,17 @@ class ARCoreGl {
     return gl_thread_task_runner_;
   }
 
-  void RequestHitTest(mojom::XRRayPtr,
-                      mojom::VRMagicWindowProvider::RequestHitTestCallback);
+  void RequestHitTest(
+      mojom::XRRayPtr,
+      mojom::XREnviromentIntegrationProvider::RequestHitTestCallback);
 
   base::WeakPtr<ARCoreGl> GetWeakPtr();
 
  private:
   // TODO(https://crbug/835948): remove frame_size.
-  void ProcessFrame(
-      mojom::XRFrameDataPtr frame_data,
-      const gfx::Size& frame_size,
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback);
+  void ProcessFrame(mojom::XRFrameDataPtr frame_data,
+                    const gfx::Size& frame_size,
+                    mojom::XRFrameDataProvider::GetFrameDataCallback callback);
 
   bool InitializeGl();
   bool IsOnGlThread() const;
@@ -80,6 +80,16 @@ class ARCoreGl {
   // Created on GL thread and should only be accessed on that thread.
   std::unique_ptr<ARCore> arcore_;
   std::unique_ptr<ARImageTransport> ar_image_transport_;
+
+  // Default dummy values to ensure consistent behaviour.
+  gfx::Size transfer_size_ = gfx::Size(0, 0);
+  display::Display::Rotation display_rotation_ = display::Display::ROTATE_0;
+
+  gfx::Transform uv_transform_;
+  gfx::Transform projection_;
+  // The first run of ProduceFrame should set uv_transform_ and projection_
+  // using the default settings in ARCore.
+  bool should_recalculate_uvs_ = true;
 
   bool is_initialized_ = false;
 

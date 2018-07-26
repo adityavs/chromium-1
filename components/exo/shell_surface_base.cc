@@ -34,6 +34,7 @@
 #include "ui/aura/client/cursor_client.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
+#include "ui/aura/window_observer.h"
 #include "ui/aura/window_targeter.h"
 #include "ui/aura/window_tree_host.h"
 #include "ui/base/accelerators/accelerator.h"
@@ -95,7 +96,8 @@ class ShellSurfaceWidget : public views::Widget {
   DISALLOW_COPY_AND_ASSIGN(ShellSurfaceWidget);
 };
 
-class CustomFrameView : public ash::CustomFrameViewAsh {
+class CustomFrameView : public ash::CustomFrameViewAsh,
+                        public aura::WindowObserver {
  public:
   using ShapeRects = std::vector<gfx::Rect>;
 
@@ -110,9 +112,16 @@ class CustomFrameView : public ash::CustomFrameViewAsh {
     SetVisible(enabled);
     if (!enabled)
       CustomFrameViewAsh::SetShouldPaintHeader(false);
+
+    frame()->GetNativeWindow()->AddObserver(this);
   }
 
-  ~CustomFrameView() override {}
+  ~CustomFrameView() override {
+    if (frame() && frame()->GetNativeWindow() &&
+        frame()->GetNativeWindow()->HasObserver(this)) {
+      frame()->GetNativeWindow()->RemoveObserver(this);
+    }
+  }
 
   // Overridden from ash::CustomFrameViewAsh:
   void SetShouldPaintHeader(bool paint) override {
@@ -154,7 +163,13 @@ class CustomFrameView : public ash::CustomFrameViewAsh {
     // the window mask layer bounds can be set correctly in function
     // SetShouldPaintHeader(). Note: this can be removed if the layer mask in
     // CustomFrameView becomes unnecessary.
+    // TODO(oshima): Investigate if we can eliminate this.
     CustomFrameViewAsh::UpdateHeaderView();
+  }
+
+  void OnWindowDestroying(aura::Window* window) override {
+    DCHECK_EQ(frame()->GetNativeWindow(), window);
+    window->RemoveObserver(this);
   }
 
   // Overridden from views::NonClientFrameView:
@@ -808,6 +823,12 @@ bool ShellSurfaceBase::IsInputEnabled(Surface*) const {
 }
 
 void ShellSurfaceBase::OnSetFrame(SurfaceFrameType frame_type) {
+  if (is_popup_) {
+    // TODO(oshima): Consider supporting shadow type.
+    DLOG(WARNING) << "popup does not support frame decoration";
+    return;
+  }
+
   bool frame_was_disabled = !frame_enabled();
   frame_type_ = frame_type;
   switch (frame_type) {

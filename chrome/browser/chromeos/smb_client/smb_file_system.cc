@@ -309,13 +309,11 @@ AbortCallback SmbFileSystem::CopyEntry(
     const base::FilePath& source_path,
     const base::FilePath& target_path,
     storage::AsyncFileUtil::StatusCallback callback) {
-  auto reply = base::BindOnce(&SmbFileSystem::HandleStatusCallback, AsWeakPtr(),
-                              std::move(callback));
-  SmbTask task =
-      base::BindOnce(&SmbProviderClient::CopyEntry, GetWeakSmbProviderClient(),
-                     GetMountId(), source_path, target_path, std::move(reply));
+  OperationId operation_id = task_queue_.GetNextOperationId();
 
-  return EnqueueTaskAndGetCallback(std::move(task));
+  StartCopy(source_path, target_path, operation_id, std::move(callback));
+
+  return CreateAbortCallback(operation_id);
 }
 
 AbortCallback SmbFileSystem::MoveEntry(
@@ -469,6 +467,33 @@ void SmbFileSystem::Configure(storage::AsyncFileUtil::StatusCallback callback) {
   NOTREACHED();
 }
 
+void SmbFileSystem::StartCopy(const base::FilePath& source_path,
+                              const base::FilePath& target_path,
+                              OperationId operation_id,
+                              storage::AsyncFileUtil::StatusCallback callback) {
+  auto reply = base::BindOnce(&SmbFileSystem::HandleStartCopyCallback,
+                              AsWeakPtr(), std::move(callback), operation_id);
+  SmbTask task =
+      base::BindOnce(&SmbProviderClient::StartCopy, GetWeakSmbProviderClient(),
+                     GetMountId(), source_path, target_path, std::move(reply));
+
+  EnqueueTask(std::move(task), operation_id);
+}
+
+void SmbFileSystem::ContinueCopy(
+    OperationId operation_id,
+    int32_t copy_token,
+    storage::AsyncFileUtil::StatusCallback callback) {
+  auto reply =
+      base::BindOnce(&SmbFileSystem::HandleContinueCopyCallback, AsWeakPtr(),
+                     std::move(callback), operation_id, copy_token);
+  SmbTask task = base::BindOnce(&SmbProviderClient::ContinueCopy,
+                                GetWeakSmbProviderClient(), GetMountId(),
+                                copy_token, std::move(reply));
+
+  EnqueueTask(std::move(task), operation_id);
+}
+
 void SmbFileSystem::HandleRequestReadDirectoryCallback(
     storage::AsyncFileUtil::ReadDirectoryCallback callback,
     const base::ElapsedTimer& metrics_timer,
@@ -540,6 +565,40 @@ void SmbFileSystem::HandleDeleteEntryCallback(
     }
     std::move(callback).Run(TranslateToFileError(delete_error));
   }
+}
+
+void SmbFileSystem::HandleStartCopyCallback(
+    storage::AsyncFileUtil::StatusCallback callback,
+    OperationId operation_id,
+    smbprovider::ErrorType error,
+    int32_t copy_token) {
+  task_queue_.TaskFinished();
+
+  if (error == smbprovider::ERROR_COPY_PENDING) {
+    // The copy needs to be continued.
+    DCHECK_GE(copy_token, 0);
+
+    ContinueCopy(operation_id, copy_token, std::move(callback));
+    return;
+  }
+
+  std::move(callback).Run(TranslateToFileError(error));
+}
+
+void SmbFileSystem::HandleContinueCopyCallback(
+    storage::AsyncFileUtil::StatusCallback callback,
+    OperationId operation_id,
+    int32_t copy_token,
+    smbprovider::ErrorType error) {
+  task_queue_.TaskFinished();
+
+  if (error == smbprovider::ERROR_COPY_PENDING) {
+    // The copy needs to be continued.
+    ContinueCopy(operation_id, copy_token, std::move(callback));
+    return;
+  }
+
+  std::move(callback).Run(TranslateToFileError(error));
 }
 
 void SmbFileSystem::HandleRequestGetMetadataEntryCallback(

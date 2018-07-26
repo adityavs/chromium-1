@@ -11,6 +11,7 @@
 
 #include "third_party/blink/renderer/bindings/tests/results/modules/v8_void_callback_function_modules.h"
 
+#include "base/stl_util.h"
 #include "third_party/blink/renderer/bindings/core/v8/generated_code_helper.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
 #include "third_party/blink/renderer/bindings/core/v8/to_v8_for_core.h"
@@ -103,13 +104,11 @@ void V8VoidCallbackFunctionModules::InvokeAndReportException(ScriptWrappable* ca
   ALLOW_UNUSED_LOCAL(maybe_result);
 }
 
-MODULES_TEMPLATE_EXPORT
 v8::Maybe<void> V8PersistentCallbackFunction<V8VoidCallbackFunctionModules>::Invoke(ScriptWrappable* callback_this_value) {
   return Proxy()->Invoke(
       callback_this_value);
 }
 
-MODULES_TEMPLATE_EXPORT
 void V8PersistentCallbackFunction<V8VoidCallbackFunctionModules>::InvokeAndReportException(ScriptWrappable* callback_this_value) {
   Proxy()->InvokeAndReportException(
       callback_this_value);

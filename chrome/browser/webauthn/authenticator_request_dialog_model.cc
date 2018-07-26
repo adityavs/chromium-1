@@ -21,7 +21,10 @@ void AuthenticatorRequestDialogModel::StartGuidedFlowForTransport(
   DCHECK_EQ(current_step(), Step::kTransportSelection);
   switch (transport) {
     case AuthenticatorTransport::kUsb:
-      SetCurrentStep(Step::kUsbInsert);
+      SetCurrentStep(Step::kUsbInsertAndActivateOnRegister);
+      break;
+    case AuthenticatorTransport::kBluetoothLowEnergy:
+      SetCurrentStep(Step::kBlePowerOnManual);
       break;
     default:
       break;
@@ -51,7 +54,7 @@ void AuthenticatorRequestDialogModel::FinishPairingWithPin(
 }
 
 void AuthenticatorRequestDialogModel::TryUsbDevice() {
-  DCHECK_EQ(current_step(), Step::kUsbInsert);
+  DCHECK_EQ(current_step(), Step::kUsbInsertAndActivateOnRegister);
 }
 
 void AuthenticatorRequestDialogModel::Cancel() {}
@@ -71,4 +74,8 @@ void AuthenticatorRequestDialogModel::RemoveObserver(Observer* observer) {
 
 void AuthenticatorRequestDialogModel::OnRequestComplete() {
   SetCurrentStep(Step::kCompleted);
+}
+
+void AuthenticatorRequestDialogModel::OnRequestTimeout() {
+  SetCurrentStep(Step::kErrorTimedOut);
 }

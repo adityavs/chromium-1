@@ -9,14 +9,16 @@
 
 #include "ios/chrome/browser/browser_state/chrome_browser_state.h"
 #import "ios/chrome/browser/experimental_flags.h"
+#import "ios/chrome/browser/ui/collection_view/cells/collection_view_cell_constants.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
-#import "ios/chrome/browser/ui/commands/open_url_command.h"
+#import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
 #import "ios/chrome/browser/ui/settings/bar_button_activity_indicator.h"
 #import "ios/chrome/browser/ui/settings/settings_navigation_controller.h"
 #import "ios/chrome/browser/ui/settings/settings_utils.h"
 #include "ios/chrome/browser/ui/ui_util.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
 #include "ios/chrome/grit/ios_strings.h"
+#import "ios/third_party/material_components_ios/src/components/AppBar/src/MaterialAppBar.h"
 #import "ios/third_party/material_components_ios/src/components/Collections/src/MaterialCollections.h"
 #include "ui/base/l10n/l10n_util.h"
 
@@ -58,11 +60,13 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
     self.collectionView.backgroundColor =
         [UIColor groupTableViewBackgroundColor];
     self.styler.cellStyle = MDCCollectionViewCellStyleGrouped;
-    self.styler.separatorInset = UIEdgeInsetsMake(0, 48, 0, 0);
+    self.styler.separatorColor = UIColorFromRGB(kUIKitSeparatorColor);
+    self.appBar.headerViewController.headerView.backgroundColor =
+        [UIColor groupTableViewBackgroundColor];
   } else {
     self.styler.cellStyle = MDCCollectionViewCellStyleCard;
-    self.styler.separatorInset = UIEdgeInsetsMake(0, 16, 0, 16);
   }
+  self.styler.separatorInset = UIEdgeInsetsMake(0, 16, 0, 16);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -130,7 +134,7 @@ const CGFloat kActivityIndicatorDimensionIPhone = 56;
 - (void)cell:(CollectionViewFooterCell*)cell didTapLinkURL:(GURL)URL {
   // Subclass must have a valid dispatcher assigned.
   DCHECK(self.dispatcher);
-  OpenUrlCommand* command = [[OpenUrlCommand alloc] initWithURLFromChrome:URL];
+  OpenNewTabCommand* command = [OpenNewTabCommand commandWithURLFromChrome:URL];
   [self.dispatcher closeSettingsUIAndOpenURL:command];
 }
 

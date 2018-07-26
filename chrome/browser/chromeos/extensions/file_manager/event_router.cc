@@ -390,13 +390,51 @@ class DriveFsEventRouterImpl : public DriveFsEventRouter {
   explicit DriveFsEventRouterImpl(Profile* profile) : profile_(profile) {}
 
  private:
-  void DispatchOnFileTransfersUpdatedEvent(
-      const file_manager_private::FileTransferStatus& status) override {
-    extensions::EventRouter::Get(profile_)->BroadcastEvent(
-        std::make_unique<extensions::Event>(
-            extensions::events::FILE_MANAGER_PRIVATE_ON_FILE_TRANSFERS_UPDATED,
-            file_manager_private::OnFileTransfersUpdated::kEventName,
-            file_manager_private::OnFileTransfersUpdated::Create(status)));
+  std::set<std::string> GetEventListenerExtensionIds(
+      const std::string& event_name) override {
+    const extensions::EventListenerMap::ListenerList& listeners =
+        extensions::EventRouter::Get(profile_)
+            ->listeners()
+            .GetEventListenersByName(event_name);
+
+    std::set<std::string> extension_ids;
+
+    for (const auto& listener : listeners) {
+      extension_ids.insert(listener->extension_id());
+    }
+
+    return extension_ids;
+  }
+
+  GURL ConvertDrivePathToFileSystemUrl(
+      const base::FilePath& file_path,
+      const std::string& extension_id) override {
+    GURL url;
+    file_manager::util::ConvertAbsoluteFilePathToFileSystemUrl(
+        profile_,
+        base::FilePath(DriveIntegrationServiceFactory::FindForProfile(profile_)
+                           ->GetMountPointPath()
+                           .value() +
+                       file_path.value()),
+        extension_id, &url);
+    return url;
+  }
+
+  std::string GetDriveFileSystemName() override {
+    return DriveIntegrationServiceFactory::FindForProfile(profile_)
+        ->GetMountPointPath()
+        .BaseName()
+        .value();
+  }
+
+  void DispatchEventToExtension(
+      const std::string& extension_id,
+      extensions::events::HistogramValue histogram_value,
+      const std::string& event_name,
+      std::unique_ptr<base::ListValue> event_args) override {
+    extensions::EventRouter::Get(profile_)->DispatchEventToExtension(
+        extension_id, std::make_unique<extensions::Event>(
+                          histogram_value, event_name, std::move(event_args)));
   }
 
   Profile* const profile_;

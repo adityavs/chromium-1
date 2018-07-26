@@ -12,11 +12,11 @@
 #include "base/strings/string_util.h"
 #include "base/time/time.h"
 #include "content/browser/service_worker/embedded_worker_status.h"
-#include "content/common/service_worker/service_worker_utils.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/common/content_client.h"
 #include "net/url_request/url_request.h"
+#include "third_party/blink/public/common/service_worker/service_worker_utils.h"
 
 namespace content {
 
@@ -216,72 +216,22 @@ void RecordURLMetricOnUI(const std::string& metric_name, const GURL& url) {
   GetContentClient()->browser()->RecordURLMetric(metric_name, url);
 }
 
-enum EventHandledRatioType {
-  EVENT_HANDLED_NONE,
-  EVENT_HANDLED_SOME,
-  EVENT_HANDLED_ALL,
-  NUM_EVENT_HANDLED_RATIO_TYPE,
-};
-
 }  // namespace
 
 using ScopedEventRecorder = ServiceWorkerMetrics::ScopedEventRecorder;
 
-ScopedEventRecorder::ScopedEventRecorder(
-    ServiceWorkerMetrics::EventType start_worker_purpose)
-    : start_worker_purpose_(start_worker_purpose) {}
+ScopedEventRecorder::ScopedEventRecorder() = default;
 
 ScopedEventRecorder::~ScopedEventRecorder() {
-  for (const auto& ev : event_stats_) {
-    RecordEventHandledRatio(ev.first, ev.second.handled_events,
-                            ev.second.fired_events);
-  }
-  if (start_worker_purpose_ == EventType::NAVIGATION_HINT) {
-    bool frame_fetch_event_fired =
-        event_stats_[EventType::FETCH_MAIN_FRAME].fired_events ||
-        event_stats_[EventType::FETCH_SUB_FRAME].fired_events;
-    UMA_HISTOGRAM_BOOLEAN("ServiceWorker.StartHintPrecision",
-                          frame_fetch_event_fired);
-  }
+  UMA_HISTOGRAM_BOOLEAN("ServiceWorker.StartHintPrecision",
+                        frame_fetch_event_fired_);
 }
 
 void ScopedEventRecorder::RecordEventHandledStatus(
-    ServiceWorkerMetrics::EventType event,
-    bool handled) {
-  event_stats_[event].fired_events++;
-  if (handled)
-    event_stats_[event].handled_events++;
-}
-
-void ScopedEventRecorder::RecordEventHandledRatio(
-    ServiceWorkerMetrics::EventType event,
-    size_t handled_events,
-    size_t fired_events) {
-  if (!fired_events)
-    return;
-  EventHandledRatioType type = EVENT_HANDLED_SOME;
-  if (fired_events == handled_events)
-    type = EVENT_HANDLED_ALL;
-  else if (handled_events == 0)
-    type = EVENT_HANDLED_NONE;
-
-  // For now Fetch and Foreign Fetch are the only types that are recorded.
-  switch (event) {
-    case EventType::FETCH_MAIN_FRAME:
-    case EventType::FETCH_SUB_FRAME:
-    case EventType::FETCH_SHARED_WORKER:
-    case EventType::FETCH_SUB_RESOURCE:
-      UMA_HISTOGRAM_ENUMERATION("ServiceWorker.EventHandledRatioType.Fetch",
-                                type, NUM_EVENT_HANDLED_RATIO_TYPE);
-      break;
-    case EventType::FOREIGN_FETCH:
-      UMA_HISTOGRAM_ENUMERATION(
-          "ServiceWorker.EventHandledRatioType.ForeignFetch", type,
-          NUM_EVENT_HANDLED_RATIO_TYPE);
-      break;
-    default:
-      // Do nothing.
-      break;
+    ServiceWorkerMetrics::EventType event) {
+  if (event == EventType::FETCH_MAIN_FRAME ||
+      event == EventType::FETCH_SUB_FRAME) {
+    frame_fetch_event_fired_ = true;
   }
 }
 
@@ -474,19 +424,19 @@ void ServiceWorkerMetrics::RecordStartWorkerStatus(
     EventType purpose,
     bool is_installed) {
   if (!is_installed) {
-    UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartNewWorker.Status", status,
-                              blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+    UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartNewWorker.Status", status);
     return;
   }
 
-  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.Status", status,
-                            blink::SERVICE_WORKER_ERROR_MAX_VALUE);
-  RecordHistogramEnum(std::string("ServiceWorker.StartWorker.StatusByPurpose") +
-                          EventTypeToSuffix(purpose),
-                      status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.Status", status);
+  RecordHistogramEnum(
+      std::string("ServiceWorker.StartWorker.StatusByPurpose") +
+          EventTypeToSuffix(purpose),
+      static_cast<uint32_t>(status),
+      static_cast<uint32_t>(blink::ServiceWorkerStatusCode::kMaxValue));
   UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.Purpose", purpose,
                             EventType::NUM_TYPES);
-  if (status == blink::SERVICE_WORKER_ERROR_TIMEOUT) {
+  if (status == blink::ServiceWorkerStatusCode::kErrorTimeout) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.Timeout.StartPurpose",
                               purpose, EventType::NUM_TYPES);
   }
@@ -557,7 +507,7 @@ void ServiceWorkerMetrics::RecordActivatedWorkerPreparationForMainFrame(
 
   // Don't record .Time if S13nServiceWorker is enabled.
   // https://crbug.com/852664
-  if (ServiceWorkerUtils::IsServicificationEnabled())
+  if (blink::ServiceWorkerUtils::IsServicificationEnabled())
     return;
 
   // Record the preparation time.
@@ -598,21 +548,19 @@ void ServiceWorkerMetrics::RecordStopWorkerTime(base::TimeDelta time) {
 void ServiceWorkerMetrics::RecordActivateEventStatus(
     blink::ServiceWorkerStatusCode status,
     bool is_shutdown) {
-  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.ActivateEventStatus", status,
-                            blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.ActivateEventStatus", status);
   if (is_shutdown) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.ActivateEventStatus_InShutdown",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   } else {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.ActivateEventStatus_NotInShutdown",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   }
 }
 
 void ServiceWorkerMetrics::RecordInstallEventStatus(
     blink::ServiceWorkerStatusCode status) {
-  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.InstallEventStatus", status,
-                            blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+  UMA_HISTOGRAM_ENUMERATION("ServiceWorker.InstallEventStatus", status);
 }
 
 void ServiceWorkerMetrics::RecordEventDispatchingDelay(EventType event_type,
@@ -734,10 +682,10 @@ void ServiceWorkerMetrics::RecordFetchEventStatus(
     blink::ServiceWorkerStatusCode status) {
   if (is_main_resource) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.FetchEvent.MainResource.Status",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   } else {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.FetchEvent.Subresource.Status",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   }
 }
 
@@ -774,32 +722,6 @@ void ServiceWorkerMetrics::RecordFallbackedRequestMode(
 void ServiceWorkerMetrics::RecordProcessCreated(bool is_new_process) {
   UMA_HISTOGRAM_BOOLEAN("EmbeddedWorkerInstance.ProcessCreated",
                         is_new_process);
-}
-
-void ServiceWorkerMetrics::RecordTimeToSendStartWorker(
-    base::TimeDelta duration,
-    StartSituation situation) {
-  std::string name = "EmbeddedWorkerInstance.Start.TimeToSendStartWorker";
-  UMA_HISTOGRAM_MEDIUM_TIMES(name, duration);
-  RecordSuffixedMediumTimeHistogram(
-      name, StartSituationToDeprecatedSuffix(situation), duration);
-}
-
-void ServiceWorkerMetrics::RecordTimeToStartThread(base::TimeDelta duration,
-                                                   StartSituation situation) {
-  std::string name = "EmbeddedWorkerInstance.Start.TimeToStartThread";
-  UMA_HISTOGRAM_MEDIUM_TIMES(name, duration);
-  RecordSuffixedMediumTimeHistogram(
-      name, StartSituationToDeprecatedSuffix(situation), duration);
-}
-
-void ServiceWorkerMetrics::RecordTimeToEvaluateScript(
-    base::TimeDelta duration,
-    StartSituation situation) {
-  std::string name = "EmbeddedWorkerInstance.Start.TimeToEvaluateScript";
-  UMA_HISTOGRAM_MEDIUM_TIMES(name, duration);
-  RecordSuffixedMediumTimeHistogram(
-      name, StartSituationToDeprecatedSuffix(situation), duration);
 }
 
 void ServiceWorkerMetrics::RecordStartWorkerTiming(const StartTimes& times,
@@ -872,7 +794,7 @@ void ServiceWorkerMetrics::RecordStartStatusAfterFailure(
     blink::ServiceWorkerStatusCode status) {
   DCHECK_GT(failure_count, 0);
 
-  if (status == blink::SERVICE_WORKER_OK) {
+  if (status == blink::ServiceWorkerStatusCode::kOk) {
     UMA_HISTOGRAM_COUNTS_1000("ServiceWorker.StartWorker.FailureStreakEnded",
                               failure_count);
   } else if (failure_count < std::numeric_limits<int>::max()) {
@@ -882,13 +804,13 @@ void ServiceWorkerMetrics::RecordStartStatusAfterFailure(
 
   if (failure_count == 1) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.AfterFailureStreak_1",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   } else if (failure_count == 2) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.AfterFailureStreak_2",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   } else if (failure_count == 3) {
     UMA_HISTOGRAM_ENUMERATION("ServiceWorker.StartWorker.AfterFailureStreak_3",
-                              status, blink::SERVICE_WORKER_ERROR_MAX_VALUE);
+                              status);
   }
 }
 

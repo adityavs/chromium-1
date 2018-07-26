@@ -242,10 +242,17 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
                         public IAccessibleTable2,
                         public IAccessibleTableCell,
                         public IExpandCollapseProvider,
+                        public IGridItemProvider,
+                        public IGridProvider,
                         public IRangeValueProvider,
                         public IRawElementProviderSimple,
                         public IScrollItemProvider,
+                        public IScrollProvider,
+                        public ISelectionItemProvider,
+                        public ISelectionProvider,
                         public IServiceProvider,
+                        public ITableItemProvider,
+                        public ITableProvider,
                         public IToggleProvider,
                         public IValueProvider,
                         public AXPlatformNodeBase {
@@ -262,9 +269,16 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
     COM_INTERFACE_ENTRY(IAccessibleTable2)
     COM_INTERFACE_ENTRY(IAccessibleTableCell)
     COM_INTERFACE_ENTRY(IExpandCollapseProvider)
+    COM_INTERFACE_ENTRY(IGridItemProvider)
+    COM_INTERFACE_ENTRY(IGridProvider)
     COM_INTERFACE_ENTRY(IRangeValueProvider)
     COM_INTERFACE_ENTRY(IRawElementProviderSimple)
     COM_INTERFACE_ENTRY(IScrollItemProvider)
+    COM_INTERFACE_ENTRY(IScrollProvider)
+    COM_INTERFACE_ENTRY(ISelectionItemProvider)
+    COM_INTERFACE_ENTRY(ISelectionProvider)
+    COM_INTERFACE_ENTRY(ITableItemProvider)
+    COM_INTERFACE_ENTRY(ITableProvider)
     COM_INTERFACE_ENTRY(IToggleProvider)
     COM_INTERFACE_ENTRY(IValueProvider)
     COM_INTERFACE_ENTRY(IServiceProvider)
@@ -429,7 +443,7 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
                                   LONG* child_id) override;
 
   //
-  // IExpandCollapseProvider methods..
+  // IExpandCollapseProvider methods.
   //
 
   STDMETHODIMP Collapse() override;
@@ -439,10 +453,105 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
   STDMETHODIMP get_ExpandCollapseState(ExpandCollapseState* result) override;
 
   //
+  // IGridItemProvider methods.
+  //
+
+  STDMETHODIMP get_Column(int* result) override;
+
+  STDMETHODIMP get_ColumnSpan(int* result) override;
+
+  STDMETHODIMP get_ContainingGrid(IRawElementProviderSimple** result) override;
+
+  STDMETHODIMP get_Row(int* result) override;
+
+  STDMETHODIMP get_RowSpan(int* result) override;
+
+  //
+  // IGridProvider methods.
+  //
+
+  STDMETHODIMP GetItem(int row,
+                       int column,
+                       IRawElementProviderSimple** result) override;
+
+  STDMETHODIMP get_RowCount(int* result) override;
+
+  STDMETHODIMP get_ColumnCount(int* result) override;
+
+  //
   // IScrollItemProvider methods.
   //
 
   STDMETHODIMP ScrollIntoView() override;
+
+  //
+  // IScrollProvider methods.
+  //
+
+  STDMETHODIMP Scroll(ScrollAmount horizontal_amount,
+                      ScrollAmount vertical_amount) override;
+
+  STDMETHODIMP SetScrollPercent(double horizontal_percent,
+                                double vertical_percent) override;
+
+  STDMETHODIMP get_HorizontallyScrollable(BOOL* result) override;
+
+  STDMETHODIMP get_HorizontalScrollPercent(double* result) override;
+
+  // Horizontal size of the viewable region as a percentage of the total content
+  // area.
+  STDMETHODIMP get_HorizontalViewSize(double* result) override;
+
+  STDMETHODIMP get_VerticallyScrollable(BOOL* result) override;
+
+  STDMETHODIMP get_VerticalScrollPercent(double* result) override;
+
+  // Vertical size of the viewable region as a percentage of the total content
+  // area.
+  STDMETHODIMP get_VerticalViewSize(double* result) override;
+
+  //
+  // ISelectionItemProvider methods.
+  //
+
+  STDMETHODIMP AddToSelection() override;
+
+  STDMETHODIMP RemoveFromSelection() override;
+
+  STDMETHODIMP Select() override;
+
+  STDMETHODIMP get_IsSelected(BOOL* result) override;
+
+  STDMETHODIMP get_SelectionContainer(
+      IRawElementProviderSimple** result) override;
+
+  //
+  // ISelectionProvider methods.
+  //
+
+  STDMETHODIMP GetSelection(SAFEARRAY** result) override;
+
+  STDMETHODIMP get_CanSelectMultiple(BOOL* result) override;
+
+  STDMETHODIMP get_IsSelectionRequired(BOOL* result) override;
+
+  //
+  // ITableItemProvider methods.
+  //
+
+  STDMETHODIMP GetColumnHeaderItems(SAFEARRAY** result) override;
+
+  STDMETHODIMP GetRowHeaderItems(SAFEARRAY** result) override;
+
+  //
+  // ITableProvider methods.
+  //
+
+  STDMETHODIMP GetColumnHeaders(SAFEARRAY** result) override;
+
+  STDMETHODIMP GetRowHeaders(SAFEARRAY** result) override;
+
+  STDMETHODIMP get_RowOrColumnMajor(RowOrColumnMajor* result) override;
 
   //
   // IToggleProvider methods.
@@ -900,6 +1009,16 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
   SAFEARRAY* CreateUIAElementsArrayForRelation(
       const ax::mojom::IntListAttribute& attribute);
 
+  // Return an array of automation elements given a vector
+  // of |AXNode| ids.
+  SAFEARRAY* CreateUIAElementsArrayFromIdVector(std::vector<int32_t>& ids);
+
+  // Returns the scroll offsets to which UI Automation should scroll an
+  // accessible object, given the horizontal and vertical scroll amounts.
+  gfx::Vector2d CalculateUIAScrollPoint(
+      const ScrollAmount horizontal_amount,
+      const ScrollAmount vertical_amount) const;
+
   void AddAlertTarget();
   void RemoveAlertTarget();
 
@@ -913,6 +1032,11 @@ class AX_EXPORT __declspec(uuid("26f5641a-246d-457b-a96d-07f3fae6acf2"))
                     IA2TextBoundaryType ia2_boundary,
                     LONG start_offset,
                     TextBoundaryDirection direction);
+
+  // Return true if the index represents a text character.
+  bool IsText(const base::string16& text,
+              size_t index,
+              bool is_indexed_from_end = false);
 
   // Many MSAA methods take a var_id parameter indicating that the operation
   // should be performed on a particular child ID, rather than this object.

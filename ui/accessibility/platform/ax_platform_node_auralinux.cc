@@ -6,7 +6,12 @@
 
 #include <stdint.h>
 
+#include <memory>
+#include <string>
+#include <utility>
+
 #include "base/command_line.h"
+#include "base/strings/string_number_conversions.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "ui/accessibility/ax_action_data.h"
@@ -306,7 +311,13 @@ static AtkRelationSet* ax_platform_node_auralinux_ref_relation_set(
 
 static AtkAttributeSet* ax_platform_node_auralinux_get_attributes(
     AtkObject* atk_object) {
-  return NULL;
+
+  ui::AXPlatformNodeAuraLinux* obj =
+      AtkObjectToAXPlatformNodeAuraLinux(atk_object);
+  if (!obj)
+    return nullptr;
+
+  return obj->GetAtkAttributes();
 }
 
 static AtkRole ax_platform_node_auralinux_get_role(AtkObject* atk_object) {
@@ -973,9 +984,13 @@ AtkRole AXPlatformNodeAuraLinux::GetAtkRole() {
     case ax::mojom::Role::kAnnotation:
       return ATK_ROLE_PANEL;
     case ax::mojom::Role::kApplication:
-      // Don't use ATK_ROLE_APPLICATION, which is for top level app windows,
-      // not ARIA applications.
-      return ATK_ROLE_EMBEDDED;
+      // Only use ATK_ROLE_APPLICATION for elements with no parent, since it
+      // is only for top level app windows and not ARIA applications.
+      if (!GetParent()) {
+        return ATK_ROLE_APPLICATION;
+      } else {
+        return ATK_ROLE_EMBEDDED;
+      }
     case ax::mojom::Role::kArticle:
       return ATK_ROLE_ARTICLE;
     case ax::mojom::Role::kAudio:
@@ -1252,7 +1267,6 @@ AtkRole AXPlatformNodeAuraLinux::GetAtkRole() {
                .empty() ||
           IsFocusedInputWithSuggestions()) {
         return ATK_ROLE_AUTOCOMPLETE;
-        ;
       }
       return ATK_ROLE_ENTRY;
     case ax::mojom::Role::kTextFieldWithComboBox:
@@ -1346,8 +1360,8 @@ void AXPlatformNodeAuraLinux::GetAtkState(AtkStateSet* atk_state_set) {
     atk_state_set_add_state(atk_state_set, ATK_STATE_FOCUSED);
 }
 
-void AXPlatformNodeAuraLinux::GetAtkRelations(AtkRelationSet* atk_relation_set)
-{
+void AXPlatformNodeAuraLinux::GetAtkRelations(
+    AtkRelationSet* atk_relation_set) {
 }
 
 AXPlatformNodeAuraLinux::AXPlatformNodeAuraLinux()
@@ -1533,6 +1547,15 @@ const gchar* AXPlatformNodeAuraLinux::GetDefaultActionName() {
   ATK_AURALINUX_RETURN_STRING(base::UTF16ToUTF8(action_verb));
 }
 
+AtkAttributeSet* AXPlatformNodeAuraLinux::GetAtkAttributes() const {
+  AtkAttributeSet* atk_attributes = nullptr;
+
+  atk_attributes = AddIntAttributeToAtkAttributeSet(
+      atk_attributes, ax::mojom::IntAttribute::kHierarchicalLevel, "level");
+
+  return atk_attributes;
+}
+
 // AtkDocumentHelpers
 
 const gchar* AXPlatformNodeAuraLinux::GetDocumentAttributeValue(
@@ -1549,6 +1572,17 @@ const gchar* AXPlatformNodeAuraLinux::GetDocumentAttributeValue(
   return nullptr;
 }
 
+static AtkAttributeSet* PrependAtkAttributeToAtkAttributeSet(
+    AtkAttributeSet* attribute_set,
+    const char* name,
+    const char* value) {
+  AtkAttribute* attribute =
+      static_cast<AtkAttribute*>(g_malloc(sizeof(AtkAttribute)));
+  attribute->name = g_strdup(name);
+  attribute->value = g_strdup(value);
+  return g_slist_prepend(attribute_set, attribute);
+}
+
 AtkAttributeSet* AXPlatformNodeAuraLinux::GetDocumentAttributes() const {
   AtkAttributeSet* attribute_set = nullptr;
   const gchar* doc_attributes[] = {"DocType", "MimeType", "Title", "URI"};
@@ -1557,11 +1591,8 @@ AtkAttributeSet* AXPlatformNodeAuraLinux::GetDocumentAttributes() const {
   for (unsigned i = 0; i < G_N_ELEMENTS(doc_attributes); i++) {
     value = GetDocumentAttributeValue(doc_attributes[i]);
     if (value) {
-      AtkAttribute* attribute =
-          static_cast<AtkAttribute*>(g_malloc(sizeof(AtkAttribute)));
-      attribute->name = g_strdup(doc_attributes[i]);
-      attribute->value = g_strdup(value);
-      attribute_set = g_slist_prepend(attribute_set, attribute);
+      attribute_set = PrependAtkAttributeToAtkAttributeSet(
+          attribute_set, doc_attributes[i], value);
     }
   }
 
@@ -1599,6 +1630,19 @@ void AXPlatformNodeAuraLinux::GetFloatAttributeInGValue(
     g_value_init(value, G_TYPE_FLOAT);
     g_value_set_float(value, float_val);
   }
+}
+
+AtkAttributeSet* AXPlatformNodeAuraLinux::AddIntAttributeToAtkAttributeSet(
+    AtkAttributeSet* attributes,
+    ax::mojom::IntAttribute attribute,
+    const char* atk_attribute) const {
+  int value;
+  if (GetIntAttribute(attribute, &value)) {
+    attributes = PrependAtkAttributeToAtkAttributeSet(
+        attributes, atk_attribute, base::IntToString(value).c_str());
+  }
+
+  return attributes;
 }
 
 }  // namespace ui

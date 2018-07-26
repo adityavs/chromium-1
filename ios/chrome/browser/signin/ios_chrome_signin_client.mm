@@ -7,7 +7,6 @@
 #include "base/strings/utf_string_conversions.h"
 #include "components/metrics/metrics_service.h"
 #include "components/signin/core/browser/cookie_settings_util.h"
-#include "components/signin/core/browser/signin_cookie_change_subscription.h"
 #include "components/signin/ios/browser/account_consistency_service.h"
 #include "ios/chrome/browser/application_context.h"
 #include "ios/chrome/browser/browser_state/browser_state_info_cache.h"
@@ -136,18 +135,6 @@ void IOSChromeSigninClient::RemoveContentSettingsObserver(
   host_content_settings_map_->RemoveObserver(observer);
 }
 
-std::unique_ptr<SigninClient::CookieChangeSubscription>
-IOSChromeSigninClient::AddCookieChangeCallback(
-    const GURL& url,
-    const std::string& name,
-    net::CookieChangeCallback callback) {
-  scoped_refptr<net::URLRequestContextGetter> context_getter =
-      GetURLRequestContext();
-  DCHECK(context_getter.get());
-  return std::make_unique<SigninCookieChangeSubscription>(
-      context_getter, url, name, std::move(callback));
-}
-
 void IOSChromeSigninClient::DelayNetworkCall(const base::Closure& callback) {
   network_callback_helper_->HandleCallback(callback);
 }
@@ -155,9 +142,9 @@ void IOSChromeSigninClient::DelayNetworkCall(const base::Closure& callback) {
 std::unique_ptr<GaiaAuthFetcher> IOSChromeSigninClient::CreateGaiaAuthFetcher(
     GaiaAuthConsumer* consumer,
     const std::string& source,
-    net::URLRequestContextGetter* getter) {
-  return std::make_unique<GaiaAuthFetcherIOS>(consumer, source, getter,
-                                              browser_state_);
+    scoped_refptr<network::SharedURLLoaderFactory> url_loader_factory) {
+  return std::make_unique<GaiaAuthFetcherIOS>(
+      consumer, source, url_loader_factory, browser_state_);
 }
 
 void IOSChromeSigninClient::PreGaiaLogout(base::OnceClosure callback) {

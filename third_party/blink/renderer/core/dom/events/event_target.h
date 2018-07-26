@@ -155,7 +155,7 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
 
   DispatchEventResult DispatchEvent(Event*);
 
-  void EnqueueAsyncEvent(Event*, TaskType);
+  void EnqueueEvent(Event*, TaskType);
 
   // dispatchEventForBindings is intended to only be called from
   // javascript originated calls. This method will validate and may adjust
@@ -220,7 +220,7 @@ class CORE_EXPORT EventTarget : public ScriptWrappable {
                          EventListenerVector*,
                          EventListenerVector*);
 
-  void DispatchAsyncEvent(Event*, ExecutionContext*);
+  void DispatchEnqueuedEvent(Event*, ExecutionContext*);
 
   friend class EventListenerIterator;
 };
@@ -242,7 +242,7 @@ class CORE_EXPORT EventTargetWithInlineData : public EventTarget {
   // EventTargetData is a GCed object, so it should not be used as a part of
   // object. However, we intentionally use it as a part of object for
   // performance, assuming that no one extracts a pointer of
-  // EventTargetWithInlineData::m_eventTargetData and store it to a Member etc.
+  // EventTargetWithInlineData::event_target_data_ and store it to a Member etc.
   GC_PLUGIN_IGNORE("513199") EventTargetData event_target_data_;
 };
 

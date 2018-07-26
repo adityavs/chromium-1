@@ -25,6 +25,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/task_scheduler/post_task.h"
 #include "build/build_config.h"
+#include "content/app/strings/grit/content_strings.h"
 #include "content/browser/browser_main_loop.h"
 #include "content/browser/child_process_launcher.h"
 #include "content/browser/gpu/gpu_process_host.h"
@@ -92,6 +93,11 @@
 
 #if defined(USE_AURA)
 #include "ui/aura/env.h"
+#endif
+
+#if defined(OS_LINUX)
+#include "components/services/font/font_service_app.h"
+#include "components/services/font/public/interfaces/constants.mojom.h"
 #endif
 
 namespace content {
@@ -288,15 +294,6 @@ class ServiceBinaryLauncherFactory
 
   DISALLOW_COPY_AND_ASSIGN(ServiceBinaryLauncherFactory);
 };
-
-// Helper to invoke GetGeolocationRequestContext on the currently-set
-// ContentBrowserClient.
-void GetGeolocationRequestContextFromContentClient(
-    base::OnceCallback<void(scoped_refptr<net::URLRequestContextGetter>)>
-        callback) {
-  GetContentClient()->browser()->GetGeolocationRequestContext(
-      std::move(callback));
-}
 
 bool ShouldEnableVizService() {
 #if defined(USE_AURA)
@@ -524,7 +521,7 @@ ServiceManagerContext::ServiceManagerContext(
   device_info.factory = base::Bind(
       &device::CreateDeviceService, device_blocking_task_runner,
       service_manager_thread_task_runner_,
-      base::BindRepeating(&GetGeolocationRequestContextFromContentClient),
+      GetContentClient()->browser()->GetSystemSharedURLLoaderFactory(),
       GetContentClient()->browser()->GetGeolocationApiKey(),
       GetContentClient()->browser()->ShouldUseGmsCoreGeolocationProvider(),
       base::Bind(&WakeLockContextHost::GetNativeViewForContext),
@@ -535,7 +532,7 @@ ServiceManagerContext::ServiceManagerContext(
   device_info.factory = base::Bind(
       &device::CreateDeviceService, device_blocking_task_runner,
       service_manager_thread_task_runner_,
-      base::BindRepeating(&GetGeolocationRequestContextFromContentClient),
+      GetContentClient()->browser()->GetSystemSharedURLLoaderFactory(),
       GetContentClient()->browser()->GetGeolocationApiKey(),
       base::Bind(&ContentBrowserClient::OverrideSystemLocationProvider,
                  base::Unretained(GetContentClient()->browser())));
@@ -602,6 +599,19 @@ ServiceManagerContext::ServiceManagerContext(
 
   out_of_process_services[data_decoder::mojom::kServiceName] =
       base::BindRepeating(&base::ASCIIToUTF16, "Data Decoder Service");
+
+#if defined(OS_LINUX)
+  {
+    service_manager::EmbeddedServiceInfo font_service_info;
+    font_service_info.factory =
+        base::BindRepeating(font_service::FontServiceApp::CreateService);
+    font_service_info.task_runner = base::CreateSequencedTaskRunnerWithTraits(
+        base::TaskTraits({base::MayBlock(), base::WithBaseSyncPrimitives(),
+                          base::TaskPriority::USER_BLOCKING}));
+    packaged_services_connection_->AddEmbeddedService(
+        font_service::mojom::kServiceName, font_service_info);
+  }
+#endif
 
   bool network_service_enabled =
       base::FeatureList::IsEnabled(network::features::kNetworkService);

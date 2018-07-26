@@ -54,6 +54,10 @@ class AuthenticatorInitialSheetModel : public AuthenticatorSheetModelBase {
   // AuthenticatorSheetModelBase:
   base::string16 GetStepTitle() const override;
   base::string16 GetStepDescription() const override;
+  bool IsAcceptButtonVisible() const override;
+  bool IsAcceptButtonEnabled() const override;
+  base::string16 GetAcceptButtonLabel() const override;
+  void OnAccept() override;
 };
 
 // The sheet shown for selecting the transport over which the security key
@@ -73,7 +77,112 @@ class AuthenticatorTransportSelectorSheetModel
   base::string16 GetStepDescription() const override;
 };
 
-class AuthenticatorInsertUsbSheetModel : public AuthenticatorSheetModelBase {
+class AuthenticatorInsertAndActivateUsbOnRegisterSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorInsertAndActivateUsbOnSignSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorTimeoutErrorModel : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorBlePowerOnManualSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+  bool IsAcceptButtonVisible() const override;
+  bool IsAcceptButtonEnabled() const override;
+  base::string16 GetAcceptButtonLabel() const override;
+};
+
+class AuthenticatorBlePairingBeginSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+  bool IsAcceptButtonVisible() const override;
+  bool IsAcceptButtonEnabled() const override;
+  base::string16 GetAcceptButtonLabel() const override;
+};
+
+class AuthenticatorBleEnterPairingModeSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorBleDeviceSelectionSheetModel
+    : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorBlePinEntrySheetModel : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+  bool IsAcceptButtonVisible() const override;
+  bool IsAcceptButtonEnabled() const override;
+  base::string16 GetAcceptButtonLabel() const override;
+};
+
+class AuthenticatorBleVerifyingSheetModel : public AuthenticatorSheetModelBase {
+ public:
+  using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
+
+ private:
+  // AuthenticatorSheetModelBase:
+  base::string16 GetStepTitle() const override;
+  base::string16 GetStepDescription() const override;
+};
+
+class AuthenticatorBleActivateSheetModel : public AuthenticatorSheetModelBase {
  public:
   using AuthenticatorSheetModelBase::AuthenticatorSheetModelBase;
 

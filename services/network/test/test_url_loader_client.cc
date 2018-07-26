@@ -21,7 +21,7 @@ void TestURLLoaderClient::OnReceiveResponse(
   has_received_response_ = true;
   response_head_ = response_head;
   if (quit_closure_for_on_receive_response_)
-    quit_closure_for_on_receive_response_.Run();
+    std::move(quit_closure_for_on_receive_response_).Run();
 }
 
 void TestURLLoaderClient::OnReceiveRedirect(
@@ -37,7 +37,7 @@ void TestURLLoaderClient::OnReceiveRedirect(
   redirect_info_ = redirect_info;
   response_head_ = response_head;
   if (quit_closure_for_on_receive_redirect_)
-    quit_closure_for_on_receive_redirect_.Run();
+    std::move(quit_closure_for_on_receive_redirect_).Run();
 }
 
 void TestURLLoaderClient::OnReceiveCachedMetadata(
@@ -49,11 +49,10 @@ void TestURLLoaderClient::OnReceiveCachedMetadata(
   cached_metadata_ =
       std::string(reinterpret_cast<const char*>(data.data()), data.size());
   if (quit_closure_for_on_receive_cached_metadata_)
-    quit_closure_for_on_receive_cached_metadata_.Run();
+    std::move(quit_closure_for_on_receive_cached_metadata_).Run();
 }
 
 void TestURLLoaderClient::OnTransferSizeUpdated(int32_t transfer_size_diff) {
-  EXPECT_TRUE(has_received_response_);
   EXPECT_FALSE(has_received_completion_);
   EXPECT_GT(transfer_size_diff, 0);
   body_transfer_size_ += transfer_size_diff;
@@ -81,7 +80,7 @@ void TestURLLoaderClient::OnStartLoadingResponseBody(
   EXPECT_FALSE(has_received_completion_);
   response_body_ = std::move(body);
   if (quit_closure_for_on_start_loading_response_body_)
-    quit_closure_for_on_start_loading_response_body_.Run();
+    std::move(quit_closure_for_on_start_loading_response_body_).Run();
 }
 
 void TestURLLoaderClient::OnComplete(const URLLoaderCompletionStatus& status) {
@@ -89,7 +88,7 @@ void TestURLLoaderClient::OnComplete(const URLLoaderCompletionStatus& status) {
   has_received_completion_ = true;
   completion_status_ = status;
   if (quit_closure_for_on_complete_)
-    quit_closure_for_on_complete_.Run();
+    std::move(quit_closure_for_on_complete_).Run();
 }
 
 void TestURLLoaderClient::ClearHasReceivedRedirect() {
@@ -115,7 +114,6 @@ void TestURLLoaderClient::RunUntilResponseReceived() {
   base::RunLoop run_loop;
   quit_closure_for_on_receive_response_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_receive_response_.Reset();
 }
 
 void TestURLLoaderClient::RunUntilRedirectReceived() {
@@ -124,7 +122,6 @@ void TestURLLoaderClient::RunUntilRedirectReceived() {
   base::RunLoop run_loop;
   quit_closure_for_on_receive_redirect_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_receive_redirect_.Reset();
 }
 
 void TestURLLoaderClient::RunUntilCachedMetadataReceived() {
@@ -133,7 +130,6 @@ void TestURLLoaderClient::RunUntilCachedMetadataReceived() {
   base::RunLoop run_loop;
   quit_closure_for_on_receive_cached_metadata_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_receive_cached_metadata_.Reset();
 }
 
 void TestURLLoaderClient::RunUntilResponseBodyArrived() {
@@ -142,7 +138,6 @@ void TestURLLoaderClient::RunUntilResponseBodyArrived() {
   base::RunLoop run_loop;
   quit_closure_for_on_start_loading_response_body_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_start_loading_response_body_.Reset();
 }
 
 void TestURLLoaderClient::RunUntilComplete() {
@@ -151,7 +146,6 @@ void TestURLLoaderClient::RunUntilComplete() {
   base::RunLoop run_loop;
   quit_closure_for_on_complete_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_complete_.Reset();
 }
 
 void TestURLLoaderClient::RunUntilConnectionError() {
@@ -160,7 +154,6 @@ void TestURLLoaderClient::RunUntilConnectionError() {
   base::RunLoop run_loop;
   quit_closure_for_on_connection_error_ = run_loop.QuitClosure();
   run_loop.Run();
-  quit_closure_for_on_connection_error_.Reset();
 }
 
 void TestURLLoaderClient::OnConnectionError() {
@@ -168,7 +161,7 @@ void TestURLLoaderClient::OnConnectionError() {
     return;
   has_received_connection_error_ = true;
   if (quit_closure_for_on_connection_error_)
-    quit_closure_for_on_connection_error_.Run();
+    std::move(quit_closure_for_on_connection_error_).Run();
 }
 
 }  // namespace network

@@ -115,6 +115,7 @@ void AwAutofillClient::ShowAutofillPopup(
     const gfx::RectF& element_bounds,
     base::i18n::TextDirection text_direction,
     const std::vector<autofill::Suggestion>& suggestions,
+    bool /*unused_autoselect_first_suggestion*/,
     base::WeakPtr<autofill::AutofillPopupDelegate> delegate) {
   suggestions_ = suggestions;
   delegate_ = delegate;
@@ -262,6 +263,18 @@ void AwAutofillClient::ShowUnmaskPrompt(
 
 void AwAutofillClient::OnUnmaskVerificationResult(PaymentsRpcResult result) {
   NOTIMPLEMENTED();
+}
+
+void AwAutofillClient::ShowLocalCardMigrationPrompt(base::OnceClosure closure) {
+  NOTIMPLEMENTED();
+}
+
+void AwAutofillClient::ConfirmSaveAutofillProfile(
+    const autofill::AutofillProfile& profile,
+    base::OnceClosure callback) {
+  // Since there is no confirmation needed to save an Autofill Profile,
+  // running |callback| will proceed with saving |profile|.
+  std::move(callback).Run();
 }
 
 void AwAutofillClient::ConfirmSaveCreditCardLocally(

@@ -11,6 +11,7 @@
 
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
+#include "base/sequence_checker.h"
 #include "base/strings/string16.h"
 #include "sql/connection.h"
 #include "sql/sql_export.h"
@@ -124,7 +125,6 @@ class SQL_EXPORT Statement {
   // where that type is not the native type. For safety, call ColumnType only
   // on a column before getting the value out in any way.
   ColType ColumnType(int col) const;
-  ColType DeclaredColumnType(int col) const;
 
   // These all take a 0-based argument index.
   bool ColumnBool(int col) const;
@@ -136,7 +136,7 @@ class SQL_EXPORT Statement {
 
   // When reading a blob, you can get a raw pointer to the underlying data,
   // along with the length, or you can just ask us to copy the blob into a
-  // vector. Danger! ColumnBlob may return NULL if there is no data!
+  // vector. Danger! ColumnBlob may return nullptr if there is no data!
   int ColumnByteLength(int col) const;
   const void* ColumnBlob(int col) const;
   bool ColumnBlobAsString(int col, std::string* blob) const;
@@ -187,8 +187,8 @@ class SQL_EXPORT Statement {
   bool RunWithoutTimers();
 
   // The actual sqlite statement. This may be unique to us, or it may be cached
-  // by the connection, which is why it's refcounted. This pointer is
-  // guaranteed non-NULL.
+  // by the connection, which is why it's ref-counted. This pointer is
+  // guaranteed non-null.
   scoped_refptr<Connection::StatementRef> ref_;
 
   // Set after Step() or Run() are called, reset by Reset().  Used to

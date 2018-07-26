@@ -8,6 +8,7 @@
 
 #include <limits>
 #include <utility>
+#include <vector>
 
 #include "base/base64url.h"
 #include "base/bind.h"
@@ -192,10 +193,8 @@ class TestSocketFactory;
 // A variant of MockUDPClientSocket which always fails to Connect.
 class FailingUDPClientSocket : public MockUDPClientSocket {
  public:
-  FailingUDPClientSocket(SocketDataProvider* data,
-                         net::NetLog* net_log)
-      : MockUDPClientSocket(data, net_log) {
-  }
+  FailingUDPClientSocket(SocketDataProvider* data, net::NetLog* net_log)
+      : MockUDPClientSocket(data, net_log) {}
   ~FailingUDPClientSocket() override = default;
   int Connect(const IPEndPoint& endpoint) override {
     return ERR_CONNECTION_REFUSED;
@@ -211,8 +210,7 @@ class TestUDPClientSocket : public MockUDPClientSocket {
   TestUDPClientSocket(TestSocketFactory* factory,
                       SocketDataProvider* data,
                       net::NetLog* net_log)
-      : MockUDPClientSocket(data, net_log), factory_(factory) {
-  }
+      : MockUDPClientSocket(data, net_log), factory_(factory) {}
   ~TestUDPClientSocket() override = default;
   int Connect(const IPEndPoint& endpoint) override;
 
@@ -273,9 +271,7 @@ class TransactionHelper {
         completed_(false) {}
 
   // Mark that the transaction shall be destroyed immediately upon callback.
-  void set_cancel_in_callback() {
-    cancel_in_callback_ = true;
-  }
+  void set_cancel_in_callback() { cancel_in_callback_ = true; }
 
   void StartTransaction(DnsTransactionFactory* factory) {
     EXPECT_EQ(NULL, transaction_.get());
@@ -329,9 +325,7 @@ class TransactionHelper {
     }
   }
 
-  bool has_completed() const {
-    return completed_;
-  }
+  bool has_completed() const { return completed_; }
 
   // Shorthands for commonly used commands.
 
@@ -536,9 +530,10 @@ class URLRequestMockDohJob : public URLRequestJob, public AsyncSocket {
   const ResponseModifierCallback response_modifier_;
   IOBuffer* pending_buf_;
   int pending_buf_size_;
-  DISALLOW_COPY_AND_ASSIGN(URLRequestMockDohJob);
 
   base::WeakPtrFactory<URLRequestMockDohJob> weak_factory_;
+
+  DISALLOW_COPY_AND_ASSIGN(URLRequestMockDohJob);
 };
 
 class DnsTransactionTestBase : public testing::Test {
@@ -940,14 +935,19 @@ TEST_F(DnsTransactionTest, MismatchedResponseSync) {
   config_.attempts = 2;
   ConfigureFactory();
 
-  // Attempt receives mismatched response followed by valid response.
+  // First attempt receives mismatched response synchronously.
   std::unique_ptr<DnsSocketData> data(new DnsSocketData(
       0 /* id */, kT0HostName, kT0Qtype, SYNCHRONOUS, Transport::UDP));
-  data->AddResponseData(kT1ResponseDatagram,
-                        arraysize(kT1ResponseDatagram), SYNCHRONOUS);
-  data->AddResponseData(kT0ResponseDatagram,
-                        arraysize(kT0ResponseDatagram), SYNCHRONOUS);
+  data->AddResponseData(kT1ResponseDatagram, arraysize(kT1ResponseDatagram),
+                        SYNCHRONOUS);
   AddSocketData(std::move(data));
+
+  // Second attempt receives valid response synchronously.
+  std::unique_ptr<DnsSocketData> data1(new DnsSocketData(
+      0 /* id */, kT0HostName, kT0Qtype, SYNCHRONOUS, Transport::UDP));
+  data1->AddResponseData(kT0ResponseDatagram, arraysize(kT0ResponseDatagram),
+                         ASYNC);
+  AddSocketData(std::move(data1));
 
   TransactionHelper helper0(kT0HostName, kT0Qtype, kT0RecordCount);
   EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
@@ -957,33 +957,34 @@ TEST_F(DnsTransactionTest, MismatchedResponseAsync) {
   config_.attempts = 2;
   ConfigureFactory();
 
-  // First attempt receives mismatched response followed by valid response.
-  // Second attempt times out.
-  std::unique_ptr<DnsSocketData> data(new DnsSocketData(
+  // First attempt receives mismatched response asynchronously.
+  std::unique_ptr<DnsSocketData> data0(new DnsSocketData(
       0 /* id */, kT0HostName, kT0Qtype, ASYNC, Transport::UDP));
-  data->AddResponseData(kT1ResponseDatagram,
-                        arraysize(kT1ResponseDatagram), ASYNC);
-  data->AddResponseData(kT0ResponseDatagram,
-                        arraysize(kT0ResponseDatagram), ASYNC);
-  AddSocketData(std::move(data));
-  AddQueryAndTimeout(kT0HostName, kT0Qtype);
+  data0->AddResponseData(kT1ResponseDatagram, arraysize(kT1ResponseDatagram),
+                         ASYNC);
+  AddSocketData(std::move(data0));
+
+  // Second attempt receives valid response asynchronously.
+  std::unique_ptr<DnsSocketData> data1(new DnsSocketData(
+      0 /* id */, kT0HostName, kT0Qtype, ASYNC, Transport::UDP));
+  data1->AddResponseData(kT0ResponseDatagram, arraysize(kT0ResponseDatagram),
+                         ASYNC);
+  AddSocketData(std::move(data1));
 
   TransactionHelper helper0(kT0HostName, kT0Qtype, kT0RecordCount);
   EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
 }
 
-TEST_F(DnsTransactionTestWithMockTime, MismatchedResponseFail) {
+TEST_F(DnsTransactionTest, MismatchedResponseFail) {
   ConfigureFactory();
 
-  // Attempt receives mismatched response but times out because only one attempt
-  // is allowed.
+  // Attempt receives mismatched response and fails because only one attempt is
+  // allowed.
   AddAsyncQueryAndResponse(1 /* id */, kT0HostName, kT0Qtype,
                            kT0ResponseDatagram, arraysize(kT0ResponseDatagram));
 
-  TransactionHelper helper0(kT0HostName, kT0Qtype, ERR_DNS_TIMED_OUT);
-  EXPECT_FALSE(helper0.Run(transaction_factory_.get()));
-  FastForwardBy(session_->NextTimeout(0, 0));
-  EXPECT_TRUE(helper0.has_completed());
+  TransactionHelper helper0(kT0HostName, kT0Qtype, ERR_DNS_MALFORMED_RESPONSE);
+  EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
 }
 
 TEST_F(DnsTransactionTest, MismatchedResponseNxdomain) {
@@ -1067,8 +1068,8 @@ TEST_F(DnsTransactionTestWithMockTime, ServerFallbackAndRotate) {
   EXPECT_TRUE(helper1.Run(transaction_factory_.get()));
 
   unsigned kOrder[] = {
-      0, 1, 2, 0, 1,    // The first transaction.
-      1, 2, 0,          // The second transaction starts from the next server.
+      0, 1, 2, 0, 1,  // The first transaction.
+      1, 2, 0,        // The second transaction starts from the next server.
   };
   CheckServerOrder(kOrder, arraysize(kOrder));
 }
@@ -1097,7 +1098,7 @@ TEST_F(DnsTransactionTest, SuffixSearchAboveNdots) {
   EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
 
   // Also check if suffix search causes server rotation.
-  unsigned kOrder0[] = { 0, 1, 0, 1 };
+  unsigned kOrder0[] = {0, 1, 0, 1};
   CheckServerOrder(kOrder0, arraysize(kOrder0));
 }
 
@@ -2023,6 +2024,47 @@ TEST_F(DnsTransactionTest, MismatchedThenOkThenTCP) {
   AddSocketData(std::move(tcp_data));
 
   TransactionHelper helper0(kT0HostName, kT0Qtype, kT0RecordCount);
+  EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
+}
+
+TEST_F(DnsTransactionTest, MismatchedThenRefusedThenTCP) {
+  // Set up the expected sequence of events:
+  // 1) First attempt (UDP) gets a synchronous mismatched response. On such
+  //    malformed responses, DnsTransaction triggers an immediate retry to read
+  //    again from the socket within the same "attempt".
+  // 2) Second read (within the first attempt) starts. Test is configured to
+  //    give an asynchronous TCP required response which will complete later.
+  //    On asynchronous action after a malformed response, the attempt will
+  //    immediately produce a retriable error result while the retry continues,
+  //    thus forking the running attempts.
+  // 3) Error result triggers a second attempt (UDP) which test gives a
+  //    synchronous ERR_CONNECTION_REFUSED, which is a retriable error, but
+  //    DnsTransaction has exhausted max retries (2 attempts), so this result
+  //    gets posted as the result of the transaction and other running attempts
+  //    should be cancelled.
+  // 4) First attempt should be cancelled when the transaction result is posted,
+  //    so first attempt's second read should never complete. If it did
+  //    complete, it would complete with a TCP-required error, and
+  //    DnsTransaction would start a TCP attempt and clear previous attempts. It
+  //    would be very bad if that then cleared the attempt posted as the final
+  //    result, as result handling does not expect that memory to go away.
+
+  config_.attempts = 2;
+  ConfigureFactory();
+
+  // Attempt 1.
+  std::unique_ptr<DnsSocketData> data(new DnsSocketData(
+      0 /* id */, kT0HostName, kT0Qtype, SYNCHRONOUS, Transport::UDP));
+  data->AddResponseData(kT1ResponseDatagram, arraysize(kT1ResponseDatagram),
+                        SYNCHRONOUS);
+  data->AddRcode(dns_protocol::kFlagTC, ASYNC);
+  AddSocketData(std::move(data));
+
+  // Attempt 2.
+  AddQueryAndErrorResponse(0 /* id */, kT0HostName, kT0Qtype,
+                           ERR_CONNECTION_REFUSED, SYNCHRONOUS, Transport::UDP);
+
+  TransactionHelper helper0(kT0HostName, kT0Qtype, ERR_CONNECTION_REFUSED);
   EXPECT_TRUE(helper0.Run(transaction_factory_.get()));
 }
 

@@ -34,10 +34,11 @@
 #include <memory>
 #include <utility>
 
+#include "base/time/time.h"
 #include "third_party/blink/public/common/blob/blob_utils.h"
 #include "third_party/blink/public/common/frame/user_activation_update_type.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_provider_client.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_provider_client.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_application_cache_host.h"
 #include "third_party/blink/public/platform/web_media_player_source.h"
@@ -135,6 +136,25 @@ bool IsBackForwardNavigationInProgress(LocalFrame* local_frame) {
          IsBackForwardLoadType(
              local_frame->Loader().GetDocumentLoader()->LoadType()) &&
          !local_frame->GetDocument()->LoadEventFinished();
+}
+
+// Called after committing provisional load to reset the EventHandlerProperties.
+// Only called on local frame roots.
+void ResetWheelAndTouchEventHandlerProperties(LocalFrame& frame) {
+  // If we are loading a local root, it is important to explicitly set the event
+  // listener properties to Nothing as this triggers notifications to the
+  // client. Clients may assume the presence of handlers for touch and wheel
+  // events, so these notifications tell it there are (presently) no handlers.
+  auto& chrome_client = frame.GetPage()->GetChromeClient();
+  chrome_client.SetEventListenerProperties(
+      &frame, cc::EventListenerClass::kTouchStartOrMove,
+      cc::EventListenerProperties::kNone);
+  chrome_client.SetEventListenerProperties(&frame,
+                                           cc::EventListenerClass::kMouseWheel,
+                                           cc::EventListenerProperties::kNone);
+  chrome_client.SetEventListenerProperties(
+      &frame, cc::EventListenerClass::kTouchEndOrCancel,
+      cc::EventListenerProperties::kNone);
 }
 
 }  // namespace
@@ -433,6 +453,13 @@ void LocalFrameClientImpl::DispatchDidCommitLoad(
   if (web_frame_->Client()) {
     web_frame_->Client()->DidCommitProvisionalLoad(
         WebHistoryItem(item), commit_type, global_object_reuse_policy);
+    if (web_frame_->GetFrame()->IsLocalRoot()) {
+      // This update should be sent as soon as loading the new document begins
+      // so that the browser and compositor could reset their states. However,
+      // up to this point |web_frame_| is still provisional and the updates will
+      // not get sent. Revise this when https://crbug.com/578349 is fixed.
+      ResetWheelAndTouchEventHandlerProperties(*web_frame_->GetFrame());
+    }
   }
   if (WebDevToolsAgentImpl* dev_tools = DevToolsAgent())
     dev_tools->DidCommitLoadForLocalFrame(web_frame_->GetFrame());
@@ -486,8 +513,8 @@ NavigationPolicy LocalFrameClientImpl::DecidePolicyForNavigation(
       wrapped_resource_request);
   navigation_info.navigation_type = type;
   navigation_info.default_policy = static_cast<WebNavigationPolicy>(policy);
-  navigation_info.extra_data =
-      web_document_loader ? web_document_loader->GetExtraData() : nullptr;
+  // TODO(dgozman): remove this after some Canary coverage.
+  CHECK(!web_document_loader || !web_document_loader->GetExtraData());
   navigation_info.replaces_current_history_item = replaces_current_history_item;
   navigation_info.is_client_redirect = is_client_redirect;
   navigation_info.triggering_event_info = triggering_event_info;
@@ -581,7 +608,9 @@ void LocalFrameClientImpl::ForwardResourceTimingToParent(
   web_frame_->Client()->ForwardResourceTimingToParent(info);
 }
 
-void LocalFrameClientImpl::DownloadURL(const ResourceRequest& request) {
+void LocalFrameClientImpl::DownloadURL(
+    const ResourceRequest& request,
+    DownloadCrossOriginRedirects cross_origin_redirect_behavior) {
   if (!web_frame_->Client())
     return;
   DCHECK(web_frame_->GetFrame()->GetDocument());
@@ -592,6 +621,8 @@ void LocalFrameClientImpl::DownloadURL(const ResourceRequest& request) {
   }
   web_frame_->Client()->DownloadURL(
       WrappedResourceRequest(request),
+      static_cast<WebLocalFrameClient::CrossOriginRedirects>(
+          cross_origin_redirect_behavior),
       blob_url_token.PassInterface().PassHandle());
 }
 
@@ -709,11 +740,17 @@ DocumentLoader* LocalFrameClientImpl::CreateDocumentLoader(
     const ResourceRequest& request,
     const SubstituteData& data,
     ClientRedirectPolicy client_redirect_policy,
-    const base::UnguessableToken& devtools_navigation_token) {
+    const base::UnguessableToken& devtools_navigation_token,
+    std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+    const WebNavigationTimings& navigation_timings) {
   DCHECK(frame);
 
   WebDocumentLoaderImpl* document_loader = WebDocumentLoaderImpl::Create(
       frame, request, data, client_redirect_policy, devtools_navigation_token);
+  document_loader->SetExtraData(std::move(extra_data));
+  document_loader->UpdateNavigationTimings(
+      navigation_timings.navigation_start, navigation_timings.redirect_start,
+      navigation_timings.redirect_end, navigation_timings.fetch_start);
   if (web_frame_->Client())
     web_frame_->Client()->DidCreateDocumentLoader(document_loader);
   return document_loader;
@@ -1092,5 +1129,10 @@ LocalFrameClientImpl::CreateWorkerContentSettingsClient() {
 void LocalFrameClientImpl::SetMouseCapture(bool capture) {
   web_frame_->Client()->SetMouseCapture(capture);
 }
+
+STATIC_ASSERT_ENUM(DownloadCrossOriginRedirects::kFollow,
+                   WebLocalFrameClient::CrossOriginRedirects::kFollow);
+STATIC_ASSERT_ENUM(DownloadCrossOriginRedirects::kNavigate,
+                   WebLocalFrameClient::CrossOriginRedirects::kNavigate);
 
 }  // namespace blink

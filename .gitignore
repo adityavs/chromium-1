@@ -146,9 +146,10 @@ vs-chromium-project.txt
 /chrome/test/data/perf/private/
 /chrome/test/data/perf/third_party/
 /chrome/test/data/plugin/
-/chrome/test/data/vr/webvr_info/
-/chrome/test/data/vr/webxr_samples/
+/chrome/test/data/vr/
 /chrome/test/data/webrtc/resources
+/chrome/test/data/xr/webvr_info/
+/chrome/test/data/xr/webxr_samples/
 /chrome/test/media_router/internal
 /chrome/test/python_tests/
 /chrome/tools/memory
@@ -265,9 +266,6 @@ vs-chromium-project.txt
 /tools/metrics/actions/actions.old.xml
 /tools/metrics/histograms/histograms.before.pretty-print.xml
 /tools/page_cycler/acid3
-/tools/perf/data
-/tools/perf/internal
-/tools/perf/results.html
 /tools/swarming_client
 /tools/tryserver
 /tools/win/link_limiter/build
@@ -275,10 +273,9 @@ vs-chromium-project.txt
 /ui/keyboard/keyboard_mojom_bindings.xml
 /ui/surface/surface.xml
 /ui/surface/surface_gpu_tests.xml
+/ui/webui/internal
 /v8
 /webkit/data
 /webpagereplay_logs/
-/win8/delegate_execute/delegate_execute_version_resources.xml
-/win8/metro_driver/metro_driver_version_resources.xml
 /x86-generic_out/
 /xcodebuild

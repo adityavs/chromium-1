@@ -67,10 +67,10 @@ class TestModuleScriptLoaderClient final
 class ModuleScriptLoaderTestModulator final : public DummyModulator {
  public:
   ModuleScriptLoaderTestModulator(
-      scoped_refptr<ScriptState> script_state,
+      ScriptState* script_state,
       scoped_refptr<const SecurityOrigin> security_origin,
       ResourceFetcher* fetcher)
-      : script_state_(std::move(script_state)),
+      : script_state_(script_state),
         security_origin_(std::move(security_origin)),
         fetcher_(fetcher) {}
 
@@ -82,7 +82,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
     return KURL(base_url, module_request);
   }
 
-  ScriptState* GetScriptState() override { return script_state_.get(); }
+  ScriptState* GetScriptState() override { return script_state_; }
 
   void SetModuleRequests(const Vector<String>& requests) {
     requests_.clear();
@@ -96,7 +96,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
 
   ModuleScriptFetcher* CreateModuleScriptFetcher(
       ModuleScriptCustomFetchType custom_fetch_type) override {
-    auto* execution_context = ExecutionContext::From(script_state_.get());
+    auto* execution_context = ExecutionContext::From(script_state_);
     if (execution_context->IsWorkletGlobalScope()) {
       EXPECT_EQ(ModuleScriptCustomFetchType::kWorkletAddModule,
                 custom_fetch_type);
@@ -113,7 +113,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
   void Trace(blink::Visitor*) override;
 
  private:
-  scoped_refptr<ScriptState> script_state_;
+  Member<ScriptState> script_state_;
   scoped_refptr<const SecurityOrigin> security_origin_;
   Member<ResourceFetcher> fetcher_;
   Vector<ModuleRequest> requests_;
@@ -121,6 +121,7 @@ class ModuleScriptLoaderTestModulator final : public DummyModulator {
 
 void ModuleScriptLoaderTestModulator::Trace(blink::Visitor* visitor) {
   visitor->Trace(fetcher_);
+  visitor->Trace(script_state_);
   DummyModulator::Trace(visitor);
 }
 
@@ -202,7 +203,8 @@ void ModuleScriptLoaderTest::TestFetchDataURL(
     TestModuleScriptLoaderClient* client) {
   ModuleScriptLoaderRegistry* registry = ModuleScriptLoaderRegistry::Create();
   KURL url("data:text/javascript,export default 'grapes';");
-  FetchClientSettingsObjectSnapshot fetch_client_settings_object(GetDocument());
+  auto* fetch_client_settings_object =
+      new FetchClientSettingsObjectSnapshot(GetDocument());
   ModuleScriptLoader::Fetch(
       ModuleScriptFetchRequest::CreateForTest(url),
       fetch_client_settings_object, ModuleGraphLevel::kTopLevelModuleFetch,
@@ -255,7 +257,8 @@ void ModuleScriptLoaderTest::TestInvalidSpecifier(
     TestModuleScriptLoaderClient* client) {
   ModuleScriptLoaderRegistry* registry = ModuleScriptLoaderRegistry::Create();
   KURL url("data:text/javascript,import 'invalid';export default 'grapes';");
-  FetchClientSettingsObjectSnapshot fetch_client_settings_object(GetDocument());
+  auto* fetch_client_settings_object =
+      new FetchClientSettingsObjectSnapshot(GetDocument());
   GetModulator()->SetModuleRequests({"invalid"});
   ModuleScriptLoader::Fetch(
       ModuleScriptFetchRequest::CreateForTest(url),
@@ -296,7 +299,8 @@ void ModuleScriptLoaderTest::TestFetchInvalidURL(
   ModuleScriptLoaderRegistry* registry = ModuleScriptLoaderRegistry::Create();
   KURL url;
   EXPECT_FALSE(url.IsValid());
-  FetchClientSettingsObjectSnapshot fetch_client_settings_object(GetDocument());
+  auto* fetch_client_settings_object =
+      new FetchClientSettingsObjectSnapshot(GetDocument());
   ModuleScriptLoader::Fetch(
       ModuleScriptFetchRequest::CreateForTest(url),
       fetch_client_settings_object, ModuleGraphLevel::kTopLevelModuleFetch,
@@ -332,7 +336,8 @@ void ModuleScriptLoaderTest::TestFetchURL(
   KURL url("https://example.test/module.js");
   URLTestHelpers::RegisterMockedURLLoad(
       url, test::CoreTestDataPath("module.js"), "text/javascript");
-  FetchClientSettingsObjectSnapshot fetch_client_settings_object(GetDocument());
+  auto* fetch_client_settings_object =
+      new FetchClientSettingsObjectSnapshot(GetDocument());
 
   ModuleScriptLoaderRegistry* registry = ModuleScriptLoaderRegistry::Create();
   ModuleScriptLoader::Fetch(

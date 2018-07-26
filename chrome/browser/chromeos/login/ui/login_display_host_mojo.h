@@ -14,6 +14,7 @@
 #include "base/optional.h"
 #include "chrome/browser/chromeos/login/ui/kiosk_app_menu_updater.h"
 #include "chrome/browser/chromeos/login/ui/login_display_host_common.h"
+#include "chrome/browser/chromeos/login/ui/oobe_ui_dialog_delegate.h"
 #include "chrome/browser/ui/ash/login_screen_client.h"
 #include "chromeos/login/auth/auth_status_consumer.h"
 
@@ -63,12 +64,9 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
     return user_selection_screen_.get();
   }
 
-  ExistingUserController* existing_user_controller() {
-    return existing_user_controller_.get();
-  }
-
   // LoginDisplayHost:
   LoginDisplay* GetLoginDisplay() override;
+  ExistingUserController* GetExistingUserController() override;
   gfx::NativeWindow GetNativeWindow() const override;
   OobeUI* GetOobeUI() const override;
   content::WebContents* GetOobeWebContents() const override;
@@ -89,11 +87,15 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void ShowGaiaDialog(
       bool can_close,
       const base::Optional<AccountId>& prefilled_account) override;
-  void HideGaiaDialog() override;
-  void UpdateGaiaDialogSize(int width, int height) override;
+  void HideOobeDialog() override;
+  void UpdateOobeDialogSize(int width, int height) override;
   const user_manager::UserList GetUsers() override;
-  void CancelPasswordChangedFlow() override;
+  void OnCancelPasswordChangedFlow() override;
   void ShowFeedback() override;
+  void ShowResetScreen() override;
+  void ShowDialogForCaptivePortal() override;
+  void HideDialogForCaptivePortal() override;
+  void UpdateAddUserButtonStatus() override;
 
   // LoginScreenClient::Delegate:
   void HandleAuthenticateUser(const AccountId& account_id,
@@ -116,8 +118,7 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
   void OnAuthSuccess(const UserContext& user_context) override;
 
  private:
-  // Initialize the dialog widget for webui (for gaia and post login screens).
-  void InitWidgetAndView();
+  void LoadOobeDialog();
 
   // State associated with a pending authentication attempt.
   struct AuthState {
@@ -155,6 +156,11 @@ class LoginDisplayHostMojo : public LoginDisplayHostCommon,
 
   // Updates UI when version info is changed.
   std::unique_ptr<MojoVersionInfoDispatcher> version_info_updater_;
+
+  // Prevents repeated calls to OnStartSigninScreen, which can happen when a
+  // user cancels the Powerwash dialog in the login screen. Set to true on the
+  // first OnStartSigninScreen and remains true afterward.
+  bool signin_screen_started_ = false;
 
   base::WeakPtrFactory<LoginDisplayHostMojo> weak_factory_;
 

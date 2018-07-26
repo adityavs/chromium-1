@@ -7,9 +7,12 @@
 
 #include "third_party/blink/public/platform/modules/background_fetch/background_fetch.mojom-blink.h"
 #include "third_party/blink/renderer/modules/background_fetch/background_fetch_settled_event.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_registration.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_registration.h"
 
 namespace blink {
+
+class BackgroundFetchIconLoader;
+class BackgroundFetchUpdateUIOptions;
 
 // Event for interacting with fetch requests that have completed.
 class MODULES_EXPORT BackgroundFetchUpdateEvent final
@@ -37,7 +40,8 @@ class MODULES_EXPORT BackgroundFetchUpdateEvent final
   ~BackgroundFetchUpdateEvent() override;
 
   // Web Exposed method defined in the IDL file.
-  ScriptPromise updateUI(ScriptState* script_state, const String& title);
+  ScriptPromise updateUI(ScriptState* script_state,
+                         const BackgroundFetchUpdateUIOptions& ui_options);
 
   void Trace(blink::Visitor* visitor) override;
 
@@ -53,10 +57,15 @@ class MODULES_EXPORT BackgroundFetchUpdateEvent final
                              WaitUntilObserver* observer,
                              ServiceWorkerRegistration* registration);
 
+  void DidGetIcon(ScriptPromiseResolver* resolver,
+                  const String& title,
+                  const SkBitmap& icon);
+
   void DidUpdateUI(ScriptPromiseResolver* resolver,
                    mojom::blink::BackgroundFetchError error);
 
   Member<ServiceWorkerRegistration> registration_;
+  Member<BackgroundFetchIconLoader> loader_;
 };
 
 }  // namespace blink

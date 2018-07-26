@@ -22,11 +22,13 @@ import org.chromium.chrome.browser.download.home.list.DateOrderedListCoordinator
 import org.chromium.chrome.browser.widget.ThumbnailProvider;
 import org.chromium.chrome.browser.widget.ThumbnailProvider.ThumbnailRequest;
 import org.chromium.chrome.browser.widget.ThumbnailProviderImpl;
+import org.chromium.chrome.browser.widget.selection.SelectionDelegate;
 import org.chromium.components.offline_items_collection.OfflineContentProvider;
 import org.chromium.components.offline_items_collection.OfflineItem;
 import org.chromium.components.offline_items_collection.VisualsCallback;
 
 import java.io.Closeable;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
@@ -59,7 +61,8 @@ class DateOrderedListMediator {
      * @param model            The {@link ListItemModel} to push {@code provider} into.
      */
     public DateOrderedListMediator(boolean offTheRecord, OfflineContentProvider provider,
-            DeleteController deleteController, ListItemModel model) {
+            DeleteController deleteController, SelectionDelegate<ListItem> selectionDelegate,
+            ListItemModel model) {
         // Build a chain from the data source to the model.  The chain will look like:
         // [OfflineContentProvider] ->
         //     [OfflineItemSource] ->
@@ -92,6 +95,7 @@ class DateOrderedListMediator {
         mModel.getProperties().setShareCallback(item -> {});
         mModel.getProperties().setRemoveCallback(this::onDeleteItem);
         mModel.getProperties().setVisualsProvider(this::getVisuals);
+        mModel.getProperties().setSelectionDelegate(selectionDelegate);
     }
 
     /** Tears down this mediator. */
@@ -119,6 +123,11 @@ class DateOrderedListMediator {
         try (AnimationDisableClosable closeable = new AnimationDisableClosable()) {
             mSearchFilter.onQueryChanged(filter);
         }
+    }
+
+    /** Called to delete a list of items specified by {@code items}. */
+    public void onDeletionRequested(List<ListItem> items) {
+        onDeleteItems(getOfflineItems(items));
     }
 
     /**
@@ -165,6 +174,16 @@ class DateOrderedListMediator {
                 new ThumbnailRequestGlue(mProvider, item, iconWidthPx, iconHeightPx, callback);
         mThumbnailProvider.getThumbnail(request);
         return () -> mThumbnailProvider.cancelRetrieval(request);
+    }
+
+    private List<OfflineItem> getOfflineItems(List<ListItem> items) {
+        List<OfflineItem> offlineItems = new ArrayList<>();
+        for (ListItem item : items) {
+            if (item instanceof ListItem.OfflineItemListItem) {
+                offlineItems.add(((ListItem.OfflineItemListItem) item).item);
+            }
+        }
+        return offlineItems;
     }
 
     /** Helper class to disable animations for certain list changes. */

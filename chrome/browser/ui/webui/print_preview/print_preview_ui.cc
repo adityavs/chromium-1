@@ -420,13 +420,18 @@ void AddPrintPreviewFlags(content::WebUIDataSource* source, Profile* profile) {
   bool nup_printing_enabled =
       base::FeatureList::IsEnabled(features::kNupPrinting);
   source->AddBoolean("pagesPerSheetEnabled", nup_printing_enabled);
+
+  bool cloud_printer_handler_enabled =
+      base::FeatureList::IsEnabled(features::kCloudPrinterHandler);
+  source->AddBoolean("cloudPrinterHandlerEnabled",
+                     cloud_printer_handler_enabled);
 }
 
 void SetupPrintPreviewPlugin(content::WebUIDataSource* source) {
   source->AddResourcePath("pdf/index.html", IDR_PDF_INDEX_HTML);
   source->AddResourcePath("pdf/index.css", IDR_PDF_INDEX_CSS);
   source->AddResourcePath("pdf/main.js", IDR_PDF_MAIN_JS);
-  source->AddResourcePath("pdf/pdf.js", IDR_PDF_PDF_JS);
+  source->AddResourcePath("pdf/pdf_viewer.js", IDR_PDF_PDF_VIEWER_JS);
   source->AddResourcePath("pdf/toolbar_manager.js", IDR_PDF_UI_MANAGER_JS);
   source->AddResourcePath("pdf/pdf_fitting_type.js",
                           IDR_PDF_PDF_FITTING_TYPE_JS);

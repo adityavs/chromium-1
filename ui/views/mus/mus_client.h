@@ -13,9 +13,7 @@
 
 #include "base/macros.h"
 #include "services/service_manager/public/cpp/identity.h"
-#include "services/ui/public/interfaces/event_injector.mojom.h"
 #include "ui/aura/client/capture_client.h"
-#include "ui/aura/mus/window_tree_client.h"
 #include "ui/aura/mus/window_tree_client_delegate.h"
 #include "ui/views/mus/mus_export.h"
 #include "ui/views/mus/screen_mus_delegate.h"
@@ -68,15 +66,13 @@ class VIEWS_MUS_EXPORT MusClient : public aura::WindowTreeClientDelegate,
     InitParams();
     ~InitParams();
 
-    // Production code should provide |connector|, |identity|, |wtc_config|
-    // and an |io_task_runner| if the process already has one. Test code may
-    // skip these parameters (e.g. a unit test that does not need to connect
-    // to the window service does not need to provide a connector).
+    // Production code should provide |connector|, |identity|, and an
+    // |io_task_runner| if the process already has one. Test code may skip these
+    // parameters (e.g. a unit test that does not need to connect to the window
+    // service does not need to provide a connector).
     service_manager::Connector* connector = nullptr;
     service_manager::Identity identity;
     scoped_refptr<base::SingleThreadTaskRunner> io_task_runner = nullptr;
-    aura::WindowTreeClient::Config wtc_config =
-        aura::WindowTreeClient::Config::kMash;
 
     // Create a wm::WMState. Some processes (e.g. the browser) may already
     // have one.
@@ -84,7 +80,6 @@ class VIEWS_MUS_EXPORT MusClient : public aura::WindowTreeClientDelegate,
 
     // Tests may need to control objects owned by MusClient.
     bool create_cursor_factory = true;
-    bool bind_test_ws_interfaces = false;
 
     // If provided, MusClient will not create the WindowTreeClient. Not owned.
     // Must outlive MusClient.
@@ -153,10 +148,6 @@ class VIEWS_MUS_EXPORT MusClient : public aura::WindowTreeClientDelegate,
   // Close all widgets this client knows.
   void CloseAllWidgets();
 
-  // Returns an interface to inject events into the Window Service. Only
-  // available when created with MusClientTestingState::CREATE_TESTING_STATE.
-  ui::mojom::EventInjector* GetTestingEventInjector() const;
-
  private:
   friend class AuraInit;
   friend class MusClientTestApi;
@@ -178,6 +169,9 @@ class VIEWS_MUS_EXPORT MusClient : public aura::WindowTreeClientDelegate,
                               int64_t display_id,
                               aura::Window* target) override;
   aura::PropertyConverter* GetPropertyConverter() override;
+  void OnDisplaysChanged(std::vector<ui::mojom::WsDisplayPtr> ws_displays,
+                         int64_t primary_display_id,
+                         int64_t internal_display_id) override;
 
   // ScreenMusDelegate:
   void OnWindowManagerFrameValuesChanged() override;
@@ -219,8 +213,6 @@ class VIEWS_MUS_EXPORT MusClient : public aura::WindowTreeClientDelegate,
   // apps that do not need accessibility support and for the browser itself
   // under OopAsh.
   std::unique_ptr<AXRemoteHost> ax_remote_host_;
-
-  ui::mojom::EventInjectorPtr event_injector_;
 
   DISALLOW_COPY_AND_ASSIGN(MusClient);
 };

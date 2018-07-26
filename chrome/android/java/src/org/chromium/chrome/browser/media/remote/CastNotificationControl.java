@@ -45,7 +45,7 @@ public class CastNotificationControl implements MediaRouteController.UiListener,
     protected MediaRouteController mMediaRouteController;
     private MediaNotificationInfo.Builder mNotificationBuilder;
     private Context mContext;
-    private PlayerState mState;
+    private @PlayerState int mState;
     private String mTitle = "";
     private AudioManager mAudioManager;
 
@@ -115,15 +115,15 @@ public class CastNotificationControl implements MediaRouteController.UiListener,
         mMediaRouteController.removeUiListener(this);
     }
 
-    public void show(PlayerState initialState) {
+    public void show(@PlayerState int initialState) {
         mMediaRouteController.addUiListener(this);
         // TODO(aberent): investigate why this is necessary, and whether we are handling
         // it correctly. Also add code to restore it when Chrome is resumed.
         mAudioManager.requestAudioFocus(this, AudioManager.USE_DEFAULT_STREAM_TYPE,
                 AudioManager.AUDIOFOCUS_GAIN);
         Intent contentIntent = new Intent(mContext, ExpandedControllerActivity.class);
-        contentIntent.putExtra(MediaNotificationUma.INTENT_EXTRA_NAME,
-                MediaNotificationUma.SOURCE_MEDIA_FLING);
+        contentIntent.putExtra(
+                MediaNotificationUma.INTENT_EXTRA_NAME, MediaNotificationUma.Source.MEDIA_FLING);
         mNotificationBuilder = new MediaNotificationInfo.Builder()
                 .setPaused(false)
                 .setPrivate(false)
@@ -176,7 +176,7 @@ public class CastNotificationControl implements MediaRouteController.UiListener,
 
     // MediaRouteController.UiListener implementation.
     @Override
-    public void onPlaybackStateChanged(PlayerState newState) {
+    public void onPlaybackStateChanged(@PlayerState int newState) {
         if (!mIsShowing
                 && (newState == PlayerState.PLAYING || newState == PlayerState.LOADING
                         || newState == PlayerState.PAUSED)) {

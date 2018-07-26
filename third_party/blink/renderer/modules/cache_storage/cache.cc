@@ -9,10 +9,11 @@
 #include "base/optional.h"
 #include "services/network/public/mojom/fetch_api.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/cache_storage/cache_storage.mojom-blink.h"
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_response.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_response.h"
 #include "third_party/blink/renderer/bindings/core/v8/callback_promise_adapter.h"
 #include "third_party/blink/renderer/bindings/core/v8/idl_types.h"
 #include "third_party/blink/renderer/bindings/core/v8/native_value_traits_impl.h"
+#include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_promise_resolver.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
 #include "third_party/blink/renderer/bindings/core/v8/v8_code_cache.h"
@@ -27,7 +28,7 @@
 #include "third_party/blink/renderer/core/html/parser/text_resource_decoder.h"
 #include "third_party/blink/renderer/core/inspector/console_message.h"
 #include "third_party/blink/renderer/modules/cache_storage/cache_storage_error.h"
-#include "third_party/blink/renderer/modules/serviceworkers/service_worker_global_scope.h"
+#include "third_party/blink/renderer/modules/service_worker/service_worker_global_scope.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_throw_exception.h"
@@ -358,7 +359,7 @@ class Cache::CodeCacheHandleCallbackForPut final
 
     scoped_refptr<CachedMetadata> cached_metadata =
         V8CodeCache::GenerateFullCodeCache(
-            script_state_.get(),
+            script_state_,
             text_decoder->Decode(static_cast<const char*>(array_buffer->Data()),
                                  array_buffer->ByteLength()),
             web_request_.Url().GetString(), text_decoder->Encoding(),
@@ -387,12 +388,13 @@ class Cache::CodeCacheHandleCallbackForPut final
   void Abort() override { barrier_callback_->Abort(); }
 
   void Trace(blink::Visitor* visitor) override {
+    visitor->Trace(script_state_);
     visitor->Trace(barrier_callback_);
     FetchDataLoader::Client::Trace(visitor);
   }
 
  private:
-  const scoped_refptr<ScriptState> script_state_;
+  const Member<ScriptState> script_state_;
   const size_t index_;
   Member<BarrierCallbackForPut> barrier_callback_;
   const String mime_type_;

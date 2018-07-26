@@ -5,9 +5,9 @@
 #include "chrome/browser/ui/webui/welcome_ui.h"
 
 #include <memory>
+#include <string>
 
 #include "build/build_config.h"
-#include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/signin/account_consistency_mode_manager.h"
 #include "chrome/browser/ui/webui/welcome_handler.h"
 #include "chrome/common/pref_names.h"
@@ -20,10 +20,13 @@
 #include "net/base/url_util.h"
 #include "ui/base/l10n/l10n_util.h"
 
-#if defined(OS_WIN)
+#if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
+#include "chrome/browser/bookmarks/bookmark_model_factory.h"
+#include "components/nux/show_promo_delegate.h"
 #include "components/nux_google_apps/constants.h"
-#include "components/nux_google_apps/webui.h"
-#endif  // OS_WIN
+#include "components/nux_google_apps/google_apps_handler.h"
+#include "content/public/browser/web_contents.h"
+#endif  // defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
 
 namespace {
   const bool kIsBranded =
@@ -45,8 +48,7 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
     return;
   }
 
-  // Store that this profile has been shown the Welcome page.
-  profile->GetPrefs()->SetBoolean(prefs::kHasSeenWelcomePage, true);
+  StorePageSeen(profile, url);
 
   web_ui->AddMessageHandler(std::make_unique<WelcomeHandler>(web_ui));
 
@@ -105,13 +107,33 @@ WelcomeUI::WelcomeUI(content::WebUI* web_ui, const GURL& url)
     html_source->SetDefaultResource(IDR_WELCOME_HTML);
   }
 
-#if defined(OS_WIN)
+#if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
   if (base::FeatureList::IsEnabled(nux_google_apps::kNuxGoogleAppsFeature)) {
-    nux_google_apps::AddSources(html_source);
+    content::BrowserContext* browser_context =
+        web_ui->GetWebContents()->GetBrowserContext();
+    web_ui->AddMessageHandler(
+        std::make_unique<nux_google_apps::GoogleAppsHandler>(
+            profile->GetPrefs(),
+            BookmarkModelFactory::GetForBrowserContext(browser_context)));
+
+    nux_google_apps::GoogleAppsHandler::AddSources(html_source);
   }
-#endif  // OS_WIN
+#endif  // defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD
 
   content::WebUIDataSource::Add(profile, html_source);
 }
 
 WelcomeUI::~WelcomeUI() {}
+
+void WelcomeUI::StorePageSeen(Profile* profile, const GURL& url) {
+#if defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
+  if (url.EqualsIgnoringRef(GURL(nux_google_apps::kNuxGoogleAppsUrl))) {
+    // Record that the new user experience page was visited.
+    profile->GetPrefs()->SetBoolean(prefs::kHasSeenGoogleAppsPromoPage, true);
+    return;
+  }
+#endif  // defined(OS_WIN) && defined(GOOGLE_CHROME_BUILD)
+
+  // Store that this profile has been shown the Welcome page.
+  profile->GetPrefs()->SetBoolean(prefs::kHasSeenWelcomePage, true);
+}

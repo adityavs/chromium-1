@@ -263,22 +263,27 @@ class CORE_EXPORT WebLocalFrameImpl final
       WebFrameLoadType,
       const WebHistoryItem&,
       bool is_client_redirect,
-      const base::UnguessableToken& devtools_navigation_token) override;
+      const base::UnguessableToken& devtools_navigation_token,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+      const WebNavigationTimings& navigation_timings) override;
   blink::mojom::CommitResult CommitSameDocumentNavigation(
       const WebURL&,
       WebFrameLoadType,
       const WebHistoryItem&,
       bool is_client_redirect) override;
   void LoadJavaScriptURL(const WebURL&) override;
-  void CommitDataNavigation(const WebData&,
-                            const WebString& mime_type,
-                            const WebString& text_encoding,
-                            const WebURL& base_url,
-                            const WebURL& unreachable_url,
-                            bool replace,
-                            WebFrameLoadType,
-                            const WebHistoryItem&,
-                            bool is_client_redirect) override;
+  void CommitDataNavigation(
+      const WebData&,
+      const WebString& mime_type,
+      const WebString& text_encoding,
+      const WebURL& base_url,
+      const WebURL& unreachable_url,
+      bool replace,
+      WebFrameLoadType,
+      const WebHistoryItem&,
+      bool is_client_redirect,
+      std::unique_ptr<WebDocumentLoader::ExtraData> navigation_data,
+      const WebNavigationTimings& navigation_timings) override;
   FallbackContentResult MaybeRenderFallbackContent(
       const WebURLError&) const override;
   void ReportContentSecurityPolicyViolation(
@@ -309,9 +314,15 @@ class CORE_EXPORT WebLocalFrameImpl final
             bool wrap_within_frame,
             bool* active_now = nullptr) override;
   void StopFindingForTesting(mojom::StopFindAction) override;
-
   void SetTickmarks(const WebVector<WebRect>&) override;
   WebPlugin* GetWebPluginForFind() override;
+  void ReportFindInPageMatchCount(int identifier,
+                                  int count,
+                                  bool final_update) override;
+  void ReportFindInPageSelection(int identifier,
+                                 int active_match_ordinal,
+                                 const WebRect& selection,
+                                 bool final_update) override;
   WebNode ContextMenuNode() const override;
   WebFrameWidget* FrameWidget() const override;
   void CopyImageAt(const WebPoint&) override;

@@ -131,6 +131,7 @@
 #include "chromeos/dbus/services/virtual_file_request_service_provider.h"
 #include "chromeos/dbus/services/vm_applications_service_provider.h"
 #include "chromeos/dbus/session_manager_client.h"
+#include "chromeos/dbus/util/version_loader.h"
 #include "chromeos/disks/disk_mount_manager.h"
 #include "chromeos/login/login_state.h"
 #include "chromeos/login_event_recorder.h"
@@ -166,8 +167,6 @@
 #include "net/base/network_change_notifier.h"
 #include "net/cert/nss_cert_database.h"
 #include "net/cert/nss_cert_database_chromeos.h"
-#include "net/url_request/url_request.h"
-#include "net/url_request/url_request_context_getter.h"
 #include "printing/backend/print_backend.h"
 #include "rlz/buildflags/buildflags.h"
 #include "services/service_manager/public/cpp/connector.h"
@@ -661,7 +660,8 @@ void ChromeBrowserMainPartsChromeos::PreMainMessageLoopRun() {
       std::unique_ptr<quirks::QuirksManager::Delegate>(
           new quirks::QuirksManagerDelegateImpl()),
       g_browser_process->local_state(),
-      g_browser_process->system_request_context());
+      g_browser_process->system_network_context_manager()
+          ->GetSharedURLLoaderFactory());
 
   // Start loading machine statistics here. StatisticsProvider::Shutdown()
   // will ensure that loading is aborted on early exit.
@@ -822,6 +822,13 @@ void ChromeBrowserMainPartsChromeos::PreProfileInit() {
         parsed_command_line().GetSwitchValueASCII(switches::kLoginProfile);
     session_manager::SessionManager::Get()->CreateSessionForRestart(
         account_id, user_id_hash);
+
+    // If restarting demo session, mark demo session as started before primary
+    // profile starts initialization so browser context keyed services created
+    // with the browser context (for example ExtensionService) can use
+    // DemoSession::started().
+    DemoSession::StartIfInDemoMode();
+
     VLOG(1) << "Relaunching browser for user: " << account_id.Serialize()
             << " with hash: " << user_id_hash;
   }

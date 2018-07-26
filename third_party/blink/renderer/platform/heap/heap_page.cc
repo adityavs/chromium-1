@@ -281,14 +281,11 @@ Address BaseArena::LazySweep(size_t allocation_size, size_t gc_info_index) {
 
 void BaseArena::SweepUnsweptPage() {
   BasePage* page = first_unswept_page_;
-  if (page->IsEmpty()) {
-    page->Unlink(&first_unswept_page_);
+  const bool is_empty = page->Sweep();
+  page->Unlink(&first_unswept_page_);
+  if (is_empty) {
     page->RemoveFromHeap();
   } else {
-    // Sweep a page and move the page from m_firstUnsweptPages to
-    // m_firstPages.
-    page->Sweep();
-    page->Unlink(&first_unswept_page_);
     page->Link(&first_page_);
     page->MarkAsSwept();
   }
@@ -504,11 +501,6 @@ void NormalPageArena::SweepAndCompact() {
 
   while (!SweepingCompleted()) {
     BasePage* page = first_unswept_page_;
-    if (page->IsEmpty()) {
-      page->Unlink(&first_unswept_page_);
-      page->RemoveFromHeap();
-      continue;
-    }
     // Large objects do not belong to this arena.
     DCHECK(!page->IsLargeObjectPage());
     NormalPage* normal_page = static_cast<NormalPage*>(page);
@@ -836,17 +828,13 @@ Address NormalPageArena::LazySweepPages(size_t allocation_size,
   Address result = nullptr;
   while (!SweepingCompleted()) {
     BasePage* page = first_unswept_page_;
-    if (page->IsEmpty()) {
-      page->Unlink(&first_unswept_page_);
+    const bool is_empty = page->Sweep();
+    page->Unlink(&first_unswept_page_);
+    if (is_empty) {
       page->RemoveFromHeap();
     } else {
-      // Sweep a page and move the page from m_firstUnsweptPages to
-      // m_firstPages.
-      page->Sweep();
-      page->Unlink(&first_unswept_page_);
       page->Link(&first_page_);
       page->MarkAsSwept();
-
       // For NormalPage, stop lazy sweeping once we find a slot to
       // allocate a new object.
       result = AllocateFromFreeList(allocation_size, gc_info_index);
@@ -1068,22 +1056,19 @@ Address LargeObjectArena::LazySweepPages(size_t allocation_size,
   size_t swept_size = 0;
   while (!SweepingCompleted()) {
     BasePage* page = first_unswept_page_;
-    if (page->IsEmpty()) {
+    const bool is_empty = page->Sweep();
+    page->Unlink(&first_unswept_page_);
+    if (is_empty) {
       swept_size += static_cast<LargeObjectPage*>(page)->ObjectSize();
-      page->Unlink(&first_unswept_page_);
       page->RemoveFromHeap();
       // For LargeObjectPage, stop lazy sweeping once we have swept
-      // more than allocationSize bytes.
+      // more than |allocation_size| bytes.
       if (swept_size >= allocation_size) {
         result = DoAllocateLargeObjectPage(allocation_size, gc_info_index);
         DCHECK(result);
         break;
       }
     } else {
-      // Sweep a page and move the page from m_firstUnsweptPages to
-      // m_firstPages.
-      page->Sweep();
-      page->Unlink(&first_unswept_page_);
       page->Link(&first_page_);
       page->MarkAsSwept();
     }
@@ -1305,11 +1290,6 @@ size_t NormalPage::ObjectPayloadSizeForTesting() {
   return object_payload_size;
 }
 
-bool NormalPage::IsEmpty() {
-  HeapObjectHeader* header = reinterpret_cast<HeapObjectHeader*>(Payload());
-  return header->IsFree() && header->size() == PayloadSize();
-}
-
 void NormalPage::RemoveFromHeap() {
   ArenaForNormalPage()->FreePage(this);
 }
@@ -1327,7 +1307,7 @@ static void DiscardPages(Address begin, Address end) {
 }
 #endif
 
-void NormalPage::Sweep() {
+bool NormalPage::Sweep() {
   object_start_bit_map()->Clear();
   size_t marked_object_size = 0;
   Address start_of_gap = Payload();
@@ -1383,7 +1363,10 @@ void NormalPage::Sweep() {
     marked_object_size += size;
     start_of_gap = header_address;
   }
-  if (start_of_gap != PayloadEnd()) {
+  // Only add the memory to the free list if the page is not completely empty
+  // and we are not at the end of the page. Empty pages are not added to the
+  // free list as the pages are removed immediately.
+  if (start_of_gap != Payload() && start_of_gap != PayloadEnd()) {
     page_arena->AddToFreeList(start_of_gap, PayloadEnd() - start_of_gap);
 #if !DCHECK_IS_ON() && !defined(LEAK_SANITIZER) && !defined(ADDRESS_SANITIZER)
     if (MemoryCoordinator::IsLowEndDevice())
@@ -1397,6 +1380,7 @@ void NormalPage::Sweep() {
   }
 
   VerifyObjectStartBitmapIsConsistentWithPayload();
+  return start_of_gap == Payload();
 }
 
 void NormalPage::SweepAndCompact(CompactionContext& context) {
@@ -1568,20 +1552,23 @@ void NormalPage::PoisonUnmarkedObjects() {
 
 void NormalPage::VerifyObjectStartBitmapIsConsistentWithPayload() {
 #if DCHECK_IS_ON()
-  Address current_allocation_point =
-      ArenaForNormalPage()->CurrentAllocationPoint();
-  DCHECK(!current_allocation_point ||
-         (PageFromObject(current_allocation_point) != this));
-
   HeapObjectHeader* current_header =
       reinterpret_cast<HeapObjectHeader*>(Payload());
-  object_start_bit_map()->Iterate([&current_header](Address object_address) {
+  object_start_bit_map()->Iterate([this,
+                                   &current_header](Address object_address) {
     const HeapObjectHeader* object_header =
         reinterpret_cast<HeapObjectHeader*>(object_address);
     DCHECK_EQ(object_header, current_header);
     DCHECK(object_header->IsValidOrZapped());
     current_header = reinterpret_cast<HeapObjectHeader*>(object_address +
                                                          object_header->size());
+    // Skip over allocation area.
+    if (reinterpret_cast<Address>(current_header) ==
+        ArenaForNormalPage()->CurrentAllocationPoint()) {
+      current_header = reinterpret_cast<HeapObjectHeader*>(
+          ArenaForNormalPage()->CurrentAllocationPoint() +
+          ArenaForNormalPage()->RemainingAllocationSize());
+    }
   });
 #endif  // DCHECK_IS_ON()
 }
@@ -1659,14 +1646,14 @@ void NormalPage::TakeSnapshot(base::trace_event::MemoryAllocatorDump* page_dump,
       live_count++;
       live_size += header->size();
 
-      size_t gc_info_index = header->GcInfoIndex();
+      uint32_t gc_info_index = header->GcInfoIndex();
       info.live_count[gc_info_index]++;
       info.live_size[gc_info_index] += header->size();
     } else {
       dead_count++;
       dead_size += header->size();
 
-      size_t gc_info_index = header->GcInfoIndex();
+      uint32_t gc_info_index = header->GcInfoIndex();
       info.dead_count[gc_info_index]++;
       info.dead_size[gc_info_index] += header->size();
     }
@@ -1707,17 +1694,17 @@ size_t LargeObjectPage::ObjectPayloadSizeForTesting() {
   return PayloadSize();
 }
 
-bool LargeObjectPage::IsEmpty() {
-  return !ObjectHeader()->IsMarked();
-}
-
 void LargeObjectPage::RemoveFromHeap() {
   static_cast<LargeObjectArena*>(Arena())->FreeLargeObjectPage(this);
 }
 
-void LargeObjectPage::Sweep() {
+bool LargeObjectPage::Sweep() {
+  if (!ObjectHeader()->IsMarked()) {
+    return true;
+  }
   ObjectHeader()->Unmark();
   Arena()->GetThreadState()->Heap().IncreaseMarkedObjectSize(size());
+  return false;
 }
 
 void LargeObjectPage::MakeConsistentForMutator() {
@@ -1743,7 +1730,7 @@ void LargeObjectPage::TakeSnapshot(
   size_t live_count = 0;
   size_t dead_count = 0;
   HeapObjectHeader* header = ObjectHeader();
-  size_t gc_info_index = header->GcInfoIndex();
+  uint32_t gc_info_index = header->GcInfoIndex();
   size_t payload_size = header->PayloadSize();
   if (header->IsMarked()) {
     live_count = 1;
@@ -1787,31 +1774,39 @@ uint32_t ComputeRandomMagic() {
 #pragma warning(disable : 4319)
 #endif
 
-  const uintptr_t random1 = ~(RotateLeft16(reinterpret_cast<uintptr_t>(
+  // Get an ASLR'd address from one of our own DLLs/.sos, and then another from
+  // a system DLL/.so:
+
+  const uint32_t random1 = ~(RotateLeft16(reinterpret_cast<uintptr_t>(
       base::trace_event::MemoryAllocatorDump::kNameSize)));
 
 #if defined(OS_WIN)
-  const uintptr_t random2 =
-      ~(RotateLeft16(reinterpret_cast<uintptr_t>(::ReadFile)));
+  uintptr_t random2 = reinterpret_cast<uintptr_t>(::ReadFile);
 #elif defined(OS_POSIX) || defined(OS_FUCHSIA)
-  const uintptr_t random2 =
-      ~(RotateLeft16(reinterpret_cast<uintptr_t>(::read)));
+  uintptr_t random2 = reinterpret_cast<uintptr_t>(::read);
+#else
+#error platform not supported
 #endif
 
 #if defined(ARCH_CPU_64_BITS)
   static_assert(sizeof(uintptr_t) == sizeof(uint64_t),
                 "uintptr_t is not uint64_t");
-  const uint32_t random = static_cast<uint32_t>(
-      (random1 & 0x0FFFFULL) | ((random2 >> 32) & 0x0FFFF0000ULL));
+  // Shift in some high-order bits.
+  random2 = random2 >> 16;
 #elif defined(ARCH_CPU_32_BITS)
   // Although we don't use heap metadata canaries on 32-bit due to memory
   // pressure, keep this code around just in case we do, someday.
   static_assert(sizeof(uintptr_t) == sizeof(uint32_t),
                 "uintptr_t is not uint32_t");
-  const uint32_t random = (random1 & 0x0FFFFUL) | (random2 & 0xFFFF0000UL);
 #else
 #error architecture not supported
 #endif
+
+  random2 = ~(RotateLeft16(random2));
+
+  // Combine the 2 values:
+  const uint32_t random = (random1 & 0x0000FFFFUL) |
+                          (static_cast<uint32_t>(random2) & 0xFFFF0000UL);
 
 #if defined(COMPILER_MSVC)
 #pragma warning(pop)

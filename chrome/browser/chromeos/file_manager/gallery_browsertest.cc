@@ -18,6 +18,10 @@ class GalleryBrowserTestBase : public FileManagerBrowserTestBase {
     return test_case_name_.c_str();
   }
 
+  std::string GetFullTestCaseName() const override {
+    return test_case_name_;
+  }
+
   const char* GetTestExtensionManifestName() const override {
     return "gallery_test_manifest.json";
   }
@@ -71,9 +75,8 @@ IN_PROC_BROWSER_TEST_F(GalleryBrowserTest, OpenMultipleImagesOnDrive) {
   StartTest();
 }
 
-// Flaky in RELEASE crbug.com/857021
 IN_PROC_BROWSER_TEST_F(GalleryBrowserTest,
-                       DISABLED_CheckAvailabilityOfEditAndPrintButtons) {
+                       CheckAvailabilityOfEditAndPrintButtons) {
   set_test_case_name("checkAvailabilityOfEditAndPrintButtons");
   StartTest();
 }

@@ -110,11 +110,11 @@ class TestRenderWidgetHostView : public RenderWidgetHostViewBase,
                          int error_code) override;
   void Destroy() override;
   void SetTooltipText(const base::string16& tooltip_text) override {}
-  gfx::Vector2d GetOffsetFromRootSurface() override;
   gfx::Rect GetBoundsInRootWindow() override;
   bool LockMouse() override;
   void UnlockMouse() override;
-  viz::FrameSinkId GetFrameSinkId() override;
+  const viz::FrameSinkId& GetFrameSinkId() const override;
+  const viz::LocalSurfaceId& GetLocalSurfaceId() const override;
   viz::SurfaceId GetCurrentSurfaceId() const override;
 
   bool is_showing() const { return is_showing_; }
@@ -202,6 +202,7 @@ class TestRenderViewHost
   TestRenderViewHost(SiteInstance* instance,
                      std::unique_ptr<RenderWidgetHostImpl> widget,
                      RenderViewHostDelegate* delegate,
+                     int32_t routing_id,
                      int32_t main_frame_routing_id,
                      bool swapped_out);
   ~TestRenderViewHost() override;

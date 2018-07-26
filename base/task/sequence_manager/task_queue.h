@@ -11,17 +11,10 @@
 #include "base/optional.h"
 #include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
+#include "base/task/sequence_manager/lazy_now.h"
 #include "base/task/sequence_manager/moveable_auto_lock.h"
 #include "base/threading/platform_thread.h"
 #include "base/time/time.h"
-
-// Currently the implementation is located in Blink because scheduler/base move
-// is in progress https://crbug.com/783309.
-// TODO(kraynov): Remove this hack ASAP.
-#ifndef HACKDEF_INCLUDED_FROM_BLINK
-// Need PLATFORM_EXPORT macro.
-#error Use third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h.
-#endif
 
 namespace base {
 
@@ -32,14 +25,14 @@ class BlameContext;
 namespace sequence_manager {
 
 namespace internal {
-class TaskQueueImpl;
 class GracefulQueueShutdownHelper;
+class SequenceManagerImpl;
+class TaskQueueImpl;
 }  // namespace internal
 
 class TimeDomain;
-class TaskQueueManagerImpl;
 
-class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
+class BASE_EXPORT TaskQueue : public SingleThreadTaskRunner {
  public:
   class Observer {
    public:
@@ -60,7 +53,7 @@ class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
 
   // A wrapper around OnceClosure with additional metadata to be passed
   // to PostTask and plumbed until PendingTask is created.
-  struct PLATFORM_EXPORT PostedTask {
+  struct BASE_EXPORT PostedTask {
     PostedTask(OnceClosure callback,
                Location posted_from,
                TimeDelta delay = TimeDelta(),
@@ -143,7 +136,7 @@ class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
   };
 
   // Interface to pass per-task metadata to RendererScheduler.
-  class PLATFORM_EXPORT Task : public PendingTask {
+  class BASE_EXPORT Task : public PendingTask {
    public:
     Task(PostedTask posted_task, TimeTicks desired_run_time);
 
@@ -151,6 +144,61 @@ class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
 
    private:
     int task_type_;
+  };
+
+  // Information about task execution.
+  //
+  // Wall-time related methods (start_time, end_time, wall_duration) can be
+  // called only when |has_wall_time()| is true.
+  // Thread-time related mehtods (start_thread_time, end_thread_time,
+  // thread_duration) can be called only when |has_thread_time()| is true.
+  //
+  // start_* should be called after RecordTaskStart.
+  // end_* and *_duration should be called after RecordTaskEnd.
+  class BASE_EXPORT TaskTiming {
+   public:
+    TaskTiming(bool has_wall_time, bool has_thread_time);
+
+    bool has_wall_time() const { return has_wall_time_; }
+    bool has_thread_time() const { return has_thread_time_; }
+
+    base::TimeTicks start_time() const {
+      DCHECK(has_wall_time());
+      return start_time_;
+    }
+    base::TimeTicks end_time() const {
+      DCHECK(has_wall_time());
+      return end_time_;
+    }
+    base::TimeDelta wall_duration() const {
+      DCHECK(has_wall_time());
+      return end_time_ - start_time_;
+    }
+    base::ThreadTicks start_thread_time() const {
+      DCHECK(has_thread_time());
+      return start_thread_time_;
+    }
+    base::ThreadTicks end_thread_time() const {
+      DCHECK(has_thread_time());
+      return end_thread_time_;
+    }
+    base::TimeDelta thread_duration() const {
+      DCHECK(has_thread_time());
+      return end_thread_time_ - start_thread_time_;
+    }
+
+    void RecordTaskStart(LazyNow* now);
+    void RecordTaskEnd(LazyNow* now);
+
+    // Protected for tests.
+   protected:
+    bool has_wall_time_;
+    bool has_thread_time_;
+
+    base::TimeTicks start_time_;
+    base::TimeTicks end_time_;
+    base::ThreadTicks start_thread_time_;
+    base::ThreadTicks end_thread_time_;
   };
 
   // An interface that lets the owner vote on whether or not the associated
@@ -281,8 +329,8 @@ class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
   internal::TaskQueueImpl* GetTaskQueueImpl() const { return impl_.get(); }
 
  private:
+  friend class internal::SequenceManagerImpl;
   friend class internal::TaskQueueImpl;
-  friend class TaskQueueManagerImpl;
 
   bool IsOnMainThread() const;
 
@@ -304,7 +352,7 @@ class PLATFORM_EXPORT TaskQueue : public SingleThreadTaskRunner {
 
   const PlatformThreadId thread_id_;
 
-  const WeakPtr<TaskQueueManagerImpl> task_queue_manager_;
+  const WeakPtr<internal::SequenceManagerImpl> sequence_manager_;
 
   const scoped_refptr<internal::GracefulQueueShutdownHelper>
       graceful_queue_shutdown_helper_;

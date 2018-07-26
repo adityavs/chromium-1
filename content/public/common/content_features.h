@@ -19,12 +19,14 @@ namespace features {
 CONTENT_EXPORT extern const base::Feature kAllowActivationDelegationAttr;
 CONTENT_EXPORT extern const base::Feature
     kAllowContentInitiatedDataUrlNavigations;
+CONTENT_EXPORT extern const base::Feature
+    kAllowSignedHTTPExchangeCertsWithoutExtension;
 CONTENT_EXPORT extern const base::Feature kAsmJsToWebAssembly;
-CONTENT_EXPORT extern const base::Feature kAsyncWheelEvents;
 CONTENT_EXPORT extern const base::Feature kAudioServiceAudioStreams;
 CONTENT_EXPORT extern const base::Feature kAudioServiceLaunchOnStartup;
 CONTENT_EXPORT extern const base::Feature kAudioServiceOutOfProcess;
 CONTENT_EXPORT extern const base::Feature kBlinkHeapIncrementalMarking;
+CONTENT_EXPORT extern const base::Feature kBloatedRendererDetection;
 CONTENT_EXPORT extern const base::Feature kBlockCredentialedSubresources;
 CONTENT_EXPORT extern const base::Feature kBrotliEncoding;
 CONTENT_EXPORT extern const base::Feature kCacheInlineScriptCode;
@@ -64,7 +66,6 @@ CONTENT_EXPORT extern const base::Feature kMojoSessionStorage;
 CONTENT_EXPORT extern const base::Feature kMojoVideoCapture;
 CONTENT_EXPORT extern const base::Feature kNetworkServiceInProcess;
 CONTENT_EXPORT extern const base::Feature kNotificationContentImage;
-CONTENT_EXPORT extern const base::Feature kOffMainThreadWebSocket;
 CONTENT_EXPORT extern const base::Feature kOriginPolicy;
 CONTENT_EXPORT extern const base::Feature kOriginTrials;
 CONTENT_EXPORT extern const base::Feature kPageLifecycle;
@@ -93,11 +94,9 @@ CONTENT_EXPORT extern const base::Feature kSignedHTTPExchange;
 CONTENT_EXPORT extern const base::Feature kSignedHTTPExchangeOriginTrial;
 CONTENT_EXPORT extern const base::Feature kSpareRendererForSitePerProcess;
 CONTENT_EXPORT extern const base::Feature kStopInBackground;
-CONTENT_EXPORT extern const base::Feature kStopLoadingInBackground;
 CONTENT_EXPORT extern const base::Feature kStopNonTimersInBackground;
 CONTENT_EXPORT extern const base::Feature kTimerThrottlingForHiddenFrames;
 CONTENT_EXPORT extern const base::Feature kTopDocumentIsolation;
-CONTENT_EXPORT extern const base::Feature kTouchpadAndWheelScrollLatching;
 CONTENT_EXPORT extern const base::Feature kTouchpadOverscrollHistoryNavigation;
 CONTENT_EXPORT extern const base::Feature kUseFeaturePolicyForPermissions;
 CONTENT_EXPORT extern const base::Feature kUserActivationV2;
@@ -107,7 +106,6 @@ CONTENT_EXPORT extern const base::Feature kV8ContextSnapshot;
 CONTENT_EXPORT extern const base::Feature kV8LowMemoryModeForSubframes;
 CONTENT_EXPORT extern const base::Feature kV8Orinoco;
 CONTENT_EXPORT extern const base::Feature kV8VmFuture;
-CONTENT_EXPORT extern const base::Feature kVrWebInputEditing;
 CONTENT_EXPORT extern const base::Feature kWebAssembly;
 CONTENT_EXPORT extern const base::Feature kWebAssemblyStreaming;
 CONTENT_EXPORT extern const base::Feature kWebAssemblyBaseline;
@@ -137,6 +135,7 @@ CONTENT_EXPORT extern const base::Feature kWebXrHitTest;
 CONTENT_EXPORT extern const base::Feature kWebXrOrientationSensorDevice;
 CONTENT_EXPORT extern const base::Feature kWipeCorruptV2IDBDatabases;
 CONTENT_EXPORT extern const base::Feature kWorkStealingInScriptRunner;
+CONTENT_EXPORT extern const base::Feature kScheduledScriptStreaming;
 
 #if defined(OS_ANDROID)
 CONTENT_EXPORT extern const base::Feature kAndroidAutofillAccessibility;
@@ -149,6 +148,14 @@ CONTENT_EXPORT extern const char kWebXrRenderPathParamValueClientWait[];
 CONTENT_EXPORT extern const char kWebXrRenderPathParamValueGpuFence[];
 CONTENT_EXPORT extern const char kWebXrRenderPathParamValueSharedBuffer[];
 #endif  // defined(OS_ANDROID)
+
+#if !defined(OS_ANDROID)
+CONTENT_EXPORT extern const base::Feature kWebUIPolymer2;
+#endif  // !defined(OS_ANDROID)
+
+#if defined(OS_ANDROID) || defined(OS_CHROMEOS)
+CONTENT_EXPORT extern const base::Feature kOverrideUIThreadPriority;
+#endif  // defined(OS_ANDROID) || defined(OS_CHROMEOS)
 
 #if defined(OS_MACOSX)
 CONTENT_EXPORT extern const base::Feature kDeviceMonitorMac;

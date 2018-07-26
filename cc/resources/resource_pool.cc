@@ -83,6 +83,9 @@ ResourcePool::ResourcePool(
       this, "cc::ResourcePool", task_runner_.get());
   // Register this component with base::MemoryCoordinatorClientRegistry.
   base::MemoryCoordinatorClientRegistry::GetInstance()->Register(this);
+  memory_pressure_listener_.reset(
+      new base::MemoryPressureListener(base::BindRepeating(
+          &ResourcePool::OnMemoryPressure, weak_ptr_factory_.GetWeakPtr())));
 }
 
 ResourcePool::~ResourcePool() {
@@ -306,7 +309,6 @@ void ResourcePool::PrepareForExport(const InUsePoolResource& resource) {
         resource.resource_->size(), resource.resource_->format());
   }
   transferable.format = resource.resource_->format();
-  transferable.buffer_format = viz::BufferFormat(transferable.format);
   transferable.color_space = resource.resource_->color_space();
   resource.resource_->set_resource_id(resource_provider_->ImportResource(
       std::move(transferable),
@@ -557,6 +559,18 @@ void ResourcePool::OnMemoryStateChange(base::MemoryState state) {
   evict_busy_resources_when_unused_ = state == base::MemoryState::SUSPENDED;
 }
 
+void ResourcePool::OnMemoryPressure(
+    base::MemoryPressureListener::MemoryPressureLevel level) {
+  switch (level) {
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_NONE:
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_MODERATE:
+      break;
+    case base::MemoryPressureListener::MEMORY_PRESSURE_LEVEL_CRITICAL:
+      EvictResourcesNotUsedSince(base::TimeTicks() + base::TimeDelta::Max());
+      break;
+  }
+}
+
 ResourcePool::PoolResource::PoolResource(size_t unique_id,
                                          const gfx::Size& size,
                                          viz::ResourceFormat format,
@@ -573,28 +587,6 @@ void ResourcePool::PoolResource::OnMemoryDump(
     int tracing_id,
     const viz::ClientResourceProvider* resource_provider,
     bool is_free) const {
-  base::UnguessableToken shm_guid;
-  base::trace_event::MemoryAllocatorDumpGuid backing_guid;
-  if (software_backing_) {
-    // Software resources are allocated in shared memory for use cross-process
-    // in the display compositor. So we use the guid for the shared memory to
-    // identify them in tracing in all processes.
-    shm_guid = software_backing_->SharedMemoryGuid();
-  } else if (gpu_backing_) {
-    // We prefer the SharedMemoryGuid() if it exists, if the resource is backed
-    // by shared memory.
-    shm_guid = gpu_backing_->SharedMemoryGuid();
-    if (shm_guid.is_empty()) {
-      auto* dump_manager = base::trace_event::MemoryDumpManager::GetInstance();
-      backing_guid =
-          gpu_backing_->MemoryDumpGuid(dump_manager->GetTracingProcessId());
-    }
-  }
-
-  // If memory isn't allocated on the resource yet, then don't dump it.
-  if (shm_guid.is_empty() && backing_guid.empty())
-    return;
-
   // Resource IDs are not process-unique, so log with the ResourcePool's unique
   // tracing id.
   std::string dump_name = base::StringPrintf(
@@ -606,12 +598,14 @@ void ResourcePool::PoolResource::OnMemoryDump(
   // the root ownership. The gpu processes uses 0, so 2 is sufficient, and was
   // chosen historically and there is no need to adjust it.
   const int kImportance = 2;
-  if (!shm_guid.is_empty()) {
-    pmd->CreateSharedMemoryOwnershipEdge(dump->guid(), shm_guid, kImportance);
-  } else {
-    DCHECK(!backing_guid.empty());
-    pmd->CreateSharedGlobalAllocatorDump(backing_guid);
-    pmd->AddOwnershipEdge(dump->guid(), backing_guid, kImportance);
+  auto* dump_manager = base::trace_event::MemoryDumpManager::GetInstance();
+  uint64_t tracing_process_id = dump_manager->GetTracingProcessId();
+  if (software_backing_) {
+    software_backing_->OnMemoryDump(pmd, dump->guid(), tracing_process_id,
+                                    kImportance);
+  } else if (gpu_backing_) {
+    gpu_backing_->OnMemoryDump(pmd, dump->guid(), tracing_process_id,
+                               kImportance);
   }
 
   uint64_t total_bytes =

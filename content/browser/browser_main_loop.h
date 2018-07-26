@@ -71,9 +71,9 @@ class MidiService;
 }  // namespace midi
 
 namespace mojo {
-namespace edk {
+namespace core {
 class ScopedIPCSupport;
-}  // namespace edk
+}  // namespace core
 }  // namespace mojo
 
 namespace net {
@@ -127,10 +127,7 @@ class CONTENT_EXPORT BrowserMainLoop {
   explicit BrowserMainLoop(const MainFunctionParams& parameters);
   virtual ~BrowserMainLoop();
 
-  // |service_manager_thread| is optional. If set, it will be registered as
-  // BrowserThread::IO in CreateThreads() instead of creating a brand new
-  // thread.
-  void Init(std::unique_ptr<BrowserProcessSubThread> service_manager_thread);
+  void Init();
 
   // Return value is exit status. Anything other than RESULT_CODE_NORMAL_EXIT
   // is considered an error.
@@ -338,7 +335,7 @@ class CONTENT_EXPORT BrowserMainLoop {
 
   // Members initialized in |BrowserThreadsStarted()| --------------------------
   std::unique_ptr<ServiceManagerContext> service_manager_context_;
-  std::unique_ptr<mojo::edk::ScopedIPCSupport> mojo_ipc_support_;
+  std::unique_ptr<mojo::core::ScopedIPCSupport> mojo_ipc_support_;
 
   // |user_input_monitor_| has to outlive |audio_manager_|, so declared first.
   std::unique_ptr<media::UserInputMonitor> user_input_monitor_;

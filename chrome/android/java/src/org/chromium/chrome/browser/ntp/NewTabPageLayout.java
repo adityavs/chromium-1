@@ -19,7 +19,6 @@ import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewGroup.MarginLayoutParams;
 import android.view.ViewStub;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -49,7 +48,8 @@ import org.chromium.chrome.browser.suggestions.TileView;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.util.MathUtils;
 import org.chromium.chrome.browser.util.ViewUtils;
-import org.chromium.chrome.browser.vr_shell.VrShellDelegate;
+import org.chromium.chrome.browser.vr.VrModeObserver;
+import org.chromium.chrome.browser.vr.VrModuleProvider;
 import org.chromium.chrome.browser.widget.displaystyle.UiConfig;
 import org.chromium.ui.base.DeviceFormFactor;
 
@@ -57,8 +57,7 @@ import org.chromium.ui.base.DeviceFormFactor;
  * Layout for the new tab page. This positions the page elements in the correct vertical positions.
  * There are no separate phone and tablet UIs; this layout adapts based on the available space.
  */
-public class NewTabPageLayout
-        extends LinearLayout implements TileGroup.Observer, VrShellDelegate.VrModeObserver {
+public class NewTabPageLayout extends LinearLayout implements TileGroup.Observer, VrModeObserver {
     private static final String TAG = "NewTabPageLayout";
 
     /**
@@ -256,14 +255,21 @@ public class NewTabPageLayout
 
         mTileGroup.startObserving(getMaxTileRows() * getMaxTileColumns());
 
-        VrShellDelegate.registerVrModeObserver(this);
-        if (VrShellDelegate.isInVr()) onEnterVr();
+        VrModuleProvider.registerVrModeObserver(this);
+        if (VrModuleProvider.getDelegate().isInVr()) onEnterVr();
 
         manager.addDestructionObserver(NewTabPageLayout.this ::onDestroy);
 
         mInitialized = true;
 
         TraceEvent.end(TAG + ".initialize()");
+    }
+
+    /**
+     * @return The {@link ScrollDelegate} for this class.
+     */
+    ScrollDelegate getScrollDelegate() {
+        return mScrollDelegate;
     }
 
     /**
@@ -404,8 +410,9 @@ public class NewTabPageLayout
         searchBoxTop += mSearchBoxView.getPaddingTop();
 
         final int scrollY = mScrollDelegate.getVerticalScrollOffset();
+        // Use int pixel size instead of float dimension to avoid precision error on the percentage.
         final float transitionLength =
-                getResources().getDimension(R.dimen.ntp_search_box_transition_length);
+                getResources().getDimensionPixelSize(R.dimen.ntp_search_box_transition_length);
         // Tab strip height is zero on phones, nonzero on tablets.
         int tabStripHeight = getResources().getDimensionPixelSize(R.dimen.tab_strip_height);
 
@@ -858,7 +865,7 @@ public class NewTabPageLayout
     }
 
     private void onDestroy() {
-        VrShellDelegate.unregisterVrModeObserver(this);
+        VrModuleProvider.unregisterVrModeObserver(this);
     }
 
     private void initializeShortcuts() {

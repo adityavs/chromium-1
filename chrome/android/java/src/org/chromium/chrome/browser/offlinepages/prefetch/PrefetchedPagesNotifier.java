@@ -45,9 +45,7 @@ public class PrefetchedPagesNotifier {
     private static PrefetchedPagesNotifier sInstance;
 
     public static PrefetchedPagesNotifier getInstance() {
-        if (sInstance == null) {
-            sInstance = new PrefetchedPagesNotifier();
-        }
+        if (sInstance == null) sInstance = new PrefetchedPagesNotifier();
         return sInstance;
     }
 
@@ -115,7 +113,7 @@ public class PrefetchedPagesNotifier {
         ChromeNotificationBuilder builder =
                 NotificationBuilderFactory
                         .createChromeNotificationBuilder(true /* preferCompat */,
-                                ChannelDefinitions.CHANNEL_ID_CONTENT_SUGGESTIONS)
+                                ChannelDefinitions.ChannelId.CONTENT_SUGGESTIONS)
                         .setAutoCancel(true)
                         .setContentIntent(clickIntent)
                         .setContentTitle(title)
@@ -140,8 +138,8 @@ public class PrefetchedPagesNotifier {
         // Metrics tracking
         recordNotificationAction(NOTIFICATION_ACTION_SHOWN);
         NotificationUmaTracker.getInstance().onNotificationShown(
-                NotificationUmaTracker.OFFLINE_CONTENT_SUGGESTION,
-                ChannelDefinitions.CHANNEL_ID_CONTENT_SUGGESTIONS);
+                NotificationUmaTracker.SystemNotificationType.OFFLINE_CONTENT_SUGGESTION,
+                ChannelDefinitions.ChannelId.CONTENT_SUGGESTIONS);
     }
 
     private static PendingIntent getPendingBroadcastFor(Context context, Class clazz) {

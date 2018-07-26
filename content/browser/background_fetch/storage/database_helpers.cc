@@ -5,6 +5,7 @@
 #include "content/browser/background_fetch/storage/database_helpers.h"
 
 #include "base/strings/string_number_conversions.h"
+#include "content/browser/background_fetch/background_fetch.pb.h"
 
 namespace content {
 
@@ -23,8 +24,8 @@ std::string RegistrationKey(const std::string& unique_id) {
   return kRegistrationKeyPrefix + unique_id;
 }
 
-std::string TitleKey(const std::string& unique_id) {
-  return kTitleKeyPrefix + unique_id;
+std::string UIOptionsKey(const std::string& unique_id) {
+  return kUIOptionsKeyPrefix + unique_id;
 }
 
 std::string PendingRequestKeyPrefix(const std::string& unique_id) {
@@ -54,38 +55,52 @@ std::string CompletedRequestKey(const std::string& unique_id,
 
 DatabaseStatus ToDatabaseStatus(blink::ServiceWorkerStatusCode status) {
   switch (status) {
-    case blink::SERVICE_WORKER_OK:
+    case blink::ServiceWorkerStatusCode::kOk:
       return DatabaseStatus::kOk;
-    case blink::SERVICE_WORKER_ERROR_FAILED:
-    case blink::SERVICE_WORKER_ERROR_ABORT:
+    case blink::ServiceWorkerStatusCode::kErrorFailed:
+    case blink::ServiceWorkerStatusCode::kErrorAbort:
       // FAILED is for invalid arguments (e.g. empty key) or database errors.
       // ABORT is for unexpected failures, e.g. because shutdown is in progress.
       // BackgroundFetchDataManager handles both of these the same way.
       return DatabaseStatus::kFailed;
-    case blink::SERVICE_WORKER_ERROR_NOT_FOUND:
+    case blink::ServiceWorkerStatusCode::kErrorNotFound:
       // This can also happen for writes, if the ServiceWorkerRegistration has
       // been deleted.
       return DatabaseStatus::kNotFound;
-    case blink::SERVICE_WORKER_ERROR_START_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_PROCESS_NOT_FOUND:
-    case blink::SERVICE_WORKER_ERROR_EXISTS:
-    case blink::SERVICE_WORKER_ERROR_INSTALL_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_ACTIVATE_WORKER_FAILED:
-    case blink::SERVICE_WORKER_ERROR_IPC_FAILED:
-    case blink::SERVICE_WORKER_ERROR_NETWORK:
-    case blink::SERVICE_WORKER_ERROR_SECURITY:
-    case blink::SERVICE_WORKER_ERROR_EVENT_WAITUNTIL_REJECTED:
-    case blink::SERVICE_WORKER_ERROR_STATE:
-    case blink::SERVICE_WORKER_ERROR_TIMEOUT:
-    case blink::SERVICE_WORKER_ERROR_SCRIPT_EVALUATE_FAILED:
-    case blink::SERVICE_WORKER_ERROR_DISK_CACHE:
-    case blink::SERVICE_WORKER_ERROR_REDUNDANT:
-    case blink::SERVICE_WORKER_ERROR_DISALLOWED:
-    case blink::SERVICE_WORKER_ERROR_MAX_VALUE:
+    case blink::ServiceWorkerStatusCode::kErrorStartWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorProcessNotFound:
+    case blink::ServiceWorkerStatusCode::kErrorExists:
+    case blink::ServiceWorkerStatusCode::kErrorInstallWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorActivateWorkerFailed:
+    case blink::ServiceWorkerStatusCode::kErrorIpcFailed:
+    case blink::ServiceWorkerStatusCode::kErrorNetwork:
+    case blink::ServiceWorkerStatusCode::kErrorSecurity:
+    case blink::ServiceWorkerStatusCode::kErrorEventWaitUntilRejected:
+    case blink::ServiceWorkerStatusCode::kErrorState:
+    case blink::ServiceWorkerStatusCode::kErrorTimeout:
+    case blink::ServiceWorkerStatusCode::kErrorScriptEvaluateFailed:
+    case blink::ServiceWorkerStatusCode::kErrorDiskCache:
+    case blink::ServiceWorkerStatusCode::kErrorRedundant:
+    case blink::ServiceWorkerStatusCode::kErrorDisallowed:
       break;
   }
   NOTREACHED();
   return DatabaseStatus::kFailed;
+}
+
+BackgroundFetchRegistration ToBackgroundFetchRegistration(
+    const proto::BackgroundFetchMetadata& metadata_proto) {
+  const auto& registration_proto = metadata_proto.registration();
+
+  BackgroundFetchRegistration registration;
+  registration.developer_id = registration_proto.developer_id();
+  registration.unique_id = registration_proto.unique_id();
+  registration.upload_total = registration_proto.upload_total();
+  registration.uploaded = registration_proto.uploaded();
+  registration.download_total = registration_proto.download_total();
+  registration.downloaded = registration_proto.downloaded();
+
+  return registration;
 }
 
 }  // namespace background_fetch

@@ -26,6 +26,7 @@ class WebContents;
 
 namespace resource_coordinator {
 
+class UsageClock;
 class TabLifecycleObserver;
 
 // Time during which a tab cannot be discarded after having played audio.
@@ -46,9 +47,13 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   // |observers| is a list of observers to notify when the discarded state or
   // the auto-discardable state of this tab changes. It can be modified outside
   // of this TabLifecycleUnit, but only on the sequence on which this
-  // constructor is invoked. |web_contents| and |tab_strip_model| are the
-  // WebContents and TabStripModel associated with this tab.
-  TabLifecycleUnit(base::ObserverList<TabLifecycleObserver>* observers,
+  // constructor is invoked. |usage_clock| is a clock that measures Chrome usage
+  // time. |web_contents| and |tab_strip_model| are the WebContents and
+  // TabStripModel associated with this tab. The |source| is optional and may be
+  // nullptr.
+  TabLifecycleUnit(TabLifecycleUnitSource* source,
+                   base::ObserverList<TabLifecycleObserver>* observers,
+                   UsageClock* usage_clock,
                    content::WebContents* web_contents,
                    TabStripModel* tab_strip_model);
   ~TabLifecycleUnit() override;
@@ -113,6 +118,15 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   friend class TabLifecycleUnitSource;
 
  private:
+  // Indicates if an intervention (freezing or discarding) is proactive or not.
+  enum class InterventionType {
+    kProactive,
+    kExternalOrUrgent,
+  };
+
+  // Same as GetSource, but cast to the most derived type.
+  TabLifecycleUnitSource* GetTabSource() const;
+
   // Determines if the tab is a media tab, and populates an optional
   // |decision_details| with full details.
   bool IsMediaTabImpl(DecisionDetails* decision_details) const;
@@ -144,7 +158,13 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   void DidStartLoading() override;
   void OnVisibilityChanged(content::Visibility visibility) override;
 
-  bool CanReloadBloatedTab();
+  // Indicates if freezing or discarding this tab would be noticeable by the
+  // user even if it isn't brought back to the foreground. Populates
+  // |decision_details| with full details. If |intervention_type| indicates that
+  // this is a proactive intervention then more heuristics will be
+  // applied.
+  void CheckIfTabIsUsedInBackground(DecisionDetails* decision_details,
+                                    InterventionType intervention_type) const;
 
   // List of observers to notify when the discarded state or the auto-
   // discardable state of this tab changes.
@@ -157,13 +177,14 @@ class TabLifecycleUnitSource::TabLifecycleUnit
   int discard_count_ = 0;
 
   // Last time at which this tab was focused, or TimeTicks::Max() if it is
-  // currently focused.
-  //
-  // TODO(fdoray): To keep old behavior (sort order and protection of recently
-  // focused tabs), this is initialized with NowTicks(). Consider initializing
-  // this with a null TimeTicks when the tab isn't initially focused.
-  // https://crbug.com/800885
-  base::TimeTicks last_focused_time_ = NowTicks();
+  // currently focused. For tabs that aren't currently focused this is
+  // initialized using WebContents::GetLastActiveTime, which causes use times
+  // from previous browsing sessions to persist across session restore
+  // events.
+  // TODO(chrisha): Migrate |last_active_time| to actually track focus time,
+  // instead of the time that focus was lost. This is a more meaninful number
+  // for all of the clients of |last_active_time|.
+  base::TimeTicks last_focused_time_;
 
   // When this is false, CanDiscard() always returns false.
   bool auto_discardable_ = true;

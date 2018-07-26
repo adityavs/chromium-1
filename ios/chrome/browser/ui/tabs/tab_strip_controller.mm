@@ -30,9 +30,9 @@
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/browser_commands.h"
 #import "ios/chrome/browser/ui/commands/open_new_tab_command.h"
-#import "ios/chrome/browser/ui/commands/open_url_command.h"
 #include "ios/chrome/browser/ui/fullscreen/fullscreen_controller_factory.h"
 #include "ios/chrome/browser/ui/fullscreen/scoped_fullscreen_disabler.h"
+#import "ios/chrome/browser/ui/popup_menu/public/popup_menu_long_press_delegate.h"
 #include "ios/chrome/browser/ui/rtl_geometry.h"
 #import "ios/chrome/browser/ui/tabs/requirements/tab_strip_constants.h"
 #import "ios/chrome/browser/ui/tabs/requirements/tab_strip_presentation.h"
@@ -72,7 +72,11 @@ const NSTimeInterval kDragAndDropLongPressDuration = 0.4;
 const CGFloat kTabOverlap = 26.0;
 const CGFloat kTabOverlapForCompactLayout = 30.0;
 
-const CGFloat kNewTabOverlap = 8.0;
+const CGFloat kNewTabOverlap = 13.0;
+const CGFloat kNewTabOverlapLegacy = 8.0;
+CGFloat NewTabOverlap() {
+  return IsUIRefreshPhase1Enabled() ? kNewTabOverlap : kNewTabOverlapLegacy;
+}
 const CGFloat kMaxTabWidth = 265.0;
 const CGFloat kMaxTabWidthForCompactLayout = 225.0;
 
@@ -385,6 +389,7 @@ NSString* StringForItemCount(long count) {
 @synthesize tabStripView = _tabStripView;
 @synthesize view = _view;
 @synthesize dispatcher = _dispatcher;
+@synthesize longPressDelegate = _longPressDelegate;
 @synthesize presentationProvider = _presentationProvider;
 @synthesize animationWaitDuration = _animationWaitDuration;
 
@@ -518,11 +523,6 @@ NSString* StringForItemCount(long count) {
 
 - (void)hideTabStrip:(BOOL)hidden {
   self.view.hidden = hidden;
-  if (!hidden) {
-    NamedGuide* tabSwitcherGuide =
-        [NamedGuide guideWithName:kTabStripTabSwitcherGuide view:self.view];
-    tabSwitcherGuide.constrainedView = _tabSwitcherButton;
-  }
 }
 
 #pragma mark - Private
@@ -674,8 +674,7 @@ NSString* StringForItemCount(long count) {
   CGPoint center = [_buttonNewTab.superview convertPoint:_buttonNewTab.center
                                                   toView:_buttonNewTab.window];
   OpenNewTabCommand* command =
-      [[OpenNewTabCommand alloc] initWithIncognito:_isIncognito
-                                       originPoint:center];
+      [OpenNewTabCommand commandWithIncognito:_isIncognito originPoint:center];
   [self.dispatcher openNewTab:command];
 }
 
@@ -745,6 +744,21 @@ NSString* StringForItemCount(long count) {
 
 - (NSUInteger)modelIndexForTabView:(TabView*)view {
   return [self modelIndexForIndex:[_tabArray indexOfObject:view]];
+}
+
+// The |tabSwitcherGuide| cannot use constrainedView in the tab strip because
+// here views use CGAffineTransformMakeScale to support RTL, and NamedGuide
+// doesn't honor transforms. Instead we set the tabSwitcherGuide as necessary.
+- (void)updateTabSwitcherGuide {
+  NamedGuide* tabSwitcherGuide =
+      [NamedGuide guideWithName:kTabStripTabSwitcherGuide view:self.view];
+  tabSwitcherGuide.constrainedFrame = _tabSwitcherButton.frame;
+  if (UseRTLLayout()) {
+    CGRect frame = tabSwitcherGuide.constrainedFrame;
+    frame.origin.x =
+        self.view.frame.size.width - _tabSwitcherButton.frame.origin.x;
+    tabSwitcherGuide.constrainedFrame = frame;
+  }
 }
 
 #pragma mark -
@@ -1100,7 +1114,7 @@ NSString* StringForItemCount(long count) {
 - (CGFloat)tabStripVisibleSpace {
   CGFloat availableSpace = CGRectGetWidth([_tabStripView bounds]) -
                            CGRectGetWidth([_buttonNewTab frame]) +
-                           kNewTabOverlap;
+                           NewTabOverlap();
   return availableSpace;
 }
 
@@ -1176,9 +1190,16 @@ NSString* StringForItemCount(long count) {
 
 // Handles the long press on the |_tabSwitcherButton|.
 - (void)handleTabSwitcherLongPress:(UILongPressGestureRecognizer*)gesture {
-  if (gesture.state != UIGestureRecognizerStateBegan)
-    return;
-  [self.dispatcher showTabStripTabGridButtonPopup];
+  if (gesture.state == UIGestureRecognizerStateBegan) {
+    [self.dispatcher showTabStripTabGridButtonPopup];
+    TriggerHapticFeedbackForImpact(UIImpactFeedbackStyleMedium);
+  } else if (gesture.state == UIGestureRecognizerStateEnded) {
+    [self.longPressDelegate
+        longPressEndedAtPoint:[gesture locationOfTouch:0 inView:nil]];
+  } else if (gesture.state == UIGestureRecognizerStateChanged) {
+    [self.longPressDelegate
+        longPressFocusPointChangedTo:[gesture locationOfTouch:0 inView:nil]];
+  }
 }
 
 - (void)shiftTabStripSubviews:(CGPoint)oldContentOffset {
@@ -1208,7 +1229,7 @@ NSString* StringForItemCount(long count) {
   // desired width, with the standard overlap, plus the new tab button.
   CGSize contentSize = CGSizeMake(
       _currentTabWidth * tabCount - ([self tabOverlap] * (tabCount - 1)) +
-          CGRectGetWidth([_buttonNewTab frame]) - kNewTabOverlap,
+          CGRectGetWidth([_buttonNewTab frame]) - NewTabOverlap(),
       tabHeight);
   if (CGSizeEqualToSize([_tabStripView contentSize], contentSize))
     return;
@@ -1381,6 +1402,7 @@ NSString* StringForItemCount(long count) {
 // Creates TabViews for each Tab in the TabModel and positions them in the
 // correct location onscreen.
 - (void)layoutTabStripSubviews {
+  [self updateTabSwitcherGuide];
   const NSUInteger tabCount = [_tabArray count] - [_closingTabs count];
   if (!tabCount)
     return;
@@ -1625,7 +1647,7 @@ NSString* StringForItemCount(long count) {
   CGRect newTabFrame = [_buttonNewTab frame];
   BOOL moveNewTab =
       (newTabFrame.origin.x != virtualMaxX) && !_buttonNewTab.hidden;
-  newTabFrame.origin = CGPointMake(virtualMaxX - kNewTabOverlap, 0);
+  newTabFrame.origin = CGPointMake(virtualMaxX - NewTabOverlap(), 0);
   if (!animate && moveNewTab)
     [_buttonNewTab setFrame:newTabFrame];
 
@@ -1675,11 +1697,12 @@ NSString* StringForItemCount(long count) {
 
 - (void)URLWasDropped:(GURL const&)url {
   // Called when a URL is dropped on the new tab button.
-  OpenUrlCommand* command = [[OpenUrlCommand alloc] initWithURL:url
-                                                       referrer:web::Referrer()
-                                                    inIncognito:_isIncognito
-                                                   inBackground:NO
-                                                       appendTo:kLastTab];
+  OpenNewTabCommand* command =
+      [[OpenNewTabCommand alloc] initWithURL:url
+                                    referrer:web::Referrer()
+                                 inIncognito:_isIncognito
+                                inBackground:NO
+                                    appendTo:kLastTab];
   [self.dispatcher openURL:command];
 }
 

@@ -28,12 +28,11 @@
 
 #include "base/macros.h"
 #include "third_party/blink/public/platform/web_scoped_virtual_time_pauser.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_streamer.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/script/script.h"
 #include "third_party/blink/renderer/core/script/script_element_base.h"
 #include "third_party/blink/renderer/core/script/script_scheduling_type.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
+#include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/text/text_position.h"
@@ -64,7 +63,7 @@ class CORE_EXPORT PendingScriptClient : public GarbageCollectedMixin {
 // PendingScriptClient is notified.
 class CORE_EXPORT PendingScript
     : public GarbageCollectedFinalized<PendingScript>,
-      public TraceWrapperBase {
+      public NameClient {
  public:
   virtual ~PendingScript();
 
@@ -98,8 +97,7 @@ class CORE_EXPORT PendingScript
   virtual bool WasCanceled() const = 0;
 
   // Support for script streaming.
-  virtual bool StartStreamingIfPossible(ScriptStreamer::Type,
-                                        base::OnceClosure) = 0;
+  virtual bool StartStreamingIfPossible(base::OnceClosure) = 0;
   virtual bool IsCurrentlyStreaming() const = 0;
 
   // Used only for tracing, and can return a null URL.

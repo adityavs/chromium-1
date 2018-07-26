@@ -15,6 +15,7 @@
 #if defined(GOOGLE_CHROME_BUILD)
 #include "base/feature_list.h"
 #include "base/task_scheduler/post_task.h"
+#include "base/win/windows_version.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/conflicts/third_party_conflicts_manager_win.h"
 #include "chrome/common/chrome_features.h"
@@ -47,13 +48,17 @@ ModuleDatabase::ModuleDatabase(
       idle_timer_(
           FROM_HERE,
           kIdleTimeout,
-          base::Bind(&ModuleDatabase::OnDelayExpired, base::Unretained(this)),
-          false),
+          base::Bind(&ModuleDatabase::OnDelayExpired, base::Unretained(this))),
       has_started_processing_(false),
       shell_extensions_enumerated_(false),
       ime_enumerated_(false),
-      // ModuleDatabase owns |module_inspector_|, so it is safe to use
-      // base::Unretained().
+// ModuleDatabase owns both |module_load_attempt_log_listener_| and
+// |module_inspector_|, so it is safe to use base::Unretained().
+#if defined(GOOGLE_CHROME_BUILD)
+      module_load_attempt_log_listener_(
+          base::BindRepeating(&ModuleDatabase::OnModuleBlocked,
+                              base::Unretained(this))),
+#endif  // defined(GOOGLE_CHROME_BUILD)
       module_inspector_(base::Bind(&ModuleDatabase::OnModuleInspected,
                                    base::Unretained(this))) {
   AddObserver(&third_party_metrics_);
@@ -94,9 +99,10 @@ void ModuleDatabase::OnShellExtensionEnumerated(const base::FilePath& path,
 
   idle_timer_.Reset();
 
-  auto* module_info =
-      FindOrCreateModuleInfo(path, size_of_image, time_date_stamp);
-  module_info->second.module_types |= ModuleInfoData::kTypeShellExtension;
+  ModuleInfo* module_info = nullptr;
+  FindOrCreateModuleInfo(path, size_of_image, time_date_stamp, &module_info);
+  module_info->second.module_properties |=
+      ModuleInfoData::kPropertyShellExtension;
 }
 
 void ModuleDatabase::OnShellExtensionEnumerationFinished() {
@@ -116,9 +122,9 @@ void ModuleDatabase::OnImeEnumerated(const base::FilePath& path,
 
   idle_timer_.Reset();
 
-  auto* module_info =
-      FindOrCreateModuleInfo(path, size_of_image, time_date_stamp);
-  module_info->second.module_types |= ModuleInfoData::kTypeIme;
+  ModuleInfo* module_info = nullptr;
+  FindOrCreateModuleInfo(path, size_of_image, time_date_stamp, &module_info);
+  module_info->second.module_properties |= ModuleInfoData::kPropertyIme;
 }
 
 void ModuleDatabase::OnImeEnumerationFinished() {
@@ -149,13 +155,53 @@ void ModuleDatabase::OnModuleLoad(content::ProcessType process_type,
     return;
   }
 
-  auto* module_info =
-      FindOrCreateModuleInfo(module_path, module_size, module_time_date_stamp);
+  ModuleInfo* module_info = nullptr;
+  bool new_module = FindOrCreateModuleInfo(
+      module_path, module_size, module_time_date_stamp, &module_info);
 
-  module_info->second.module_types |= ModuleInfoData::kTypeLoadedModule;
+  uint32_t old_module_properties = module_info->second.module_properties;
+
+  // Mark the module as loaded.
+  module_info->second.module_properties |=
+      ModuleInfoData::kPropertyLoadedModule;
 
   // Update the list of process types that this module has been seen in.
   module_info->second.process_types |= ProcessTypeToBit(process_type);
+
+  // Some observers care about a known module that is just now loading. Also
+  // making sure that the module is ready to be sent to observers.
+  bool is_known_module_loading =
+      !new_module &&
+      old_module_properties != module_info->second.module_properties;
+  bool ready_for_notification =
+      module_info->second.inspection_result && RegisteredModulesEnumerated();
+  if (is_known_module_loading && ready_for_notification) {
+    for (auto& observer : observer_list_) {
+      observer.OnKnownModuleLoaded(module_info->first, module_info->second);
+    }
+  }
+}
+
+void ModuleDatabase::OnModuleBlocked(const base::FilePath& module_path,
+                                     uint32_t module_size,
+                                     uint32_t module_time_date_stamp) {
+  ModuleInfo* module_info = nullptr;
+  FindOrCreateModuleInfo(module_path, module_size, module_time_date_stamp,
+                         &module_info);
+
+  module_info->second.module_properties |= ModuleInfoData::kPropertyBlocked;
+}
+
+void ModuleDatabase::OnModuleAddedToBlacklist(const base::FilePath& module_path,
+                                              uint32_t module_size,
+                                              uint32_t module_time_date_stamp) {
+  auto iter = modules_.find(
+      ModuleInfoKey(module_path, module_size, module_time_date_stamp, 0));
+
+  // Only known modules should be added to the blacklist.
+  DCHECK(iter != modules_.end());
+
+  iter->second.module_properties |= ModuleInfoData::kPropertyAddedToBlacklist;
 }
 
 void ModuleDatabase::AddObserver(ModuleDatabaseObserver* observer) {
@@ -213,10 +259,11 @@ content::ProcessType ModuleDatabase::BitIndexToProcessType(uint32_t bit_index) {
   return static_cast<content::ProcessType>(bit_index + kFirstValidProcessType);
 }
 
-ModuleDatabase::ModuleInfo* ModuleDatabase::FindOrCreateModuleInfo(
+bool ModuleDatabase::FindOrCreateModuleInfo(
     const base::FilePath& module_path,
     uint32_t module_size,
-    uint32_t module_time_date_stamp) {
+    uint32_t module_time_date_stamp,
+    ModuleDatabase::ModuleInfo** module_info) {
   auto result = modules_.emplace(
       std::piecewise_construct,
       std::forward_as_tuple(module_path, module_size, module_time_date_stamp,
@@ -224,14 +271,16 @@ ModuleDatabase::ModuleInfo* ModuleDatabase::FindOrCreateModuleInfo(
       std::forward_as_tuple());
 
   // New modules must be inspected.
-  if (result.second) {
+  bool new_module = result.second;
+  if (new_module) {
     has_started_processing_ = true;
     idle_timer_.Reset();
 
     module_inspector_.AddModule(result.first->first);
   }
 
-  return &(*result.first);
+  *module_info = &(*result.first);
+  return new_module;
 }
 
 bool ModuleDatabase::RegisteredModulesEnumerated() {
@@ -290,8 +339,9 @@ void ModuleDatabase::MaybeInitializeThirdPartyConflictsManager() {
   if (!IsThirdPartyBlockingPolicyEnabled())
     return;
 
-  if (base::FeatureList::IsEnabled(
-          features::kIncompatibleApplicationsWarning) ||
+  if ((base::FeatureList::IsEnabled(
+           features::kIncompatibleApplicationsWarning) &&
+       base::win::GetVersion() >= base::win::VERSION_WIN10) ||
       base::FeatureList::IsEnabled(features::kThirdPartyModulesBlocking)) {
     third_party_conflicts_manager_ =
         std::make_unique<ThirdPartyConflictsManager>(this);

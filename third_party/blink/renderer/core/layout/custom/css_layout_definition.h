@@ -7,8 +7,8 @@
 
 #include "third_party/blink/renderer/core/css/cssom/css_style_value.h"
 #include "third_party/blink/renderer/core/css_property_names.h"
+#include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/bindings/scoped_persistent.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_member.h"
 #include "third_party/blink/renderer/platform/bindings/trace_wrapper_v8_reference.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -26,7 +26,7 @@ class SerializedScriptValue;
 // https://drafts.css-houdini.org/css-layout-api/#layout-definition
 class CSSLayoutDefinition final
     : public GarbageCollectedFinalized<CSSLayoutDefinition>,
-      public TraceWrapperBase {
+      public NameClient {
  public:
   CSSLayoutDefinition(
       ScriptState*,
@@ -78,19 +78,20 @@ class CSSLayoutDefinition final
     return child_custom_invalidation_properties_;
   }
 
-  ScriptState* GetScriptState() const { return script_state_.get(); }
+  ScriptState* GetScriptState() const { return script_state_; }
 
   v8::Local<v8::Function> LayoutFunctionForTesting(v8::Isolate* isolate) {
     return layout_.NewLocal(isolate);
   }
 
   virtual void Trace(blink::Visitor* visitor);
+
   const char* NameInHeapSnapshot() const override {
     return "CSSLayoutDefinition";
   }
 
  private:
-  scoped_refptr<ScriptState> script_state_;
+  Member<ScriptState> script_state_;
 
   // This object keeps the class instances, constructor function, intrinsic
   // sizes function, and layout function alive. It participates in wrapper

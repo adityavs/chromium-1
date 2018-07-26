@@ -25,9 +25,11 @@
 #include "services/service_manager/public/cpp/service_context.h"
 
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+#include "ash/public/interfaces/constants.mojom.h"
 #include "chromeos/assistant/internal/internal_constants.h"
 #include "chromeos/services/assistant/assistant_manager_service_impl.h"
 #include "chromeos/services/assistant/assistant_settings_manager_impl.h"
+#include "chromeos/services/assistant/utils.h"
 #include "services/device/public/mojom/battery_monitor.mojom.h"
 #include "services/device/public/mojom/constants.mojom.h"
 #else
@@ -57,6 +59,7 @@ Service::Service()
       token_refresh_timer_(std::make_unique<base::OneShotTimer>()),
       main_thread_task_runner_(base::ThreadTaskRunnerHandle::Get()),
       power_manager_observer_(this),
+      voice_interaction_observer_binding_(this),
       weak_ptr_factory_(this) {
   registry_.AddInterface<mojom::AssistantPlatform>(base::BindRepeating(
       &Service::BindAssistantPlatformConnection, base::Unretained(this)));
@@ -128,6 +131,15 @@ void Service::OnLockStateChanged(bool locked) {
   UpdateListeningState();
 }
 
+void Service::OnVoiceInteractionHotwordEnabled(bool enabled) {
+  if (assistant_manager_service_->GetState() !=
+      AssistantManagerService::State::RUNNING) {
+    return;
+  }
+  CreateAssistantManagerService(enabled);
+  RequestAccessToken();
+}
+
 void Service::BindAssistantSettingsManager(
     mojom::AssistantSettingsManagerRequest request) {
   DCHECK(assistant_settings_manager_);
@@ -162,13 +174,15 @@ void Service::RetryRefreshToken() {
 void Service::Init(mojom::ClientPtr client,
                    mojom::DeviceActionsPtr device_actions) {
   client_ = std::move(client);
+  device_actions_ = std::move(device_actions);
 #if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
-  device::mojom::BatteryMonitorPtr battery_monitor;
-  context()->connector()->BindInterface(device::mojom::kServiceName,
-                                        mojo::MakeRequest(&battery_monitor));
-  assistant_manager_service_ = std::make_unique<AssistantManagerServiceImpl>(
-      context()->connector(), std::move(battery_monitor), client_.get(),
-      std::move(device_actions));
+  context()->connector()->BindInterface(ash::mojom::kServiceName,
+                                        &voice_interaction_controller_);
+  ash::mojom::VoiceInteractionObserverPtr ptr;
+  voice_interaction_observer_binding_.Bind(mojo::MakeRequest(&ptr));
+  voice_interaction_controller_->IsHotwordEnabled(base::BindOnce(
+      &Service::CreateAssistantManagerService, weak_ptr_factory_.GetWeakPtr()));
+  voice_interaction_controller_->AddObserver(std::move(ptr));
 #else
   assistant_manager_service_ =
       std::make_unique<FakeAssistantManagerServiceImpl>();
@@ -229,6 +243,17 @@ void Service::GetAccessTokenCallback(const base::Optional<std::string>& token,
                               this, &Service::RequestAccessToken);
 }
 
+void Service::CreateAssistantManagerService(bool enable_hotword) {
+#if BUILDFLAG(ENABLE_CROS_LIBASSISTANT)
+  // TODO(updowndota): Check settings enabled pref when start Assistant.
+  device::mojom::BatteryMonitorPtr battery_monitor;
+  context()->connector()->BindInterface(device::mojom::kServiceName,
+                                        mojo::MakeRequest(&battery_monitor));
+  assistant_manager_service_ = std::make_unique<AssistantManagerServiceImpl>(
+      context()->connector(), std::move(battery_monitor), this, enable_hotword);
+#endif
+}
+
 void Service::FinalizeAssistantManagerService() {
   DCHECK(assistant_manager_service_->GetState() ==
          AssistantManagerService::State::RUNNING);
@@ -246,8 +271,6 @@ void Service::FinalizeAssistantManagerService() {
 
   assistant_settings_manager_ =
       assistant_manager_service_.get()->GetAssistantSettingsManager();
-  assistant_manager_service_->SetAssistantController(
-      assistant_controller_.get());
   registry_.AddInterface<mojom::AssistantSettingsManager>(base::BindRepeating(
       &Service::BindAssistantSettingsManager, base::Unretained(this)));
 

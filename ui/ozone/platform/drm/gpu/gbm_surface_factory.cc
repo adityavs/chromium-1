@@ -32,7 +32,22 @@
 #include "gpu/vulkan/vulkan_function_pointers.h"
 #include "ui/ozone/platform/drm/gpu/vulkan_implementation_gbm.h"
 #if defined(OS_CHROMEOS)
-#include <vulkan/vulkan_intel.h>
+#define VK_STRUCTURE_TYPE_DMA_BUF_IMAGE_CREATE_INFO_INTEL 1024
+typedef struct VkDmaBufImageCreateInfo_ {
+  VkStructureType sType;
+  const void* pNext;
+  int fd;
+  VkFormat format;
+  VkExtent3D extent;
+  uint32_t strideInBytes;
+} VkDmaBufImageCreateInfo;
+
+typedef VkResult(VKAPI_PTR* PFN_vkCreateDmaBufImageINTEL)(
+    VkDevice device,
+    const VkDmaBufImageCreateInfo* pCreateInfo,
+    const VkAllocationCallbacks* pAllocator,
+    VkDeviceMemory* pMem,
+    VkImage* pImage);
 #endif
 #endif
 
@@ -145,7 +160,6 @@ scoped_refptr<gfx::NativePixmap> GbmSurfaceFactory::CreateNativePixmapForVulkan(
     gfx::Size size,
     gfx::BufferFormat format,
     gfx::BufferUsage usage,
-    const gpu::VulkanFunctionPointers* vulkan_function_pointers,
     VkDevice vk_device,
     VkDeviceMemory* vk_device_memory,
     VkImage* vk_image) {
@@ -157,8 +171,7 @@ scoped_refptr<gfx::NativePixmap> GbmSurfaceFactory::CreateNativePixmapForVulkan(
 
   PFN_vkCreateDmaBufImageINTEL create_dma_buf_image_intel =
       reinterpret_cast<PFN_vkCreateDmaBufImageINTEL>(
-          vulkan_function_pointers->vkGetDeviceProcAddr(
-              vk_device, "vkCreateDmaBufImageINTEL"));
+          vkGetDeviceProcAddr(vk_device, "vkCreateDmaBufImageINTEL"));
   if (!create_dma_buf_image_intel) {
     LOG(ERROR) << "Scanout buffers can only be imported into vulkan when "
                   "vkCreateDmaBufImageINTEL is available.";

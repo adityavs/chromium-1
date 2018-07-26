@@ -145,7 +145,8 @@ void DrmThread::CreateBuffer(gfx::AcceleratedWidget widget,
       flags = GBM_BO_USE_LINEAR | GBM_BO_USE_SCANOUT | GBM_BO_USE_TEXTURING;
       break;
     case gfx::BufferUsage::SCANOUT_VDA_WRITE:
-      flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_TEXTURING;
+      flags = GBM_BO_USE_SCANOUT | GBM_BO_USE_TEXTURING |
+              GBM_BO_USE_HW_VIDEO_DECODER;
       break;
     case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE:
     case gfx::BufferUsage::GPU_READ_CPU_READ_WRITE_PERSISTENT:
@@ -185,7 +186,7 @@ void DrmThread::CreateBufferFromFds(
     gfx::AcceleratedWidget widget,
     const gfx::Size& size,
     gfx::BufferFormat format,
-    std::vector<base::ScopedFD>&& fds,
+    std::vector<base::ScopedFD> fds,
     const std::vector<gfx::NativePixmapPlane>& planes,
     scoped_refptr<GbmBuffer>* buffer) {
   scoped_refptr<GbmDevice> gbm =
@@ -227,7 +228,7 @@ void DrmThread::OnPlanesReadyForPageFlip(
     window->SchedulePageFlip(std::move(planes), std::move(submission_callback),
                              std::move(presentation_callback));
   } else {
-    std::move(submission_callback).Run(gfx::SwapResult::SWAP_ACK);
+    std::move(submission_callback).Run(gfx::SwapResult::SWAP_ACK, nullptr);
     std::move(presentation_callback).Run(gfx::PresentationFeedback::Failure());
   }
 }

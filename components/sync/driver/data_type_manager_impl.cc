@@ -14,8 +14,9 @@
 #include "base/containers/queue.h"
 #include "base/logging.h"
 #include "base/metrics/histogram_macros.h"
+#include "base/sequenced_task_runner.h"
 #include "base/strings/stringprintf.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "components/sync/driver/data_type_encryption_handler.h"
 #include "components/sync/driver/data_type_manager_observer.h"
@@ -671,7 +672,7 @@ void DataTypeManagerImpl::OnSingleDataTypeWillStop(ModelType type,
       // Do this asynchronously so the ModelAssociationManager has a chance to
       // finish stopping this type, otherwise DeactivateDataType() and Stop()
       // end up getting called twice on the controller.
-      base::ThreadTaskRunnerHandle::Get()->PostTask(
+      base::SequencedTaskRunnerHandle::Get()->PostTask(
           FROM_HERE, base::Bind(&DataTypeManagerImpl::ProcessReconfigure,
                                 weak_ptr_factory_.GetWeakPtr()));
     }
@@ -804,6 +805,11 @@ void DataTypeManagerImpl::StopImpl(ShutdownReason reason) {
   // callback will do nothing because state is set to STOPPING above.
   model_association_manager_.Stop(metadata_fate);
 
+  // Individual data type controllers might still be STOPPING, but we don't
+  // reflect that in |state_| because, for all practical matters, the manager is
+  // in a ready state and reconfguration can be triggered.
+  // TODO(mastiz): Reconsider waiting in STOPPING state until all datatypes have
+  // stopped.
   state_ = STOPPED;
 }
 

@@ -479,6 +479,13 @@ void ExtractUnderlines(NSAttributedString* string,
     if (subtype != NSTabletPointEventSubtype &&
         subtype != NSTabletProximityEventSubtype) {
       pointerType_ = blink::WebPointerProperties::PointerType::kMouse;
+    } else if (subtype == NSTabletProximityEventSubtype) {
+      isStylusEnteringProximity_ = [theEvent isEnteringProximity];
+      NSPointingDeviceType deviceType = [theEvent pointingDeviceType];
+      // For all tablet events, the pointer type will be pen or eraser.
+      pointerType_ = deviceType == NSEraserPointingDevice
+                         ? blink::WebPointerProperties::PointerType::kEraser
+                         : blink::WebPointerProperties::PointerType::kPen;
     }
   }
 
@@ -586,20 +593,6 @@ void ExtractUnderlines(NSAttributedString* string,
   if (EventIsReservedBySystem(theEvent))
     return NO;
 
-  // If we return |NO| from this function, cocoa will send the key event to
-  // the menu and only if the menu does not process the event to |keyDown:|. We
-  // want to send the event to a renderer _before_ sending it to the menu, so
-  // we need to return |YES| for all events that might be swallowed by the menu.
-  // We do not return |YES| for every keypress because we don't get |keyDown:|
-  // events for keys that we handle this way.
-  NSUInteger modifierFlags = [theEvent modifierFlags];
-  if ((modifierFlags & NSCommandKeyMask) == 0) {
-    // Make sure the menu does not contain key equivalents that don't
-    // contain cmd.
-    DCHECK(![[NSApp mainMenu] performKeyEquivalent:theEvent]);
-    return NO;
-  }
-
   // Command key combinations are sent via performKeyEquivalent rather than
   // keyDown:. We just forward this on and if WebCore doesn't want to handle
   // it, we let the WebContentsView figure out how to reinject it.
@@ -648,9 +641,6 @@ void ExtractUnderlines(NSAttributedString* string,
   // http://crbug.com/383558.
   if (EventIsReservedBySystem(theEvent))
     return;
-
-  DCHECK(eventType != NSKeyDown ||
-         !equiv == !(modifierFlags & NSCommandKeyMask));
 
   if (eventType == NSFlagsChanged) {
     // Ignore NSFlagsChanged events from the NumLock and Fn keys as

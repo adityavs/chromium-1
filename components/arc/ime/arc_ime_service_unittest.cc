@@ -77,9 +77,7 @@ class FakeInputMethod : public ui::DummyInputMethod {
     return client_;
   }
 
-  void ShowImeIfNeeded() override {
-    count_show_ime_if_needed_++;
-  }
+  void ShowVirtualKeyboardIfEnabled() override { count_show_ime_if_needed_++; }
 
   void CancelComposition(const ui::TextInputClient* client) override {
     if (client == client_)
@@ -126,11 +124,9 @@ class FakeArcWindowDelegate : public ArcImeService::ArcWindowDelegate {
   explicit FakeArcWindowDelegate(ui::InputMethod* input_method)
       : next_id_(0), test_input_method_(input_method) {}
 
-  bool IsExoWindow(const aura::Window* window) const override {
-    return IsArcWindow(window);
-  }
-
-  bool IsArcWindow(const aura::Window* window) const override {
+  bool IsInArcAppWindow(const aura::Window* window) const override {
+    if (!window)
+      return false;
     return arc_window_id_.count(window->id());
   }
 
@@ -235,7 +231,7 @@ TEST_F(ArcImeServiceTest, HasCompositionText) {
   EXPECT_FALSE(instance_->HasCompositionText());
 }
 
-TEST_F(ArcImeServiceTest, ShowImeIfNeeded) {
+TEST_F(ArcImeServiceTest, ShowVirtualKeyboardIfEnabled) {
   instance_->OnWindowFocused(arc_win_.get(), nullptr);
 
   instance_->OnTextInputTypeChanged(ui::TEXT_INPUT_TYPE_NONE, false);
@@ -245,7 +241,7 @@ TEST_F(ArcImeServiceTest, ShowImeIfNeeded) {
   instance_->OnTextInputTypeChanged(ui::TEXT_INPUT_TYPE_TEXT, true);
   EXPECT_EQ(0, fake_input_method_->count_show_ime_if_needed());
 
-  instance_->ShowImeIfNeeded();
+  instance_->ShowVirtualKeyboardIfEnabled();
   EXPECT_EQ(1, fake_input_method_->count_show_ime_if_needed());
 }
 

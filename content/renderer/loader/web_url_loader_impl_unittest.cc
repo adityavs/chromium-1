@@ -39,6 +39,7 @@
 #include "services/network/public/mojom/request_context_frame_type.mojom.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
+#include "third_party/blink/public/platform/web_data.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url_error.h"
 #include "third_party/blink/public/platform/web_url_loader_client.h"
@@ -175,7 +176,9 @@ class TestWebURLLoaderClient : public blink::WebURLLoaderClient {
   TestWebURLLoaderClient(ResourceDispatcher* dispatcher)
       : loader_(new WebURLLoaderImpl(
             dispatcher,
-            blink::scheduler::GetSingleThreadTaskRunnerForTesting(),
+            blink::scheduler::WebResourceLoadingTaskRunnerHandle::
+                CreateUnprioritized(
+                    blink::scheduler::GetSingleThreadTaskRunnerForTesting()),
             base::MakeRefCounted<network::WeakWrapperSharedURLLoaderFactory>(
                 &fake_url_loader_factory_))),
         delete_on_receive_redirect_(false),

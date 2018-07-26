@@ -10,7 +10,6 @@
 #include <memory>
 
 #include "base/macros.h"
-#include "crypto/hkdf.h"
 #include "net/third_party/quic/core/crypto/aes_128_gcm_12_decrypter.h"
 #include "net/third_party/quic/core/crypto/aes_128_gcm_12_encrypter.h"
 #include "net/third_party/quic/core/crypto/cert_compressor.h"
@@ -27,6 +26,7 @@
 #include "net/third_party/quic/core/crypto/proof_source.h"
 #include "net/third_party/quic/core/crypto/quic_decrypter.h"
 #include "net/third_party/quic/core/crypto/quic_encrypter.h"
+#include "net/third_party/quic/core/crypto/quic_hkdf.h"
 #include "net/third_party/quic/core/crypto/quic_random.h"
 #include "net/third_party/quic/core/proto/source_address_token.pb.h"
 #include "net/third_party/quic/core/quic_packets.h"
@@ -37,7 +37,6 @@
 #include "net/third_party/quic/platform/api/quic_endian.h"
 #include "net/third_party/quic/platform/api/quic_fallthrough.h"
 #include "net/third_party/quic/platform/api/quic_flags.h"
-#include "net/third_party/quic/platform/api/quic_hkdf.h"
 #include "net/third_party/quic/platform/api/quic_hostname_utils.h"
 #include "net/third_party/quic/platform/api/quic_logging.h"
 #include "net/third_party/quic/platform/api/quic_reference_counted.h"
@@ -78,6 +77,9 @@ class ValidateClientHelloHelper {
           result,
       std::unique_ptr<ValidateClientHelloResultCallback>* done_cb)
       : result_(std::move(result)), done_cb_(done_cb) {}
+  ValidateClientHelloHelper(const ValidateClientHelloHelper&) = delete;
+  ValidateClientHelloHelper& operator=(const ValidateClientHelloHelper&) =
+      delete;
 
   ~ValidateClientHelloHelper() {
     QUIC_BUG_IF(done_cb_ != nullptr)
@@ -103,8 +105,6 @@ class ValidateClientHelloHelper {
   QuicReferenceCountedPointer<ValidateClientHelloResultCallback::Result>
       result_;
   std::unique_ptr<ValidateClientHelloResultCallback>* done_cb_;
-
-  DISALLOW_COPY_AND_ASSIGN(ValidateClientHelloHelper);
 };
 
 // static

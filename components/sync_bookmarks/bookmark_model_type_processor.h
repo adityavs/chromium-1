@@ -22,7 +22,6 @@ class BookmarkUndoService;
 
 namespace bookmarks {
 class BookmarkModel;
-class BookmarkNode;
 }
 
 namespace sync_bookmarks {
@@ -41,7 +40,7 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
   void ConnectSync(std::unique_ptr<syncer::CommitQueue> worker) override;
   void DisconnectSync() override;
   void GetLocalChanges(size_t max_entries,
-                       const GetLocalChangesCallback& callback) override;
+                       GetLocalChangesCallback callback) override;
   void OnCommitCompleted(
       const sync_pb::ModelTypeState& type_state,
       const syncer::CommitResponseDataList& response_list) override;
@@ -57,7 +56,7 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
   void RecordMemoryUsageHistogram() override;
 
   // Encodes all sync metadata into a string, representing a state that can be
-  // restored via DecodeSyncMetadata() below.
+  // restored via ModelReadyToSync() below.
   std::string EncodeSyncMetadata() const;
 
   // It mainly decodes a BookmarkModelMetadata proto seralized in
@@ -67,13 +66,9 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
   // used for further model operations. |schedule_save_closure| is a repeating
   // closure used to schedule a save of the bookmark model together with the
   // metadata.
-  void DecodeSyncMetadata(const std::string& metadata_str,
-                          const base::RepeatingClosure& schedule_save_closure,
-                          bookmarks::BookmarkModel* model);
-
-  // Public for testing.
-  static std::vector<const syncer::UpdateResponseData*> ReorderUpdatesForTest(
-      const syncer::UpdateResponseDataList& updates);
+  void ModelReadyToSync(const std::string& metadata_str,
+                        const base::RepeatingClosure& schedule_save_closure,
+                        bookmarks::BookmarkModel* model);
 
   const SyncedBookmarkTracker* GetTrackerForTest() const;
 
@@ -81,51 +76,6 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
 
  private:
   SEQUENCE_CHECKER(sequence_checker_);
-
-  // Reorders incoming updates such that parent creation is before child
-  // creation and child deletion is before parent deletion, and deletions should
-  // come last. The returned pointers point to the elements in the original
-  // |updates|.
-  static std::vector<const syncer::UpdateResponseData*> ReorderUpdates(
-      const syncer::UpdateResponseDataList& updates);
-
-  // Given a remote update entity, it returns the parent bookmark node of the
-  // corresponding node. It returns null if the parent node cannot be found.
-  const bookmarks::BookmarkNode* GetParentNode(
-      const syncer::EntityData& update_entity) const;
-
-  // Processes a remote creation of a bookmark node.
-  // 1. For permanent folders, they are only registered in |bookmark_tracker_|.
-  // 2. If the nodes parent cannot be found, the remote creation update is
-  //    ignored.
-  // 3. Otherwise, a new node is created in the local bookmark model and
-  //    registered in |bookmark_tracker_|.
-  void ProcessRemoteCreate(const syncer::UpdateResponseData& update);
-
-  // Processes a remote update of a bookmark node. |update| must not be a
-  // deletion, and the server_id must be already tracked, otherwise, it is a
-  // creation that gets handeled in ProcessRemoteCreate(). |tracked_entity| is
-  // the tracked entity for that server_id. It is passed as a dependency instead
-  // of performing a lookup inside ProcessRemoteUpdate() to avoid wasting CPU
-  // cycles for doing another lookup (this code runs on the UI thread).
-  void ProcessRemoteUpdate(const syncer::UpdateResponseData& update,
-                           const SyncedBookmarkTracker::Entity* tracked_entity);
-
-  // Process a remote delete of a bookmark node. |update_entity| must not be a
-  // deletion. |tracked_entity| is the tracked entity for that server_id. It is
-  // passed as a dependency instead of performing a lookup inside
-  // ProcessRemoteDelete() to avoid wasting CPU cycles for doing another lookup
-  // (this code runs on the UI thread).
-  void ProcessRemoteDelete(const syncer::EntityData& update_entity,
-                           const SyncedBookmarkTracker::Entity* tracked_entity);
-
-  // Associates the permanent bookmark folders with the corresponding server
-  // side ids and registers the association in |bookmark_tracker_|.
-  // |update_entity| must contain server_defined_unique_tag that is used to
-  // determine the corresponding permanent node. All permanent nodes are assumed
-  // to be directly children nodes of |kBookmarksRootId|. This method is used in
-  // the initial sync cycle only.
-  void AssociatePermanentFolder(const syncer::UpdateResponseData& update);
 
   // If preconditions are met, inform sync that we are ready to connect.
   void ConnectIfReady();
@@ -135,12 +85,18 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
   // entities.
   void NudgeForCommitIfNeeded();
 
+  // Instantiates the required objects to track metadata and starts observing
+  // changes from the bookmark model.
+  void StartTrackingMetadata(
+      std::vector<NodeMetadataPair> nodes_metadata,
+      std::unique_ptr<sync_pb::ModelTypeState> model_type_state);
+
   // Stores the start callback in between OnSyncStarting() and
-  // DecodeSyncMetadata().
+  // ModelReadyToSync().
   StartCallback start_callback_;
 
   // The bookmark model we are processing local changes from and forwarding
-  // remote changes to. It is set during DecodeSyncMetadata(), which is called
+  // remote changes to. It is set during ModelReadyToSync(), which is called
   // during startup, as part of the bookmark-loading process.
   bookmarks::BookmarkModel* bookmark_model_ = nullptr;
 
@@ -162,8 +118,10 @@ class BookmarkModelTypeProcessor : public syncer::ModelTypeProcessor,
   std::unique_ptr<syncer::CommitQueue> worker_;
 
   // Keeps the mapping between server ids and bookmarks nodes together with sync
-  // metadata. It is constructed and set during DecodeSyncMetadata(), which is
-  // called during startup, as part of the bookmark-loading process.
+  // metadata. It is constructed and set during ModelReadyToSync(), if the
+  // loaded bookmarks JSON contained previous sync metadata, or upon completion
+  // of initial sync, which is called during startup, as part of the
+  // bookmark-loading process.
   std::unique_ptr<SyncedBookmarkTracker> bookmark_tracker_;
 
   // GUID string that identifies the sync client and is received from the sync

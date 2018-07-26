@@ -22,7 +22,6 @@
 #include "content/renderer/loader/web_url_loader_impl.h"
 #include "content/renderer/mojo/blink_interface_provider_impl.h"
 #include "content/test/mock_clipboard_host.h"
-#include "content/test/web_gesture_curve_mock.h"
 #include "media/base/media.h"
 #include "media/media_buildflags.h"
 #include "net/cookies/cookie_monster.h"
@@ -98,12 +97,13 @@ class WebURLLoaderFactoryWithMock : public blink::WebURLLoaderFactory {
 
   std::unique_ptr<blink::WebURLLoader> CreateURLLoader(
       const blink::WebURLRequest& request,
-      scoped_refptr<base::SingleThreadTaskRunner> task_runner) override {
+      std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
+          task_runner_handle) override {
     DCHECK(platform_);
     // This loader should be used only for process-local resources such as
     // data URLs.
     auto default_loader = std::make_unique<content::WebURLLoaderImpl>(
-        nullptr, task_runner, nullptr);
+        nullptr, std::move(task_runner_handle), nullptr);
     return platform_->GetURLLoaderMockFactory()->CreateURLLoader(
         std::move(default_loader));
   }
@@ -122,6 +122,8 @@ constexpr gin::V8Initializer::V8SnapshotFileType kSnapshotType =
     gin::V8Initializer::V8SnapshotFileType::kDefault;
 #endif
 #endif
+
+content::TestBlinkWebUnitTestSupport* g_test_platform = nullptr;
 
 }  // namespace
 
@@ -179,6 +181,7 @@ TestBlinkWebUnitTestSupport::TestBlinkWebUnitTestSupport()
 
   service_manager::BinderRegistry empty_registry;
   blink::Initialize(this, &empty_registry);
+  g_test_platform = this;
   blink::SetLayoutTestMode(true);
   blink::WebRuntimeFeatures::EnableDatabase(true);
   blink::WebRuntimeFeatures::EnableNotifications(true);
@@ -208,6 +211,7 @@ TestBlinkWebUnitTestSupport::~TestBlinkWebUnitTestSupport() {
   mock_clipboard_host_.reset();
   if (main_thread_scheduler_)
     main_thread_scheduler_->Shutdown();
+  g_test_platform = nullptr;
 }
 
 blink::WebBlobRegistry* TestBlinkWebUnitTestSupport::GetBlobRegistry() {
@@ -292,14 +296,6 @@ blink::WebString TestBlinkWebUnitTestSupport::DefaultLocale() {
   return blink::WebString::FromASCII("en-US");
 }
 
-std::unique_ptr<blink::WebGestureCurve>
-TestBlinkWebUnitTestSupport::CreateFlingAnimationCurve(
-    blink::WebGestureDevice device_source,
-    const blink::WebFloatPoint& velocity,
-    const blink::WebSize& cumulative_scroll) {
-  return std::make_unique<WebGestureCurveMock>(velocity, cumulative_scroll);
-}
-
 blink::WebURLLoaderMockFactory*
 TestBlinkWebUnitTestSupport::GetURLLoaderMockFactory() {
   return url_loader_factory_.get();
@@ -309,6 +305,10 @@ blink::WebThread* TestBlinkWebUnitTestSupport::CurrentThread() {
   if (web_thread_ && web_thread_->IsCurrentThread())
     return web_thread_.get();
   return BlinkPlatformImpl::CurrentThread();
+}
+
+bool TestBlinkWebUnitTestSupport::IsThreadedAnimationEnabled() {
+  return threaded_animation_;
 }
 
 namespace {
@@ -362,6 +362,15 @@ void TestBlinkWebUnitTestSupport::BindClipboardHost(
     mojo::ScopedMessagePipeHandle handle) {
   mock_clipboard_host_->Bind(
       blink::mojom::ClipboardHostRequest(std::move(handle)));
+}
+
+// static
+bool TestBlinkWebUnitTestSupport::SetThreadedAnimationEnabled(bool enabled) {
+  DCHECK(g_test_platform)
+      << "Not using TestBlinkWebUnitTestSupport as blink::Platform";
+  bool old = g_test_platform->threaded_animation_;
+  g_test_platform->threaded_animation_ = enabled;
+  return old;
 }
 
 }  // namespace content

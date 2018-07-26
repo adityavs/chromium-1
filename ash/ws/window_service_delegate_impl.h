@@ -40,8 +40,12 @@ class WindowServiceDelegateImpl : public ui::ws2::WindowServiceDelegate {
   void UpdateImeVisibility(aura::Window* window,
                            bool visible,
                            ui::mojom::TextInputStatePtr state) override;
+  void SetModalType(aura::Window* window, ui::ModalType type) override;
+  ui::SystemInputInjector* GetSystemInputInjector() override;
 
  private:
+  std::unique_ptr<ui::SystemInputInjector> system_input_injector_;
+
   DISALLOW_COPY_AND_ASSIGN(WindowServiceDelegateImpl);
 };
 

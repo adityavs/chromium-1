@@ -318,8 +318,6 @@ class BrowserView : public BrowserWindow,
   void SetFocusToLocationBar(bool select_all) override;
   void UpdateReloadStopState(bool is_loading, bool force) override;
   void UpdateToolbar(content::WebContents* contents) override;
-  // Reverts user modifications to the omnibox text. Delegates to ToolbarView.
-  void RevertToolbarUrl() override;
   void ResetToolbarTabState(content::WebContents* contents) override;
   void FocusToolbar() override;
   ToolbarActionsBar* GetToolbarActionsBar() override;
@@ -346,6 +344,10 @@ class BrowserView : public BrowserWindow,
   autofill::SaveCardBubbleView* ShowSaveCreditCardBubble(
       content::WebContents* contents,
       autofill::SaveCardBubbleController* controller,
+      bool is_user_gesture) override;
+  autofill::LocalCardMigrationBubble* ShowLocalCardMigrationBubble(
+      content::WebContents* contents,
+      autofill::LocalCardMigrationBubbleController* controller,
       bool is_user_gesture) override;
   ShowTranslateBubbleResult ShowTranslateBubble(
       content::WebContents* contents,

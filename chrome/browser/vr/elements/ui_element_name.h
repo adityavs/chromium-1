@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "chrome/browser/vr/vr_export.h"
+#include "chrome/browser/vr/vr_ui_export.h"
 
 namespace vr {
 
@@ -109,13 +109,9 @@ enum UiElementName {
   kExitWarningText,
   kExitWarningBackground,
   kExitPrompt,
-  kWebVrUrlToastTransientParent,
-  kWebVrUrlToast,
   kWebVrExclusiveScreenToast,
   kPlatformToastTransientParent,
   kPlatformToast,
-  kSplashScreenTransientParent,
-  kSplashScreenText,
   kSolidBackground,
   kWebVrFloor,
   kWebVrHostedUi,
@@ -146,6 +142,11 @@ enum UiElementName {
   kControllerTouchpadButton,
   kControllerAppButton,
   kControllerHomeButton,
+  kControllerBatteryDot0,
+  kControllerBatteryDot1,
+  kControllerBatteryDot2,
+  kControllerBatteryDot3,
+  kControllerBatteryDot4,
   kContentRepositionHitPlane,
   kContentRepositionVisibilityToggle,
 
@@ -153,7 +154,7 @@ enum UiElementName {
   kNumUiElementNames,
 };
 
-VR_EXPORT std::string UiElementNameToString(UiElementName name);
+VR_UI_EXPORT std::string UiElementNameToString(UiElementName name);
 
 }  // namespace vr
 

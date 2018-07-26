@@ -188,6 +188,48 @@ void SearchIPCRouter::UndoAllMostVisitedDeletions(int page_seq_no) {
   delegate_->OnUndoAllMostVisitedDeletions();
 }
 
+void SearchIPCRouter::AddCustomLink(int page_seq_no,
+                                    const GURL& url,
+                                    const std::string& title) {
+  if (page_seq_no != commit_counter_)
+    return;
+
+  if (!policy_->ShouldProcessAddCustomLink())
+    return;
+
+  delegate_->OnAddCustomLink(url, title);
+}
+
+void SearchIPCRouter::DeleteCustomLink(int page_seq_no, const GURL& url) {
+  if (page_seq_no != commit_counter_)
+    return;
+
+  if (!policy_->ShouldProcessDeleteCustomLink())
+    return;
+
+  delegate_->OnDeleteCustomLink(url);
+}
+
+void SearchIPCRouter::UndoDeleteCustomLink(int page_seq_no) {
+  if (page_seq_no != commit_counter_)
+    return;
+
+  if (!policy_->ShouldProcessUndoDeleteCustomLink())
+    return;
+
+  delegate_->OnUndoDeleteCustomLink();
+}
+
+void SearchIPCRouter::ResetCustomLinks(int page_seq_no) {
+  if (page_seq_no != commit_counter_)
+    return;
+
+  if (!policy_->ShouldProcessResetCustomLinks())
+    return;
+
+  delegate_->OnResetCustomLinks();
+}
+
 void SearchIPCRouter::LogEvent(int page_seq_no,
                                NTPLoggingEventType event,
                                base::TimeDelta time) {
@@ -266,6 +308,25 @@ void SearchIPCRouter::SetCustomBackgroundURL(const GURL& url) {
     return;
 
   delegate_->OnSetCustomBackgroundURL(url);
+}
+
+void SearchIPCRouter::SetCustomBackgroundURLWithAttributions(
+    const GURL& background_url,
+    const std::string& attribution_line_1,
+    const std::string& attribution_line_2,
+    const GURL& action_url) {
+  if (!policy_->ShouldProcessSetCustomBackgroundURLWithAttributions())
+    return;
+
+  delegate_->OnSetCustomBackgroundURLWithAttributions(
+      background_url, attribution_line_1, attribution_line_2, action_url);
+}
+
+void SearchIPCRouter::SelectLocalBackgroundImage() {
+  if (!policy_->ShouldProcessSelectLocalBackgroundImage())
+    return;
+
+  delegate_->OnSelectLocalBackgroundImage();
 }
 
 void SearchIPCRouter::set_delegate_for_testing(Delegate* delegate) {

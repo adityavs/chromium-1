@@ -33,7 +33,10 @@
 #include "third_party/blink/renderer/bindings/core/v8/scroll_into_view_options_or_boolean.h"
 #include "third_party/blink/renderer/bindings/core/v8/string_or_trusted_html.h"
 #include "third_party/blink/renderer/bindings/core/v8/string_or_trusted_script_url.h"
+#include "third_party/blink/renderer/bindings/core/v8/usv_string_or_trusted_url.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/animation/css/css_animations.h"
+#include "third_party/blink/renderer/core/aom/computed_accessible_node.h"
 #include "third_party/blink/renderer/core/css/css_identifier_value.h"
 #include "third_party/blink/renderer/core/css/css_primitive_value.h"
 #include "third_party/blink/renderer/core/css/css_property_value_set.h"
@@ -50,14 +53,13 @@
 #include "third_party/blink/renderer/core/css/style_engine.h"
 #include "third_party/blink/renderer/core/css_value_keywords.h"
 #include "third_party/blink/renderer/core/dom/attr.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
-#include "third_party/blink/renderer/core/dom/computed_accessible_node.h"
 #include "third_party/blink/renderer/core/dom/dataset_dom_string_map.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/dom_token_list.h"
 #include "third_party/blink/renderer/core/dom/element_data_cache.h"
 #include "third_party/blink/renderer/core/dom/element_rare_data.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
+#include "third_party/blink/renderer/core/dom/events/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/core/dom/events/event_dispatcher.h"
 #include "third_party/blink/renderer/core/dom/first_letter_pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/layout_tree_builder.h"
@@ -86,7 +88,6 @@
 #include "third_party/blink/renderer/core/editing/visible_selection.h"
 #include "third_party/blink/renderer/core/events/focus_event.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
-#include "third_party/blink/renderer/core/frame/hosts_using_features.h"
 #include "third_party/blink/renderer/core/frame/local_dom_window.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
@@ -143,13 +144,13 @@
 #include "third_party/blink/renderer/core/svg_names.h"
 #include "third_party/blink/renderer/core/trustedtypes/trusted_html.h"
 #include "third_party/blink/renderer/core/trustedtypes/trusted_script_url.h"
+#include "third_party/blink/renderer/core/trustedtypes/trusted_url.h"
 #include "third_party/blink/renderer/core/xml_names.h"
 #include "third_party/blink/renderer/platform/bindings/dom_data_store.h"
 #include "third_party/blink/renderer/platform/bindings/exception_state.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_activity_logger.h"
 #include "third_party/blink/renderer/platform/bindings/v8_dom_wrapper.h"
 #include "third_party/blink/renderer/platform/bindings/v8_per_context_data.h"
-#include "third_party/blink/renderer/platform/event_dispatch_forbidden_scope.h"
 #include "third_party/blink/renderer/platform/instrumentation/tracing/trace_event.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scroll/scrollable_area.h"
@@ -971,9 +972,11 @@ void Element::setScrollLeft(double new_left) {
 
     FloatPoint end_point(new_left * box->Style()->EffectiveZoom(),
                          box->ScrollTop().ToFloat());
-    if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-      end_point =
-          coordinator->GetSnapPositionForPoint(*box, end_point, true, false);
+    if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+      end_point = GetDocument()
+                      .GetSnapCoordinator()
+                      ->GetSnapPositionForPoint(*box, end_point, true, false)
+                      .value_or(end_point);
     }
     box->SetScrollLeft(LayoutUnit::FromFloatRound(end_point.X()));
   }
@@ -1000,9 +1003,11 @@ void Element::setScrollTop(double new_top) {
 
     FloatPoint end_point(box->ScrollLeft().ToFloat(),
                          new_top * box->Style()->EffectiveZoom());
-    if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-      end_point =
-          coordinator->GetSnapPositionForPoint(*box, end_point, false, true);
+    if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+      end_point = GetDocument()
+                      .GetSnapCoordinator()
+                      ->GetSnapPositionForPoint(*box, end_point, false, true)
+                      .value_or(end_point);
     }
     box->SetScrollTop(LayoutUnit::FromFloatRound(end_point.Y()));
   }
@@ -1119,10 +1124,14 @@ void Element::ScrollLayoutBoxBy(const ScrollToOptions& scroll_to_options) {
         top * box->Style()->EffectiveZoom() + current_scaled_top;
 
     FloatPoint new_scaled_position(new_scaled_left, new_scaled_top);
-    if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-      new_scaled_position = coordinator->GetSnapPositionForPoint(
-          *box, new_scaled_position, scroll_to_options.hasLeft(),
-          scroll_to_options.hasTop());
+    if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+      new_scaled_position =
+          GetDocument()
+              .GetSnapCoordinator()
+              ->GetSnapPositionForPoint(*box, new_scaled_position,
+                                        scroll_to_options.hasLeft(),
+                                        scroll_to_options.hasTop())
+              .value_or(new_scaled_position);
     }
     box->ScrollToPosition(new_scaled_position, scroll_behavior);
   }
@@ -1147,10 +1156,14 @@ void Element::ScrollLayoutBoxTo(const ScrollToOptions& scroll_to_options) {
           box->Style()->EffectiveZoom();
 
     FloatPoint new_scaled_position(scaled_left, scaled_top);
-    if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-      new_scaled_position = coordinator->GetSnapPositionForPoint(
-          *box, new_scaled_position, scroll_to_options.hasLeft(),
-          scroll_to_options.hasTop());
+    if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+      new_scaled_position =
+          GetDocument()
+              .GetSnapCoordinator()
+              ->GetSnapPositionForPoint(*box, new_scaled_position,
+                                        scroll_to_options.hasLeft(),
+                                        scroll_to_options.hasTop())
+              .value_or(new_scaled_position);
     }
     box->ScrollToPosition(new_scaled_position, scroll_behavior);
   }
@@ -1189,10 +1202,14 @@ void Element::ScrollFrameBy(const ScrollToOptions& scroll_to_options) {
 
   FloatPoint new_scaled_position = viewport->ScrollOffsetToPosition(
       ScrollOffset(new_scaled_left, new_scaled_top));
-  if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-    new_scaled_position = coordinator->GetSnapPositionForPoint(
-        *GetDocument().GetLayoutView(), new_scaled_position,
-        scroll_to_options.hasLeft(), scroll_to_options.hasTop());
+  if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+    new_scaled_position =
+        GetDocument()
+            .GetSnapCoordinator()
+            ->GetSnapPositionForPoint(
+                *GetDocument().GetLayoutView(), new_scaled_position,
+                scroll_to_options.hasLeft(), scroll_to_options.hasTop())
+            .value_or(new_scaled_position);
   }
   viewport->SetScrollOffset(
       viewport->ScrollPositionToOffset(new_scaled_position),
@@ -1230,10 +1247,14 @@ void Element::ScrollFrameTo(const ScrollToOptions& scroll_to_options) {
 
   FloatPoint new_scaled_position =
       viewport->ScrollOffsetToPosition(ScrollOffset(scaled_left, scaled_top));
-  if (SnapCoordinator* coordinator = GetDocument().GetSnapCoordinator()) {
-    new_scaled_position = coordinator->GetSnapPositionForPoint(
-        *GetDocument().GetLayoutView(), new_scaled_position,
-        scroll_to_options.hasLeft(), scroll_to_options.hasTop());
+  if (RuntimeEnabledFeatures::CSSScrollSnapPointsEnabled()) {
+    new_scaled_position =
+        GetDocument()
+            .GetSnapCoordinator()
+            ->GetSnapPositionForPoint(
+                *GetDocument().GetLayoutView(), new_scaled_position,
+                scroll_to_options.hasLeft(), scroll_to_options.hasTop())
+            .value_or(new_scaled_position);
   }
   viewport->SetScrollOffset(
       viewport->ScrollPositionToOffset(new_scaled_position),
@@ -1558,6 +1579,16 @@ void Element::SetSynchronizedLazyAttribute(const QualifiedName& name,
 }
 
 void Element::setAttribute(const QualifiedName& name,
+                           const StringOrTrustedHTML& stringOrHTML,
+                           ExceptionState& exception_state) {
+  String valueString =
+      TrustedHTML::GetString(stringOrHTML, &GetDocument(), exception_state);
+  if (!exception_state.HadException()) {
+    setAttribute(name, AtomicString(valueString));
+  }
+}
+
+void Element::setAttribute(const QualifiedName& name,
                            const StringOrTrustedScriptURL& stringOrURL,
                            ExceptionState& exception_state) {
   DCHECK(stringOrURL.IsString() ||
@@ -1573,6 +1604,16 @@ void Element::setAttribute(const QualifiedName& name,
                            : stringOrURL.GetAsTrustedScriptURL()->toString();
 
   setAttribute(name, AtomicString(valueString));
+}
+
+void Element::setAttribute(const QualifiedName& name,
+                           const USVStringOrTrustedURL& stringOrURL,
+                           ExceptionState& exception_state) {
+  String url =
+      TrustedURL::GetString(stringOrURL, &GetDocument(), exception_state);
+  if (!exception_state.HadException()) {
+    setAttribute(name, AtomicString(url));
+  }
 }
 
 ALWAYS_INLINE void Element::SetAttributeInternal(
@@ -2308,14 +2349,11 @@ void Element::RecalcStyle(StyleRecalcChange change) {
   }
 
   if (ShouldCallRecalcStyleForChildren(change)) {
-    // TODO(futhark@chromium.org): Pseudo elements are feature-less and match
-    // the same features as their originating element. Move the filter scope
-    // inside the if-block for shadow-including descendants below.
-    SelectorFilterParentScope filter_scope(*this);
 
     UpdatePseudoElement(kPseudoIdBefore, change);
 
     if (change > kUpdatePseudoElements || ChildNeedsStyleRecalc()) {
+      SelectorFilterParentScope filter_scope(*this);
       if (ShadowRoot* root = GetShadowRoot()) {
         if (root->ShouldCallRecalcStyle(change))
           root->RecalcStyle(change);
@@ -2689,11 +2727,7 @@ const AtomicString& Element::IsValue() const {
   return g_null_atom;
 }
 
-ShadowRoot* Element::createShadowRoot(const ScriptState* script_state,
-                                      ExceptionState& exception_state) {
-  HostsUsingFeatures::CountMainWorldOnly(
-      script_state, GetDocument(),
-      HostsUsingFeatures::Feature::kElementCreateShadowRoot);
+ShadowRoot* Element::createShadowRoot(ExceptionState& exception_state) {
   if (ShadowRoot* root = GetShadowRoot()) {
     if (root->IsUserAgent()) {
       exception_state.ThrowDOMException(
@@ -2745,14 +2779,9 @@ bool Element::CanAttachShadowRoot() const {
          tag_name == HTMLNames::spanTag;
 }
 
-ShadowRoot* Element::attachShadow(const ScriptState* script_state,
-                                  const ShadowRootInit& shadow_root_init_dict,
+ShadowRoot* Element::attachShadow(const ShadowRootInit& shadow_root_init_dict,
                                   ExceptionState& exception_state) {
   DCHECK(shadow_root_init_dict.hasMode());
-  HostsUsingFeatures::CountMainWorldOnly(
-      script_state, GetDocument(),
-      HostsUsingFeatures::Feature::kElementAttachShadow);
-
   if (!CanAttachShadowRoot()) {
     exception_state.ThrowDOMException(
         DOMExceptionCode::kNotSupportedError,
@@ -3432,20 +3461,11 @@ void Element::SetInnerHTMLFromString(const String& html) {
 
 void Element::setInnerHTML(const StringOrTrustedHTML& string_or_html,
                            ExceptionState& exception_state) {
-  DCHECK(string_or_html.IsString() ||
-         RuntimeEnabledFeatures::TrustedDOMTypesEnabled());
-
-  if (string_or_html.IsString() && GetDocument().RequireTrustedTypes()) {
-    exception_state.ThrowTypeError(
-        "This document requires `TrustedHTML` assignment.");
-    return;
+  String html =
+      TrustedHTML::GetString(string_or_html, &GetDocument(), exception_state);
+  if (!exception_state.HadException()) {
+    SetInnerHTMLFromString(html, exception_state);
   }
-
-  String html = string_or_html.IsString()
-                    ? string_or_html.GetAsString()
-                    : string_or_html.GetAsTrustedHTML()->toString();
-
-  SetInnerHTMLFromString(html, exception_state);
 }
 
 void Element::setInnerHTML(const StringOrTrustedHTML& string_or_html) {
@@ -3489,20 +3509,11 @@ void Element::SetOuterHTMLFromString(const String& html,
 
 void Element::setOuterHTML(const StringOrTrustedHTML& string_or_html,
                            ExceptionState& exception_state) {
-  DCHECK(string_or_html.IsString() ||
-         RuntimeEnabledFeatures::TrustedDOMTypesEnabled());
-
-  if (string_or_html.IsString() && GetDocument().RequireTrustedTypes()) {
-    exception_state.ThrowTypeError(
-        "This document requires `TrustedHTML` assignment.");
-    return;
+  String html =
+      TrustedHTML::GetString(string_or_html, &GetDocument(), exception_state);
+  if (!exception_state.HadException()) {
+    SetOuterHTMLFromString(html, exception_state);
   }
-
-  String html = string_or_html.IsString()
-                    ? string_or_html.GetAsString()
-                    : string_or_html.GetAsTrustedHTML()->toString();
-
-  SetOuterHTMLFromString(html, exception_state);
 }
 
 Node* Element::InsertAdjacent(const String& where,
@@ -3649,20 +3660,11 @@ void Element::insertAdjacentHTML(const String& where,
 void Element::insertAdjacentHTML(const String& where,
                                  const StringOrTrustedHTML& string_or_html,
                                  ExceptionState& exception_state) {
-  DCHECK(string_or_html.IsString() ||
-         RuntimeEnabledFeatures::TrustedDOMTypesEnabled());
-
-  if (string_or_html.IsString() && GetDocument().RequireTrustedTypes()) {
-    exception_state.ThrowTypeError(
-        "This document requires `TrustedHTML` assignment.");
-    return;
+  String markup =
+      TrustedHTML::GetString(string_or_html, &GetDocument(), exception_state);
+  if (!exception_state.HadException()) {
+    insertAdjacentHTML(where, markup, exception_state);
   }
-
-  String markup = string_or_html.IsString()
-                      ? string_or_html.GetAsString()
-                      : string_or_html.GetAsTrustedHTML()->toString();
-
-  insertAdjacentHTML(where, markup, exception_state);
 }
 
 void Element::setPointerCapture(int pointer_id,
@@ -4095,9 +4097,14 @@ scoped_refptr<ComputedStyle> Element::StyleForPseudoElement(
   if (is_before_or_after) {
     const ComputedStyle* layout_parent_style = style;
     if (style->Display() == EDisplay::kContents) {
-      Node* layout_parent = LayoutTreeBuilderTraversal::LayoutParent(*this);
-      DCHECK(layout_parent);
-      layout_parent_style = layout_parent->GetComputedStyle();
+      // TODO(futhark@chromium.org): Calling getComputedStyle for elements
+      // outside the flat tree should return empty styles, but currently we do
+      // not. See issue https://crbug.com/831568. We can replace the if-test
+      // with DCHECK(layout_parent) when that issue is fixed.
+      if (Node* layout_parent =
+              LayoutTreeBuilderTraversal::LayoutParent(*this)) {
+        layout_parent_style = layout_parent->GetComputedStyle();
+      }
     }
     return GetDocument().EnsureStyleResolver().PseudoStyleForElement(
         this, request, style, layout_parent_style);
@@ -4199,6 +4206,24 @@ void Element::GetURLAttribute(const QualifiedName& name,
                               StringOrTrustedScriptURL& result) const {
   KURL url = GetURLAttribute(name);
   result.SetString(url.GetString());
+}
+
+void Element::GetURLAttribute(const QualifiedName& name,
+                              USVStringOrTrustedURL& result) const {
+  String url = GetURLAttribute(name);
+  result.SetUSVString(url);
+}
+
+void Element::FastGetAttribute(const QualifiedName& name,
+                               USVStringOrTrustedURL& result) const {
+  String attr = FastGetAttribute(name);
+  result.SetUSVString(attr);
+}
+
+void Element::FastGetAttribute(const QualifiedName& name,
+                               StringOrTrustedHTML& result) const {
+  String html = FastGetAttribute(name);
+  result.SetString(html);
 }
 
 KURL Element::GetNonEmptyURLAttribute(const QualifiedName& name) const {
@@ -4637,6 +4662,8 @@ Node::InsertionNotificationRequest Node::InsertedInto(
   if (ChildNeedsDistributionRecalc() &&
       !insertion_point->ChildNeedsDistributionRecalc())
     insertion_point->MarkAncestorsWithChildNeedsDistributionRecalc();
+  if (AXObjectCache* cache = GetDocument().ExistingAXObjectCache())
+    cache->ChildrenChanged(insertion_point);
   return kInsertionDone;
 }
 
@@ -4649,8 +4676,10 @@ void Node::RemovedFrom(ContainerNode* insertion_point) {
   }
   if (IsInShadowTree() && !ContainingTreeScope().RootNode().IsShadowRoot())
     ClearFlag(kIsInShadowTreeFlag);
-  if (AXObjectCache* cache = GetDocument().ExistingAXObjectCache())
+  if (AXObjectCache* cache = GetDocument().ExistingAXObjectCache()) {
     cache->Remove(this);
+    cache->ChildrenChanged(insertion_point);
+  }
 }
 
 void Element::WillRecalcStyle(StyleRecalcChange) {

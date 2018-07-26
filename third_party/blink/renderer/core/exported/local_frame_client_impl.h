@@ -129,7 +129,8 @@ class LocalFrameClientImpl final : public LocalFrameClient {
   void DidStopLoading() override;
   void ProgressEstimateChanged(double progress_estimate) override;
   void ForwardResourceTimingToParent(const WebResourceTimingInfo&) override;
-  void DownloadURL(const ResourceRequest&) override;
+  void DownloadURL(const ResourceRequest&,
+                   DownloadCrossOriginRedirects) override;
   void LoadErrorPage(int reason) override;
   bool NavigateBackForward(int offset) const override;
   void DidAccessInitialDocument() override;
@@ -159,7 +160,9 @@ class LocalFrameClientImpl final : public LocalFrameClient {
       const ResourceRequest&,
       const SubstituteData&,
       ClientRedirectPolicy,
-      const base::UnguessableToken& devtools_navigation_token) override;
+      const base::UnguessableToken& devtools_navigation_token,
+      std::unique_ptr<WebDocumentLoader::ExtraData> extra_data,
+      const WebNavigationTimings& navigation_timings) override;
   WTF::String UserAgent() override;
   WTF::String DoNotTrackValue() override;
   void TransitionToCommittedForNewPage() override;

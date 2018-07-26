@@ -66,9 +66,10 @@ void RenderParamsFromPrintSettings(const PrintSettings& settings,
   params->display_header_footer = settings.display_header_footer();
   params->title = settings.title();
   params->url = settings.url();
-  params->printed_doc_type =
-      IsOopifEnabled() ? SkiaDocumentType::MSKP : SkiaDocumentType::PDF;
-  params->num_pages_per_sheet = settings.num_pages_per_sheet();
+  params->printed_doc_type = IsOopifEnabled() && settings.is_modifiable()
+                                 ? SkiaDocumentType::MSKP
+                                 : SkiaDocumentType::PDF;
+  params->pages_per_sheet = settings.pages_per_sheet();
 }
 
 }  // namespace printing

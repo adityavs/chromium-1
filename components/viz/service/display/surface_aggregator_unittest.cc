@@ -333,10 +333,11 @@ class SurfaceAggregatorTest : public testing::Test, public DisplayTimeSource {
         pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
     surface_quad->SetNew(
         pass->shared_quad_state_list.back(), primary_surface_rect,
-        primary_surface_rect, primary_surface_id,
-        fallback_surface_id.is_valid()
-            ? base::Optional<SurfaceId>(fallback_surface_id)
-            : base::nullopt,
+        primary_surface_rect,
+        SurfaceRange(fallback_surface_id.is_valid()
+                         ? base::Optional<SurfaceId>(fallback_surface_id)
+                         : base::nullopt,
+                     primary_surface_id),
         default_background_color, stretch_content_to_fill_bounds);
   }
 
@@ -1377,7 +1378,7 @@ TEST_F(SurfaceAggregatorValidSurfaceTest, UnreferencedSurface) {
     AddPasses(&frame.render_pass_list, parent_passes,
               base::size(parent_passes));
 
-    frame.metadata.referenced_surfaces.push_back(embedded_surface_id);
+    frame.metadata.referenced_surfaces.emplace_back(embedded_surface_id);
 
     parent_support->SubmitCompositorFrame(parent_local_surface_id,
                                           std::move(frame));
@@ -1392,10 +1393,10 @@ TEST_F(SurfaceAggregatorValidSurfaceTest, UnreferencedSurface) {
     CompositorFrame frame = MakeEmptyCompositorFrame();
     AddPasses(&frame.render_pass_list, root_passes, base::size(root_passes));
 
-    frame.metadata.referenced_surfaces.push_back(parent_surface_id);
+    frame.metadata.referenced_surfaces.emplace_back(parent_surface_id);
     // Reference to Surface ID of a Surface that doesn't exist should be
     // included in previous_contained_surfaces, but otherwise ignored.
-    frame.metadata.referenced_surfaces.push_back(nonexistent_surface_id);
+    frame.metadata.referenced_surfaces.emplace_back(nonexistent_surface_id);
 
     support_->SubmitCompositorFrame(root_local_surface_id_, std::move(frame));
   }
@@ -1903,8 +1904,8 @@ TEST_F(SurfaceAggregatorValidSurfaceTest, AggregateSharedQuadStateProperties) {
       child_one_pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
   grandchild_surface_quad->SetNew(
       child_one_pass->shared_quad_state_list.back(), gfx::Rect(SurfaceSize()),
-      gfx::Rect(SurfaceSize()), grandchild_surface_id, base::nullopt,
-      SK_ColorWHITE, false);
+      gfx::Rect(SurfaceSize()),
+      SurfaceRange(base::nullopt, grandchild_surface_id), SK_ColorWHITE, false);
   AddSolidColorQuadWithBlendMode(SurfaceSize(), child_one_pass.get(),
                                  blend_modes[3]);
   QueuePassAsFrame(std::move(child_one_pass), child_one_local_surface_id,
@@ -1930,18 +1931,18 @@ TEST_F(SurfaceAggregatorValidSurfaceTest, AggregateSharedQuadStateProperties) {
                                  blend_modes[0]);
   auto* child_one_surface_quad =
       root_pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
-  child_one_surface_quad->SetNew(root_pass->shared_quad_state_list.back(),
-                                 gfx::Rect(SurfaceSize()),
-                                 gfx::Rect(SurfaceSize()), child_one_surface_id,
-                                 base::nullopt, SK_ColorWHITE, false);
+  child_one_surface_quad->SetNew(
+      root_pass->shared_quad_state_list.back(), gfx::Rect(SurfaceSize()),
+      gfx::Rect(SurfaceSize()),
+      SurfaceRange(base::nullopt, child_one_surface_id), SK_ColorWHITE, false);
   AddSolidColorQuadWithBlendMode(SurfaceSize(), root_pass.get(),
                                  blend_modes[4]);
   auto* child_two_surface_quad =
       root_pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
-  child_two_surface_quad->SetNew(root_pass->shared_quad_state_list.back(),
-                                 gfx::Rect(SurfaceSize()),
-                                 gfx::Rect(SurfaceSize()), child_two_surface_id,
-                                 base::nullopt, SK_ColorWHITE, false);
+  child_two_surface_quad->SetNew(
+      root_pass->shared_quad_state_list.back(), gfx::Rect(SurfaceSize()),
+      gfx::Rect(SurfaceSize()),
+      SurfaceRange(base::nullopt, child_two_surface_id), SK_ColorWHITE, false);
   AddSolidColorQuadWithBlendMode(SurfaceSize(), root_pass.get(),
                                  blend_modes[6]);
 
@@ -2625,6 +2626,215 @@ TEST_F(SurfaceAggregatorValidSurfaceTest, SwitchSurfaceDamage) {
   }
 }
 
+// Verifies that damage to any surface between primary and fallback damages the
+// display if primary and fallback have the FrameSinkId.
+TEST_F(SurfaceAggregatorValidSurfaceTest, SurfaceDamageSameFrameSinkId) {
+  auto embedded_support = std::make_unique<CompositorFrameSinkSupport>(
+      nullptr, &manager_, kArbitraryFrameSinkId1, kRootIsRoot,
+      kNeedsSyncPoints);
+  LocalSurfaceId id1 = allocator_.GenerateId();
+  LocalSurfaceId id2 = allocator_.GenerateId();
+  LocalSurfaceId id3 = allocator_.GenerateId();
+  LocalSurfaceId id4 = allocator_.GenerateId();
+  LocalSurfaceId id5 = allocator_.GenerateId();
+  SurfaceId fallback_surface_id(kArbitraryFrameSinkId1, id2);
+  SurfaceId primary_surface_id(kArbitraryFrameSinkId1, id4);
+  Quad embedded_quads[] = {Quad::SolidColorQuad(SK_ColorGREEN, gfx::Rect(5, 5)),
+                           Quad::SolidColorQuad(SK_ColorBLUE, gfx::Rect(5, 5))};
+  Pass embedded_passes[] = {
+      Pass(embedded_quads, base::size(embedded_quads), SurfaceSize())};
+
+  constexpr float device_scale_factor = 1.0f;
+  SubmitCompositorFrame(embedded_support.get(), embedded_passes,
+                        base::size(embedded_passes), id2, device_scale_factor);
+  Quad quads[] = {Quad::SurfaceQuad(primary_surface_id, fallback_surface_id,
+                                    SK_ColorWHITE, gfx::Rect(5, 5), 1.f,
+                                    gfx::Transform(), false)};
+  Pass passes[] = {Pass(quads, base::size(quads), SurfaceSize())};
+
+  SubmitCompositorFrame(support_.get(), passes, base::size(passes),
+                        root_local_surface_id_, device_scale_factor);
+
+  SurfaceId root_surface_id(support_->frame_sink_id(), root_local_surface_id_);
+  CompositorFrame aggregated_frame =
+      aggregator_.Aggregate(root_surface_id, GetNextDisplayTimeAndIncrement());
+
+  // |id1| is before the fallback id so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id1)));
+
+  // |id2| is the fallback id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id2)));
+
+  // |id3| is between fallback and primary so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id3)));
+
+  // |id4| is the primary id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id4)));
+
+  // |id5| is newer than the primary surface so it shouldn't damage display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id5)));
+
+  // This FrameSinkId is not embedded at all so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId3, id3)));
+}
+
+// Verifies that only damage to primary and fallback surfaces and nothing in
+// between damages the display if primary and fallback have different
+// FrameSinkIds.
+TEST_F(SurfaceAggregatorValidSurfaceTest, SurfaceDamageDifferentFrameSinkId) {
+  auto embedded_support = std::make_unique<CompositorFrameSinkSupport>(
+      nullptr, &manager_, kArbitraryFrameSinkId1, kRootIsRoot,
+      kNeedsSyncPoints);
+  LocalSurfaceId id1 = allocator_.GenerateId();
+  LocalSurfaceId id2 = allocator_.GenerateId();
+  LocalSurfaceId id3 = allocator_.GenerateId();
+  LocalSurfaceId id4 = allocator_.GenerateId();
+  LocalSurfaceId id5 = allocator_.GenerateId();
+  SurfaceId fallback_surface_id(kArbitraryFrameSinkId1, id2);
+  SurfaceId primary_surface_id(kArbitraryFrameSinkId2, id4);
+  Quad embedded_quads[] = {Quad::SolidColorQuad(SK_ColorGREEN, gfx::Rect(5, 5)),
+                           Quad::SolidColorQuad(SK_ColorBLUE, gfx::Rect(5, 5))};
+  Pass embedded_passes[] = {
+      Pass(embedded_quads, base::size(embedded_quads), SurfaceSize())};
+
+  constexpr float device_scale_factor = 1.0f;
+  SubmitCompositorFrame(embedded_support.get(), embedded_passes,
+                        base::size(embedded_passes), id2, device_scale_factor);
+  Quad quads[] = {Quad::SurfaceQuad(primary_surface_id, fallback_surface_id,
+                                    SK_ColorWHITE, gfx::Rect(5, 5), 1.f,
+                                    gfx::Transform(), false)};
+  Pass passes[] = {Pass(quads, base::size(quads), SurfaceSize())};
+
+  SubmitCompositorFrame(support_.get(), passes, base::size(passes),
+                        root_local_surface_id_, device_scale_factor);
+
+  SurfaceId root_surface_id(support_->frame_sink_id(), root_local_surface_id_);
+  CompositorFrame aggregated_frame =
+      aggregator_.Aggregate(root_surface_id, GetNextDisplayTimeAndIncrement());
+
+  // |id1| is before the fallback id so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id1)));
+
+  // |id2| is the fallback id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id2)));
+
+  // |id3| is after the fallback but primary has a different FrameSinkId so it
+  // shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id3)));
+
+  // |id3| is before the primary but fallback has a different FrameSinkId so it
+  // shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId2, id3)));
+
+  // |id4| is the primary id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId2, id4)));
+
+  // |id5| is newer than the primary surface so it shouldn't damage display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id5)));
+
+  // This FrameSinkId is not embedded at all so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId3, id4)));
+}
+
+// Verifies that when only a primary surface is provided any damage to primary
+// surface damages the display.
+TEST_F(SurfaceAggregatorValidSurfaceTest, SurfaceDamagePrimarySurfaceOnly) {
+  LocalSurfaceId id1 = allocator_.GenerateId();
+  LocalSurfaceId id2 = allocator_.GenerateId();
+  LocalSurfaceId id3 = allocator_.GenerateId();
+  SurfaceId primary_surface_id(kArbitraryFrameSinkId1, id2);
+  Quad quads[] = {Quad::SurfaceQuad(primary_surface_id, InvalidSurfaceId(),
+                                    SK_ColorWHITE, gfx::Rect(5, 5), 1.f,
+                                    gfx::Transform(), false)};
+  Pass passes[] = {Pass(quads, base::size(quads), SurfaceSize())};
+
+  constexpr float device_scale_factor = 1.0f;
+  SubmitCompositorFrame(support_.get(), passes, base::size(passes),
+                        root_local_surface_id_, device_scale_factor);
+
+  SurfaceId root_surface_id(support_->frame_sink_id(), root_local_surface_id_);
+  CompositorFrame aggregated_frame =
+      aggregator_.Aggregate(root_surface_id, GetNextDisplayTimeAndIncrement());
+
+  // |id1| is before the primary id but there is no fallback so it shouldn't
+  // damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id1)));
+
+  // |id2| is the primary id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id2)));
+
+  // |id3| is after the primary id so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id3)));
+
+  // This FrameSinkId is not embedded at all so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId3, id2)));
+}
+
+// Verifies that when primary and fallback ids are equal, only damage to that
+// particular surface causee damage to display.
+TEST_F(SurfaceAggregatorValidSurfaceTest,
+       SurfaceDamagePrimaryAndFallbackEqual) {
+  auto embedded_support = std::make_unique<CompositorFrameSinkSupport>(
+      nullptr, &manager_, kArbitraryFrameSinkId1, kRootIsRoot,
+      kNeedsSyncPoints);
+  LocalSurfaceId id1 = allocator_.GenerateId();
+  LocalSurfaceId id2 = allocator_.GenerateId();
+  LocalSurfaceId id3 = allocator_.GenerateId();
+  SurfaceId surface_id(kArbitraryFrameSinkId1, id2);
+
+  Quad embedded_quads[] = {Quad::SolidColorQuad(SK_ColorGREEN, gfx::Rect(5, 5)),
+                           Quad::SolidColorQuad(SK_ColorBLUE, gfx::Rect(5, 5))};
+  Pass embedded_passes[] = {
+      Pass(embedded_quads, base::size(embedded_quads), SurfaceSize())};
+  constexpr float device_scale_factor = 1.0f;
+  SubmitCompositorFrame(embedded_support.get(), embedded_passes,
+                        base::size(embedded_passes), id2, device_scale_factor);
+
+  Quad quads[] = {Quad::SurfaceQuad(surface_id, surface_id, SK_ColorWHITE,
+                                    gfx::Rect(5, 5), 1.f, gfx::Transform(),
+                                    false)};
+  Pass passes[] = {Pass(quads, base::size(quads), SurfaceSize())};
+  SubmitCompositorFrame(support_.get(), passes, base::size(passes),
+                        root_local_surface_id_, device_scale_factor);
+
+  SurfaceId root_surface_id(support_->frame_sink_id(), root_local_surface_id_);
+  CompositorFrame aggregated_frame =
+      aggregator_.Aggregate(root_surface_id, GetNextDisplayTimeAndIncrement());
+
+  // |id1| is before the fallback id so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id1)));
+
+  // |id2| is the embedded id so it should damage the display.
+  EXPECT_TRUE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id2)));
+
+  // |id3| is newer than primary id so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId1, id3)));
+
+  // This FrameSinkId is not embedded at all so it shouldn't damage the display.
+  EXPECT_FALSE(aggregator_.NotifySurfaceDamageAndCheckForDisplayDamage(
+      SurfaceId(kArbitraryFrameSinkId3, id2)));
+}
+
 class SurfaceAggregatorPartialSwapTest
     : public SurfaceAggregatorValidSurfaceTest {
  public:
@@ -3003,7 +3213,8 @@ void SubmitCompositorFrameWithResources(ResourceId* resource_ids,
   if (child_id.is_valid()) {
     auto* surface_quad = pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
     surface_quad->SetNew(sqs, gfx::Rect(0, 0, 1, 1), gfx::Rect(0, 0, 1, 1),
-                         child_id, base::nullopt, SK_ColorWHITE, false);
+                         SurfaceRange(base::nullopt, child_id), SK_ColorWHITE,
+                         false);
   }
 
   for (size_t i = 0u; i < num_resource_ids; ++i) {
@@ -3271,7 +3482,8 @@ TEST_F(SurfaceAggregatorWithResourcesTest, SecureOutputTexture) {
     auto* surface_quad = pass->CreateAndAppendDrawQuad<SurfaceDrawQuad>();
 
     surface_quad->SetNew(sqs, gfx::Rect(0, 0, 1, 1), gfx::Rect(0, 0, 1, 1),
-                         surface1_id, base::nullopt, SK_ColorWHITE, false);
+                         SurfaceRange(base::nullopt, surface1_id),
+                         SK_ColorWHITE, false);
     pass->copy_requests.push_back(CopyOutputRequest::CreateStubForTesting());
 
     CompositorFrame frame =

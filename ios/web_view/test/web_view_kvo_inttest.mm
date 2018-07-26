@@ -7,11 +7,11 @@
 
 #include "base/strings/stringprintf.h"
 #import "base/strings/sys_string_conversions.h"
-#import "ios/testing/wait_util.h"
 #import "ios/web_view/test/observer.h"
-#import "ios/web_view/test/web_view_int_test.h"
+#import "ios/web_view/test/web_view_inttest_base.h"
 #import "ios/web_view/test/web_view_test_util.h"
 #import "net/base/mac/url_conversions.h"
+#include "net/test/embedded_test_server/embedded_test_server.h"
 #include "testing/gtest_mac.h"
 #include "url/gurl.h"
 
@@ -23,10 +23,12 @@ namespace ios_web_view {
 
 // Tests that the KVO compliant properties of CWVWebView correctly report
 // changes.
-typedef ios_web_view::WebViewIntTest WebViewKvoTest;
+typedef ios_web_view::WebViewInttestBase WebViewKvoTest;
 
 // Tests that CWVWebView correctly reports |canGoBack| and |canGoForward| state.
 TEST_F(WebViewKvoTest, CanGoBackForward) {
+  ASSERT_TRUE(test_server_->Start());
+
   Observer* back_observer = [[Observer alloc] init];
   [back_observer setObservedObject:web_view_ keyPath:@"canGoBack"];
 
@@ -90,6 +92,8 @@ TEST_F(WebViewKvoTest, CanGoBackForward) {
 
 // Tests that CWVWebView correctly reports current |title|.
 TEST_F(WebViewKvoTest, Title) {
+  ASSERT_TRUE(test_server_->Start());
+
   Observer* observer = [[Observer alloc] init];
   [observer setObservedObject:web_view_ keyPath:@"title"];
 
@@ -121,6 +125,8 @@ TEST_F(WebViewKvoTest, Title) {
 
 // Tests that CWVWebView correctly reports |isLoading| value.
 TEST_F(WebViewKvoTest, Loading) {
+  ASSERT_TRUE(test_server_->Start());
+
   Observer* observer = [[Observer alloc] init];
   [observer setObservedObject:web_view_ keyPath:@"loading"];
 
@@ -151,6 +157,8 @@ TEST_F(WebViewKvoTest, Loading) {
 
 // Tests that CWVWebView correctly reports |visibleURL| and |lastCommittedURL|.
 TEST_F(WebViewKvoTest, URLs) {
+  ASSERT_TRUE(test_server_->Start());
+
   Observer* last_committed_url_observer = [[Observer alloc] init];
   [last_committed_url_observer setObservedObject:web_view_
                                          keyPath:@"lastCommittedURL"];

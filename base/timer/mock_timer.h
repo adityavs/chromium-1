@@ -12,28 +12,10 @@ namespace base {
 
 class TestSimpleTaskRunner;
 
-// A mock implementation of base::Timer which requires being explicitly
+// A mock implementation of base::OneShotTimer which requires being explicitly
 // Fire()'d.
 // Prefer using ScopedTaskEnvironment::MOCK_TIME + FastForward*() to this when
-// possible
-class MockTimer : public Timer {
- public:
-  MockTimer(bool retain_user_task, bool is_repeating);
-  ~MockTimer() override;
-
-  // Testing method.
-  void Fire();
-
- private:
-  // Timer implementation.
-  // MockTimer doesn't support SetTaskRunner. Do not use this.
-  void SetTaskRunner(scoped_refptr<SequencedTaskRunner> task_runner) override;
-
-  SimpleTestTickClock clock_;
-  scoped_refptr<TestSimpleTaskRunner> test_task_runner_;
-};
-
-// See MockTimer's comment. Prefer using ScopedTaskEnvironment::MOCK_TIME.
+// possible.
 class MockOneShotTimer : public OneShotTimer {
  public:
   MockOneShotTimer();
@@ -51,7 +33,8 @@ class MockOneShotTimer : public OneShotTimer {
   scoped_refptr<TestSimpleTaskRunner> test_task_runner_;
 };
 
-// See MockTimer's comment. Prefer using ScopedTaskEnvironment::MOCK_TIME.
+// See MockOneShotTimer's comment. Prefer using
+// ScopedTaskEnvironment::MOCK_TIME.
 class MockRepeatingTimer : public RepeatingTimer {
  public:
   MockRepeatingTimer();
@@ -63,6 +46,25 @@ class MockRepeatingTimer : public RepeatingTimer {
  private:
   // Timer implementation.
   // MockRepeatingTimer doesn't support SetTaskRunner. Do not use this.
+  void SetTaskRunner(scoped_refptr<SequencedTaskRunner> task_runner) override;
+
+  SimpleTestTickClock clock_;
+  scoped_refptr<TestSimpleTaskRunner> test_task_runner_;
+};
+
+// See MockOneShotTimer's comment. Prefer using
+// ScopedTaskEnvironment::MOCK_TIME.
+class MockRetainingOneShotTimer : public RetainingOneShotTimer {
+ public:
+  MockRetainingOneShotTimer();
+  ~MockRetainingOneShotTimer() override;
+
+  // Testing method.
+  void Fire();
+
+ private:
+  // Timer implementation.
+  // MockRetainingOneShotTimer doesn't support SetTaskRunner. Do not use this.
   void SetTaskRunner(scoped_refptr<SequencedTaskRunner> task_runner) override;
 
   SimpleTestTickClock clock_;

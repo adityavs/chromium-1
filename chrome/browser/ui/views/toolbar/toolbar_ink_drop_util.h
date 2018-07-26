@@ -35,24 +35,15 @@ constexpr float kToolbarInkDropHighlightVisibleOpacity = 0.08f;
 // Creates insets for a host view so that when insetting from the host view
 // the resulting mask or inkdrop has the desired inkdrop size.
 template <class BaseInkDropHostView>
-gfx::Insets GetInkDropInsets(BaseInkDropHostView* host_view) {
-  gfx::Insets inkdrop_insets;
-  const gfx::Insets host_insets = host_view->GetInsets();
-  // If content is not centered (leftmost or rightmost toolbar button), inset
-  // the inkdrop mask accordingly.
-  if (host_insets.left() > host_insets.right()) {
-    const int leading_excess = host_insets.left() - host_insets.right();
-    // TODO(pbos): Inkdrop masks and layers should be flipped with RTL. Fix this
-    // and remove RTL handling from here (and below).
-    inkdrop_insets += base::i18n::IsRTL()
-                          ? gfx::Insets(0, 0, 0, leading_excess)
-                          : gfx::Insets(0, leading_excess, 0, 0);
-  } else if (host_insets.right() > host_insets.left()) {
-    const int trailing_excess = host_insets.right() - host_insets.left();
-    inkdrop_insets += base::i18n::IsRTL()
-                          ? gfx::Insets(0, trailing_excess, 0, 0)
-                          : gfx::Insets(0, 0, 0, trailing_excess);
-  }
+gfx::Insets GetInkDropInsets(BaseInkDropHostView* host_view,
+                             const gfx::Insets& margin_insets) {
+  // TODO(pbos): Inkdrop masks and layers should be flipped with RTL. Fix this
+  // and remove RTL handling from here.
+  gfx::Insets inkdrop_insets =
+      base::i18n::IsRTL()
+          ? gfx::Insets(margin_insets.top(), margin_insets.right(),
+                        margin_insets.bottom(), margin_insets.left())
+          : margin_insets;
 
   // Inset the inkdrop insets so that the end result matches the target inkdrop
   // dimensions.
@@ -61,6 +52,24 @@ gfx::Insets GetInkDropInsets(BaseInkDropHostView* host_view) {
   inkdrop_insets += gfx::Insets((host_size.height() - inkdrop_dimensions) / 2);
 
   return inkdrop_insets;
+}
+
+// Create a SkPath matching the toolbar inkdrops to be used for the focus ring.
+// TODO(pbos): Consolidate inkdrop effects, highlights and ripples along with
+// focus rings so that they are derived  from the same actual SkPath or other
+// shared primitive. That way they would be significantly easier to keep in
+// sync. This method at least reuses GetInkDropInsets.
+template <class BaseInkDropHostView>
+SkPath CreateToolbarFocusRingPath(BaseInkDropHostView* host_view,
+                                  const gfx::Insets& margin_insets) {
+  gfx::Rect rect(host_view->size());
+  rect.Inset(GetInkDropInsets(host_view, margin_insets));
+
+  SkPath path;
+  path.addRoundRect(gfx::RectToSkRect(rect),
+                    host_view->ink_drop_large_corner_radius(),
+                    host_view->ink_drop_large_corner_radius());
+  return path;
 }
 
 // Creates the appropriate ink drop for the calling button. When the newer
@@ -91,13 +100,15 @@ std::unique_ptr<views::InkDrop> CreateToolbarInkDrop(
 template <class BaseInkDropHostView>
 std::unique_ptr<views::InkDropRipple> CreateToolbarInkDropRipple(
     const BaseInkDropHostView* host_view,
-    const gfx::Point& center_point) {
+    const gfx::Point& center_point,
+    const gfx::Insets& margin_insets) {
   if (!ui::MaterialDesignController::IsNewerMaterialUi())
     return host_view->BaseInkDropHostView::CreateInkDropRipple();
 
   return std::make_unique<views::FloodFillInkDropRipple>(
-      host_view->size(), GetInkDropInsets(host_view), center_point,
-      host_view->GetInkDropBaseColor(), host_view->ink_drop_visible_opacity());
+      host_view->size(), GetInkDropInsets(host_view, margin_insets),
+      center_point, host_view->GetInkDropBaseColor(),
+      host_view->ink_drop_visible_opacity());
 }
 
 // Creates the appropriate ink drop highlight for the calling button. When the
@@ -130,12 +141,13 @@ std::unique_ptr<views::InkDropHighlight> CreateToolbarInkDropHighlight(
 // fill ripple fill a circle rather than a default square shape.
 template <class BaseInkDropHostView>
 std::unique_ptr<views::InkDropMask> CreateToolbarInkDropMask(
-    const BaseInkDropHostView* host_view) {
+    const BaseInkDropHostView* host_view,
+    const gfx::Insets& margin_insets) {
   if (!ui::MaterialDesignController::IsNewerMaterialUi())
     return host_view->BaseInkDropHostView::CreateInkDropMask();
 
   return std::make_unique<views::RoundRectInkDropMask>(
-      host_view->size(), GetInkDropInsets(host_view),
+      host_view->size(), GetInkDropInsets(host_view, margin_insets),
       host_view->ink_drop_large_corner_radius());
 }
 

@@ -112,26 +112,6 @@ std::unique_ptr<base::Value> NetLogStartCallback(
   return std::move(dict);
 }
 
-// Values are used in UMA histograms. Do not change existing values.
-enum MalformedResponseResult {
-  MALFORMED_OK = 0,
-  MALFORMED_MALFORMED = 1,
-  MALFORMED_FAILED = 2,
-  MALFORMED_MAX
-};
-
-void RecordMalformedResponseHistogram(int net_error) {
-  MalformedResponseResult error_type;
-  if (net_error == OK)
-    error_type = MALFORMED_OK;
-  else if (net_error == ERR_DNS_MALFORMED_RESPONSE)
-    error_type = MALFORMED_MALFORMED;
-  else
-    error_type = MALFORMED_FAILED;
-  UMA_HISTOGRAM_ENUMERATION("Net.DNS.ResultAfterMalformedResponse", error_type,
-                            MALFORMED_MAX);
-}
-
 // ----------------------------------------------------------------------------
 
 // A single asynchronous DNS exchange, which consists of sending out a
@@ -174,19 +154,15 @@ class DnsAttempt {
     return std::move(dict);
   }
 
-  void set_result(int result) {
-    result_ = result;
-  }
+  void set_result(int result) { result_ = result; }
 
   // True if current attempt is pending (waiting for server response).
-  bool is_pending() const {
-    return result_ == ERR_IO_PENDING;
-  }
+  bool is_pending() const { return result_ == ERR_IO_PENDING; }
 
   // True if attempt is completed (received server response).
   bool is_completed() const {
     return (result_ == OK) || (result_ == ERR_NAME_NOT_RESOLVED) ||
-        (result_ == ERR_DNS_SERVER_REQUIRES_TCP);
+           (result_ == ERR_DNS_SERVER_REQUIRES_TCP);
   }
 
  private:
@@ -203,16 +179,11 @@ class DnsUDPAttempt : public DnsAttempt {
                 std::unique_ptr<DnsQuery> query)
       : DnsAttempt(server_index),
         next_state_(STATE_NONE),
-        received_malformed_response_(false),
         socket_lease_(std::move(socket_lease)),
         query_(std::move(query)) {}
 
   // DnsAttempt methods.
 
-  // TODO(https://crbug.com/779589):  This method violates the usual convention
-  // that |callback| is only called once.  In particular, this method might
-  // return ERR_IO_PENDING, then |callback| might be called with
-  // ERR_DNS_MALFORMED_RESPONSE, then again with some other error code.
   int Start(const CompletionCallback& callback) override {
     DCHECK_EQ(STATE_NONE, next_state_);
     callback_ = callback;
@@ -241,9 +212,7 @@ class DnsUDPAttempt : public DnsAttempt {
     STATE_NONE,
   };
 
-  DatagramClientSocket* socket() {
-    return socket_lease_->socket();
-  }
+  DatagramClientSocket* socket() { return socket_lease_->socket(); }
 
   int DoLoop(int result) {
     CHECK_NE(STATE_NONE, next_state_);
@@ -271,20 +240,15 @@ class DnsUDPAttempt : public DnsAttempt {
     } while (rv != ERR_IO_PENDING && next_state_ != STATE_NONE);
 
     set_result(rv);
-    if (received_malformed_response_) {
-      // If we received a malformed response, and are now waiting for another
-      // one, indicate to the transaction that the server might be misbehaving.
-      if (rv == ERR_IO_PENDING)
-        return ERR_DNS_MALFORMED_RESPONSE;
 
-      // This is a new response after the original malformed one.
-      RecordMalformedResponseHistogram(rv);
-    }
+    if (rv == ERR_IO_PENDING)
+      return rv;
+
     if (rv == OK) {
       DCHECK_EQ(STATE_NONE, next_state_);
       UMA_HISTOGRAM_LONG_TIMES_100("AsyncDNS.UDPAttemptSuccess",
                                    base::TimeTicks::Now() - start_time_);
-    } else if (rv != ERR_IO_PENDING) {
+    } else {
       UMA_HISTOGRAM_LONG_TIMES_100("AsyncDNS.UDPAttemptFail",
                                    base::TimeTicks::Now() - start_time_);
     }
@@ -326,17 +290,8 @@ class DnsUDPAttempt : public DnsAttempt {
       return rv;
 
     DCHECK(rv);
-    if (!response_->InitParse(rv, *query_)) {
-      // Other implementations simply ignore mismatched responses. Since each
-      // DnsUDPAttempt binds to a different port, we might find that responses
-      // to previously timed out queries lead to failures in the future.
-      // Our solution is to make another attempt, in case the query truly
-      // failed, but keep this attempt alive, in case it was a false alarm.
-      received_malformed_response_ = true;
-      RecordMalformedResponseHistogram(ERR_DNS_MALFORMED_RESPONSE);
-      next_state_ = STATE_READ_RESPONSE;
-      return OK;
-    }
+    if (!response_->InitParse(rv, *query_))
+      return ERR_DNS_MALFORMED_RESPONSE;
     if (response_->flags() & dns_protocol::kFlagTC)
       return ERR_DNS_SERVER_REQUIRES_TCP;
     if (response_->rcode() == dns_protocol::kRcodeNXDOMAIN)
@@ -354,7 +309,6 @@ class DnsUDPAttempt : public DnsAttempt {
   }
 
   State next_state_;
-  bool received_malformed_response_;
   base::TimeTicks start_time_;
 
   std::unique_ptr<DnsSession::SocketLease> socket_lease_;
@@ -840,7 +794,7 @@ class DnsTransactionImpl : public DnsTransaction,
   DnsTransactionImpl(DnsSession* session,
                      const std::string& hostname,
                      uint16_t qtype,
-                     DnsTransactionFactory::CallbackType& callback,
+                     DnsTransactionFactory::CallbackType callback,
                      const NetLogWithSource& net_log,
                      const OptRecordRdata* opt_rdata)
       : session_(session),
@@ -895,9 +849,12 @@ class DnsTransactionImpl : public DnsTransaction,
 
     // Must always return result asynchronously, to avoid reentrancy.
     if (result.rv != ERR_IO_PENDING) {
+      // Clear all other non-completed attempts. They are no longer needed and
+      // they may interfere with this posted result.
+      ClearAttempts(result.attempt);
       base::ThreadTaskRunnerHandle::Get()->PostTask(
           FROM_HERE,
-          base::Bind(&DnsTransactionImpl::DoCallback, AsWeakPtr(), result));
+          base::BindOnce(&DnsTransactionImpl::DoCallback, AsWeakPtr(), result));
     }
   }
 
@@ -1122,14 +1079,9 @@ class DnsTransactionImpl : public DnsTransaction,
 
     RecordLostPacketsIfAny();
 
-    // Cancel all other attempts that have not received a response, no point
-    // waiting on them.
-    for (auto it = attempts_.begin(); it != attempts_.end();) {
-      if (!(*it)->is_completed())
-        it = attempts_.erase(it);
-      else
-        ++it;
-    }
+    // Cancel all attempts that have not received a response, no point waiting
+    // on them.
+    ClearAttempts(nullptr);
 
     unsigned attempt_number = attempts_.size();
 
@@ -1288,11 +1240,6 @@ class DnsTransactionImpl : public DnsTransaction,
           }
           if (MoreAttemptsAllowed()) {
             result = MakeAttempt();
-          } else if (result.rv == ERR_DNS_MALFORMED_RESPONSE &&
-                     !had_tcp_attempt_ && !doh_attempt_) {
-            // For UDP only, ignore the response and wait until the last
-            // attempt times out.
-            return AttemptResult(ERR_IO_PENDING, NULL);
           } else {
             return AttemptResult(result.rv, NULL);
           }
@@ -1300,6 +1247,18 @@ class DnsTransactionImpl : public DnsTransaction,
       }
     }
     return result;
+  }
+
+  // Clears and cancels all non-completed attempts. If |leave_attempt| is not
+  // null, it is not cleared even if complete.
+  void ClearAttempts(const DnsAttempt* leave_attempt) {
+    for (auto it = attempts_.begin(); it != attempts_.end();) {
+      if (!(*it)->is_completed() && it->get() != leave_attempt) {
+        it = attempts_.erase(it);
+      } else {
+        ++it;
+      }
+    }
   }
 
   void OnTimeout() {
@@ -1361,8 +1320,9 @@ class DnsTransactionFactoryImpl : public DnsTransactionFactory {
       uint16_t qtype,
       CallbackType callback,
       const NetLogWithSource& net_log) override {
-    return std::unique_ptr<DnsTransaction>(new DnsTransactionImpl(
-        session_.get(), hostname, qtype, callback, net_log, opt_rdata_.get()));
+    return std::make_unique<DnsTransactionImpl>(session_.get(), hostname, qtype,
+                                                std::move(callback), net_log,
+                                                opt_rdata_.get());
   }
 
   void AddEDNSOption(const OptRecordRdata::Opt& opt) override {

@@ -4,8 +4,10 @@
 <translation id="1012876632442809908">‏جهاز USB-C (المنفذ الأمامي)</translation>
 <translation id="1013923882670373915">يريد جهاز بلوتوث "<ph name="DEVICE_NAME" />" الحصول على إذن للإقران. يُرجى إدخال رقم التعريف الشخصي هذا في هذا الجهاز: <ph name="PINCODE" /></translation>
 <translation id="1032891413405719768">بطارية قلم الشاشة منخفضة</translation>
+<translation id="1037492556044956303">تمت إضافة جهاز <ph name="DEVICE_NAME" /></translation>
 <translation id="1056775291175587022">لم يتم العثور على أي شبكات.</translation>
 <translation id="1059194134494239015"><ph name="DISPLAY_NAME" />: <ph name="RESOLUTION" /></translation>
+<translation id="1104621072296271835">تعمل أجهزتك بشكل أفضل وهي مرتبطة معًا</translation>
 <translation id="112308213915226829">الإخفاء التلقائي للرف</translation>
 <translation id="1153356358378277386">الأجهزة المقترنة</translation>
 <translation id="1195412055398077112">الخروج عن إطار الشاشة</translation>
@@ -34,7 +36,6 @@
 <translation id="1658406695958299976">عذرًا، لا يمكن التحقق من كلمة المرور حتى الآن. ملاحظة: في حال تغيير كلمة المرور مؤخرًا، سيتم تطبيق كلمة المرور الجديدة بعد تسجيل الخروج، يُرجى استخدام كلمة المرور القديمة هنا.</translation>
 <translation id="1677472565718498478">الوقت المتبقي <ph name="TIME" /></translation>
 <translation id="1698760176351776263">‏عنوان IPv6:‏ <ph name="ADDRESS" /></translation>
-<translation id="170389796989115980">قد يتمكن مشرف الجهاز من مراقبة نشاطك.</translation>
 <translation id="1734367976349034509">يخضع هذا الجهاز لإدارة المؤسسة</translation>
 <translation id="1746730358044914197">تتم تهيئة طرق الإدخال بواسطة المشرف.</translation>
 <translation id="1747827819627189109">تم تفعيل لوحة المفاتيح على الشاشة</translation>
@@ -60,7 +61,6 @@
 <translation id="2050339315714019657">رأسي</translation>
 <translation id="2067602449040652523">سطوع لوحة المفاتيح</translation>
 <translation id="2081529251031312395">سيظل بإمكان $1 تسجيل الدخول لاحقًا.</translation>
-<translation id="2122028596993374965">إيقاف إرسال <ph name="TAB_NAME" /> إلى <ph name="RECEIVER_NAME" /></translation>
 <translation id="2127372758936585790">شاحن منخفض الطاقة</translation>
 <translation id="2135456203358955318">المكبّر الذي تم إرساؤه</translation>
 <translation id="2144487987174258011">‏إعادة التشغيل لتحديث Adobe Flash Player</translation>
@@ -73,7 +73,6 @@
 <translation id="2303600792989757991">نظرة عامة لنافذة التبديل</translation>
 <translation id="2338501278241028356">تشغيل البلوتوث لاكتشاف الأجهزة القريبة</translation>
 <translation id="2339073806695260576">انقر على زر قلم الشاشة على الرف لتدوين ملاحظة أو للحصول على لقطة شاشة أو لاستخدام مؤشر الليزر أو العدسة المكبرة.</translation>
-<translation id="2351266942280602854">اللغة والإدخال</translation>
 <translation id="2352467521400612932">إعدادات قلم الشاشة</translation>
 <translation id="2354174487190027830">تفعيل <ph name="NAME" /></translation>
 <translation id="2359808026110333948">المتابعة</translation>
@@ -91,7 +90,6 @@
 <translation id="2597972630681408282">إضاءة ليلية: <ph name="NIGHT_LIGHT_STATUS" /></translation>
 <translation id="2617342710774726426">‏تم قفل شريحة SIM</translation>
 <translation id="2653659639078652383">إرسال</translation>
-<translation id="2696763960464195425">ستتم إزالة معلوماتك عند تسجيل الخروج. <ph name="LEARN_MORE" /></translation>
 <translation id="2700493154570097719">تعيين لوحة المفاتيح</translation>
 <translation id="2718395828230677721">الإضاءة الليلية</translation>
 <translation id="2727977024730340865">تمّ توصيل شاحن منخفض الطاقة. لذا قد لا تكون عملية شحن البطارية جديرة بالثقة.</translation>
@@ -99,6 +97,7 @@
 <translation id="277257480934873581">إعادة الاتصال بـ <ph name="NAME" /></translation>
 <translation id="2792498699870441125">‏Alt+مفتاح البحث</translation>
 <translation id="2805756323405976993">تطبيقات</translation>
+<translation id="2808012452536866044">‏تم ربط خدمة Better Together بهاتف جديد</translation>
 <translation id="2819276065543622893">سيتم تسجيل خروجك الآن.</translation>
 <translation id="2825619548187458965">الرف</translation>
 <translation id="2844169650293029770">‏جهاز USB-C (المنفذ الأمامي الأيسر)</translation>
@@ -107,10 +106,12 @@
 <translation id="2878884018241093801">ليست هناك عناصر تم استخدامها مؤخرًا</translation>
 <translation id="2903844815300039659">تم الاتصال بشبكة <ph name="NAME" />، <ph name="STRENGTH" /></translation>
 <translation id="2911940648265863620">أنت تشارك شاشتك حاليًا</translation>
+<translation id="2942350706960889382">تفعيل المكبّر</translation>
 <translation id="2942516765047364088">وضع الرف</translation>
 <translation id="2946119680249604491">إضافة اتصال</translation>
 <translation id="2961963223658824723">حدث خطأ. يُرجى إعادة المحاولة خلال بضع ثوانٍ.</translation>
 <translation id="2963773877003373896">mod3</translation>
+<translation id="2996462380875591307">‏تم تفعيل المكبّر. يمكنك إيقافه بالضغط على Ctrl+Search+D مرة أخرى.</translation>
 <translation id="2999742336789313416"><ph name="DISPLAY_NAME" /> هي جلسة عامة يديرها <ph name="DOMAIN" /></translation>
 <translation id="3000461861112256445">صوت أحادي</translation>
 <translation id="3009178788565917040">الإخراج</translation>
@@ -170,6 +171,7 @@
 <translation id="4072264167173457037">إشارة متوسطة</translation>
 <translation id="4200057768455216496">لقد ضغطت على اختصار المُكبِّر الذي تم إرساؤه. هل ترغب في تفعيله؟</translation>
 <translation id="4217571870635786043">إملاء</translation>
+<translation id="4274921305979314545">‏ربط جهاز Chromebook بهاتفك</translation>
 <translation id="4279490309300973883">النسخ المطابق</translation>
 <translation id="4321179778687042513">ctrl</translation>
 <translation id="4331809312908958774">Chrome OS</translation>
@@ -189,6 +191,7 @@
 <translation id="4544944664594876241">لقد تغير اختصار قفل الشاشة. يُرجى استخدام <ph name="NEW_SHORTCUT" /> بدلاً من <ph name="OLD_SHORTCUT" />.</translation>
 <translation id="4564869809620998694">خدمة الخطوط</translation>
 <translation id="4570957409596482333">زر "سماع الاختيار"</translation>
+<translation id="4585337515783392668">إيقاف الإرسال إلى مستلم غير معروف</translation>
 <translation id="4628757576491864469">الأجهزة</translation>
 <translation id="4659419629803378708">‏تم تفعيل ChromeVox</translation>
 <translation id="4734965478015604180">أفقي</translation>
@@ -223,6 +226,7 @@
 <translation id="554893713779400387">تبديل الإملاء</translation>
 <translation id="5571066253365925590">تم تفعيل البلوتوث</translation>
 <translation id="5597451508971090205"><ph name="SHORT_WEEKDAY" />، <ph name="DATE" /></translation>
+<translation id="5598551463564921617">‏خدمة Better Together مفعّلة</translation>
 <translation id="5600837773213129531">‏اضغط على Ctrl + Alt + Z لإيقاف التعليقات والملاحظات المنطوقة</translation>
 <translation id="5648021990716966815">مقبس الميكروفون</translation>
 <translation id="5669267381087807207">تفعيل</translation>
@@ -234,12 +238,13 @@
 <translation id="5805697420284793859">مدير النوافذ</translation>
 <translation id="5820394555380036790">‏نظام التشغيل Chromium</translation>
 <translation id="5832805196449965646">إضافة شخص</translation>
+<translation id="5837036133683224804">إيقاف <ph name="ROUTE_TITLE" /> في <ph name="RECEIVER_NAME" /></translation>
 <translation id="5860033963881614850">إيقاف</translation>
 <translation id="5895138241574237353">إعادة التشغيل</translation>
 <translation id="5901316534475909376">Shift+Esc</translation>
 <translation id="5911533659001334206">عارض الاختصارات</translation>
 <translation id="5916664084637901428">تشغيل</translation>
-<translation id="5927132638760172455">إرسال إلى مستلم غير معروف</translation>
+<translation id="592343074608792716">‏سيتم الربط تلقائيًا بين جهاز Chromebook هذا وهاتفك.</translation>
 <translation id="5947494881799873997">التراجع عن الإجراء</translation>
 <translation id="595202126637698455">تم تفعيل تتبع مستوى الأداء</translation>
 <translation id="5957083217255311415">تم إيقاف ميزة بيانات الجوّال.</translation>
@@ -262,6 +267,7 @@
 <translation id="6164005077879661055">سيتم حذف جميع الملفات والبيانات المحلية المقترنة بالمستخدم الذي يخضع للإشراف نهائيًا بمجرد 
 إزالة هذا المستخدم الذي يخضع للإشراف. وقد تظل مواقع الويب التي تم الانتقال إليها والإعدادات التابعة للمستخدم الذي يخضع للإشراف مرئية للمدير على <ph name="MANAGEMENT_URL" />.</translation>
 <translation id="6165508094623778733">مزيد من المعلومات</translation>
+<translation id="6259254695169772643">استخدام قلم الشاشة للاختيار</translation>
 <translation id="6267036997247669271"><ph name="NAME" />: جارٍ التفعيل...</translation>
 <translation id="6284232397434400372">تم تغيير درجة الدقة</translation>
 <translation id="6297287540776456956">استخدام قلم الشاشة لتحديد منطقة</translation>
@@ -270,6 +276,7 @@
 <translation id="639644700271529076">‏مفتاح CAPS LOCK قيد الإيقاف</translation>
 <translation id="6406704438230478924">altgr</translation>
 <translation id="643147933154517414">ليس لديك أي إشعارات</translation>
+<translation id="6445835306623867477"><ph name="ROUTE_TITLE" /> في <ph name="RECEIVER_NAME" /></translation>
 <translation id="6452181791372256707">رفض</translation>
 <translation id="6453179446719226835">تم تغيير اللغة</translation>
 <translation id="6459472438155181876">تمديد الشاشة إلى <ph name="DISPLAY_NAME" /></translation>
@@ -304,7 +311,6 @@
 <translation id="698231206551913481">سيتم حذف جميع الملفات والبيانات المحلية المرتبطة بهذا المستخدم نهائيًا بمجرد إزالة هذا المستخدم.</translation>
 <translation id="7015766095477679451">يمكنك العودة لاستخدام الجهاز في <ph name="COME_BACK_TIME" />.</translation>
 <translation id="7029814467594812963">إنهاء الجلسة</translation>
-<translation id="7034339000180558234">إرسال <ph name="TAB_NAME" /> إلى <ph name="RECEIVER_NAME" />.</translation>
 <translation id="7037152028959403492">لقد ضغطت على اختصار التباين العالي. هل ترغب في تفعيله؟</translation>
 <translation id="7066646422045619941">تم إيقاف هذه الشبكة من قِبل مشرفك.</translation>
 <translation id="7067196344162293536">تدوير تلقائي</translation>
@@ -351,6 +357,7 @@
 <translation id="7982789257301363584">الشبكة</translation>
 <translation id="7994370417837006925">الدخول المتعدد</translation>
 <translation id="8000066093800657092">لا شبكة</translation>
+<translation id="8029241286966751120">‏تم تفعيل المكبّر بوضع ملء الشاشة. يمكنك إيقافه بالضغط على Ctrl+Search+M مرة أخرى.</translation>
 <translation id="8054466585765276473">يجري حساب وقت البطارية.</translation>
 <translation id="8061464966246066292">تباين عالٍ</translation>
 <translation id="8098591350844501178">إيقاف إرسال الشاشة إلى <ph name="RECEIVER_NAME" /></translation>
@@ -359,13 +366,14 @@
 <translation id="813913629614996137">جارٍ التهيئة...</translation>
 <translation id="8142699993796781067">الشبكة الخاصة</translation>
 <translation id="8152119955266188852">لقد ضغطت على اختصار المُكبِّر بملء الشاشة. هل ترغب في تفعيله؟</translation>
-<translation id="8180896103888046100">إيقاف الإرسال إلى مستلم غير معروف</translation>
 <translation id="8190698733819146287">تخصيص اللغات والإدخال...</translation>
 <translation id="8261506727792406068">حذف</translation>
 <translation id="8297006494302853456">ضعيفة</translation>
 <translation id="8308637677604853869">القائمة السابقة</translation>
 <translation id="8351131234907093545">إنشاء ملاحظة</translation>
 <translation id="8392451568018454956">قائمة الخيارات لـ <ph name="USER_EMAIL_ADDRESS" /></translation>
+<translation id="8406981827175133772">مُكبِّر بوضع ملء الشاشة</translation>
+<translation id="8427213022735114808">‏ترسل ميزة "الإملاء" صوتك إلى Google للسماح بالكتابة بالصوت في أي حقل نصي.</translation>
 <translation id="8428213095426709021">الإعدادات</translation>
 <translation id="8431190899827883166">عرض النقرات</translation>
 <translation id="8433186206711564395">إعدادات الشبكة</translation>
@@ -399,7 +407,6 @@
 <translation id="8984179138335769204">التشغيل السريع</translation>
 <translation id="8995603266996330174">مدار بواسطة <ph name="DOMAIN" /></translation>
 <translation id="9029474291399787231">‏هناك تحديث جديد لتطبيق Adobe Flash Player</translation>
-<translation id="9033907480196064950">أنت حاليًا تبث <ph name="TAB_NAME" />.</translation>
 <translation id="9074739597929991885">بلوتوث</translation>
 <translation id="9079731690316798640">‏Wi-Fi:‏ <ph name="ADDRESS" /></translation>
 <translation id="9080206825613744995">الميكروفون قيد الاستخدام</translation>
@@ -408,6 +415,7 @@
 <translation id="9111102763498581341">فتح القفل</translation>
 <translation id="9151726767154816831">‏إعادة التشغيل وإجراء Powerwash للتحديث</translation>
 <translation id="9179259655489829027">تسمح لك هذه الميزة بالوصول بسرعة إلى أي مستخدم سجّل دخوله بدون طلب كلمة مرور. لا تستخدم هذه الميزة إلا مع الحسابات التي تثق بها.</translation>
+<translation id="9193626018745640770">إرسال إلى مستلم غير معروف</translation>
 <translation id="9194617393863864469">تسجيل دخول مستخدم آخر...</translation>
 <translation id="9201131092683066720">اكتمل شحن <ph name="PERCENTAGE" />% من البطارية.</translation>
 <translation id="9210037371811586452">جارٍ الخروج من وضع سطح المكتب الموحد</translation>

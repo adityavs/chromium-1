@@ -8,7 +8,6 @@
 
 #include "android_webview/browser/aw_content_browser_client.h"
 #include "android_webview/browser/aw_media_url_interceptor.h"
-#include "android_webview/browser/aw_safe_browsing_config_helper.h"
 #include "android_webview/browser/browser_view_renderer.h"
 #include "android_webview/browser/command_line_helper.h"
 #include "android_webview/browser/deferred_gpu_command_service.h"
@@ -16,7 +15,7 @@
 #include "android_webview/common/aw_descriptors.h"
 #include "android_webview/common/aw_paths.h"
 #include "android_webview/common/aw_switches.h"
-#include "android_webview/common/crash_reporter/aw_microdump_crash_reporter.h"
+#include "android_webview/common/crash_reporter/aw_crash_reporter_client.h"
 #include "android_webview/common/crash_reporter/crash_keys.h"
 #include "android_webview/gpu/aw_content_gpu_client.h"
 #include "android_webview/renderer/aw_content_renderer_client.h"

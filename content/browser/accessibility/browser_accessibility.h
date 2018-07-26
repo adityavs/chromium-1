@@ -73,7 +73,7 @@ class CONTENT_EXPORT BrowserAccessibility : public ui::AXPlatformNodeDelegate {
   // caller.
   static BrowserAccessibility* Create();
 
-  virtual ~BrowserAccessibility();
+  ~BrowserAccessibility() override;
 
   // Called only once, immediately after construction. The constructor doesn't
   // take any arguments because in the Windows subclass we use a special
@@ -160,10 +160,14 @@ class CONTENT_EXPORT BrowserAccessibility : public ui::AXPlatformNodeDelegate {
   // Returns the bounds of the given range in coordinates relative to the
   // top-left corner of the overall web area. Only valid when the
   // role is WebAXRoleStaticText.
-  gfx::Rect GetPageBoundsForRange(int start, int len) const;
+  gfx::Rect GetPageBoundsForRange(int start,
+                                  int len,
+                                  bool clipped = false) const;
 
   // Same as |GetPageBoundsForRange| but in screen coordinates.
-  gfx::Rect GetScreenBoundsForRange(int start, int len) const;
+  gfx::Rect GetScreenBoundsForRange(int start,
+                                    int len,
+                                    bool clipped = false) const;
 
   // Convert a bounding rectangle from this node's coordinate system
   // (which is relative to its nearest scrollable ancestor) to
@@ -343,7 +347,9 @@ class CONTENT_EXPORT BrowserAccessibility : public ui::AXPlatformNodeDelegate {
   gfx::AcceleratedWidget GetTargetForNativeAccessibilityEvent() override;
   int GetTableRowCount() const override;
   int GetTableColCount() const override;
+  std::vector<int32_t> GetColHeaderNodeIds() const override;
   std::vector<int32_t> GetColHeaderNodeIds(int32_t col_index) const override;
+  std::vector<int32_t> GetRowHeaderNodeIds() const override;
   std::vector<int32_t> GetRowHeaderNodeIds(int32_t row_index) const override;
   int32_t GetCellId(int32_t row_index, int32_t col_index) const override;
   int32_t CellIdToIndex(int32_t cell_id) const override;

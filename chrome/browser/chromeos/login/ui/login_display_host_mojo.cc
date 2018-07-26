@@ -14,7 +14,6 @@
 #include "chrome/browser/chromeos/login/screens/gaia_view.h"
 #include "chrome/browser/chromeos/login/ui/login_display.h"
 #include "chrome/browser/chromeos/login/ui/login_display_mojo.h"
-#include "chrome/browser/chromeos/login/ui/oobe_ui_dialog_delegate.h"
 #include "chrome/browser/chromeos/login/user_board_view_mojo.h"
 #include "chrome/browser/chromeos/login/wizard_controller.h"
 #include "chrome/browser/ui/ash/login_screen_client.h"
@@ -29,6 +28,7 @@ namespace {
 
 constexpr char kLoginDisplay[] = "login";
 constexpr char kAccelSendFeedback[] = "send_feedback";
+constexpr char kAccelReset[] = "reset";
 
 }  // namespace
 
@@ -47,8 +47,8 @@ LoginDisplayHostMojo::LoginDisplayHostMojo()
       weak_factory_(this) {
   user_selection_screen_->SetView(user_board_view_mojo_.get());
 
-  // Preload the WebUI for post-login screens.
-  InitWidgetAndView();
+  // Preload webui-based OOBE for add user, kiosk apps, etc.
+  LoadOobeDialog();
 }
 
 LoginDisplayHostMojo::~LoginDisplayHostMojo() {
@@ -78,35 +78,47 @@ void LoginDisplayHostMojo::ShowPasswordChangedDialog(bool show_password_error,
   DCHECK(GetOobeUI());
   GetOobeUI()->signin_screen_handler()->ShowPasswordChangedDialog(
       show_password_error, email);
-  dialog_->Show(false /*closable_by_esc*/);
+  dialog_->Show();
 }
 
 void LoginDisplayHostMojo::ShowWhitelistCheckFailedError() {
   DCHECK(GetOobeUI());
   GetOobeUI()->signin_screen_handler()->ShowWhitelistCheckFailedError();
-  dialog_->Show(true /*closable_by_esc*/);
+  dialog_->Show();
 }
 
 void LoginDisplayHostMojo::ShowUnrecoverableCrypthomeErrorDialog() {
   DCHECK(GetOobeUI());
   GetOobeUI()->signin_screen_handler()->ShowUnrecoverableCrypthomeErrorDialog();
-  dialog_->Show(false /*closable_by_esc*/);
+  dialog_->Show();
 }
 
 void LoginDisplayHostMojo::ShowErrorScreen(LoginDisplay::SigninError error_id) {
   DCHECK(GetOobeUI());
   GetOobeUI()->signin_screen_handler()->ShowErrorScreen(error_id);
-  dialog_->Show(false /*closable_by_esc*/);
+  dialog_->Show();
 }
 
 void LoginDisplayHostMojo::ShowSigninUI(const std::string& email) {
   DCHECK(GetOobeUI());
   GetOobeUI()->signin_screen_handler()->ShowSigninUI(email);
-  dialog_->Show(true /*closable_by_esc*/);
+  dialog_->Show();
+}
+
+void LoginDisplayHostMojo::ShowDialogForCaptivePortal() {
+  dialog_->Show();
+}
+
+void LoginDisplayHostMojo::HideDialogForCaptivePortal() {
+  dialog_->Hide();
 }
 
 LoginDisplay* LoginDisplayHostMojo::GetLoginDisplay() {
   return login_display_.get();
+}
+
+ExistingUserController* LoginDisplayHostMojo::GetExistingUserController() {
+  return existing_user_controller_.get();
 }
 
 gfx::NativeWindow LoginDisplayHostMojo::GetNativeWindow() const {
@@ -148,14 +160,10 @@ void LoginDisplayHostMojo::SetStatusAreaVisible(bool visible) {
 void LoginDisplayHostMojo::StartWizard(OobeScreen first_screen) {
   DCHECK(GetOobeUI());
 
-  // Dtor of the old WizardController should be called before ctor of the
-  // new one to ensure only one |ExistingUserController| instance at a time.
-  wizard_controller_.reset();
-  wizard_controller_.reset(new WizardController(this, GetOobeUI()));
+  wizard_controller_ = std::make_unique<WizardController>();
   wizard_controller_->Init(first_screen);
 
-  // Post login screens should not be closable by escape key.
-  dialog_->Show(false /*closable_by_esc*/);
+  dialog_->Show();
 }
 
 WizardController* LoginDisplayHostMojo::GetWizardController() {
@@ -183,9 +191,17 @@ void LoginDisplayHostMojo::OnStartSignInScreen(
     return;
   }
 
-  // There can only be one |ExistingUserController| instance at a time.
-  existing_user_controller_.reset();
-  existing_user_controller_ = std::make_unique<ExistingUserController>(this);
+  if (signin_screen_started_) {
+    // If we already have a signin screen instance, just reset the state of the
+    // oobe dialog.
+    HideOobeDialog();
+    GetOobeUI()->GetGaiaScreenView()->ShowGaiaAsync(base::nullopt);
+    return;
+  }
+
+  signin_screen_started_ = true;
+
+  existing_user_controller_ = std::make_unique<ExistingUserController>();
   login_display_->set_delegate(existing_user_controller_.get());
 
   // We need auth attempt results to notify views-based lock screen.
@@ -200,6 +216,9 @@ void LoginDisplayHostMojo::OnStartSignInScreen(
 
   // Start to request version info.
   version_info_updater_->StartUpdate();
+
+  // Update status of add user button in the shelf.
+  UpdateAddUserButtonStatus();
 }
 
 void LoginDisplayHostMojo::OnPreferencesChanged() {
@@ -211,7 +230,7 @@ void LoginDisplayHostMojo::OnStartAppLaunch() {
 }
 
 void LoginDisplayHostMojo::OnStartArcKiosk() {
-  NOTIMPLEMENTED();
+  dialog_->ShowFullScreen();
 }
 
 void LoginDisplayHostMojo::OnBrowserCreated() {
@@ -230,7 +249,7 @@ bool LoginDisplayHostMojo::IsVoiceInteractionOobe() {
 void LoginDisplayHostMojo::ShowGaiaDialog(
     bool can_close,
     const base::Optional<AccountId>& prefilled_account) {
-  DCHECK(dialog_);
+  DCHECK(GetOobeUI());
   can_close_dialog_ = can_close;
 
   // Always disabling closing if there are no users, otherwise a blank screen
@@ -239,38 +258,47 @@ void LoginDisplayHostMojo::ShowGaiaDialog(
     can_close_dialog_ = false;
 
   if (prefilled_account) {
-    bool is_signing_in = login_display_->IsSigninInProgress();
     // Make sure gaia displays |account| if requested.
-    if (!is_signing_in)
+    if (!login_display_->IsSigninInProgress())
       GetOobeUI()->GetGaiaScreenView()->ShowGaiaAsync(prefilled_account);
     LoadWallpaper(*prefilled_account);
   } else {
+    // Two criteria here:
+    // 1) If we have started a wizard other than Gaia signin (signified by the
+    // current_screen() changing), we need to reload the Gaia screen, otherwise
+    // dialog_->Show() will show the wrong screen. 2) While login is being
+    // loaded in, the current_screen is UNKNOWN. During this time, the
+    // GaiaScreenView is initialized, after which ShowGaiaAsync() is called to
+    // load up the Gaia screen. If we try to ShowGaiaAsync() before this
+    // initialization is complete, the Gaia screen UI can crash and get stuck.
+    if (GetOobeUI()->current_screen() != OobeScreen::SCREEN_GAIA_SIGNIN &&
+        GetOobeUI()->current_screen() != OobeScreen::SCREEN_UNKNOWN) {
+      GetOobeUI()->GetGaiaScreenView()->ShowGaiaAsync(base::nullopt);
+    }
     LoadSigninWallpaper();
   }
 
-  dialog_->Show(can_close /*closable_by_esc*/);
+  dialog_->Show();
   return;
 }
 
-void LoginDisplayHostMojo::HideGaiaDialog() {
+void LoginDisplayHostMojo::HideOobeDialog() {
   DCHECK(dialog_);
+  if (!can_close_dialog_)
+    return;
 
-  if (GetOobeUI() && !can_close_dialog_) {
-    bool is_signing_in = login_display_->IsSigninInProgress();
-
-    // The dialog can not be closed if there is no user on the login screen.
-    // Refresh the dialog instead.
-    if (!is_signing_in && users_.empty() && GetOobeUI()) {
-      GetOobeUI()->GetGaiaScreenView()->ShowGaiaAsync(base::nullopt);
-      return;
-    }
-
-    LoadWallpaper(focused_pod_account_id_);
-    dialog_->Hide();
+  // The dialog can not be hidden if there are no users on the login screen.
+  // Reload it instead.
+  if (!login_display_->IsSigninInProgress() && users_.empty()) {
+    GetOobeUI()->GetGaiaScreenView()->ShowGaiaAsync(base::nullopt);
+    return;
   }
+
+  LoadWallpaper(focused_pod_account_id_);
+  dialog_->Hide();
 }
 
-void LoginDisplayHostMojo::UpdateGaiaDialogSize(int width, int height) {
+void LoginDisplayHostMojo::UpdateOobeDialogSize(int width, int height) {
   if (dialog_)
     dialog_->UpdateSizeAndPosition(width, height);
 }
@@ -281,14 +309,22 @@ const user_manager::UserList LoginDisplayHostMojo::GetUsers() {
 
 void LoginDisplayHostMojo::ShowFeedback() {
   DCHECK(GetOobeUI());
-  GetOobeUI()->web_ui()->CallJavascriptFunctionUnsafe(
-      "cr.ui.Oobe.handleAccelerator", base::Value(kAccelSendFeedback));
+  GetOobeUI()->ForwardAccelerator(kAccelSendFeedback);
 }
 
-void LoginDisplayHostMojo::CancelPasswordChangedFlow() {
-  // Close the Oobe UI dialog.
-  HideGaiaDialog();
-  LoginDisplayHostCommon::CancelPasswordChangedFlow();
+void LoginDisplayHostMojo::ShowResetScreen() {
+  DCHECK(GetOobeUI());
+  GetOobeUI()->ForwardAccelerator(kAccelReset);
+}
+
+void LoginDisplayHostMojo::UpdateAddUserButtonStatus() {
+  DCHECK(GetOobeUI());
+  LoginScreenClient::Get()->login_screen()->SetAddUserButtonEnabled(
+      !GetOobeUI()->signin_screen_handler()->AllWhitelistedUsersPresent());
+}
+
+void LoginDisplayHostMojo::OnCancelPasswordChangedFlow() {
+  HideOobeDialog();
 }
 
 void LoginDisplayHostMojo::HandleAuthenticateUser(
@@ -310,6 +346,19 @@ void LoginDisplayHostMojo::HandleAuthenticateUser(
   user_context.SetIsUsingPin(authenticated_by_pin);
   user_context.SetKey(
       Key(chromeos::Key::KEY_TYPE_PASSWORD_PLAIN, "" /*salt*/, password));
+  // Save the user's plaintext password for possible authentication to a
+  // network. If the user's OpenNetworkConfiguration policy contains a
+  // ${PASSWORD} variable, then the user's password will be used to authenticate
+  // to the specified network.
+  //
+  // The user's password needs to be saved in memory until the policy can be
+  // examined. When the policy comes in, if it does not contain the ${PASSWORD}
+  // variable, the user's password will be discarded. If it contains the
+  // password, it will be sent to the session manager, which will then save it
+  // in a keyring so it can be retrieved for authenticating to the network.
+  //
+  // More details can be found in https://crbug.com/386606
+  user_context.SetPasswordKey(Key(password));
   if (account_id.GetAccountType() == AccountType::ACTIVE_DIRECTORY &&
       (user_context.GetUserType() !=
        user_manager::UserType::USER_TYPE_ACTIVE_DIRECTORY)) {
@@ -385,12 +434,11 @@ void LoginDisplayHostMojo::OnAuthSuccess(const UserContext& user_context) {
   }
 }
 
-void LoginDisplayHostMojo::InitWidgetAndView() {
+void LoginDisplayHostMojo::LoadOobeDialog() {
   if (dialog_)
     return;
 
   dialog_ = new OobeUIDialogDelegate(weak_factory_.GetWeakPtr());
-  dialog_->Init();
   dialog_->GetOobeUI()->signin_screen_handler()->SetDelegate(
       login_display_.get());
 }

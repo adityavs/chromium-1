@@ -11,6 +11,8 @@
 #include "base/gtest_prod_util.h"
 #include "base/strings/string16.h"
 #include "base/strings/string_piece_forward.h"
+#include "net/extras/preload_data/decoder.h"
+
 #include "third_party/icu/source/common/unicode/uniset.h"
 #include "third_party/icu/source/common/unicode/utypes.h"
 #include "third_party/icu/source/common/unicode/uversion.h"
@@ -35,6 +37,14 @@ FORWARD_DECLARE_TEST(UrlFormatterTest, IDNToUnicode);
 
 class IDNSpoofChecker {
  public:
+  struct HuffmanTrieParams {
+    const uint8_t* huffman_tree;
+    size_t huffman_tree_size;
+    const uint8_t* trie;
+    size_t trie_bits;
+    size_t trie_root_position;
+  };
+
   IDNSpoofChecker();
   ~IDNSpoofChecker();
 
@@ -43,15 +53,16 @@ class IDNSpoofChecker {
   // See the function body for details on the specific safety checks performed.
   bool SafeToDisplayAsUnicode(base::StringPiece16 label, bool is_tld_ascii);
 
-  // Returns true if |hostname| or the last few components of |hostname| looks
-  // similar to one of top domains listed in top_domains/alexa_domains.list. Two
-  // checks are done:
+  // Returns the matching top domain if |hostname| or the last few components of
+  // |hostname| looks similar to one of top domains listed i
+  // top_domains/alexa_domains.list.
+  // Two checks are done:
   //   1. Calculate the skeleton of |hostname| based on the Unicode confusable
   //   character list and look it up in the pre-calculated skeleton list of
   //   top domains.
   //   2. Look up the diacritic-free version of |hostname| in the list of
   //   top domains. Note that non-IDN hostnames will not get here.
-  bool SimilarToTopDomains(base::StringPiece16 hostname);
+  std::string GetSimilarTopDomain(base::StringPiece16 hostname);
 
  private:
   // Sets allowed characters in IDN labels and turns on USPOOF_CHAR_LIMIT.
@@ -62,8 +73,8 @@ class IDNSpoofChecker {
   bool IsMadeOfLatinAlikeCyrillic(const icu::UnicodeString& label);
 
   // Used for unit tests.
-  static void RestoreTopDomainGraphToDefault();
-  static void SetTopDomainGraph(base::StringPiece domain_graph);
+  static void SetTrieParamsForTesting(const HuffmanTrieParams& trie_params);
+  static void RestoreTrieParamsForTesting();
 
   USpoofChecker* checker_;
   icu::UnicodeSet deviation_characters_;

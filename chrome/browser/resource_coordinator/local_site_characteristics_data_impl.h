@@ -113,6 +113,12 @@ class LocalSiteCharacteristicsDataImpl
 
   const url::Origin& origin() const { return origin_; }
 
+  void ExpireAllObservationWindowsForTesting();
+
+  void ClearObservationsAndInvalidateReadOperationForTesting() {
+    ClearObservationsAndInvalidateReadOperation();
+  }
+
  protected:
   friend class base::RefCounted<LocalSiteCharacteristicsDataImpl>;
   friend class LocalSiteCharacteristicsDataImplTest;
@@ -181,7 +187,8 @@ class LocalSiteCharacteristicsDataImpl
 
   // Helper function to update a given |SiteCharacteristicsFeatureProto| when a
   // feature gets used.
-  void NotifyFeatureUsage(SiteCharacteristicsFeatureProto* feature_proto);
+  void NotifyFeatureUsage(SiteCharacteristicsFeatureProto* feature_proto,
+                          const char* feature_name);
 
   bool IsLoaded() const { return loaded_tabs_count_ > 0U; }
 
@@ -223,9 +230,10 @@ class LocalSiteCharacteristicsDataImpl
   // destroyed, it should outlive this object.
   OnDestroyDelegate* const delegate_;
 
-  // Indicates if this object is in a state where it can be written to the
-  // database without erasing some data.
-  bool safe_to_write_to_db_;
+  // Indicates if this object has been fully initialized, either because the
+  // read operation from the database has completed or because it has been
+  // cleared.
+  bool fully_initialized_;
 
   // Dirty bit, indicates if any of the fields in |site_characteristics_| has
   // changed since it has been initialized.

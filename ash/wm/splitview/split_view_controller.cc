@@ -1391,9 +1391,11 @@ void SplitViewController::RemoveWindowFromOverviewIfApplicable(
   overview_window_item_bounds_map_[window] = item->target_bounds();
 
   // Remove it from the grid. The transform will be reset later after the
-  // window is snapped.
+  // window is snapped. Note the remaining windows in overview don't need to be
+  // repositioned in this case as they have been positioned to the right place
+  // during dragging.
   item->RestoreWindow(/*reset_transform=*/false);
-  window_selector->RemoveWindowSelectorItem(item);
+  window_selector->RemoveWindowSelectorItem(item, /*reposition=*/false);
 }
 
 aura::Window* SplitViewController::GetSnappedWindowAt(
@@ -1412,7 +1414,7 @@ void SplitViewController::InsertWindowToOverview(aura::Window* window) {
   if (!window || !Shell::Get()->window_selector_controller()->IsSelecting())
     return;
   Shell::Get()->window_selector_controller()->window_selector()->AddItem(
-      window);
+      window, /*reposition=*/true);
 }
 
 void SplitViewController::StartOverview() {
@@ -1464,13 +1466,9 @@ void SplitViewController::EndWindowDragImpl(
         InsertWindowToOverview(previous_snapped_window);
       }
     } else {
-      // Maximize the window if we are not supposed to snap the window. End
-      // the overview mode first if it's active at the moment.
+      // End the overview mode if it's active at the moment. The dragged window
+      // will be restored back to its previous state before dragging.
       EndOverview();
-      // TODO(minch): Remove the logic that maximize the window explicitly,
-      // since window will be maximized in tablet mode if it is not snapped.
-      wm::WMEvent maximize_event(wm::WM_EVENT_MAXIMIZE);
-      wm::GetWindowState(window)->OnWMEvent(&maximize_event);
     }
   } else {
     aura::Window* previous_snapped_window =

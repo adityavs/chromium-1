@@ -28,6 +28,9 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   // Returns the padding on the left, right, and bottom of the avatar icon.
   static int GetAvatarIconPadding();
 
+  // Returns the padding on the sides of the tabstrip.
+  static int GetTabstripPadding();
+
   BrowserView* browser_view() const { return browser_view_; }
   BrowserFrame* frame() const { return frame_; }
 
@@ -42,7 +45,7 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
   // Called on Linux X11 after the browser window is maximized or restored.
   virtual void OnMaximizedStateChanged();
 
-  // Called on Linux X11 after the browser window is fullscreened or
+  // Called on Linux X11 and Mac after the browser window is fullscreened or
   // unfullscreened.
   virtual void OnFullscreenStateChanged();
 
@@ -71,6 +74,9 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
 
   // Returns whether the top UI should hide.
   virtual bool ShouldHideTopUIForFullscreen() const;
+
+  // Returns whether the content is painted with a client edge or not.
+  virtual bool HasClientEdge() const;
 
   // Retrieves the icon to use in the frame to indicate an incognito window.
   gfx::ImageSkia GetIncognitoAvatarIcon() const;
@@ -111,7 +117,7 @@ class BrowserNonClientFrameView : public views::NonClientFrameView,
 
   // Whether the special painting mode for one tab is allowed, regardless of how
   // many tabs there are right now.
-  bool IsSingleTabModeAvailable() const;
+  virtual bool IsSingleTabModeAvailable() const;
 
   // views::NonClientFrameView:
   void ChildPreferredSizeChanged(views::View* child) override;

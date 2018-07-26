@@ -5,6 +5,7 @@
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_buffer.h"
 
 #include "third_party/blink/renderer/platform/fonts/character_range.h"
+#include "third_party/blink/renderer/platform/fonts/shaping/shape_result.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_inline_headers.h"
 #include "third_party/blink/renderer/platform/fonts/simple_font_data.h"
 #include "third_party/blink/renderer/platform/geometry/float_point.h"
@@ -25,6 +26,13 @@ CharacterRange ShapeResultBuffer::GetCharacterRange(
   Vector<scoped_refptr<const ShapeResult>, 64> results;
   results.push_back(result);
   return GetCharacterRangeInternal(results, direction, total_width, from, to);
+}
+
+CharacterRange ShapeResultBuffer::GetCharacterRange(float total_width,
+                                                    TextDirection direction,
+                                                    unsigned from,
+                                                    unsigned to) const {
+  return GetCharacterRangeInternal(results_, direction, total_width, from, to);
 }
 
 CharacterRange ShapeResultBuffer::GetCharacterRangeInternal(
@@ -123,13 +131,6 @@ CharacterRange ShapeResultBuffer::GetCharacterRangeInternal(
   return CharacterRange(to_x, from_x, -min_y, max_y);
 }
 
-CharacterRange ShapeResultBuffer::GetCharacterRange(TextDirection direction,
-                                                    float total_width,
-                                                    unsigned from,
-                                                    unsigned to) const {
-  return GetCharacterRangeInternal(results_, direction, total_width, from, to);
-}
-
 void ShapeResultBuffer::AddRunInfoRanges(const ShapeResult::RunInfo& run_info,
                                          float offset,
                                          Vector<CharacterRange>& ranges) {
@@ -137,10 +138,13 @@ void ShapeResultBuffer::AddRunInfoRanges(const ShapeResult::RunInfo& run_info,
   for (const auto& glyph : run_info.glyph_data_)
     character_widths[glyph.character_index] += glyph.advance;
 
+  if (run_info.Rtl())
+    offset += run_info.width_;
+
   for (unsigned character_index = 0; character_index < run_info.num_characters_;
        character_index++) {
     float start = offset;
-    offset += character_widths[character_index];
+    offset += character_widths[character_index] * (run_info.Rtl() ? -1 : 1);
     float end = offset;
 
     // To match getCharacterRange we flip ranges to ensure start <= end.
@@ -157,24 +161,28 @@ Vector<CharacterRange> ShapeResultBuffer::IndividualCharacterRanges(
   Vector<CharacterRange> ranges;
   float current_x = direction == TextDirection::kRtl ? total_width : 0;
   for (const scoped_refptr<const ShapeResult> result : results_) {
-    if (direction == TextDirection::kRtl)
-      current_x -= result->Width();
     unsigned run_count = result->runs_.size();
-    for (unsigned index = 0; index < run_count; index++) {
-      unsigned run_index =
-          direction == TextDirection::kRtl ? run_count - 1 - index : index;
-      AddRunInfoRanges(*result->runs_[run_index], current_x, ranges);
-      current_x += result->runs_[run_index]->width_;
+
+    if (result->Rtl()) {
+      for (int index = run_count - 1; index >= 0; index--) {
+        current_x -= result->runs_[index]->width_;
+        AddRunInfoRanges(*result->runs_[index], current_x, ranges);
+      }
+    } else {
+      for (unsigned index = 0; index < run_count; index++) {
+        AddRunInfoRanges(*result->runs_[index], current_x, ranges);
+        current_x += result->runs_[index]->width_;
+      }
     }
-    if (direction == TextDirection::kRtl)
-      current_x -= result->Width();
   }
   return ranges;
 }
 
-int ShapeResultBuffer::OffsetForPosition(const TextRun& run,
-                                         float target_x,
-                                         bool include_partial_glyphs) const {
+int ShapeResultBuffer::OffsetForPosition(
+    const TextRun& run,
+    float target_x,
+    IncludePartialGlyphsOption partial_glyphs,
+    BreakGlyphsOption break_glyphs) const {
   unsigned total_offset;
   if (run.Rtl()) {
     total_offset = run.length();
@@ -184,8 +192,8 @@ int ShapeResultBuffer::OffsetForPosition(const TextRun& run,
         continue;
       total_offset -= word_result->NumCharacters();
       if (target_x >= 0 && target_x <= word_result->Width()) {
-        int offset_for_word =
-            word_result->OffsetForPosition(target_x, include_partial_glyphs);
+        int offset_for_word = word_result->OffsetForPosition(
+            target_x, partial_glyphs, break_glyphs);
         return total_offset + offset_for_word;
       }
       target_x -= word_result->Width();
@@ -195,8 +203,8 @@ int ShapeResultBuffer::OffsetForPosition(const TextRun& run,
     for (const auto& word_result : results_) {
       if (!word_result)
         continue;
-      int offset_for_word =
-          word_result->OffsetForPosition(target_x, include_partial_glyphs);
+      int offset_for_word = word_result->OffsetForPosition(
+          target_x, partial_glyphs, break_glyphs);
       DCHECK_GE(offset_for_word, 0);
       total_offset += offset_for_word;
       if (target_x >= 0 && target_x <= word_result->Width())
@@ -205,6 +213,20 @@ int ShapeResultBuffer::OffsetForPosition(const TextRun& run,
     }
   }
   return total_offset;
+}
+
+void ShapeResultBuffer::ExpandRangeToIncludePartialGlyphs(int* from,
+                                                          int* to) const {
+  int offset = 0;
+  for (unsigned j = 0; j < results_.size(); j++) {
+    const scoped_refptr<const ShapeResult> result = results_[j];
+    for (unsigned i = 0; i < result->runs_.size(); i++) {
+      if (!result->runs_[i])
+        continue;
+      result->runs_[i]->ExpandRangeToIncludePartialGlyphs(offset, from, to);
+      offset += result->runs_[i]->num_characters_;
+    }
+  }
 }
 
 Vector<ShapeResult::RunFontData> ShapeResultBuffer::GetRunFontData() const {

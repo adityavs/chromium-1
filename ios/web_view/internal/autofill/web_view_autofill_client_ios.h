@@ -48,6 +48,9 @@ class WebViewAutofillClientIOS : public AutofillClient {
                         UnmaskCardReason reason,
                         base::WeakPtr<CardUnmaskDelegate> delegate) override;
   void OnUnmaskVerificationResult(PaymentsRpcResult result) override;
+  void ShowLocalCardMigrationPrompt(base::OnceClosure closure) override;
+  void ConfirmSaveAutofillProfile(const AutofillProfile& profile,
+                                  base::OnceClosure callback) override;
   void ConfirmSaveCreditCardLocally(const CreditCard& card,
                                     const base::Closure& callback) override;
   void ConfirmSaveCreditCardToCloud(
@@ -65,6 +68,7 @@ class WebViewAutofillClientIOS : public AutofillClient {
       const gfx::RectF& element_bounds,
       base::i18n::TextDirection text_direction,
       const std::vector<Suggestion>& suggestions,
+      bool /*unused_autoselect_first_suggestion*/,
       base::WeakPtr<AutofillPopupDelegate> delegate) override;
   void HideAutofillPopup() override;
   bool IsAutocompleteEnabled() override;

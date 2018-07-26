@@ -38,7 +38,15 @@ class DatabaseTaskHost {
  public:
   virtual void OnTaskFinished(DatabaseTask* task) = 0;
   virtual BackgroundFetchDataManager* data_manager() = 0;
-  virtual ~DatabaseTaskHost() = default;
+  virtual ~DatabaseTaskHost();
+
+  base::WeakPtr<DatabaseTaskHost> GetWeakPtr();
+
+ protected:
+  DatabaseTaskHost();
+
+ private:
+  base::WeakPtrFactory<DatabaseTaskHost> weak_factory_;
 };
 
 // A DatabaseTask is an asynchronous "transaction" that needs to read/write the
@@ -63,10 +71,14 @@ class DatabaseTask : public DatabaseTaskHost {
 
   // Each task MUST call this once finished, even if exceptions occur, to
   // release their lock and allow the next task to execute.
+  // This should be called in FinishWithError() for consistency.
   void Finished();
 
   void AddDatabaseTask(std::unique_ptr<DatabaseTask> task);
   void AddSubTask(std::unique_ptr<DatabaseTask> task);
+
+  // Abandon all fetches for a given service worker.
+  void AbandonFetches(int64_t service_worker_registration_id);
 
   ServiceWorkerContextWrapper* service_worker_context();
 
@@ -81,6 +93,12 @@ class DatabaseTask : public DatabaseTaskHost {
   BackgroundFetchDataManager* data_manager() override;
 
  private:
+  // Each task must override this function and perform the following steps:
+  // 1) Report error (UMA) if applicable.
+  // 2) Run the provided callback.
+  // 3) Call Finished().
+  virtual void FinishWithError(blink::mojom::BackgroundFetchError error) = 0;
+
   DatabaseTaskHost* host_;
 
   // Owns a reference to the CacheStorageManager in case Shutdown was

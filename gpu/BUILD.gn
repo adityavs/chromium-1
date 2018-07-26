@@ -349,6 +349,8 @@ test("gpu_unittests") {
     "command_buffer/service/gpu_service_test.cc",
     "command_buffer/service/gpu_service_test.h",
     "command_buffer/service/gpu_tracer_unittest.cc",
+    "command_buffer/service/gr_cache_controller_unittest.cc",
+    "command_buffer/service/gr_shader_cache_unittest.cc",
     "command_buffer/service/id_manager_unittest.cc",
     "command_buffer/service/indexed_buffer_binding_host_unittest.cc",
     "command_buffer/service/mailbox_manager_unittest.cc",
@@ -472,7 +474,7 @@ test("gpu_unittests") {
     "//gpu/ipc/host",
     "//gpu/ipc/service",
     "//ipc:test_support",
-    "//mojo/edk",
+    "//mojo/core/embedder",
     "//mojo/public/cpp/bindings",
     "//net:test_support",
     "//skia",
@@ -480,6 +482,7 @@ test("gpu_unittests") {
     "//testing/gtest",
     "//third_party/angle:translator",
     "//third_party/mesa:mesa_headers",
+    "//third_party/mesa:osmesa",
     "//ui/gfx",
     "//ui/gfx:test_support",
     "//ui/gfx/geometry",
@@ -525,6 +528,7 @@ test("gpu_perftests") {
   data_deps = [
     # Needed for isolate script to execute.
     "//testing:run_perf_test",
+    "//third_party/mesa:osmesa",
   ]
 
   # This target should not require the Chrome executable to run.
@@ -648,6 +652,52 @@ if (is_linux) {
     ]
 
     defines = [ "GPU_FUZZER_USE_RASTER_DECODER" ]
+
+    deps = [
+      ":gles2",
+      ":gpu",
+      "//base",
+      "//base/third_party/dynamic_annotations",
+      "//ui/gfx/geometry",
+      "//ui/gl",
+      "//ui/gl:test_support",
+    ]
+
+    libfuzzer_options = [ "max_len=16384" ]
+  }
+
+  fuzzer_test("gpu_raster_swiftshader_fuzzer") {
+    sources = [
+      "command_buffer/tests/fuzzer_main.cc",
+    ]
+
+    defines = [
+      "GPU_FUZZER_USE_RASTER_DECODER",
+      "GPU_FUZZER_USE_SWIFTSHADER",
+    ]
+
+    deps = [
+      ":gles2",
+      ":gpu",
+      "//base",
+      "//base/third_party/dynamic_annotations",
+      "//ui/gfx/geometry",
+      "//ui/gl",
+      "//ui/gl:test_support",
+    ]
+
+    libfuzzer_options = [ "max_len=16384" ]
+  }
+
+  fuzzer_test("gpu_raster_angle_fuzzer") {
+    sources = [
+      "command_buffer/tests/fuzzer_main.cc",
+    ]
+
+    defines = [
+      "GPU_FUZZER_USE_RASTER_DECODER",
+      "GPU_FUZZER_USE_ANGLE",
+    ]
 
     deps = [
       ":gles2",

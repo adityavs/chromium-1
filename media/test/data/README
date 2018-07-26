@@ -44,6 +44,11 @@ nonzero-start-time.webm - Has the same headers as bear-320x240.webm but the firs
 bear-320x240_corrupted_after_init_segment.webm - bear-320x240.webm's initialization segment followed by "CORRUPTED\n"
 bear-320x240-live.webm - bear-320x240.webm remuxed w/o a duration and using clusters with unknown sizes.
                          ffmpeg -i bear-320x240.webm -acodec copy -vcodec copy -f webm pipe:1 > bear-320x240-live.webm
+four-colors.mp4 - A 960x540 H.264 mp4 video with 4 color blocks (Y,R,G,B) in
+                  every frame. The video playback looks like a still image.
+                  An image of 4 color blocks (.png file) is first created by
+                  Windows Paint.exe. This image is then used as a basic video
+                  frame in making this 2-second video from Mac iStopMotion.
 vp8-I-frame-160x240 - The first I frame of a 160x240 reencode of bear-320x240.webm.
 vp8-I-frame-320x120 - The first I frame of a 320x120 reencode of bear-320x240.webm.
 vp8-I-frame-320x240 - The first I frame of bear-320x240.webm.
@@ -68,6 +73,20 @@ vorbis-packet-0  - timestamp: 0ms, duration: 0ms
 vorbis-packet-1  - timestamp: 0ms, duration: 0ms
 vorbis-packet-2  - timestamp: 0ms, duration: 0ms
 vorbis-packet-3  - timestamp: 2902ms, duration: 0ms
+
+// MSE MP4 keyframe-metadata versus encoded AVC keyframe-ness test media:
+bear-640x360-v-2frames_frag.mp4 - Just first 2 video frames of bear-640x360-v_frag.mp4, created with:
+  ffmpeg -i bear-640x360-v_frag.mp4 -vcodec copy -movflags frag_keyframe+empty_moov+default_base_moof \
+    -vframes 2 bear-640x360-v-2frames_frag.mp4
+  It's 1 keyframe + 1 non-keyframe, with container's frame keyframe-ness correct.
+bear-640x360-v-2frames-keyframe-is-non-sync-sample_frag.mp4
+  This is bear-640x360-v-2frames_frag.mp4, with manually updated trun.first_sample_flags:
+    s/0x02000000/0x01010000 (first frame is non-sync-sample, depends on another
+    frame, mismatches compressed h264 first frame's keyframe-ness).
+bear-640x360-v-2frames-nonkeyframe-is-sync-sample_frag.mp4
+  This is bear-640x360-v-2frames_frag.mp4, with manually updated tfhd.default_sample_flags:
+    s/0x01010000/0x02000000 (second frame is sync-sample, doesn't depend on other
+    frames, mismatches compressed h264 second frame's nonkeyframe-ness).
 
 // 10-bit test file(s)
 bear-320x180-hi10p.mp4

@@ -23,6 +23,7 @@
 #include "components/autofill/core/common/password_form_generation_data.h"
 #include "components/autofill/core/common/password_generation_util.h"
 #include "components/autofill/core/common/submission_source.h"
+#include "mojo/public/cpp/base/text_direction_mojom_traits.h"
 #include "mojo/public/cpp/bindings/struct_traits.h"
 #include "ui/gfx/geometry/rect_f.h"
 #include "url/origin.h"
@@ -118,6 +119,13 @@ struct EnumTraits<autofill::mojom::LabelSource,
       autofill::FormFieldData::LabelSource input);
   static bool FromMojom(autofill::mojom::LabelSource input,
                         autofill::FormFieldData::LabelSource* output);
+};
+
+template <>
+struct EnumTraits<autofill::mojom::FillingStatus, autofill::FillingStatus> {
+  static autofill::mojom::FillingStatus ToMojom(autofill::FillingStatus input);
+  static bool FromMojom(autofill::mojom::FillingStatus input,
+                        autofill::FillingStatus* output);
 };
 
 template <>
@@ -380,6 +388,11 @@ struct StructTraits<autofill::mojom::PasswordFormFillDataDataView,
     return r.password_field;
   }
 
+  static bool username_may_use_prefilled_placeholder(
+      const autofill::PasswordFormFillData& r) {
+    return r.username_may_use_prefilled_placeholder;
+  }
+
   static const std::string& preferred_realm(
       const autofill::PasswordFormFillData& r) {
     return r.preferred_realm;
@@ -450,6 +463,11 @@ struct StructTraits<autofill::mojom::PasswordGenerationUIDataDataView,
   static const base::string16& generation_element(
       const autofill::password_generation::PasswordGenerationUIData& r) {
     return r.generation_element;
+  }
+
+  static base::i18n::TextDirection text_direction(
+      const autofill::password_generation::PasswordGenerationUIData& r) {
+    return r.text_direction;
   }
 
   static const autofill::PasswordForm& password_form(
@@ -626,6 +644,11 @@ struct StructTraits<autofill::mojom::PasswordFormDataView,
 
   static bool only_for_fallback_saving(const autofill::PasswordForm& r) {
     return r.only_for_fallback_saving;
+  }
+
+  static bool is_gaia_with_skip_save_password_form(
+      const autofill::PasswordForm& r) {
+    return r.is_gaia_with_skip_save_password_form;
   }
 
   static bool Read(autofill::mojom::PasswordFormDataView data,

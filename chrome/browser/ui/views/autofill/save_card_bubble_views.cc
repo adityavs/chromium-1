@@ -14,6 +14,8 @@
 #include "chrome/browser/ui/views/autofill/dialog_view_ids.h"
 #include "chrome/browser/ui/views/harmony/chrome_layout_provider.h"
 #include "chrome/browser/ui/views/harmony/chrome_typography.h"
+#include "components/autofill/core/browser/autofill_experiments.h"
+#include "components/autofill/core/browser/autofill_metrics.h"
 #include "components/autofill/core/browser/credit_card.h"
 #include "components/autofill/core/browser/legal_message_line.h"
 #include "components/autofill/core/browser/ui/save_card_bubble_controller.h"
@@ -26,10 +28,13 @@
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/gfx/paint_vector_icon.h"
 #include "ui/views/border.h"
+#include "ui/views/bubble/bubble_border.h"
 #include "ui/views/bubble/bubble_frame_view.h"
+#include "ui/views/bubble/tooltip_icon.h"
 #include "ui/views/controls/button/blue_button.h"
 #include "ui/views/controls/button/label_button.h"
 #include "ui/views/controls/label.h"
+#include "ui/views/controls/separator.h"
 #include "ui/views/controls/styled_label.h"
 #include "ui/views/controls/textfield/textfield.h"
 #include "ui/views/layout/box_layout.h"
@@ -41,8 +46,14 @@ namespace autofill {
 namespace {
 
 // Dimensions of the Google Pay logo.
-const int kGooglePayLogoWidth = 57;
+const int kGooglePayLogoWidth = 40;
 const int kGooglePayLogoHeight = 16;
+
+const int kGooglePayLogoSeparatorHeight = 12;
+
+const int kTooltipIconSize = 12;
+
+const SkColor kTitleSeparatorColor = SkColorSetRGB(0x9E, 0x9E, 0x9E);
 
 std::unique_ptr<views::StyledLabel> CreateLegalMessageLineLabel(
     const LegalMessageLine& line,
@@ -169,6 +180,54 @@ gfx::Size SaveCardBubbleViews::CalculatePreferredSize() const {
   return gfx::Size(width, GetHeightForWidth(width));
 }
 
+void SaveCardBubbleViews::AddedToWidget() {
+  // Use a custom title container if this is a server card. Done when this view
+  // is added to the widget, so the bubble frame view is guaranteed to exist.
+  if (GetCurrentFlowStep() != UPLOAD_SAVE_ONLY_STEP)
+    return;
+  ChromeLayoutProvider* provider = ChromeLayoutProvider::Get();
+
+  auto title_container = std::make_unique<views::View>();
+  // TODO(ftirelo): DISTANCE_RELATED_BUTTON_HORIZONTAL isn't the right choice
+  //                here, but INSETS_DIALOG_TITLE gives too much padding.
+  //                Make a new Harmony DistanceMetric?
+  title_container->SetLayoutManager(std::make_unique<views::BoxLayout>(
+      views::BoxLayout::kHorizontal, gfx::Insets(),
+      provider->GetDistanceMetric(views::DISTANCE_RELATED_BUTTON_HORIZONTAL)));
+
+  // kGooglePayLogoIcon is square, and CreateTiledImage() will clip it whereas
+  // setting the icon size would rescale it incorrectly.
+  gfx::ImageSkia image = gfx::ImageSkiaOperations::CreateTiledImage(
+      gfx::CreateVectorIcon(kGooglePayLogoIcon, gfx::kPlaceholderColor),
+      /*x=*/0, /*y=*/0, kGooglePayLogoWidth, kGooglePayLogoHeight);
+  auto icon_view = std::make_unique<views::ImageView>();
+  icon_view->SetImage(&image);
+  title_container->AddChildView(icon_view.release());
+
+  auto* separator = new views::Separator();
+  separator->SetColor(kTitleSeparatorColor);
+  title_container->AddChildView(separator);
+
+  auto title_label = std::make_unique<views::Label>(
+      GetWindowTitle(), views::style::CONTEXT_DIALOG_TITLE);
+  title_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+  title_label->SetMultiLine(true);
+  title_container->AddChildView(title_label.release());
+
+  GetBubbleFrameView()->SetTitleView(std::move(title_container));
+
+  // Add vertical padding to the separator doesn't expand to use all the
+  // available vertical space. This needs to be done after the title container
+  // is added to the bubble frame view, in order to use its preferred size.
+  const int separator_vertical_padding =
+      (GetBubbleFrameView()->title()->GetPreferredSize().height() -
+       kGooglePayLogoSeparatorHeight) /
+      2;
+  separator->SetBorder(views::CreateEmptyBorder(gfx::Insets(
+      /*vertical=*/separator_vertical_padding,
+      /*horizontal=*/0)));
+}
+
 bool SaveCardBubbleViews::ShouldShowCloseButton() const {
   // The [X] is shown for Material UI.
   return ui::MaterialDesignController::IsSecondaryUiMaterial();
@@ -176,18 +235,6 @@ bool SaveCardBubbleViews::ShouldShowCloseButton() const {
 
 base::string16 SaveCardBubbleViews::GetWindowTitle() const {
   return controller_ ? controller_->GetWindowTitle() : base::string16();
-}
-
-gfx::ImageSkia SaveCardBubbleViews::GetWindowIcon() {
-  return gfx::ImageSkiaOperations::CreateTiledImage(
-      gfx::CreateVectorIcon(kGooglePayLogoWithVerticalSeparatorIcon,
-                            gfx::kPlaceholderColor),
-      /*x=*/0, /*y=*/0, kGooglePayLogoWidth, kGooglePayLogoHeight);
-}
-
-bool SaveCardBubbleViews::ShouldShowWindowIcon() const {
-  // We show the window icon (the Google Pay logo) in non-local save scenarios.
-  return GetCurrentFlowStep() != LOCAL_SAVE_ONLY_STEP;
 }
 
 void SaveCardBubbleViews::WindowClosing() {
@@ -296,19 +343,73 @@ std::unique_ptr<views::View> SaveCardBubbleViews::CreateMainContentView() {
       card.AbbreviatedExpirationDateForDisplay(), CONTEXT_BODY_TEXT_LARGE,
       ChromeTextStyle::STYLE_SECONDARY));
 
-  // If necessary, add the cardholder name textfield to the upload save dialog.
+  // If necessary, add the cardholder name label and textfield to the upload
+  // save dialog.
   if (controller_->ShouldRequestNameFromUser()) {
+    std::unique_ptr<views::View> cardholder_name_label_row =
+        std::make_unique<views::View>();
+
+    // Set up cardholder name label.
+    // TODO(jsaul): DISTANCE_RELATED_BUTTON_HORIZONTAL isn't the right choice
+    //              here, but DISTANCE_RELATED_CONTROL_HORIZONTAL gives too much
+    //              padding. Make a new Harmony DistanceMetric?
+    cardholder_name_label_row->SetLayoutManager(
+        std::make_unique<views::BoxLayout>(
+            views::BoxLayout::kHorizontal, gfx::Insets(),
+            provider->GetDistanceMetric(
+                views::DISTANCE_RELATED_BUTTON_HORIZONTAL)));
+    std::unique_ptr<views::Label> cardholder_name_label =
+        std::make_unique<views::Label>(
+            l10n_util::GetStringUTF16(
+                IDS_AUTOFILL_SAVE_CARD_PROMPT_CARDHOLDER_NAME),
+            CONTEXT_BODY_TEXT_LARGE, ChromeTextStyle::STYLE_SECONDARY);
+    cardholder_name_label->SetHorizontalAlignment(gfx::ALIGN_LEFT);
+    cardholder_name_label_row->AddChildView(cardholder_name_label.release());
+
+    // Prepare the prefilled cardholder name.
+    base::string16 prefilled_name;
+    if (!IsAutofillUpstreamBlankCardholderNameFieldExperimentEnabled()) {
+      prefilled_name =
+          base::UTF8ToUTF16(controller_->GetAccountInfo().full_name);
+    }
+
+    // Set up cardholder name label tooltip ONLY if the cardholder name
+    // textfield will be prefilled.
+    if (!prefilled_name.empty()) {
+      std::unique_ptr<views::TooltipIcon> cardholder_name_tooltip =
+          std::make_unique<views::TooltipIcon>(
+              l10n_util::GetStringUTF16(
+                  IDS_AUTOFILL_SAVE_CARD_PROMPT_CARDHOLDER_NAME_TOOLTIP),
+              kTooltipIconSize);
+      cardholder_name_tooltip->set_anchor_point_arrow(
+          views::BubbleBorder::Arrow::TOP_LEFT);
+      cardholder_name_tooltip->set_id(DialogViewId::CARDHOLDER_NAME_TOOLTIP);
+      cardholder_name_label_row->AddChildView(
+          cardholder_name_tooltip.release());
+    }
+
+    // Set up cardholder name textfield.
     DCHECK(!cardholder_name_textfield_);
     cardholder_name_textfield_ = new views::Textfield();
     cardholder_name_textfield_->set_controller(this);
     cardholder_name_textfield_->set_id(DialogViewId::CARDHOLDER_NAME_TEXTFIELD);
-    cardholder_name_textfield_->set_placeholder_text(l10n_util::GetStringUTF16(
-        IDS_AUTOFILL_DIALOG_PLACEHOLDER_CARDHOLDER_NAME));
+    cardholder_name_textfield_->SetAccessibleName(l10n_util::GetStringUTF16(
+        IDS_AUTOFILL_SAVE_CARD_PROMPT_CARDHOLDER_NAME));
     cardholder_name_textfield_->SetTextInputType(
         ui::TextInputType::TEXT_INPUT_TYPE_TEXT);
-    cardholder_name_textfield_->SetText(
-        base::ASCIIToUTF16(controller_->GetAccountInfo().full_name));
-    view->AddChildView(cardholder_name_textfield_);
+    cardholder_name_textfield_->SetText(prefilled_name);
+    AutofillMetrics::LogSaveCardCardholderNamePrefilled(
+        !prefilled_name.empty());
+
+    // Add cardholder name elements to a single view, then to the final dialog.
+    std::unique_ptr<views::View> cardholder_name_view =
+        std::make_unique<views::View>();
+    cardholder_name_view->SetLayoutManager(std::make_unique<views::BoxLayout>(
+        views::BoxLayout::kVertical, gfx::Insets(),
+        provider->GetDistanceMetric(views::DISTANCE_RELATED_CONTROL_VERTICAL)));
+    cardholder_name_view->AddChildView(cardholder_name_label_row.release());
+    cardholder_name_view->AddChildView(cardholder_name_textfield_);
+    view->AddChildView(cardholder_name_view.release());
   }
 
   return view;
@@ -326,6 +427,13 @@ void SaveCardBubbleViews::AssignIdsToDialogClientView() {
 void SaveCardBubbleViews::Init() {
   SetLayoutManager(
       std::make_unique<views::BoxLayout>(views::BoxLayout::kVertical));
+  // For server cards, there is an explanation between the title and the
+  // controls; use views::TEXT. For local cards, since there is no explanation,
+  // use views::CONTROL instead.
+  set_margins(ChromeLayoutProvider::Get()->GetDialogInsetsForContentType(
+      GetCurrentFlowStep() == UPLOAD_SAVE_ONLY_STEP ? views::TEXT
+                                                    : views::CONTROL,
+      views::CONTROL));
   AddChildView(CreateMainContentView().release());
 }
 

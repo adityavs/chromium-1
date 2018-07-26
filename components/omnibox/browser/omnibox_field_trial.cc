@@ -42,6 +42,10 @@ const base::Feature kOmniboxRichEntitySuggestions{
 const base::Feature kOmniboxNewAnswerLayout{"OmniboxNewAnswerLayout",
                                             base::FEATURE_DISABLED_BY_DEFAULT};
 
+// Feature used to enable swapping the rows on answers.
+const base::Feature kOmniboxReverseAnswers{"OmniboxReverseAnswers",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Feature used to force on the experiment of transmission of tail suggestions
 // from GWS to this client, currently testing for desktop.
 const base::Feature kOmniboxTailSuggestions{
@@ -139,6 +143,9 @@ const base::Feature kSpeculativeServiceWorkerStartOnQueryInput{
 const base::Feature kBreakWordsAtUnderscores{"OmniboxBreakWordsAtUnderscores",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
 
+// Feature used to fetch document suggestions.
+const base::Feature kDocumentProvider{"OmniboxDocumentProvider",
+                                      base::FEATURE_DISABLED_BY_DEFAULT};
 }  // namespace omnibox
 
 namespace {
@@ -645,9 +652,9 @@ OmniboxFieldTrial::GetEmphasizeTitlesConditionForInput(
     return EMPHASIZE_WHEN_NONEMPTY;
   }
 
-  // Touch-optimized UI and MD Refresh also always swap title and URL.
+  // Touch-optimized UI always swaps title and URL.
   if (ui::MaterialDesignController::is_mode_initialized() &&
-      ui::MaterialDesignController::IsNewerMaterialUi()) {
+      ui::MaterialDesignController::IsTouchOptimizedUiEnabled()) {
     return EMPHASIZE_WHEN_NONEMPTY;
   }
 
@@ -687,6 +694,13 @@ bool OmniboxFieldTrial::IsRichEntitySuggestionsEnabled() {
 
 bool OmniboxFieldTrial::IsNewAnswerLayoutEnabled() {
   return (base::FeatureList::IsEnabled(omnibox::kOmniboxNewAnswerLayout) &&
+          ui::MaterialDesignController::is_mode_initialized() &&
+          ui::MaterialDesignController::IsRefreshUi()) ||
+         base::FeatureList::IsEnabled(features::kExperimentalUi);
+}
+
+bool OmniboxFieldTrial::IsReverseAnswersEnabled() {
+  return (base::FeatureList::IsEnabled(omnibox::kOmniboxReverseAnswers) &&
           ui::MaterialDesignController::is_mode_initialized() &&
           ui::MaterialDesignController::IsRefreshUi()) ||
          base::FeatureList::IsEnabled(features::kExperimentalUi);

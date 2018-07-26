@@ -323,6 +323,16 @@ void VizProcessTransportFactory::DisableGpuCompositing(
 void VizProcessTransportFactory::OnGpuProcessLost() {
   // Reconnect HostFrameSinkManager to new GPU process.
   ConnectHostFrameSinkManager();
+
+  // If we're using GPU compositing then OnLostResources() will get triggered by
+  // the loss of the shared context. If we're using software compositing there
+  // is no shared context so trigger OnLostResources() from here.
+  if (is_gpu_compositing_disabled()) {
+    // TODO(kylechar): Split OnLostResources() into OnLostSharedContext() and
+    // OnLostGpuProcess() to differentiate between the two cases.
+    for (auto& observer : observer_list_)
+      observer.OnLostResources();
+  }
 }
 
 void VizProcessTransportFactory::OnEstablishedGpuChannel(
@@ -394,7 +404,7 @@ VizProcessTransportFactory::TryCreateContextsForGpuCompositing(
         kSharedWorkerContextSupportsLocking, kSharedWorkerContextSupportsGLES2,
         kSharedWorkerContextSupportsRaster,
         kSharedWorkerContextSupportsGrContext,
-        ui::command_buffer_metrics::BROWSER_WORKER_CONTEXT);
+        ui::command_buffer_metrics::ContextType::BROWSER_WORKER);
 
     // Don't observer context loss on |worker_context_provider_| here, that is
     // already observered by LayerTreeFrameSink. The lost context will be caught
@@ -421,7 +431,7 @@ VizProcessTransportFactory::TryCreateContextsForGpuCompositing(
         std::move(gpu_channel_host), GetGpuMemoryBufferManager(),
         kCompositorContextSupportsLocking, kCompositorContextSupportsGLES2,
         kCompositorContextSupportsRaster, kCompositorContextSupportsGrContext,
-        ui::command_buffer_metrics::UI_COMPOSITOR_CONTEXT);
+        ui::command_buffer_metrics::ContextType::BROWSER_MAIN_THREAD);
     main_context_provider_->SetDefaultTaskRunner(resize_task_runner());
 
     auto context_result = main_context_provider_->BindToCurrentThread();

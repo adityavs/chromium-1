@@ -5,7 +5,7 @@
 Polymer({
   is: 'print-preview-destination-dialog',
 
-  behaviors: [I18nBehavior],
+  behaviors: [I18nBehavior, ListPropertyUpdateBehavior],
 
   properties: {
     /** @type {?print_preview.DestinationStore} */
@@ -71,6 +71,10 @@ Polymer({
     },
   },
 
+  observers: [
+    'adjustHeight_(invitation_, showCloudPrintPromo)',
+  ],
+
   /** @private {!EventTracker} */
   tracker_: new EventTracker(),
 
@@ -100,9 +104,43 @@ Polymer({
   attached: function() {
     this.tracker_.add(
         assert(this.$$('.sign-in')), 'click', this.onSignInClick_.bind(this));
-    this.tracker_.add(
-        assert(this.$$('#cloudprintPromo > .close-button')), 'click',
-        this.onCloudPrintPromoDismissed_.bind(this));
+  },
+
+  /**
+   * @param {!KeyboardEvent} e Event containing the key
+   * @private
+   */
+  onKeydown_: function(e) {
+    e.stopPropagation();
+    if (e.key == 'Escape' && !this.$.searchBox.getSearchInput().value.trim()) {
+      this.$.dialog.cancel();
+      e.preventDefault();
+    }
+  },
+
+  /** @private */
+  adjustHeight_: function() {
+    // Baseline size of recent list + buttons + title + search box
+    let px = 266;
+    let lines = 5;
+    if (this.invitation_) {
+      // Invitation promo size
+      px += 57;
+      lines += 4;
+    }
+    if (this.showCloudPrintPromo) {
+      // Cloud print promo size
+      px += 28;
+      lines += 2;
+    }
+    if (this.userInfo && this.userInfo.loggedIn) {
+      // User accounts select size
+      px += 14;
+      lines += 2;
+    }
+
+    // Compute sizing
+    this.$.printList.style.height = `calc(100vh - ${px}px - ${lines}rem)`;
   },
 
   /** @private */
@@ -149,9 +187,15 @@ Polymer({
     if (this.userInfo.loggedIn)
       this.showCloudPrintPromo = false;
 
-    this.destinations_ = this.userInfo ?
-        this.destinationStore.destinations(this.userInfo.activeUser) :
-        [];
+    if (this.userInfo) {
+      this.updateList(
+          'destinations_',
+          destination => destination.origin + '/' + destination.id,
+          this.destinationStore.destinations(this.userInfo.activeUser));
+    } else {
+      this.destinations_ = [];
+    }
+
     this.loadingDestinations_ =
         this.destinationStore.isPrintDestinationSearchInProgress;
   },
@@ -271,6 +315,8 @@ Polymer({
         this.destinationStore.isPrintDestinationSearchInProgress;
     this.metrics_.record(
         print_preview.Metrics.DestinationSearchBucket.DESTINATION_SHOWN);
+    this.$.recentList.forceIronResize();
+    this.$.printList.forceIronResize();
   },
 
   /** @return {boolean} Whether the dialog is open. */

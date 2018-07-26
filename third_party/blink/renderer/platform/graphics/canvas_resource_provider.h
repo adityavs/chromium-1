@@ -40,7 +40,6 @@ class GLES2Interface;
 namespace blink {
 
 class CanvasResourceDispatcher;
-class StaticBitmapImage;
 class WebGraphicsContext3DProviderWrapper;
 
 // CanvasResourceProvider
@@ -100,10 +99,26 @@ class PLATFORM_EXPORT CanvasResourceProvider
   const IntSize& Size() const { return size_; }
   virtual bool IsValid() const = 0;
   virtual bool IsAccelerated() const = 0;
+  virtual bool SupportsDirectCompositing() const = 0;
+  virtual bool SupportsSingleBuffering() const { return false; }
   uint32_t ContentUniqueID() const;
   CanvasResourceDispatcher* ResourceDispatcher() {
     return resource_dispatcher_.get();
   }
+
+  // Indicates that the compositing path is single buffered, meaning that
+  // ProduceFrame() return a reference to the same resource each time, which
+  // implies that Producing an animation frame may overwrite the resource used
+  // by the previous frame. This results in graphics updates skipping the
+  // queue, thus reducing latency, but with the possible side effects of
+  // tearring (in cases where the resource is scanned out directly) and
+  // irregular frame rate.
+  bool IsSingleBuffered() { return is_single_buffered_; }
+
+  // Attempt to enable single buffering mode on this resource provider.  May
+  // fail if the CanvasResourcePRovider subclass does not support this mode of
+  // operation.
+  void TryEnableSingleBuffering();
 
   void RecycleResource(scoped_refptr<CanvasResource>);
   void SetResourceRecyclingEnabled(bool);
@@ -120,6 +135,10 @@ class PLATFORM_EXPORT CanvasResourceProvider
   virtual GLuint GetBackingTextureHandleForOverwrite() {
     NOTREACHED();
     return 0;
+  }
+  virtual void* GetPixelBufferAddressForOverwrite() {
+    NOTREACHED();
+    return nullptr;
   }
   void Clear();
   ~CanvasResourceProvider() override;
@@ -175,7 +194,7 @@ class PLATFORM_EXPORT CanvasResourceProvider
   std::unique_ptr<cc::SkiaPaintCanvas> canvas_;
   mutable sk_sp<SkSurface> surface_;  // mutable for lazy init
   std::unique_ptr<SkCanvas> xform_canvas_;
-  SkFilterQuality filter_quality_;
+  SkFilterQuality filter_quality_ = kLow_SkFilterQuality;
 
   const cc::PaintImage::Id snapshot_paint_image_id_;
   cc::PaintImage::ContentId snapshot_paint_image_content_id_ =
@@ -184,6 +203,9 @@ class PLATFORM_EXPORT CanvasResourceProvider
 
   WTF::Vector<scoped_refptr<CanvasResource>> recycled_resources_;
   bool resource_recycling_enabled_ = true;
+
+  bool is_single_buffered_ = false;
+  scoped_refptr<CanvasResource> single_buffer_;
 
   base::WeakPtrFactory<CanvasResourceProvider> weak_ptr_factory_;
 

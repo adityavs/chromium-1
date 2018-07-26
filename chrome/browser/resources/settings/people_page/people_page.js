@@ -136,40 +136,41 @@ Polymer({
       type: Object,
       value: function() {
         const map = new Map();
-        if (settings.routes.SYNC)
-          map.set(settings.routes.SYNC.path, '#sync-status .subpage-arrow');
+        if (settings.routes.SYNC) {
+          const syncId = loadTimeData.getBoolean('unifiedConsentEnabled') ?
+              '#sync-setup' :
+              '#sync-status';
+          map.set(settings.routes.SYNC.path, `${syncId} .subpage-arrow button`);
+        }
         if (settings.routes.MANAGE_PASSWORDS) {
           map.set(
-              settings.routes.MANAGE_PASSWORDS.path,
-              '#passwordManagerButton .subpage-arrow');
+              settings.routes.MANAGE_PASSWORDS.path, '#passwordManagerButton');
         }
         if (settings.routes.AUTOFILL) {
-          map.set(
-              settings.routes.AUTOFILL.path,
-              '#autofillManagerButton .subpage-arrow');
+          map.set(settings.routes.AUTOFILL.path, '#paymentManagerButton');
         }
         // <if expr="not chromeos">
         if (settings.routes.MANAGE_PROFILE) {
           map.set(
               settings.routes.MANAGE_PROFILE.path,
-              '#picture-subpage-trigger .subpage-arrow');
+              '#picture-subpage-trigger .subpage-arrow button');
         }
         // </if>
         // <if expr="chromeos">
         if (settings.routes.CHANGE_PICTURE) {
           map.set(
               settings.routes.CHANGE_PICTURE.path,
-              '#picture-subpage-trigger .subpage-arrow');
+              '#picture-subpage-trigger .subpage-arrow button');
         }
         if (settings.routes.LOCK_SCREEN) {
           map.set(
               settings.routes.LOCK_SCREEN.path,
-              '#lock-screen-subpage-trigger .subpage-arrow');
+              '#lock-screen-subpage-trigger .subpage-arrow button');
         }
         if (settings.routes.ACCOUNTS) {
           map.set(
               settings.routes.ACCOUNTS.path,
-              '#manage-other-people-subpage-trigger .subpage-arrow');
+              '#manage-other-people-subpage-trigger .subpage-arrow button');
         }
         // </if>
         return map;
@@ -547,7 +548,7 @@ Polymer({
     if (!syncStatus)
       return '';
 
-    let syncIcon = 'settings:sync';
+    let syncIcon = 'cr:sync';
 
     if (syncStatus.hasError)
       syncIcon = 'settings:sync-problem';

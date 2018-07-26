@@ -15,7 +15,9 @@
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/shared_gpu_context.h"
 #include "third_party/blink/renderer/platform/graphics/static_bitmap_image.h"
+#include "third_party/blink/renderer/platform/wtf/functional.h"
 #include "third_party/skia/include/gpu/GrContext.h"
+#include "ui/gfx/buffer_format_util.h"
 #include "ui/gfx/color_space.h"
 
 namespace blink {
@@ -60,15 +62,6 @@ void CanvasResource::OnDestroy() {
 #endif
 }
 
-bool CanvasResource::IsBitmap() {
-  return false;
-}
-
-scoped_refptr<StaticBitmapImage> CanvasResource::Bitmap() {
-  NOTREACHED();
-  return nullptr;
-}
-
 gpu::gles2::GLES2Interface* CanvasResource::ContextGL() const {
   if (!ContextProviderWrapper())
     return nullptr;
@@ -103,16 +96,20 @@ bool CanvasResource::PrepareTransferableResource(
     MailboxSyncMode sync_mode) {
   DCHECK(IsValid());
 
+  DCHECK(out_callback);
   scoped_refptr<CanvasResource> this_ref(this);
   auto func = WTF::Bind(&ReleaseFrameResources, provider_,
                         WTF::Passed(std::move(this_ref)));
   *out_callback = viz::SingleReleaseCallback::Create(std::move(func));
 
-  if (SupportsAcceleratedCompositing()) {
-    return PrepareAcceleratedTransferableResource(out_resource, sync_mode);
-  }
+  if (out_resource) {
+    if (SupportsAcceleratedCompositing()) {
+      return PrepareAcceleratedTransferableResource(out_resource, sync_mode);
+    }
 
-  return PrepareUnacceleratedTransferableResource(out_resource);
+    return PrepareUnacceleratedTransferableResource(out_resource);
+  }
+  return true;
 }
 
 bool CanvasResource::PrepareAcceleratedTransferableResource(
@@ -143,10 +140,16 @@ bool CanvasResource::PrepareUnacceleratedTransferableResource(
     viz::TransferableResource* out_resource) {
   TRACE_EVENT0("blink",
                "CanvasResource::PrepareUnacceleratedTransferableResource");
+  const gpu::Mailbox& mailbox = GetOrCreateGpuMailbox(kVerifiedSyncToken);
+  if (mailbox.IsZero())
+    return false;
 
-  // TODO: add support for shared bitmap
-  NOTREACHED();
-  return false;
+  *out_resource = viz::TransferableResource::MakeSoftware(
+      mailbox, gfx::Size(Size()), color_params_.TransferableResourceFormat());
+
+  out_resource->color_space = color_params_.GetSamplerGfxColorSpace();
+
+  return true;
 }
 
 GrContext* CanvasResource::GetGrContext() const {
@@ -249,10 +252,6 @@ GLenum CanvasResourceBitmap::TextureTarget() const {
   return GL_TEXTURE_2D;
 }
 
-bool CanvasResourceBitmap::IsBitmap() {
-  return true;
-}
-
 scoped_refptr<StaticBitmapImage> CanvasResourceBitmap::Bitmap() {
   return image_;
 }
@@ -281,6 +280,11 @@ void CanvasResourceBitmap::Transfer() {
 bool CanvasResourceBitmap::OriginClean() const {
   DCHECK(image_);
   return image_->OriginClean();
+}
+
+void CanvasResourceBitmap::SetOriginClean(bool value) {
+  DCHECK(image_);
+  image_->SetOriginClean(value);
 }
 
 base::WeakPtr<WebGraphicsContext3DProviderWrapper>
@@ -337,7 +341,7 @@ CanvasResourceGpuMemoryBuffer::CanvasResourceGpuMemoryBuffer(
 
   image_id_ = gl->CreateImageCHROMIUM(gpu_memory_buffer_->AsClientBuffer(),
                                       size.Width(), size.Height(),
-                                      ColorParams().GLInternalFormat());
+                                      ColorParams().GLUnsizedInternalFormat());
   if (!image_id_) {
     gpu_memory_buffer_ = nullptr;
     return;
@@ -345,7 +349,24 @@ CanvasResourceGpuMemoryBuffer::CanvasResourceGpuMemoryBuffer(
   gl->GenTextures(1, &texture_id_);
   const GLenum target = TextureTarget();
   gl->BindTexture(target, texture_id_);
+  // TODO(mcasas): consider making |image_id_| a local variable and balancing
+  // BindTexImage2DCHROMIUM() with DestroyImageCHROMIUM(), leaving |texture_id_|
+  // to keep alive the Image2DCHROMIUM.
   gl->BindTexImage2DCHROMIUM(target, image_id_);
+
+  if (is_accelerated_ && target == GL_TEXTURE_EXTERNAL_OES) {
+    // We can't CopyTextureCHROMIUM() into a GL_TEXTURE_EXTERNAL_OES; create
+    // another image and bind a GL_TEXTURE_2D texture to it.
+    const GLuint image_2d_id_for_copy = gl->CreateImageCHROMIUM(
+        gpu_memory_buffer_->AsClientBuffer(), size.Width(), size.Height(),
+        ColorParams().GLUnsizedInternalFormat());
+
+    gl->GenTextures(1, &texture_2d_id_for_copy_);
+    gl->BindTexture(GL_TEXTURE_2D, texture_2d_id_for_copy_);
+    gl->BindTexImage2DCHROMIUM(GL_TEXTURE_2D, image_2d_id_for_copy);
+
+    gl->DestroyImageCHROMIUM(image_2d_id_for_copy);
+  }
 }
 
 CanvasResourceGpuMemoryBuffer::~CanvasResourceGpuMemoryBuffer() {
@@ -353,7 +374,7 @@ CanvasResourceGpuMemoryBuffer::~CanvasResourceGpuMemoryBuffer() {
 }
 
 bool CanvasResourceGpuMemoryBuffer::IsValid() const {
-  return context_provider_wrapper_ && image_id_;
+  return !!context_provider_wrapper_ && image_id_;
 }
 
 GLenum CanvasResourceGpuMemoryBuffer::TextureTarget() const {
@@ -390,14 +411,17 @@ void CanvasResourceGpuMemoryBuffer::TearDown() {
 
   surface_ = nullptr;
   if (context_provider_wrapper_ && image_id_) {
-    auto* gl = context_provider_wrapper_->ContextProvider()->ContextGL();
+    auto* gl = ContextGL();
     if (gl && image_id_)
       gl->DestroyImageCHROMIUM(image_id_);
     if (gl && texture_id_)
       gl->DeleteTextures(1, &texture_id_);
+    if (gl && texture_2d_id_for_copy_)
+      gl->DeleteTextures(1, &texture_2d_id_for_copy_);
   }
   image_id_ = 0;
   texture_id_ = 0;
+  texture_2d_id_for_copy_ = 0;
   gpu_memory_buffer_ = nullptr;
 }
 
@@ -405,6 +429,7 @@ void CanvasResourceGpuMemoryBuffer::Abandon() {
   surface_ = nullptr;
   image_id_ = 0;
   texture_id_ = 0;
+  texture_2d_id_for_copy_ = 0;
   gpu_memory_buffer_ = nullptr;
 }
 
@@ -446,11 +471,21 @@ void CanvasResourceGpuMemoryBuffer::CopyFromTexture(GLuint source_texture,
     return;
 
   TRACE_EVENT0("blink", "CanvasResourceGpuMemoryBuffer::CopyFromTexture");
+  GLenum target = TextureTarget();
+  GLuint texture_id = texture_id_;
+
+  if (texture_2d_id_for_copy_) {
+    // We can't CopyTextureCHROMIUM() into a GL_TEXTURE_EXTERNAL_OES; use
+    // instead GL_TEXTURE_2D for the CopyTextureChromium().
+    target = GL_TEXTURE_2D;
+    texture_id = texture_2d_id_for_copy_;
+  }
 
   ContextGL()->CopyTextureCHROMIUM(
-      source_texture, 0 /*sourceLevel*/, TextureTarget(), texture_id_,
-      0 /*destLevel*/, format, type, false /*unpackFlipY*/,
-      false /*unpackPremultiplyAlpha*/, false /*unpackUnmultiplyAlpha*/);
+      source_texture, 0 /*sourceLevel*/, target, texture_id, 0 /*destLevel*/,
+      format, type, false /*unpackFlipY*/, false /*unpackPremultiplyAlpha*/,
+      false /*unpackUnmultiplyAlpha*/);
+
   mailbox_needs_new_sync_token_ = true;
 }
 
@@ -480,11 +515,11 @@ void CanvasResourceGpuMemoryBuffer::WillPaint() {
       texture_info.fTarget = TextureTarget();
       texture_info.fID = texture_id_;
       texture_info.fFormat =
-          ColorParams().GLInternalFormat();  // unsized format
+          ColorParams().GLSizedInternalFormat();  // unsized format
       GrBackendTexture backend_texture(Size().Width(), Size().Height(),
                                        GrMipMapped::kNo, texture_info);
       constexpr int sample_count = 0;
-      surface_ = SkSurface::MakeFromBackendTexture(
+      surface_ = SkSurface::MakeFromBackendTextureAsRenderTarget(
           GetGrContext(), backend_texture, kTopLeft_GrSurfaceOrigin,
           sample_count, ColorParams().GetSkColorType(),
           ColorParams().GetSkColorSpace(), nullptr /*surface props*/);
@@ -524,6 +559,15 @@ CanvasResourceGpuMemoryBuffer::ContextProviderWrapper() const {
   return context_provider_wrapper_;
 }
 
+scoped_refptr<StaticBitmapImage> CanvasResourceGpuMemoryBuffer::Bitmap() {
+  WillPaint();
+  scoped_refptr<StaticBitmapImage> bitmap = StaticBitmapImage::Create(
+      surface_->makeImageSnapshot(), ContextProviderWrapper());
+  DidPaint();
+  bitmap->SetOriginClean(is_origin_clean_);
+  return bitmap;
+}
+
 // CanvasResourceSharedBitmap
 //==============================================================================
 
@@ -534,9 +578,6 @@ CanvasResourceSharedBitmap::CanvasResourceSharedBitmap(
     SkFilterQuality filter_quality)
     : CanvasResource(std::move(provider), filter_quality, color_params),
       size_(size) {
-  if (!Provider())
-    return;
-
   shared_memory_ = viz::bitmap_allocation::AllocateMappedBitmap(
       gfx::Size(Size()), ColorParams().TransferableResourceFormat());
 
@@ -546,7 +587,7 @@ CanvasResourceSharedBitmap::CanvasResourceSharedBitmap(
   shared_bitmap_id_ = viz::SharedBitmap::GenerateId();
 
   CanvasResourceDispatcher* resource_dispatcher =
-      Provider()->ResourceDispatcher();
+      Provider() ? Provider()->ResourceDispatcher() : nullptr;
   if (resource_dispatcher) {
     resource_dispatcher->DidAllocateSharedBitmap(
         viz::bitmap_allocation::DuplicateAndCloseMappedBitmap(
@@ -566,6 +607,30 @@ bool CanvasResourceSharedBitmap::IsValid() const {
 
 IntSize CanvasResourceSharedBitmap::Size() const {
   return size_;
+}
+
+scoped_refptr<StaticBitmapImage> CanvasResourceSharedBitmap::Bitmap() {
+  if (!IsValid())
+    return nullptr;
+  // Construct an SkImage that references the shared memory buffer.
+  // The release callback holds a reference to |this| to ensure that the
+  // canvas resource that owns the shared memory stays alive at least until
+  // the SkImage is destroyed.
+  SkImageInfo image_info = SkImageInfo::Make(
+      Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
+      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
+  SkPixmap pixmap(image_info, shared_memory_->memory(),
+                  image_info.minRowBytes());
+  this->AddRef();
+  sk_sp<SkImage> sk_image = SkImage::MakeFromRaster(
+      pixmap,
+      [](const void*, SkImage::ReleaseContext resource_to_unref) {
+        static_cast<CanvasResourceSharedBitmap*>(resource_to_unref)->Release();
+      },
+      this);
+  auto image = StaticBitmapImage::Create(sk_image);
+  image->SetOriginClean(is_origin_clean_);
+  return image;
 }
 
 scoped_refptr<CanvasResourceSharedBitmap> CanvasResourceSharedBitmap::Create(
@@ -607,7 +672,8 @@ bool CanvasResourceSharedBitmap::HasGpuMailbox() const {
 void CanvasResourceSharedBitmap::TakeSkImage(sk_sp<SkImage> image) {
   SkImageInfo image_info = SkImageInfo::Make(
       Size().Width(), Size().Height(), ColorParams().GetSkColorType(),
-      ColorParams().GetSkAlphaType(), ColorParams().GetSkColorSpace());
+      ColorParams().GetSkAlphaType(),
+      ColorParams().GetSkColorSpaceForSkSurfaces());
 
   bool read_pixels_successful = image->readPixels(
       image_info, shared_memory_->memory(), image_info.minRowBytes(), 0, 0);

@@ -128,6 +128,8 @@ void LoginScreenClient::RemoveUser(const AccountId& account_id) {
       ProfileMetrics::DELETE_PROFILE_USER_MANAGER);
   user_manager::UserManager::Get()->RemoveUser(account_id,
                                                nullptr /*delegate*/);
+  if (chromeos::LoginDisplayHost::default_host())
+    chromeos::LoginDisplayHost::default_host()->UpdateAddUserButtonStatus();
 }
 
 void LoginScreenClient::LaunchPublicSession(const AccountId& account_id,
@@ -154,6 +156,14 @@ void LoginScreenClient::ShowFeedback() {
 void LoginScreenClient::LaunchKioskApp(const std::string& app_id) {
   chromeos::LoginDisplayHost::default_host()->StartAppLaunch(app_id, false,
                                                              false);
+}
+
+void LoginScreenClient::LaunchArcKioskApp(const AccountId& account_id) {
+  chromeos::LoginDisplayHost::default_host()->StartArcKiosk(account_id);
+}
+
+void LoginScreenClient::ShowResetScreen() {
+  chromeos::LoginDisplayHost::default_host()->ShowResetScreen();
 }
 
 void LoginScreenClient::LoadWallpaper(const AccountId& account_id) {

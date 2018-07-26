@@ -10,7 +10,7 @@
 #include "base/bind.h"
 #include "base/location.h"
 #include "base/metrics/histogram_macros.h"
-#include "base/threading/thread_task_runner_handle.h"
+#include "base/threading/sequenced_task_runner_handle.h"
 #include "base/trace_event/memory_usage_estimator.h"
 #include "components/sync/base/data_type_histogram.h"
 #include "components/sync/base/hash_util.h"
@@ -153,18 +153,39 @@ void ClientTagBasedModelTypeProcessor::ConnectIfReady() {
 
   if (!model_type_state_.has_cache_guid()) {
     model_type_state_.set_cache_guid(activation_request_.cache_guid);
+  } else if (model_type_state_.cache_guid() != activation_request_.cache_guid) {
+    // There is a mismatch between the cache guid stored in |model_type_state_|
+    // and the one received from sync and stored it |activation_request|. This
+    // indicates that the stored metadata are invalid (e.g. has been
+    // manipulated) and don't belong to the current syncing client.
+    const ModelTypeSyncBridge::StopSyncResponse response =
+        ClearMetadataAndResetState();
+
+    switch (response) {
+      case ModelTypeSyncBridge::StopSyncResponse::kModelStillReadyToSync:
+        // The model is still ready to sync (with the same |bridge_|) - replay
+        // the initialization.
+        model_ready_to_sync_ = true;
+        // For commit-only types, no updates are expected and hence we can
+        // consider initial_sync_done().
+        model_type_state_.set_initial_sync_done(commit_only_);
+        break;
+      case ModelTypeSyncBridge::StopSyncResponse::kModelNoLongerReadyToSync:
+        // Model not ready to sync, so wait until the bridge calls
+        // ModelReadyToSync().
+        break;
+    }
+
+    // Notify the bridge sync is starting to simulate an enable event.
+    bridge_->OnSyncStarting(activation_request_);
   }
-  // TODO(crbug.com/820049): Check if there is a mismatch between the retrieved
-  //   cache guid and stored in |model_type_state_| and the one received from
-  //   sync and stored it |activation_request|. Note that many clients will have
-  //   an empty proto field, since the field was introduced recently.
 
   auto activation_response = std::make_unique<DataTypeActivationResponse>();
   activation_response->model_type_state = model_type_state_;
   activation_response->type_processor =
       std::make_unique<ModelTypeProcessorProxy>(
           weak_ptr_factory_for_worker_.GetWeakPtr(),
-          base::ThreadTaskRunnerHandle::Get());
+          base::SequencedTaskRunnerHandle::Get());
   std::move(start_callback_).Run(std::move(activation_response));
 }
 
@@ -198,21 +219,7 @@ void ClientTagBasedModelTypeProcessor::OnSyncStopping(
     }
 
     case CLEAR_METADATA: {
-      // Clear persisted metadata.
-      std::unique_ptr<MetadataChangeList> change_list =
-          bridge_->CreateMetadataChangeList();
-      for (const auto& kv : entities_) {
-        change_list->ClearMetadata(kv.second->storage_key());
-      }
-      change_list->ClearModelTypeState();
-
-      const ModelTypeSyncBridge::StopSyncResponse response =
-          bridge_->ApplyStopSyncChanges(std::move(change_list));
-
-      // Reset all the internal state of the processor.
-      ResetState(CLEAR_METADATA);
-
-      switch (response) {
+      switch (ClearMetadataAndResetState()) {
         case ModelTypeSyncBridge::StopSyncResponse::kModelStillReadyToSync:
           // The model is still ready to sync (with the same |bridge_|) - replay
           // the initialization.
@@ -226,6 +233,24 @@ void ClientTagBasedModelTypeProcessor::OnSyncStopping(
       break;
     }
   }
+}
+
+ModelTypeSyncBridge::StopSyncResponse
+ClientTagBasedModelTypeProcessor::ClearMetadataAndResetState() {
+  // Clear metadata.
+  std::unique_ptr<MetadataChangeList> change_list =
+      bridge_->CreateMetadataChangeList();
+  for (const auto& kv : entities_) {
+    change_list->ClearMetadata(kv.second->storage_key());
+  }
+  change_list->ClearModelTypeState();
+  const ModelTypeSyncBridge::StopSyncResponse response =
+      bridge_->ApplyStopSyncChanges(std::move(change_list));
+
+  // Reset all the internal state of the processor.
+  ResetState(CLEAR_METADATA);
+
+  return response;
 }
 
 bool ClientTagBasedModelTypeProcessor::IsTrackingMetadata() {
@@ -418,7 +443,7 @@ bool ClientTagBasedModelTypeProcessor::HasLocalChanges() const {
 
 void ClientTagBasedModelTypeProcessor::GetLocalChanges(
     size_t max_entries,
-    const GetLocalChangesCallback& callback) {
+    GetLocalChangesCallback callback) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK_GT(max_entries, 0U);
 
@@ -432,13 +457,13 @@ void ClientTagBasedModelTypeProcessor::GetLocalChanges(
   if (!entities_requiring_data.empty()) {
     bridge_->GetData(
         std::move(entities_requiring_data),
-        base::BindRepeating(
-            &ClientTagBasedModelTypeProcessor::OnPendingDataLoaded,
-            weak_ptr_factory_for_worker_.GetWeakPtr(), max_entries, callback));
+        base::BindOnce(&ClientTagBasedModelTypeProcessor::OnPendingDataLoaded,
+                       weak_ptr_factory_for_worker_.GetWeakPtr(), max_entries,
+                       std::move(callback)));
   } else {
     // All commit data can be availbale in memory for those entries passed in
     // the .put() method.
-    CommitLocalChanges(max_entries, callback);
+    CommitLocalChanges(max_entries, std::move(callback));
   }
 }
 
@@ -799,7 +824,7 @@ void ClientTagBasedModelTypeProcessor::OnInitialUpdateReceived(
 
 void ClientTagBasedModelTypeProcessor::OnPendingDataLoaded(
     size_t max_entries,
-    const GetLocalChangesCallback& callback,
+    GetLocalChangesCallback callback,
     std::unique_ptr<DataBatch> data_batch) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
@@ -810,7 +835,7 @@ void ClientTagBasedModelTypeProcessor::OnPendingDataLoaded(
   ConsumeDataBatch(std::move(data_batch));
 
   ConnectIfReady();
-  CommitLocalChanges(max_entries, callback);
+  CommitLocalChanges(max_entries, std::move(callback));
 }
 
 void ClientTagBasedModelTypeProcessor::ConsumeDataBatch(
@@ -829,7 +854,7 @@ void ClientTagBasedModelTypeProcessor::ConsumeDataBatch(
 
 void ClientTagBasedModelTypeProcessor::CommitLocalChanges(
     size_t max_entries,
-    const GetLocalChangesCallback& callback) {
+    GetLocalChangesCallback callback) {
   CommitRequestDataList commit_requests;
   // TODO(rlarocque): Do something smarter than iterate here.
   for (const auto& kv : entities_) {
@@ -843,7 +868,7 @@ void ClientTagBasedModelTypeProcessor::CommitLocalChanges(
       }
     }
   }
-  callback.Run(std::move(commit_requests));
+  std::move(callback).Run(std::move(commit_requests));
 }
 
 std::string ClientTagBasedModelTypeProcessor::GetHashForTag(
@@ -1061,8 +1086,6 @@ void ClientTagBasedModelTypeProcessor::ResetState(
   // This should reset all mutable fields (except for |bridge_|).
   worker_.reset();
   model_error_.reset();
-  start_callback_ = StartCallback();
-  activation_request_ = DataTypeActivationRequest();
   cached_gc_directive_version_ = 0;
   cached_gc_directive_aged_out_day_ = base::Time::FromDoubleT(0);
 
@@ -1074,6 +1097,8 @@ void ClientTagBasedModelTypeProcessor::ResetState(
       entities_.clear();
       storage_key_to_tag_hash_.clear();
       model_type_state_ = sync_pb::ModelTypeState();
+      model_type_state_.mutable_progress_marker()->set_data_type_id(
+          GetSpecificsFieldNumberFromModelType(type_));
       break;
   }
 

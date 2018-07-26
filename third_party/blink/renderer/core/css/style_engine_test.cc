@@ -18,8 +18,10 @@
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/dom/shadow_root_init.h"
+#include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/frame/frame_test_helpers.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
+#include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/html/html_element.h"
 #include "third_party/blink/renderer/core/html/html_span_element.h"
 #include "third_party/blink/renderer/core/html/html_style_element.h"
@@ -1175,29 +1177,21 @@ TEST_F(StyleEngineTest, ViewportDescriptionForZoomDSF) {
   Document* document =
       ToLocalFrame(web_view_impl->GetPage()->MainFrame())->GetDocument();
 
-  float min_width =
-      document->GetViewportDescription().min_width.GetFloatValue();
-  float max_width =
-      document->GetViewportDescription().max_width.GetFloatValue();
-  float min_height =
-      document->GetViewportDescription().min_height.GetFloatValue();
-  float max_height =
-      document->GetViewportDescription().max_height.GetFloatValue();
+  auto desc = document->GetViewportData().GetViewportDescription();
+  float min_width = desc.min_width.GetFloatValue();
+  float max_width = desc.max_width.GetFloatValue();
+  float min_height = desc.min_height.GetFloatValue();
+  float max_height = desc.max_height.GetFloatValue();
 
   const float device_scale = 3.5f;
   client.set_device_scale_factor(device_scale);
   web_view_impl->UpdateAllLifecyclePhases();
 
-  EXPECT_FLOAT_EQ(device_scale * min_width,
-                  document->GetViewportDescription().min_width.GetFloatValue());
-  EXPECT_FLOAT_EQ(device_scale * max_width,
-                  document->GetViewportDescription().max_width.GetFloatValue());
-  EXPECT_FLOAT_EQ(
-      device_scale * min_height,
-      document->GetViewportDescription().min_height.GetFloatValue());
-  EXPECT_FLOAT_EQ(
-      device_scale * max_height,
-      document->GetViewportDescription().max_height.GetFloatValue());
+  desc = document->GetViewportData().GetViewportDescription();
+  EXPECT_FLOAT_EQ(device_scale * min_width, desc.min_width.GetFloatValue());
+  EXPECT_FLOAT_EQ(device_scale * max_width, desc.max_width.GetFloatValue());
+  EXPECT_FLOAT_EQ(device_scale * min_height, desc.min_height.GetFloatValue());
+  EXPECT_FLOAT_EQ(device_scale * max_height, desc.max_height.GetFloatValue());
 }
 
 TEST_F(StyleEngineTest, MediaQueryAffectingValueChanged_StyleElementNoMedia) {
@@ -1459,6 +1453,51 @@ TEST_F(StyleEngineTest, ShadowRootStyleRecalcCrash) {
   shadow_root.getElementById("span")->remove();
   host->SetInlineStyleProperty(CSSPropertyDisplay, "inline");
   GetDocument().View()->UpdateAllLifecyclePhases();
+}
+
+TEST_F(StyleEngineTest, GetComputedStyleOutsideFlatTreeCrash) {
+  GetDocument().body()->SetInnerHTMLFromString(R"HTML(
+    <style>
+      body, div { display: contents }
+      div::before { display: contents; content: "" }
+    </style>
+    <div id=inner></div>
+  )HTML");
+
+  GetDocument().documentElement()->CreateV0ShadowRootForTesting();
+  GetDocument().View()->UpdateAllLifecyclePhases();
+  GetDocument().body()->EnsureComputedStyle();
+  GetDocument().getElementById("inner")->SetInlineStyleProperty(
+      CSSPropertyColor, "blue");
+  GetDocument().View()->UpdateAllLifecyclePhases();
+}
+
+TEST_F(StyleEngineTest, RejectSelectorForPseudoElement) {
+  GetDocument().body()->SetInnerHTMLFromString(R"HTML(
+    <style>
+      div::before { content: "" }
+      .not-in-filter div::before { color: red }
+    </style>
+    <div class='not-in-filter'></div>
+  )HTML");
+  GetDocument().View()->UpdateAllLifecyclePhases();
+
+  StyleEngine& engine = GetDocument().GetStyleEngine();
+  engine.SetStatsEnabled(true);
+
+  StyleResolverStats* stats = engine.Stats();
+  ASSERT_TRUE(stats);
+
+  Element* div = GetDocument().QuerySelector("div");
+  ASSERT_TRUE(div);
+  div->SetInlineStyleProperty(CSSPropertyColor, "green");
+
+  GetDocument().Lifecycle().AdvanceTo(DocumentLifecycle::kInStyleRecalc);
+  GetDocument().documentElement()->RecalcStyle(kNoChange);
+
+  // Should fast reject ".not-in-filter div::before {}" for both the div and its
+  // ::before pseudo element.
+  EXPECT_EQ(2u, stats->rules_fast_rejected);
 }
 
 }  // namespace blink

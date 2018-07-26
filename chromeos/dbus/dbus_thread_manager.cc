@@ -11,7 +11,6 @@
 #include "base/message_loop/message_loop.h"
 #include "base/sys_info.h"
 #include "base/threading/thread.h"
-#include "chromeos/chromeos_switches.h"
 #include "chromeos/dbus/arc_midis_client.h"
 #include "chromeos/dbus/arc_obb_mounter_client.h"
 #include "chromeos/dbus/arc_oemcrypto_client.h"
@@ -26,6 +25,7 @@
 #include "chromeos/dbus/dbus_client.h"
 #include "chromeos/dbus/dbus_clients_browser.h"
 #include "chromeos/dbus/dbus_clients_common.h"
+#include "chromeos/dbus/dbus_switches.h"
 #include "chromeos/dbus/debug_daemon_client.h"
 #include "chromeos/dbus/easy_unlock_client.h"
 #include "chromeos/dbus/gsm_sms_client.h"
@@ -33,6 +33,7 @@
 #include "chromeos/dbus/image_burner_client.h"
 #include "chromeos/dbus/image_loader_client.h"
 #include "chromeos/dbus/lorgnette_manager_client.h"
+#include "chromeos/dbus/machine_learning_client.h"
 #include "chromeos/dbus/media_analytics_client.h"
 #include "chromeos/dbus/modem_messaging_client.h"
 #include "chromeos/dbus/permission_broker_client.h"
@@ -180,11 +181,6 @@ EasyUnlockClient* DBusThreadManager::GetEasyUnlockClient() {
                           : nullptr;
 }
 
-LorgnetteManagerClient* DBusThreadManager::GetLorgnetteManagerClient() {
-  return clients_browser_ ? clients_browser_->lorgnette_manager_client_.get()
-                          : nullptr;
-}
-
 ShillDeviceClient* DBusThreadManager::GetShillDeviceClient() {
   return clients_common_->shill_device_client_.get();
 }
@@ -226,6 +222,15 @@ ImageBurnerClient* DBusThreadManager::GetImageBurnerClient() {
 ImageLoaderClient* DBusThreadManager::GetImageLoaderClient() {
   return clients_browser_ ? clients_browser_->image_loader_client_.get()
                           : nullptr;
+}
+
+LorgnetteManagerClient* DBusThreadManager::GetLorgnetteManagerClient() {
+  return clients_browser_ ? clients_browser_->lorgnette_manager_client_.get()
+                          : nullptr;
+}
+
+MachineLearningClient* DBusThreadManager::GetMachineLearningClient() {
+  return clients_common_->machine_learning_client_.get();
 }
 
 MediaAnalyticsClient* DBusThreadManager::GetMediaAnalyticsClient() {

@@ -16,6 +16,7 @@
 #include "base/bind_helpers.h"
 #include "base/command_line.h"
 #include "base/containers/flat_map.h"
+#include "base/feature_list.h"
 #include "base/i18n/number_formatting.h"
 #include "base/json/json_reader.h"
 #include "base/lazy_instance.h"
@@ -48,6 +49,7 @@
 #include "chrome/browser/ui/webui/print_preview/printer_handler.h"
 #include "chrome/browser/ui/webui/print_preview/sticky_settings.h"
 #include "chrome/common/buildflags.h"
+#include "chrome/common/chrome_features.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/cloud_print/cloud_print_constants.h"
 #include "chrome/common/crash_keys.h"
@@ -321,10 +323,9 @@ void ReportPrintSettingsStats(const base::DictionaryValue& settings) {
     ReportPrintSettingHistogram(SCALING);
   }
 
-  int num_pages_per_sheet = 1;
-  if (settings.GetInteger(printing::kSettingPagesPerSheet,
-                          &num_pages_per_sheet) &&
-      num_pages_per_sheet != 1) {
+  int pages_per_sheet = 1;
+  if (settings.GetInteger(printing::kSettingPagesPerSheet, &pages_per_sheet) &&
+      pages_per_sheet != 1) {
     ReportPrintSettingHistogram(PAGES_PER_SHEET);
   }
 
@@ -1112,7 +1113,8 @@ void PrintPreviewHandler::SendCloudPrintEnabled() {
   Profile* profile = Profile::FromBrowserContext(
       preview_web_contents()->GetBrowserContext());
   PrefService* prefs = profile->GetPrefs();
-  if (prefs->GetBoolean(prefs::kCloudPrintSubmitEnabled)) {
+  if (prefs->GetBoolean(prefs::kCloudPrintSubmitEnabled) &&
+      !base::FeatureList::IsEnabled(features::kCloudPrinterHandler)) {
     FireWebUIListener(
         "use-cloud-print",
         base::Value(GURL(cloud_devices::GetCloudPrintURL()).spec()),
@@ -1280,6 +1282,14 @@ PrinterHandler* PrintPreviewHandler::GetPrinterHandler(
           preview_web_contents(), Profile::FromWebUI(web_ui()));
     }
     return local_printer_handler_.get();
+  }
+  if (printer_type == PrinterType::kCloudPrinter) {
+    // This printer handler is currently experimental. Ensure it is never
+    // created unless the flag is enabled.
+    CHECK(base::FeatureList::IsEnabled(features::kCloudPrinterHandler));
+    if (!cloud_printer_handler_)
+      cloud_printer_handler_ = PrinterHandler::CreateForCloudPrinters();
+    return cloud_printer_handler_.get();
   }
   NOTREACHED();
   return nullptr;

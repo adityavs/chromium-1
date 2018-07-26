@@ -49,10 +49,10 @@ class CC_EXPORT SingleThreadProxy : public Proxy,
   void SetNeedsCommit() override;
   void SetNeedsRedraw(const gfx::Rect& damage_rect) override;
   void SetNextCommitWaitsForActivation() override;
+  bool RequestedAnimatePending() override;
   void NotifyInputThrottledUntilCommit() override {}
   void SetDeferCommits(bool defer_commits) override;
   bool CommitRequested() const override;
-  void MainThreadHasStoppedFlinging() override {}
   void Start() override;
   void Stop() override;
   void SetMutator(std::unique_ptr<LayerTreeMutator> mutator) override;
@@ -126,6 +126,9 @@ class CC_EXPORT SingleThreadProxy : public Proxy,
       uint32_t frame_token,
       std::vector<LayerTreeHost::PresentationTimeCallback> callbacks,
       const gfx::PresentationFeedback& feedback) override;
+
+  void OnMemoryPressureOnImplThread(
+      base::MemoryPressureListener::MemoryPressureLevel level) override;
 
   void RequestNewLayerTreeFrameSink();
 

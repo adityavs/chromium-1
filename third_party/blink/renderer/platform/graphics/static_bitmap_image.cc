@@ -79,8 +79,7 @@ void StaticBitmapImage::DrawHelper(cc::PaintCanvas* canvas,
 }
 
 scoped_refptr<StaticBitmapImage> StaticBitmapImage::ConvertToColorSpace(
-    sk_sp<SkColorSpace> target,
-    SkTransferFunctionBehavior transfer_function_behavior) {
+    sk_sp<SkColorSpace> target) {
   sk_sp<SkImage> skia_image = PaintImageForCurrentFrame().GetSkImage();
   sk_sp<SkColorSpace> src_color_space = skia_image->refColorSpace();
   if (!src_color_space.get())
@@ -91,14 +90,8 @@ scoped_refptr<StaticBitmapImage> StaticBitmapImage::ConvertToColorSpace(
   if (SkColorSpace::Equals(src_color_space.get(), dst_color_space.get()))
     return this;
 
-  // crbug.com/844145: Remove this when GPU-backed SkImage supports color
-  // covnersion for kRespect TransferFnBehavior (skia:6553).
-  if (skia_image->isTextureBacked() &&
-      transfer_function_behavior == SkTransferFunctionBehavior::kRespect) {
-    skia_image = skia_image->makeNonTextureImage();
-  }
   sk_sp<SkImage> converted_skia_image =
-      skia_image->makeColorSpace(dst_color_space, transfer_function_behavior);
+      skia_image->makeColorSpace(dst_color_space);
   DCHECK(converted_skia_image.get());
   DCHECK(skia_image.get() != converted_skia_image.get());
 

@@ -9,6 +9,7 @@
 #include "base/ios/ios_util.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/sys_string_conversions.h"
+#import "base/test/ios/wait_util.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/prefs/pref_service.h"
 #include "components/strings/grit/components_strings.h"
@@ -35,7 +36,6 @@
 #import "ios/public/provider/chrome/browser/signin/chrome_identity.h"
 #import "ios/public/provider/chrome/browser/signin/fake_chrome_identity.h"
 #import "ios/public/provider/chrome/browser/signin/fake_chrome_identity_service.h"
-#import "ios/testing/wait_util.h"
 #import "ios/web/public/test/http_server/http_server.h"
 #import "ios/web/public/test/http_server/http_server_util.h"
 #import "net/base/mac/url_conversions.h"
@@ -142,10 +142,7 @@ id<GREYMatcher> OpenInNewIncognitoTabButton() {
 id<GREYMatcher> ClearBrowsingDataButton() {
   return ButtonWithAccessibilityLabelId(IDS_IOS_CLEAR_BUTTON);
 }
-// Matcher for the clear browsing data action sheet item.
-id<GREYMatcher> ConfirmClearBrowsingDataButton() {
-  return ButtonWithAccessibilityLabelId(IDS_IOS_CONFIRM_CLEAR_BUTTON);
-}
+
 }  // namespace
 
 // History UI tests.
@@ -344,7 +341,8 @@ id<GREYMatcher> ConfirmClearBrowsingDataButton() {
       performAction:grey_tap()];
   [[EarlGrey selectElementWithMatcher:ClearBrowsingDataButton()]
       performAction:grey_tap()];
-  [[EarlGrey selectElementWithMatcher:ConfirmClearBrowsingDataButton()]
+  [[EarlGrey selectElementWithMatcher:chrome_test_util::
+                                          ConfirmClearBrowsingDataButton()]
       performAction:grey_tap()];
 
   // Include sufficientlyVisible condition for the case of the clear browsing
@@ -418,8 +416,8 @@ id<GREYMatcher> ConfirmClearBrowsingDataButton() {
   // Tap "Copy URL" and wait for the URL to be copied to the pasteboard.
   [[EarlGrey selectElementWithMatcher:ContextMenuCopyButton()]
       performAction:grey_tap()];
-  bool success =
-      testing::WaitUntilConditionOrTimeout(testing::kWaitForUIElementTimeout, ^{
+  bool success = base::test::ios::WaitUntilConditionOrTimeout(
+      base::test::ios::kWaitForUIElementTimeout, ^{
         return _URL1 ==
                net::GURLWithNSURL([UIPasteboard generalPasteboard].URL);
       });

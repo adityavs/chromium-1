@@ -19,6 +19,8 @@ namespace quic {
 class QuicPacketWriterWrapper : public QuicPacketWriter {
  public:
   QuicPacketWriterWrapper();
+  QuicPacketWriterWrapper(const QuicPacketWriterWrapper&) = delete;
+  QuicPacketWriterWrapper& operator=(const QuicPacketWriterWrapper&) = delete;
   ~QuicPacketWriterWrapper() override;
 
   // Default implementation of the QuicPacketWriter interface. Passes everything
@@ -34,6 +36,9 @@ class QuicPacketWriterWrapper : public QuicPacketWriter {
   QuicByteCount GetMaxPacketSize(
       const QuicSocketAddress& peer_address) const override;
   bool SupportsReleaseTime() const override;
+  bool IsBatchMode() const override;
+  char* GetNextWriteLocation() const override;
+  WriteResult Flush() override;
 
   // Takes ownership of |writer|.
   void set_writer(QuicPacketWriter* writer);
@@ -50,8 +55,6 @@ class QuicPacketWriterWrapper : public QuicPacketWriter {
 
   QuicPacketWriter* writer_ = nullptr;
   bool owns_writer_ = false;
-
-  DISALLOW_COPY_AND_ASSIGN(QuicPacketWriterWrapper);
 };
 
 }  // namespace quic

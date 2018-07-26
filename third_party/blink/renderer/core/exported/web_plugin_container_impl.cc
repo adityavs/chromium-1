@@ -177,7 +177,7 @@ void WebPluginContainerImpl::Paint(GraphicsContext& context,
     // inserted rather than invoking WebPlugin::paint.
     RecordForeignLayer(context, *element_->GetLayoutObject(),
                        DisplayItem::kForeignLayerPlugin, layer_,
-                       FrameRect().Location(), frame_rect_.Size());
+                       FloatPoint(FrameRect().Location()), frame_rect_.Size());
     return;
   }
 
@@ -197,7 +197,7 @@ void WebPluginContainerImpl::Paint(GraphicsContext& context,
 
   cc::PaintCanvas* canvas = context.Canvas();
 
-  IntRect window_rect = ParentFrameView().ConvertToRootFrame(cull_rect.rect_);
+  IntRect window_rect = ParentFrameView().ConvertToRootFrame(cull_rect.Rect());
   web_plugin_->Paint(canvas, window_rect);
 
   context.Restore();
@@ -460,7 +460,7 @@ void WebPluginContainerImpl::EnqueueMessageEvent(
     const WebDOMMessageEvent& event) {
   if (!element_->GetExecutionContext())
     return;
-  element_->EnqueueAsyncEvent(event, TaskType::kInternalDefault);
+  element_->EnqueueEvent(event, TaskType::kInternalDefault);
 }
 
 void WebPluginContainerImpl::Invalidate() {
@@ -572,12 +572,13 @@ bool WebPluginContainerImpl::IsRectTopmost(const WebRect& rect) {
   if (!frame)
     return false;
 
-  IntPoint location = FrameRect().Location();
-  LayoutRect document_rect(location.X() + rect.x, location.Y() + rect.y,
-                           rect.width, rect.height);
-  HitTestResult result = frame->GetEventHandler().HitTestResultAtRect(
-      document_rect, HitTestRequest::kReadOnly | HitTestRequest::kActive |
-                         HitTestRequest::kListBased);
+  IntPoint frame_location = FrameRect().Location();
+  HitTestLocation location(LayoutRect(frame_location.X() + rect.x,
+                                      frame_location.Y() + rect.y, rect.width,
+                                      rect.height));
+  HitTestResult result = frame->GetEventHandler().HitTestResultAtLocation(
+      location, HitTestRequest::kReadOnly | HitTestRequest::kActive |
+                    HitTestRequest::kListBased);
   const HitTestResult::NodeSet& nodes = result.ListBasedTestResult();
   if (nodes.size() != 1)
     return false;

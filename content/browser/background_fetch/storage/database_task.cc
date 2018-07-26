@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "content/browser/background_fetch/background_fetch_data_manager.h"
+#include "content/browser/background_fetch/background_fetch_data_manager_observer.h"
 #include "content/browser/background_fetch/storage/database_helpers.h"
 #include "content/public/browser/browser_thread.h"
 
@@ -14,19 +15,29 @@ namespace content {
 
 namespace background_fetch {
 
+DatabaseTaskHost::DatabaseTaskHost() : weak_factory_(this) {}
+
+DatabaseTaskHost::~DatabaseTaskHost() = default;
+
+base::WeakPtr<DatabaseTaskHost> DatabaseTaskHost::GetWeakPtr() {
+  return weak_factory_.GetWeakPtr();
+}
+
 DatabaseTask::DatabaseTask(DatabaseTaskHost* host) : host_(host) {
   DCHECK(host_);
   // Hold a reference to the CacheStorageManager.
   cache_manager_ = data_manager()->cache_manager();
 }
 
-DatabaseTask::~DatabaseTask() {
-  DCHECK(active_subtasks_.empty() || data_manager()->shutting_down_);
-}
+DatabaseTask::~DatabaseTask() = default;
 
 void DatabaseTask::Finished() {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  host_->OnTaskFinished(this);
+  // Post the OnTaskFinished callback to the same thread, to allow the the
+  // DatabaseTask to finish execution before deallocating it.
+  base::ThreadTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE, base::BindOnce(&DatabaseTaskHost::OnTaskFinished,
+                                host_->GetWeakPtr(), this));
 }
 
 void DatabaseTask::OnTaskFinished(DatabaseTask* finished_subtask) {
@@ -43,6 +54,11 @@ void DatabaseTask::AddSubTask(std::unique_ptr<DatabaseTask> task) {
   DCHECK_EQ(task->host_, this);
   auto insert_result = active_subtasks_.emplace(task.get(), std::move(task));
   insert_result.first->second->Start();  // Start the subtask.
+}
+
+void DatabaseTask::AbandonFetches(int64_t service_worker_registration_id) {
+  for (auto& observer : data_manager()->observers())
+    observer.OnServiceWorkerDatabaseCorrupted(service_worker_registration_id);
 }
 
 ServiceWorkerContextWrapper* DatabaseTask::service_worker_context() {

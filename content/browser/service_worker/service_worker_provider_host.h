@@ -23,7 +23,7 @@
 #include "content/browser/service_worker/service_worker_registration.h"
 #include "content/common/content_export.h"
 #include "content/common/service_worker/service_worker_container.mojom.h"
-#include "content/common/service_worker/service_worker_provider_host_info.h"
+#include "content/common/service_worker/service_worker_provider.mojom.h"
 #include "content/common/service_worker/service_worker_types.h"
 #include "content/public/common/request_context_type.h"
 #include "content/public/common/resource_type.h"
@@ -167,7 +167,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   // |process_id|.
   static std::unique_ptr<ServiceWorkerProviderHost> Create(
       int process_id,
-      ServiceWorkerProviderHostInfo info,
+      mojom::ServiceWorkerProviderHostInfoPtr info,
       base::WeakPtr<ServiceWorkerContextCore> context);
 
   ~ServiceWorkerProviderHost() override;
@@ -175,14 +175,14 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   const std::string& client_uuid() const { return client_uuid_; }
   base::TimeTicks create_time() const { return create_time_; }
   int process_id() const { return render_process_id_; }
-  int provider_id() const { return info_.provider_id; }
+  int provider_id() const { return info_->provider_id; }
   int frame_id() const;
-  int route_id() const { return info_.route_id; }
+  int route_id() const { return info_->route_id; }
   const WebContentsGetter& web_contents_getter() const {
     return web_contents_getter_;
   }
 
-  bool is_parent_frame_secure() const { return info_.is_parent_frame_secure; }
+  bool is_parent_frame_secure() const { return info_->is_parent_frame_secure; }
 
   // Returns whether this provider host is secure enough to have a service
   // worker controller.
@@ -199,19 +199,21 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   blink::mojom::ControllerServiceWorkerMode GetControllerMode() const;
 
   // Returns this provider's controller. The controller is typically the same as
-  // active_version() but can differ in the following cases:
-  // (1) The client was created before the registration existed or had an active
-  // version (in spec language, it is not "using" the registration).
-  // (2) The client had a controller but NotifyControllerLost() was called due
-  // to an exceptional circumstance (here also it is not "using" the
-  // registration).
-  // (3) During algorithms such as the update, skipWaiting(), and claim() steps,
-  // the active version and controller may temporarily differ. For example, to
-  // perform skipWaiting(), the registration's active version is updated first
-  // and then the provider host's controlling version is updated to match it.
+  // active_version(), but during algorithms such as the update, skipWaiting(),
+  // and claim() steps, the active version and controller may temporarily
+  // differ. For example, to perform skipWaiting(), the registration's active
+  // version is updated first and then the provider host's controlling version
+  // is updated to match it.
   ServiceWorkerVersion* controller() const {
-    // Only clients can have controllers.
-    DCHECK(!controller_ || IsProviderForClient());
+#if DCHECK_IS_ON()
+    if (controller_) {
+      DCHECK(IsProviderForClient());
+      DCHECK_EQ(controller_->registration_id(), associated_registration_->id());
+    } else {
+      DCHECK(!associated_registration_);
+    }
+#endif  // DCHECK_IS_ON()
+
     return controller_.get();
   }
 
@@ -221,32 +223,12 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
                : nullptr;
   }
 
-  ServiceWorkerVersion* waiting_version() const {
-    return associated_registration_.get()
-               ? associated_registration_->waiting_version()
-               : nullptr;
-  }
-
-  ServiceWorkerVersion* installing_version() const {
-    return associated_registration_.get()
-               ? associated_registration_->installing_version()
-               : nullptr;
-  }
-
-  // Returns the associated registration. The provider host listens to this
-  // registration to resolve the .ready promise and set its controller.
-  ServiceWorkerRegistration* associated_registration() const {
-    // Only clients can have an associated registration.
-    DCHECK(!associated_registration_ || IsProviderForClient());
-    return associated_registration_.get();
-  }
-
   // For service worker execution contexts. The version of the service worker.
   // This is nullptr when the worker is still starting up (until
   // CompleteStartWorkerPreparation() is called).
   ServiceWorkerVersion* running_hosted_version() const {
     DCHECK(!running_hosted_version_ ||
-           info_.type ==
+           info_->type ==
                blink::mojom::ServiceWorkerProviderType::kForServiceWorker);
     return running_hosted_version_.get();
   }
@@ -308,22 +290,23 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   const GURL& topmost_frame_url() const;
 
   blink::mojom::ServiceWorkerProviderType provider_type() const {
-    return info_.type;
+    return info_->type;
   }
   bool IsProviderForServiceWorker() const;
   bool IsProviderForClient() const;
   // Can only be called when IsProviderForClient() is true.
   blink::mojom::ServiceWorkerClientType client_type() const;
 
-  // For service worker clients. Associates to |registration| to listen for its
-  // version change events and sets the controller. If |notify_controllerchange|
-  // is true, instructs the renderer to dispatch a 'controllerchange' event.
+  // For service worker clients. Associates to |registration| to set the
+  // controller. If |notify_controllerchange| is true, instructs the renderer to
+  // dispatch a 'controllerchange' event.
   void AssociateRegistration(ServiceWorkerRegistration* registration,
                              bool notify_controllerchange);
 
-  // For service worker clients. Clears the associated registration and stops
-  // listening to it.
-  void DisassociateRegistration();
+  // For service worker clients. Clears the controller. If
+  // |notify_controllerchange| is true, instructs the renderer to dispatch a
+  // 'controllerchange' event.
+  void DisassociateRegistration(bool notify_controllerchange);
 
   // Returns a handler for a request. May return nullptr if the request doesn't
   // require special handling.
@@ -361,12 +344,15 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   base::WeakPtr<ServiceWorkerObjectHost> GetOrCreateServiceWorkerObjectHost(
       scoped_refptr<ServiceWorkerVersion> version);
 
-  // Returns true if |registration| can be associated with this provider.
-  bool CanAssociateRegistration(ServiceWorkerRegistration* registration);
-
-  // For use by the ServiceWorkerControlleeRequestHandler to disallow
-  // new registration association while a navigation is occurring and
-  // an existing registration is being looked for.
+  // For use by the ServiceWorkerControlleeRequestHandler to disallow a
+  // registration claiming this host while its main resource request is
+  // occurring.
+  //
+  // TODO(crbug.com/866353): This should be unneccessary: registration code
+  // already avoids claiming clients that are not execution ready. However
+  // there may be edge cases with shared workers (pre-NetS13nServiceWorker) and
+  // about:blank iframes, since |is_execution_ready_| is initialized true for
+  // them. Try to remove this after S13nServiceWorker.
   void SetAllowAssociation(bool allow) { allow_association_ = allow; }
 
   // Returns true if the context referred to by this host (i.e. |context_|) is
@@ -386,8 +372,9 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
 
   // For service worker clients. Completes initialization of
   // provider hosts used for navigation requests.
-  void CompleteNavigationInitialized(int process_id,
-                                     ServiceWorkerProviderHostInfo info);
+  void CompleteNavigationInitialized(
+      int process_id,
+      mojom::ServiceWorkerProviderHostInfoPtr info);
 
   // For service worker execution contexts. Completes initialization of this
   // provider host. It is called once a renderer process has been found to host
@@ -411,6 +398,16 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   // After this is called, is_execution_ready() returns true.
   void CompleteSharedWorkerPreparation();
 
+  // For service worker clients. The host keeps track of all the prospective
+  // longest-matching registrations, in order to resolve .ready or respond to
+  // claim() attempts.
+  //
+  // This is subtle: it doesn't keep all registrations (e.g., from storage) in
+  // memory, but just the ones that are possibly the longest-matching one. The
+  // best match from storage is added at load time. That match can't uninstall
+  // while this host is a controllee, so all the other stored registrations can
+  // be ignored. Only a newly installed registration can claim it, and new
+  // installing registrations are added as matches.
   void AddMatchingRegistration(ServiceWorkerRegistration* registration);
   void RemoveMatchingRegistration(ServiceWorkerRegistration* registration);
 
@@ -436,6 +433,26 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   // cache.
   void NotifyControllerLost();
 
+  // S13nServiceWorker:
+  // For service worker clients. Called when |version| is the active worker upon
+  // the main resource request for this client. Remembers |version| as needing
+  // a Soft Update. To avoid affecting page load performance, the update occurs
+  // when we get a HintToUpdateServiceWorker message from the renderer, or when
+  // |this| is destroyed before receiving that message.
+  //
+  // Corresponds to the Handle Fetch algorithm:
+  // "If request is a non-subresource request...invoke Soft Update algorithm
+  // with registration."
+  // https://w3c.github.io/ServiceWorker/#on-fetch-request-algorithm
+  //
+  // This can be called multiple times due to redirects during a main resource
+  // load. All service workers are updated.
+  //
+  // For non-S13nServiceWorker: The update logic is controlled entirely by
+  // ServiceWorkerControlleeRequestHandler, which sees all resource request
+  // activity and schedules an update at a convenient time.
+  void AddServiceWorkerToUpdate(scoped_refptr<ServiceWorkerVersion> version);
+
   bool is_execution_ready() const { return is_execution_ready_; }
 
  private:
@@ -443,6 +460,8 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   friend class ServiceWorkerProviderHostTest;
   friend class ServiceWorkerWriteToCacheJobTest;
   friend class ServiceWorkerContextRequestHandlerTest;
+  friend class service_worker_controllee_request_handler_unittest::
+      ServiceWorkerControlleeRequestHandlerTest;
   friend class service_worker_object_host_unittest::ServiceWorkerObjectHostTest;
   FRIEND_TEST_ALL_PREFIXES(ServiceWorkerWriteToCacheJobTest, Update_SameScript);
   FRIEND_TEST_ALL_PREFIXES(ServiceWorkerWriteToCacheJobTest,
@@ -468,7 +487,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
                            RegisterWithoutLiveSWRegistration);
 
   ServiceWorkerProviderHost(int process_id,
-                            ServiceWorkerProviderHostInfo info,
+                            mojom::ServiceWorkerProviderHostInfoPtr info,
                             base::WeakPtr<ServiceWorkerContextCore> context);
 
   // ServiceWorkerRegistration::Listener overrides.
@@ -481,13 +500,12 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
       ServiceWorkerRegistration* registration) override;
   void OnSkippedWaiting(ServiceWorkerRegistration* registration) override;
 
-  // Sets the controller field to |version| or if |version| is nullptr, clears
-  // the field. If |notify_controllerchange| is true, instructs the renderer to
-  // dispatch a 'controller' change event.
-  void SetControllerVersionAttribute(ServiceWorkerVersion* version,
-                                     bool notify_controllerchange);
-
-  void SendAssociateRegistrationMessage();
+  // Sets the controller to |associated_registration_->active_version()| or null
+  // if there is no associated registration.
+  //
+  // If |notify_controllerchange| is true, instructs the renderer to dispatch a
+  // 'controller' change event.
+  void UpdateController(bool notify_controllerchange);
 
   // Syncs matching registrations with live registrations.
   void SyncMatchingRegistrations();
@@ -517,6 +535,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   void CloneForWorker(
       mojom::ServiceWorkerContainerHostRequest container_host_request) override;
   void Ping(PingCallback callback) override;
+  void HintToUpdateServiceWorker() override;
 
   // Callback for ServiceWorkerContextCore::RegisterServiceWorker().
   void RegistrationComplete(RegisterCallback callback,
@@ -578,7 +597,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   // Otherwise, |kDocumentMainThreadId|.
   int render_thread_id_;
 
-  ServiceWorkerProviderHostInfo info_;
+  mojom::ServiceWorkerProviderHostInfoPtr info_;
 
   // Only set when this object is pre-created for a navigation. It indicates the
   // tab where the navigation occurs.
@@ -587,6 +606,7 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   GURL document_url_;
   GURL topmost_frame_url_;
 
+  // The registration of |controller_|.
   scoped_refptr<ServiceWorkerRegistration> associated_registration_;
 
   // Keyed by registration scope URL length.
@@ -666,8 +686,11 @@ class CONTENT_EXPORT ServiceWorkerProviderHost
   // redirects.
   bool is_execution_ready_ = false;
 
-  // TODO(crbug.com/838410): Temporary debugging for the linked bug.
-  bool in_dtor_ = false;
+  // For service worker clients. The service workers in the chain of redirects
+  // during the main resource request for this client. These workers should be
+  // updated "soon". See AddServiceWorkerToUpdate() documentation.
+  class PendingUpdateVersion;
+  base::flat_set<PendingUpdateVersion> versions_to_update_;
 
   DISALLOW_COPY_AND_ASSIGN(ServiceWorkerProviderHost);
 };

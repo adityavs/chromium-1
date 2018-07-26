@@ -191,9 +191,13 @@ class AutofillManager : public AutofillHandler,
   // client supports Autofill.
   virtual bool IsAutofillEnabled() const;
 
+  // Returns true if the value of the AutofillProfileEnabled pref is true and
+  // the client supports Autofill.
+  virtual bool IsProfileAutofillEnabled() const;
+
   // Returns true if the value of the AutofillCreditCardEnabled pref is true and
   // the client supports Autofill.
-  virtual bool IsCreditCardAutofillEnabled();
+  virtual bool IsCreditCardAutofillEnabled() const;
 
   // Shared code to determine if |form| should be uploaded to the Autofill
   // server. It verifies that uploading is allowed and |form| meets conditions
@@ -253,7 +257,8 @@ class AutofillManager : public AutofillHandler,
   void OnQueryFormFieldAutofillImpl(int query_id,
                                     const FormData& form,
                                     const FormFieldData& field,
-                                    const gfx::RectF& transformed_box) override;
+                                    const gfx::RectF& transformed_box,
+                                    bool autoselect_first_suggestion) override;
   void OnSelectControlDidChangeImpl(const FormData& form,
                                     const FormFieldData& field,
                                     const gfx::RectF& bounding_box) override;
@@ -273,6 +278,9 @@ class AutofillManager : public AutofillHandler,
   void set_download_manager(AutofillDownloadManager* manager) {
     download_manager_.reset(manager);
   }
+
+  // Exposed for testing.
+  payments::PaymentsClient* payments_client() { return payments_client_.get(); }
 
   // Exposed for testing.
   void set_payments_client(payments::PaymentsClient* payments_client) {
@@ -325,7 +333,6 @@ class AutofillManager : public AutofillHandler,
     bool is_filling_credit_card = false;
     // Flag to indicate whether all suggestions come from Google Payments.
     bool is_all_server_suggestions = false;
-    bool section_has_autofilled_field = false;
     SuppressReason suppress_reason = SuppressReason::kNotSuppressed;
   };
 
@@ -653,6 +660,10 @@ class AutofillManager : public AutofillHandler,
                            CreditCardCheckoutFlowUserActions);
   FRIEND_TEST_ALL_PREFIXES(AutofillMetricsTest,
                            LogHiddenRepresentationalFieldSkipDecision);
+  FRIEND_TEST_ALL_PREFIXES(AutofillMetricsTest,
+                           LogRepeatedAddressTypeRationalized);
+  FRIEND_TEST_ALL_PREFIXES(AutofillMetricsTest,
+                           LogRepeatedStateCountryTypeRationalized);
 
   FRIEND_TEST_ALL_PREFIXES(
       AutofillMetricsTest,

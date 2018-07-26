@@ -127,7 +127,8 @@ using namespace HTMLNames;
 
 // The amount of time to wait for a cursor update on style and layout changes
 // Set to 50Hz, no need to be faster than common screen refresh rate
-static const double kCursorUpdateInterval = 0.02;
+static constexpr TimeDelta kCursorUpdateInterval =
+    TimeDelta::FromMilliseconds(20);
 
 static const int kMaximumCursorSize = 128;
 
@@ -228,12 +229,13 @@ void EventHandler::StartMiddleClickAutoscroll(LayoutObject* layout_object) {
   controller->StartMiddleClickAutoscroll(
       layout_object->GetFrame(),
       frame_->GetPage()->GetVisualViewport().ViewportToRootFrame(
-          mouse_event_manager_->LastKnownMousePosition()),
+          FloatPoint(mouse_event_manager_->LastKnownMousePosition())),
       mouse_event_manager_->LastKnownMousePositionGlobal());
   mouse_event_manager_->InvalidateClick();
 }
 
-void EventHandler::PerformHitTest(HitTestResult& result,
+void EventHandler::PerformHitTest(const HitTestLocation& location,
+                                  HitTestResult& result,
                                   bool no_lifecycle_update) const {
   // LayoutView::hitTest causes a layout, and we don't want to hit that until
   // the first layout because until then, there is nothing shown on the screen -
@@ -251,9 +253,9 @@ void EventHandler::PerformHitTest(HitTestResult& result,
     return;
 
   if (no_lifecycle_update) {
-    frame_->ContentLayoutObject()->HitTestNoLifecycleUpdate(result);
+    frame_->ContentLayoutObject()->HitTestNoLifecycleUpdate(location, result);
   } else {
-    frame_->ContentLayoutObject()->HitTest(result);
+    frame_->ContentLayoutObject()->HitTest(location, result);
   }
   const HitTestRequest& request = result.GetHitTestRequest();
   if (!request.ReadOnly()) {
@@ -262,14 +264,14 @@ void EventHandler::PerformHitTest(HitTestResult& result,
   }
 }
 
-HitTestResult EventHandler::HitTestResultAtPoint(
-    const LayoutPoint& point,
+HitTestResult EventHandler::HitTestResultAtLocation(
+    const HitTestLocation& location,
     HitTestRequest::HitTestRequestType hit_type,
     const LayoutObject* stop_node,
     bool no_lifecycle_update) {
-  TRACE_EVENT0("blink", "EventHandler::hitTestResultAtPoint");
+  TRACE_EVENT0("blink", "EventHandler::HitTestResultAtLocation");
 
-  // We always send hitTestResultAtPoint to the main frame if we have one,
+  // We always send HitTestResultAtLocation to the main frame if we have one,
   // otherwise we might hit areas that are obscured by higher frames.
   if (frame_->GetPage()) {
     LocalFrame& main_frame = frame_->LocalFrameRoot();
@@ -277,53 +279,30 @@ HitTestResult EventHandler::HitTestResultAtPoint(
       LocalFrameView* frame_view = frame_->View();
       LocalFrameView* main_view = main_frame.View();
       if (frame_view && main_view) {
-        LayoutPoint main_content_point = main_view->ConvertFromRootFrame(
-            frame_view->ConvertToRootFrame(point));
-        return main_frame.GetEventHandler().HitTestResultAtPoint(
-            main_content_point, hit_type, stop_node);
+        if (location.IsRectBasedTest()) {
+          DCHECK(location.IsRectilinear());
+          LayoutPoint main_content_point =
+              main_view->ConvertFromRootFrame(frame_view->ConvertToRootFrame(
+                  location.BoundingBox().Location()));
+          HitTestLocation adjusted_location(
+              (LayoutRect(main_content_point, location.BoundingBox().Size())));
+          return main_frame.GetEventHandler().HitTestResultAtLocation(
+              adjusted_location, hit_type, stop_node);
+        } else {
+          HitTestLocation adjusted_location(main_view->ConvertFromRootFrame(
+              frame_view->ConvertToRootFrame(location.Point())));
+          return main_frame.GetEventHandler().HitTestResultAtLocation(
+              adjusted_location, hit_type, stop_node);
+        }
       }
     }
   }
-
-  // hitTestResultAtPoint is specifically used to hitTest into all frames, thus
-  // it always allows child frame content.
+  // HitTestResultAtLocation is specifically used to hitTest into all frames,
+  // thus it always allows child frame content.
   HitTestRequest request(hit_type | HitTestRequest::kAllowChildFrameContent,
                          stop_node);
-  HitTestResult result(request, point);
-  PerformHitTest(result, no_lifecycle_update);
-  return result;
-}
-
-HitTestResult EventHandler::HitTestResultAtRect(
-    const LayoutRect& rect,
-    HitTestRequest::HitTestRequestType hit_type,
-    const LayoutObject* stop_node,
-    bool no_lifecycle_update) {
-  TRACE_EVENT0("blink", "EventHandler::hitTestResultAtRect");
-
-  DCHECK(hit_type & HitTestRequest::kListBased);
-  DCHECK(!rect.IsEmpty());
-
-  if (frame_->GetPage()) {
-    LocalFrame& main_frame = frame_->LocalFrameRoot();
-    if (frame_ != &main_frame) {
-      LocalFrameView* frame_view = frame_->View();
-      LocalFrameView* main_view = main_frame.View();
-      if (frame_view && main_view) {
-        LayoutPoint main_content_point = main_view->ConvertFromRootFrame(
-            frame_view->ConvertToRootFrame(rect.Location()));
-        return main_frame.GetEventHandler().HitTestResultAtRect(
-            LayoutRect(main_content_point, rect.Size()), hit_type, stop_node);
-      }
-    }
-  }
-
-  // hitTestResultAtPoint is specifically used to hitTest into all frames, thus
-  // it always allows child frame content.
-  HitTestRequest request(hit_type | HitTestRequest::kAllowChildFrameContent,
-                         stop_node);
-  HitTestResult result(request, rect);
-  PerformHitTest(result, no_lifecycle_update);
+  HitTestResult result(request, location);
+  PerformHitTest(location, result, no_lifecycle_update);
   return result;
 }
 
@@ -393,14 +372,14 @@ void EventHandler::UpdateCursor() {
 
   HitTestRequest request(HitTestRequest::kReadOnly |
                          HitTestRequest::kAllowChildFrameContent);
-  HitTestResult result(
-      request,
+  HitTestLocation location(
       view->ViewportToFrame(mouse_event_manager_->LastKnownMousePosition()));
-  layout_view->HitTest(result);
+  HitTestResult result(request, location);
+  layout_view->HitTest(location, result);
 
   if (LocalFrame* frame = result.InnerNodeFrame()) {
     EventHandler::OptionalCursor optional_cursor =
-        frame->GetEventHandler().SelectCursor(result);
+        frame->GetEventHandler().SelectCursor(location, result);
     if (optional_cursor.IsCursorChange()) {
       view->SetCursor(optional_cursor.GetCursor());
     }
@@ -408,12 +387,12 @@ void EventHandler::UpdateCursor() {
 }
 
 bool EventHandler::ShouldShowResizeForNode(const Node* node,
-                                           const HitTestResult& result) {
+                                           const HitTestLocation& location) {
   if (LayoutObject* layout_object = node->GetLayoutObject()) {
     PaintLayer* layer = layout_object->EnclosingLayer();
     if (layer->GetScrollableArea() &&
         layer->GetScrollableArea()->IsPointInResizeControl(
-            result.RoundedPointInMainFrame(), kResizerForPointer)) {
+            RoundedIntPoint(location.Point()), kResizerForPointer)) {
       return true;
     }
   }
@@ -447,6 +426,7 @@ bool EventHandler::ShouldShowIBeamForNode(const Node* node,
 }
 
 EventHandler::OptionalCursor EventHandler::SelectCursor(
+    const HitTestLocation& location,
     const HitTestResult& result) {
   if (scroll_manager_->InResizeMode())
     return kNoCursorChange;
@@ -464,7 +444,7 @@ EventHandler::OptionalCursor EventHandler::SelectCursor(
   if (!node)
     return SelectAutoCursor(result, node, IBeamCursor());
 
-  if (ShouldShowResizeForNode(node, result))
+  if (ShouldShowResizeForNode(node, location))
     return PointerCursor();
 
   LayoutObject* layout_object = node->GetLayoutObject();
@@ -729,7 +709,7 @@ WebInputEventResult EventHandler::HandleMousePressEvent(
   // the same behavior and it's more compatible with other browsers.
   GetSelectionController().InitializeSelectionState();
   HitTestResult hit_test_result = EventHandlingUtil::HitTestResultInFrame(
-      frame_, document_point, HitTestRequest::kReadOnly);
+      frame_, HitTestLocation(document_point), HitTestRequest::kReadOnly);
   InputDeviceCapabilities* source_capabilities =
       frame_->GetDocument()
           ->domWindow()
@@ -790,23 +770,25 @@ WebInputEventResult EventHandler::HandleMouseMoveEvent(
     const WebMouseEvent& event,
     const Vector<WebMouseEvent>& coalesced_events) {
   TRACE_EVENT0("blink", "EventHandler::handleMouseMoveEvent");
-  HitTestResult hovered_node = HitTestResult();
-  WebInputEventResult result =
-      HandleMouseMoveOrLeaveEvent(event, coalesced_events, &hovered_node);
+  HitTestResult hovered_node_result;
+  HitTestLocation location;
+  WebInputEventResult result = HandleMouseMoveOrLeaveEvent(
+      event, coalesced_events, &hovered_node_result, &location);
 
   Page* page = frame_->GetPage();
   if (!page)
     return result;
 
   if (PaintLayer* layer =
-          EventHandlingUtil::LayerForNode(hovered_node.InnerNode())) {
+          EventHandlingUtil::LayerForNode(hovered_node_result.InnerNode())) {
     if (ScrollableArea* layer_scrollable_area =
             EventHandlingUtil::AssociatedScrollableArea(layer))
       layer_scrollable_area->MouseMovedInContentArea();
   }
 
-  hovered_node.SetToShadowHostIfInRestrictedShadowRoot();
-  page->GetChromeClient().MouseDidMoveOverElement(*frame_, hovered_node);
+  hovered_node_result.SetToShadowHostIfInRestrictedShadowRoot();
+  page->GetChromeClient().MouseDidMoveOverElement(*frame_, location,
+                                                  hovered_node_result);
 
   return result;
 }
@@ -817,14 +799,15 @@ void EventHandler::HandleMouseLeaveEvent(const WebMouseEvent& event) {
   Page* page = frame_->GetPage();
   if (page)
     page->GetChromeClient().ClearToolTip(*frame_);
-  HandleMouseMoveOrLeaveEvent(event, Vector<WebMouseEvent>(), nullptr, false,
-                              true);
+  HandleMouseMoveOrLeaveEvent(event, Vector<WebMouseEvent>(), nullptr, nullptr,
+                              false, true);
 }
 
 WebInputEventResult EventHandler::HandleMouseMoveOrLeaveEvent(
     const WebMouseEvent& mouse_event,
     const Vector<WebMouseEvent>& coalesced_events,
-    HitTestResult* hovered_node,
+    HitTestResult* hovered_node_result,
+    HitTestLocation* hit_test_location,
     bool only_update_scrollbars,
     bool force_leave) {
   DCHECK(frame_);
@@ -892,8 +875,9 @@ WebInputEventResult EventHandler::HandleMouseMoveOrLeaveEvent(
   if (pointer_event_manager_->IsAnyTouchActive() && !force_leave)
     hit_type |= HitTestRequest::kActive | HitTestRequest::kReadOnly;
   HitTestRequest request(hit_type);
+  HitTestLocation out_location((LayoutPoint()));
   MouseEventWithHitTestResults mev = MouseEventWithHitTestResults(
-      mouse_event, HitTestResult(request, LayoutPoint()));
+      mouse_event, out_location, HitTestResult(request, out_location));
 
   // We don't want to do a hit-test in forceLeave scenarios because there
   // might actually be some other frame above this one at the specified
@@ -906,8 +890,11 @@ WebInputEventResult EventHandler::HandleMouseMoveOrLeaveEvent(
                                                       mouse_event);
   }
 
-  if (hovered_node)
-    *hovered_node = mev.GetHitTestResult();
+  if (hovered_node_result)
+    *hovered_node_result = mev.GetHitTestResult();
+
+  if (hit_test_location)
+    *hit_test_location = mev.GetHitTestLocation();
 
   Scrollbar* scrollbar = nullptr;
 
@@ -951,8 +938,8 @@ WebInputEventResult EventHandler::HandleMouseMoveOrLeaveEvent(
     // subframe of the target node to be detached from its LocalFrameView, in
     // which case the event should not be passed.
     if (new_subframe->View()) {
-      event_result = PassMouseMoveEventToSubframe(mev, coalesced_events,
-                                                  new_subframe, hovered_node);
+      event_result = PassMouseMoveEventToSubframe(
+          mev, coalesced_events, new_subframe, hovered_node_result);
     }
   } else {
     if (scrollbar && !mouse_event_manager_->MousePressed()) {
@@ -962,7 +949,7 @@ WebInputEventResult EventHandler::HandleMouseMoveOrLeaveEvent(
     }
     if (LocalFrameView* view = frame_->View()) {
       EventHandler::OptionalCursor optional_cursor =
-          SelectCursor(mev.GetHitTestResult());
+          SelectCursor(mev.GetHitTestLocation(), mev.GetHitTestResult());
       if (optional_cursor.IsCursorChange()) {
         view->SetCursor(optional_cursor.GetCursor());
       }
@@ -1019,9 +1006,7 @@ WebInputEventResult EventHandler::HandleMouseReleaseEvent(
         EventTypeNames::mouseup, mouse_event);
   }
 
-  // Only release scrollbar when left button up.
-  if (mouse_event.button == WebPointerProperties::Button::kLeft &&
-      last_scrollbar_under_mouse_) {
+  if (last_scrollbar_under_mouse_) {
     mouse_event_manager_->InvalidateClick();
     last_scrollbar_under_mouse_->MouseUp(mouse_event);
     frame_->LocalFrameRoot().Client()->SetMouseCapture(false);
@@ -1227,6 +1212,10 @@ void EventHandler::ClearDragState() {
   drag_target_ = nullptr;
   capturing_mouse_events_node_ = nullptr;
   should_only_fire_drag_over_event_ = false;
+}
+
+void EventHandler::AnimateSnapFling(base::TimeTicks monotonic_time) {
+  scroll_manager_->AnimateSnapFling(monotonic_time);
 }
 
 void EventHandler::SetCapturingMouseEventsNode(Node* n) {
@@ -1465,13 +1454,14 @@ bool EventHandler::GestureCorrespondsToAdjustedTouch(
 }
 
 bool EventHandler::BestClickableNodeForHitTestResult(
+    const HitTestLocation& location,
     const HitTestResult& result,
     IntPoint& target_point,
     Node*& target_node) {
   // FIXME: Unify this with the other best* functions which are very similar.
 
   TRACE_EVENT0("input", "EventHandler::bestClickableNodeForHitTestResult");
-  DCHECK(result.IsRectBasedTest());
+  DCHECK(location.IsRectBasedTest());
 
   // If the touch is over a scrollbar, don't adjust the touch point since touch
   // adjustment only takes into account DOM nodes so a touch over a scrollbar
@@ -1483,9 +1473,9 @@ bool EventHandler::BestClickableNodeForHitTestResult(
   }
 
   IntPoint touch_center =
-      frame_->View()->ConvertToRootFrame(result.RoundedPointInMainFrame());
-  IntRect touch_rect = frame_->View()->ConvertToRootFrame(
-      result.GetHitTestLocation().EnclosingIntRect());
+      frame_->View()->ConvertToRootFrame(RoundedIntPoint(location.Point()));
+  IntRect touch_rect =
+      frame_->View()->ConvertToRootFrame(location.EnclosingIntRect());
 
   HeapVector<Member<Node>, 11> nodes;
   CopyToVector(result.ListBasedTestResult(), nodes);
@@ -1498,14 +1488,15 @@ bool EventHandler::BestClickableNodeForHitTestResult(
 }
 
 bool EventHandler::BestContextMenuNodeForHitTestResult(
+    const HitTestLocation& location,
     const HitTestResult& result,
     IntPoint& target_point,
     Node*& target_node) {
-  DCHECK(result.IsRectBasedTest());
+  DCHECK(location.IsRectBasedTest());
   IntPoint touch_center =
-      frame_->View()->ConvertToRootFrame(result.RoundedPointInMainFrame());
-  IntRect touch_rect = frame_->View()->ConvertToRootFrame(
-      result.GetHitTestLocation().EnclosingIntRect());
+      frame_->View()->ConvertToRootFrame(RoundedIntPoint(location.Point()));
+  IntRect touch_rect =
+      frame_->View()->ConvertToRootFrame(location.EnclosingIntRect());
   HeapVector<Member<Node>, 11> nodes;
   CopyToVector(result.ListBasedTestResult(), nodes);
 
@@ -1717,7 +1708,7 @@ GestureEventWithHitTestResults EventHandler::TargetGestureEvent(
         event_with_hit_test_results.GetHitTestResult().InnerElement();
     // TODO(https://crbug.com/668758): Use a normal BeginFrame update for this.
     active_interval_timer_.StartOneShot(
-        (kMinimumActiveInterval - active_interval).InSecondsF(), FROM_HERE);
+        kMinimumActiveInterval - active_interval, FROM_HERE);
   }
 
   return event_with_hit_test_results;
@@ -1747,23 +1738,25 @@ GestureEventWithHitTestResults EventHandler::HitTestResultForGestureEvent(
     }
   }
 
+  HitTestLocation location;
   LocalFrame& root_frame = frame_->LocalFrameRoot();
   HitTestResult hit_test_result;
   if (hit_rect_size.IsEmpty()) {
-    hit_test_result = root_frame.GetEventHandler().HitTestResultAtPoint(
-        LayoutPoint(adjusted_event.PositionInRootFrame()), hit_type);
+    location = HitTestLocation(adjusted_event.PositionInRootFrame());
+    hit_test_result = root_frame.GetEventHandler().HitTestResultAtLocation(
+        location, hit_type);
   } else {
     LayoutPoint top_left(adjusted_event.PositionInRootFrame());
     top_left.Move(-hit_rect_size * 0.5f);
-    hit_test_result = root_frame.GetEventHandler().HitTestResultAtRect(
-        LayoutRect(top_left, hit_rect_size), hit_type);
+    location = HitTestLocation(LayoutRect(top_left, hit_rect_size));
+    hit_test_result = root_frame.GetEventHandler().HitTestResultAtLocation(
+        location, hit_type);
   }
 
-  if (hit_test_result.IsRectBasedTest()) {
+  if (location.IsRectBasedTest()) {
     // Adjust the location of the gesture to the most likely nearby node, as
     // appropriate for the type of event.
-    ApplyTouchAdjustment(&adjusted_event, &hit_test_result);
-
+    ApplyTouchAdjustment(&adjusted_event, location, &hit_test_result);
     // Do a new hit-test at the (adjusted) gesture co-ordinates. This is
     // necessary because rect-based hit testing and touch adjustment sometimes
     // return a different node than what a point-based hit test would return for
@@ -1773,16 +1766,15 @@ GestureEventWithHitTestResults EventHandler::HitTestResultForGestureEvent(
     LocalFrame* hit_frame = hit_test_result.InnerNodeFrame();
     if (!hit_frame)
       hit_frame = frame_;
-    hit_test_result = EventHandlingUtil::HitTestResultInFrame(
-        hit_frame,
-        hit_frame->View()->ConvertFromRootFrame(
-            LayoutPoint(adjusted_event.PositionInRootFrame())),
+    location = HitTestLocation(adjusted_event.PositionInRootFrame());
+    hit_test_result = root_frame.GetEventHandler().HitTestResultAtLocation(
+        location,
         (hit_type | HitTestRequest::kReadOnly) & ~HitTestRequest::kListBased);
   }
   // If we did a rect-based hit test it must be resolved to the best single node
   // by now to ensure consumers don't accidentally use one of the other
   // candidates.
-  DCHECK(!hit_test_result.IsRectBasedTest());
+  DCHECK(!location.IsRectBasedTest());
 
   if (ShouldApplyTouchAdjustment(gesture_event) &&
       (gesture_event.GetType() == WebInputEvent::kGestureTap ||
@@ -1793,10 +1785,12 @@ GestureEventWithHitTestResults EventHandler::HitTestResultForGestureEvent(
     UMA_HISTOGRAM_COUNTS_100("Event.Touch.TouchAdjustment.AdjustDistance",
                              static_cast<int>(adjusted_distance));
   }
-  return GestureEventWithHitTestResults(adjusted_event, hit_test_result);
+  return GestureEventWithHitTestResults(adjusted_event, location,
+                                        hit_test_result);
 }
 
 void EventHandler::ApplyTouchAdjustment(WebGestureEvent* gesture_event,
+                                        HitTestLocation& location,
                                         HitTestResult* hit_test_result) {
   Node* adjusted_node = nullptr;
   IntPoint adjusted_point =
@@ -1808,13 +1802,13 @@ void EventHandler::ApplyTouchAdjustment(WebGestureEvent* gesture_event,
     case WebInputEvent::kGestureTapDown:
     case WebInputEvent::kGestureShowPress:
       adjusted = BestClickableNodeForHitTestResult(
-          *hit_test_result, adjusted_point, adjusted_node);
+          location, *hit_test_result, adjusted_point, adjusted_node);
       break;
     case WebInputEvent::kGestureLongPress:
     case WebInputEvent::kGestureLongTap:
     case WebInputEvent::kGestureTwoFingerTap:
       adjusted = BestContextMenuNodeForHitTestResult(
-          *hit_test_result, adjusted_point, adjusted_node);
+          location, *hit_test_result, adjusted_point, adjusted_node);
       break;
     default:
       NOTREACHED();
@@ -1825,8 +1819,10 @@ void EventHandler::ApplyTouchAdjustment(WebGestureEvent* gesture_event,
   // FIXME: We should do this even when no candidate matches the node filter.
   // crbug.com/398914
   if (adjusted) {
-    hit_test_result->ResolveRectBasedTest(
-        adjusted_node, frame_->View()->ConvertFromRootFrame(adjusted_point));
+    LayoutPoint point = frame_->View()->ConvertFromRootFrame(adjusted_point);
+    DCHECK(location.ContainsPoint(FloatPoint(point)));
+    DCHECK(location.IsRectBasedTest());
+    location = hit_test_result->ResolveRectBasedTest(adjusted_node, point);
     gesture_event->ApplyTouchAdjustment(
         WebFloatPoint(adjusted_point.X(), adjusted_point.Y()));
   }
@@ -1940,7 +1936,8 @@ WebInputEventResult EventHandler::ShowNonLocatedContextMenu(
 
   // Use the focused node as the target for hover and active.
   HitTestRequest request(HitTestRequest::kActive);
-  HitTestResult result(request, location_in_root_frame);
+  HitTestLocation location(location_in_root_frame);
+  HitTestResult result(request, location);
   result.SetInnerNode(target_node);
   doc->UpdateHoverActiveState(request, result.InnerElement());
 
@@ -2016,10 +2013,10 @@ void EventHandler::HoverTimerFired(TimerBase*) {
   if (auto* layout_object = frame_->ContentLayoutObject()) {
     if (LocalFrameView* view = frame_->View()) {
       HitTestRequest request(HitTestRequest::kMove);
-      HitTestResult result(request,
-                           view->ViewportToFrame(
-                               mouse_event_manager_->LastKnownMousePosition()));
-      layout_object->HitTest(result);
+      HitTestLocation location(view->ViewportToFrame(
+          mouse_event_manager_->LastKnownMousePosition()));
+      HitTestResult result(request, location);
+      layout_object->HitTest(location, result);
       frame_->GetDocument()->UpdateHoverActiveState(request,
                                                     result.InnerElement());
     }
@@ -2127,9 +2124,14 @@ void EventHandler::CapsLockStateMayHaveChanged() {
 
 bool EventHandler::PassMousePressEventToScrollbar(
     MouseEventWithHitTestResults& mev) {
-  // Only handle mouse left button as press.
-  if (mev.Event().button != WebPointerProperties::Button::kLeft)
+  // Do not pass the mouse press to scrollbar if scrollbar pressed. If the
+  // user's left button is down, then the cursor moves outside the scrollbar
+  // and presses the middle button , we should not clear
+  // last_scrollbar_under_mouse_.
+  if (last_scrollbar_under_mouse_ &&
+      last_scrollbar_under_mouse_->PressedPart() != ScrollbarPart::kNoPart) {
     return false;
+  }
 
   Scrollbar* scrollbar = mev.GetScrollbar();
   UpdateLastScrollbarUnderMouse(scrollbar, true);
@@ -2174,12 +2176,13 @@ WebInputEventResult EventHandler::PassMouseMoveEventToSubframe(
     MouseEventWithHitTestResults& mev,
     const Vector<WebMouseEvent>& coalesced_events,
     LocalFrame* subframe,
-    HitTestResult* hovered_node) {
+    HitTestResult* hovered_node,
+    HitTestLocation* hit_test_location) {
   if (mouse_event_manager_->MouseDownMayStartDrag())
     return WebInputEventResult::kNotHandled;
   WebInputEventResult result =
       subframe->GetEventHandler().HandleMouseMoveOrLeaveEvent(
-          mev.Event(), coalesced_events, hovered_node);
+          mev.Event(), coalesced_events, hovered_node, hit_test_location);
   if (result != WebInputEventResult::kNotHandled)
     return result;
   return WebInputEventResult::kHandledSystem;

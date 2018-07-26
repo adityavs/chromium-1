@@ -57,6 +57,9 @@ class QuicEndpoint : public Endpoint,
   // progress.
   void AddBytesToTransfer(QuicByteCount bytes);
 
+  // Drop the next packet upon receipt.
+  void DropNextIncomingPacket();
+
   // UnconstrainedPortInterface method.  Called whenever the endpoint receives a
   // packet.
   void AcceptPacket(std::unique_ptr<Packet> packet) override;
@@ -134,6 +137,9 @@ class QuicEndpoint : public Endpoint,
     QuicByteCount GetMaxPacketSize(
         const QuicSocketAddress& peer_address) const override;
     bool SupportsReleaseTime() const override;
+    bool IsBatchMode() const override;
+    char* GetNextWriteLocation() const override;
+    WriteResult Flush() override;
 
    private:
     QuicEndpoint* endpoint_;
@@ -174,6 +180,9 @@ class QuicEndpoint : public Endpoint,
   // Set to true if the endpoint receives stream data different from what it
   // expects.
   bool wrong_data_received_;
+
+  // If true, drop the next packet when receiving it.
+  bool drop_next_packet_;
 
   // Record of received offsets in the data stream.
   QuicIntervalSet<QuicStreamOffset> offsets_received_;

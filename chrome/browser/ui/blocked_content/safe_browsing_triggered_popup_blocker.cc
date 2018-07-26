@@ -7,7 +7,6 @@
 #include <utility>
 
 #include "base/memory/ptr_util.h"
-#include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/common/pref_names.h"
@@ -15,6 +14,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/safe_browsing/db/util.h"
 #include "components/safe_browsing/db/v4_protocol_manager_util.h"
+#include "components/subresource_filter/content/browser/subresource_filter_safe_browsing_activation_throttle.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/page_navigator.h"
 #include "content/public/browser/render_frame_host.h"
@@ -24,21 +24,23 @@
 
 namespace {
 
-const char kIgnoreSublistsParam[] = "ignore_sublists";
-
 void LogAction(SafeBrowsingTriggeredPopupBlocker::Action action) {
   UMA_HISTOGRAM_ENUMERATION("ContentSettings.Popups.StrongBlockerActions",
                             action,
                             SafeBrowsingTriggeredPopupBlocker::Action::kCount);
 }
 
-safe_browsing::SubresourceFilterLevel PickMostSevereLevel(
-    const base::Optional<safe_browsing::SubresourceFilterLevel>& previous,
-    const safe_browsing::SubresourceFilterLevel& current) {
-  if (!previous.has_value()) {
-    return current;
-  }
-  return std::max(current, previous.value());
+subresource_filter::ActivationPosition GetActivationPosition(
+    size_t match_index,
+    size_t num_checks) {
+  DCHECK_GT(num_checks, 0u);
+  if (num_checks == 1)
+    return subresource_filter::ActivationPosition::kOnly;
+  if (match_index == 0)
+    return subresource_filter::ActivationPosition::kFirst;
+  if (match_index == num_checks - 1)
+    return subresource_filter::ActivationPosition::kLast;
+  return subresource_filter::ActivationPosition::kMiddle;
 }
 
 }  // namespace
@@ -111,11 +113,7 @@ SafeBrowsingTriggeredPopupBlocker::SafeBrowsingTriggeredPopupBlocker(
     subresource_filter::SubresourceFilterObserverManager* observer_manager)
     : content::WebContentsObserver(web_contents),
       scoped_observer_(this),
-      current_page_data_(std::make_unique<PageData>()),
-      ignore_sublists_(
-          base::GetFieldTrialParamByFeatureAsBool(kAbusiveExperienceEnforce,
-                                                  kIgnoreSublistsParam,
-                                                  false /* default_value */)) {
+      current_page_data_(std::make_unique<PageData>()) {
   DCHECK(observer_manager);
   scoped_observer_.Add(observer_manager);
 }
@@ -157,24 +155,28 @@ void SafeBrowsingTriggeredPopupBlocker::OnSafeBrowsingChecksComplete(
     content::NavigationHandle* navigation_handle,
     const SafeBrowsingCheckResults& results) {
   DCHECK(navigation_handle->IsInMainFrame());
-  base::Optional<safe_browsing::SubresourceFilterLevel> current_level;
-  for (const auto& result : results) {
-    if (result.threat_type ==
-        safe_browsing::SBThreatType::SB_THREAT_TYPE_SUBRESOURCE_FILTER) {
-      if (ignore_sublists_) {
-        // No warning for ignore_sublists mode.
-        level_for_next_committed_navigation_ = SubresourceFilterLevel::ENFORCE;
-        return;
-      }
-      auto abusive = result.threat_metadata.subresource_filter_match.find(
-          safe_browsing::SubresourceFilterType::ABUSIVE);
-      if (abusive != result.threat_metadata.subresource_filter_match.end()) {
-        current_level = PickMostSevereLevel(current_level, abusive->second);
-      }
+  base::Optional<safe_browsing::SubresourceFilterLevel> match_level;
+  base::Optional<size_t> match_index;
+  for (size_t i = 0u; i < results.size(); ++i) {
+    const auto& result = results[i];
+    if (result.threat_type !=
+        safe_browsing::SBThreatType::SB_THREAT_TYPE_SUBRESOURCE_FILTER)
+      continue;
+
+    auto abusive = result.threat_metadata.subresource_filter_match.find(
+        safe_browsing::SubresourceFilterType::ABUSIVE);
+    if (abusive != result.threat_metadata.subresource_filter_match.end() &&
+        (!match_level.has_value() || match_level.value() < abusive->second)) {
+      match_level = abusive->second;
+      match_index = i;
     }
   }
-  if (current_level.has_value()) {
-    level_for_next_committed_navigation_ = current_level;
+
+  if (match_level.has_value()) {
+    level_for_next_committed_navigation_ = match_level;
+    UMA_HISTOGRAM_ENUMERATION(
+        "ContentSettings.Popups.StrongBlockerActivationPosition",
+        GetActivationPosition(match_index.value(), results.size()));
   }
 }
 

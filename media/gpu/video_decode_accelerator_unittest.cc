@@ -67,6 +67,7 @@
 #include "media/gpu/test/video_accelerator_unittest_helpers.h"
 #include "media/gpu/test/video_decode_accelerator_unittest_helpers.h"
 #include "media/video/h264_parser.h"
+#include "mojo/core/embedder/embedder.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/gfx/codec/png_codec.h"
 #include "ui/gl/gl_image.h"
@@ -258,8 +259,6 @@ class GLRenderingVDAClient
   // will start delaying the call to ReusePictureBuffer() for kReuseDelay.
   // |decode_calls_per_second| is the number of VDA::Decode calls per second.
   // If |decode_calls_per_second| > 0, |num_in_flight_decodes| must be 1.
-  // |render_as_thumbnails| indicates if the decoded picture will be rendered
-  // as thumbnails at the end of tests.
   // |num_frames| is the number of frames that must be verified to be decoded
   // during the test.
   struct Config {
@@ -277,7 +276,6 @@ class GLRenderingVDAClient
     bool fake_decoder = false;
     size_t delay_reuse_after_frame_num = std::numeric_limits<size_t>::max();
     size_t decode_calls_per_second = 0;
-    bool render_as_thumbnails = false;
     size_t num_frames = 0;
   };
 
@@ -603,19 +601,16 @@ void GLRenderingVDAClient::PictureReady(const Picture& picture) {
       base::Bind(&GLRenderingVDAClient::ReturnPicture, AsWeakPtr(),
                  picture.picture_buffer_id()));
   ASSERT_TRUE(pending_textures_.insert(*texture_it).second);
-
-  if (config_.render_as_thumbnails) {
-    rendering_helper_->RenderThumbnail(video_frame->texture_target(),
-                                       video_frame->texture_id());
-  } else {
-    rendering_helper_->QueueVideoFrame(config_.window_id, video_frame);
-  }
+  rendering_helper_->ConsumeVideoFrame(config_.window_id,
+                                       std::move(video_frame));
 }
 
 void GLRenderingVDAClient::ReturnPicture(int32_t picture_buffer_id) {
+  // Remove TextureRef from pending_textures_ regardless whether decoder is
+  // deleted.
+  LOG_ASSERT(1U == pending_textures_.erase(picture_buffer_id));
   if (decoder_deleted())
     return;
-  LOG_ASSERT(1U == pending_textures_.erase(picture_buffer_id));
 
   if (active_textures_.find(picture_buffer_id) == active_textures_.end()) {
     // The picture associated with picture_buffer_id is dismissed.
@@ -708,7 +703,10 @@ void GLRenderingVDAClient::NotifyResetDone() {
     case DONE_RESET_AFTER_FIRST_CONFIG_INFO:
     case MID_STREAM_RESET:
       reset_point_ = END_OF_STREAM_RESET;
-      DecodeNextFragment();
+      // Because VDA::Decode() is executed if |reset_point_| is
+      // MID_STREAM_RESET or RESET_AFTER_FIRST_CONFIG_INFO,
+      // NotifyEndOfBitstreamBuffer() will be invoked. Next VDA::Decode() is
+      // triggered from NotifyEndOfBitstreamBuffer().
       return;
     case START_OF_STREAM_RESET:
       EXPECT_EQ(num_decoded_frames_, 0u);
@@ -778,6 +776,8 @@ void GLRenderingVDAClient::FinishInitialization() {
   initialize_done_ticks_ = base::TimeTicks::Now();
   EXPECT_EQ(encoded_data_helper_->AtHeadOfStream(), true);
   num_decoded_frames_ = 0;
+  if (decoder_deleted())
+    return;
 
   if (reset_point_ == START_OF_STREAM_RESET) {
     decoder_->Reset();
@@ -786,7 +786,7 @@ void GLRenderingVDAClient::FinishInitialization() {
 
   for (size_t i = 0; i < config_.num_in_flight_decodes; ++i)
     DecodeNextFragment();
-  DCHECK_EQ(outstanding_decodes_, config_.num_in_flight_decodes);
+  EXPECT_EQ(outstanding_decodes_, config_.num_in_flight_decodes);
 }
 
 void GLRenderingVDAClient::DeleteDecoder() {
@@ -860,6 +860,12 @@ void GLRenderingVDAClient::DecodeNextFragment() {
         FROM_HERE,
         base::Bind(&GLRenderingVDAClient::DecodeNextFragment, AsWeakPtr()),
         base::TimeDelta::FromSeconds(1) / config_.decode_calls_per_second);
+  } else {
+    // Unless DecodeNextFragment() is posted from the above PostDelayedTask(),
+    // all the DecodeNextFragment() will be executed from
+    // NotifyEndOfBitstreamBuffer(). The number of Decode()s in flight must be
+    // less than or equal to the specified times.
+    EXPECT_LE(outstanding_decodes_, config_.num_in_flight_decodes);
   }
 }
 
@@ -1180,7 +1186,6 @@ TEST_P(VideoDecodeAcceleratorParamTest, MAYBE_TestSimpleDecode) {
     config.profile = video_file->profile;
     config.fake_decoder = g_fake_decoder;
     config.delay_reuse_after_frame_num = delay_reuse_after_frame_num;
-    config.render_as_thumbnails = render_as_thumbnails;
     config.num_frames = video_file->num_frames;
 
     clients_[index] = std::make_unique<GLRenderingVDAClient>(
@@ -1587,6 +1592,8 @@ class VDATestSuite : public base::TestSuite {
 
   int Run() {
 #if defined(OS_WIN) || defined(OS_CHROMEOS)
+    mojo::core::Init();  // Required only for Win7 tests.
+
     // For windows the decoding thread initializes the media foundation decoder
     // which uses COM. We need the thread to be a UI thread.
     // On Ozone, the backend initializes the event system using a UI

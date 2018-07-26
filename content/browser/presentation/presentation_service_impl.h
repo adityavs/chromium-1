@@ -24,12 +24,11 @@
 #include "content/public/browser/web_contents_observer.h"
 #include "content/public/common/frame_navigate_params.h"
 #include "mojo/public/cpp/bindings/binding.h"
-#include "third_party/blink/public/platform/modules/presentation/presentation.mojom.h"
+#include "third_party/blink/public/mojom/presentation/presentation.mojom.h"
 #include "url/gurl.h"
 
 namespace content {
 
-struct PresentationConnectionMessage;
 class RenderFrameHost;
 
 // Implementation of Mojo PresentationService.
@@ -112,9 +111,6 @@ class CONTENT_EXPORT PresentationServiceImpl
 
   // Maximum number of pending ReconnectPresentation requests at any given time.
   static const int kMaxQueuedRequests = 10;
-
-  using ConnectionMessagesCallback =
-      base::OnceCallback<void(std::vector<PresentationConnectionMessage>)>;
 
   // Listener implementation owned by PresentationServiceImpl. An instance of
   // this is created when PresentationRequest.getAvailability() is resolved.
@@ -213,12 +209,6 @@ class CONTENT_EXPORT PresentationServiceImpl
   // State changes will be returned via |OnConnectionStateChanged|.
   void ListenForConnectionStateChange(
       const blink::mojom::PresentationInfo& connection);
-
-  // Passed to embedder's implementation of PresentationServiceDelegate for
-  // later invocation when connection messages arrive.
-  void OnConnectionMessages(
-      const blink::mojom::PresentationInfo& presentation_info,
-      std::vector<content::PresentationConnectionMessage> messages);
 
   // A callback registered to LocalPresentationManager when
   // the PresentationServiceImpl for the presentation receiver is initialized.

@@ -38,9 +38,9 @@
 #include "content/public/common/web_preferences.h"
 #include "content/public/renderer/media_stream_utils.h"
 #include "content/public/renderer/render_frame.h"
+#include "content/public/renderer/render_thread.h"
 #include "content/public/renderer/render_view.h"
 #include "content/public/renderer/render_view_visitor.h"
-#include "content/public/renderer/renderer_gamepad_provider.h"
 #include "content/public/test/layouttest_support.h"
 #include "content/shell/common/layout_test/layout_test_messages.h"
 #include "content/shell/common/shell_messages.h"
@@ -84,6 +84,7 @@
 #include "third_party/blink/public/web/web_frame_widget.h"
 #include "third_party/blink/public/web/web_history_item.h"
 #include "third_party/blink/public/web/web_local_frame.h"
+#include "third_party/blink/public/web/web_navigation_timings.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "third_party/blink/public/web/web_testing_support.h"
 #include "third_party/blink/public/web/web_view.h"
@@ -831,7 +832,8 @@ void BlinkTestRunner::OnSetTestConfiguration(
 
   // Tests should always start with the browser controls hidden.
   render_view()->GetWebView()->UpdateBrowserControlsState(
-      blink::kWebBrowserControlsBoth, blink::kWebBrowserControlsHidden, false);
+      cc::BrowserControlsState::kBoth, cc::BrowserControlsState::kHidden,
+      false);
 
   LayoutTestRenderThreadObserver::GetInstance()
       ->test_interfaces()
@@ -849,10 +851,11 @@ void BlinkTestRunner::OnReset() {
   Reset(true /* for_new_test */);
   // Navigating to about:blank will make sure that no new loads are initiated
   // by the renderer.
-  main_frame->CommitNavigation(WebURLRequest(GURL(url::kAboutBlankURL)),
-                               blink::WebFrameLoadType::kStandard,
-                               blink::WebHistoryItem(), false,
-                               base::UnguessableToken::Create());
+  main_frame->CommitNavigation(
+      WebURLRequest(GURL(url::kAboutBlankURL)),
+      blink::WebFrameLoadType::kStandard, blink::WebHistoryItem(), false,
+      base::UnguessableToken::Create(), nullptr /* extra_data */,
+      blink::WebNavigationTimings());
   Send(new ShellViewHostMsg_ResetDone(routing_id()));
 }
 

@@ -21,8 +21,7 @@ class VRDisplayHost;
 class BrowserXrDevice : public device::mojom::XRRuntimeEventListener {
  public:
   explicit BrowserXrDevice(device::mojom::XRRuntimePtr device,
-                           device::mojom::VRDisplayInfoPtr info,
-                           bool is_fallback);
+                           device::mojom::VRDisplayInfoPtr info);
   ~BrowserXrDevice() override;
 
   device::mojom::XRRuntime* GetRuntime() { return device_.get(); }
@@ -33,16 +32,13 @@ class BrowserXrDevice : public device::mojom::XRRuntimeEventListener {
   void ExitPresent(VRDisplayHost* display);
   void RequestSession(
       VRDisplayHost* display,
-      device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
+      const device::mojom::XRDeviceRuntimeSessionOptionsPtr& options,
       device::mojom::VRDisplayHost::RequestSessionCallback callback);
   VRDisplayHost* GetPresentingDisplayHost() { return presenting_display_host_; }
   void UpdateListeningForActivate(VRDisplayHost* display);
   device::mojom::VRDisplayInfoPtr GetVRDisplayInfo() {
     return display_info_.Clone();
   }
-
-  // Methods called by VRDeviceManager to inspect the device.
-  bool IsFallbackDevice() { return is_fallback_; }
 
  private:
   // device::XRRuntimeEventListener
@@ -55,24 +51,23 @@ class BrowserXrDevice : public device::mojom::XRRuntimeEventListener {
 
   void OnInitialDevicePropertiesReceived(
       device::mojom::VRDisplayInfoPtr display_info);
-  void StopExclusiveSession();
+  void StopImmersiveSession();
   void OnListeningForActivate(bool is_listening);
   void OnRequestSessionResult(
-      VRDisplayHost* display,
+      base::WeakPtr<VRDisplayHost> display,
       device::mojom::XRDeviceRuntimeSessionOptionsPtr options,
       device::mojom::VRDisplayHost::RequestSessionCallback callback,
-      device::mojom::XRPresentationConnectionPtr connection,
-      device::mojom::XRSessionControllerPtr exclusive_session_controller);
+      device::mojom::XRSessionPtr session,
+      device::mojom::XRSessionControllerPtr immersive_session_controller);
 
   device::mojom::XRRuntimePtr device_;
-  device::mojom::XRSessionControllerPtr exclusive_session_controller_;
+  device::mojom::XRSessionControllerPtr immersive_session_controller_;
 
   std::set<VRDisplayHost*> displays_;
   device::mojom::VRDisplayInfoPtr display_info_;
 
   VRDisplayHost* listening_for_activation_display_host_ = nullptr;
   VRDisplayHost* presenting_display_host_ = nullptr;
-  bool is_fallback_;
 
   mojo::Binding<device::mojom::XRRuntimeEventListener> binding_;
 

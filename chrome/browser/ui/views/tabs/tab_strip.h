@@ -84,7 +84,7 @@ class TabStrip : public views::View,
   int GetTabsMaxX() const;
 
   // Set the background offset used by inactive tabs to match the frame image.
-  void SetBackgroundOffset(const gfx::Point& offset);
+  void SetBackgroundOffset(int offset);
 
   // Returns true if the specified rect (in TabStrip coordinates) intersects
   // the window caption area of the browser window.
@@ -127,10 +127,6 @@ class TabStrip : public views::View,
   // Sets |stacked_layout_| and animates if necessary.
   void SetStackedLayout(bool stacked_layout);
 
-  // Whether the special painting mode for a single tab is enabled. This is only
-  // true if both the mode is available and we have exactly one tab.
-  bool SingleTabMode() const;
-
   // Called when the value of SingleTabMode() changes.
   void SingleTabModeChanged();
 
@@ -155,7 +151,9 @@ class TabStrip : public views::View,
 
   // Removes a tab at the specified index. If the tab with |contents| is being
   // dragged then the drag is completed.
-  void RemoveTabAt(content::WebContents* contents, int model_index);
+  void RemoveTabAt(content::WebContents* contents,
+                   int model_index,
+                   bool was_active);
 
   // Sets the tab data at the specified model index.
   void SetTabData(int model_index, TabRendererData data);
@@ -166,12 +164,6 @@ class TabStrip : public views::View,
   // changing that to the first tab would cause |tab| to be pushed over enough
   // to clip).
   bool ShouldTabBeVisible(const Tab* tab) const;
-
-  // Invoked from the controller when the close initiates from the TabController
-  // (the user clicked the tab close button or middle clicked the tab). This is
-  // invoked from Close. Because of unload handlers Close is not always
-  // immediately followed by RemoveTabAt.
-  void PrepareForCloseAt(int model_index, CloseTabSource source);
 
   // Invoked when the selection is updated.
   void SetSelection(const ui::ListSelectionModel& new_selection);
@@ -247,6 +239,7 @@ class TabStrip : public views::View,
   bool IsTabPinned(const Tab* tab) const override;
   bool IsFirstVisibleTab(const Tab* tab) const override;
   bool IsLastVisibleTab(const Tab* tab) const override;
+  bool SingleTabMode() const override;
   bool IsIncognito() const override;
   void MaybeStartDrag(
       Tab* tab,
@@ -254,8 +247,8 @@ class TabStrip : public views::View,
       const ui::ListSelectionModel& original_selection) override;
   void ContinueDrag(views::View* view, const ui::LocatedEvent& event) override;
   bool EndDrag(EndDragReason reason) override;
-  Tab* GetTabAt(Tab* tab, const gfx::Point& tab_in_tab_coordinates) override;
-  Tab* GetSubsequentTab(Tab* tab) override;
+  Tab* GetTabAt(const gfx::Point& point) override;
+  const Tab* GetSubsequentTab(const Tab* tab) override;
   void OnMouseEventInTab(views::View* source,
                          const ui::MouseEvent& event) override;
   bool ShouldPaintTab(
@@ -270,7 +263,7 @@ class TabStrip : public views::View,
   SkColor GetTabForegroundColor(TabState state) const override;
   base::string16 GetAccessibleTabName(const Tab* tab) const override;
   int GetBackgroundResourceId(bool* custom_image) const override;
-  gfx::Rect GetTabAnimationTargetBounds(Tab* tab) override;
+  gfx::Rect GetTabAnimationTargetBounds(const Tab* tab) override;
 
   // MouseWatcherListener:
   void MouseMovedOutOfHost() override;
@@ -338,13 +331,6 @@ class TabStrip : public views::View,
   // move.
   void StartMoveTabAnimation();
 
-  // Starts the remove tab animation.
-  void StartRemoveTabAnimation(int model_index);
-
-  // Schedules the animations and bounds changes necessary for a remove tab
-  // animation.
-  void ScheduleRemoveTabAnimation(Tab* tab);
-
   // Animates all the views to their ideal bounds.
   // NOTE: this does *not* invoke GenerateIdealBounds, it uses the bounds
   // currently set in ideal_bounds.
@@ -352,9 +338,6 @@ class TabStrip : public views::View,
 
   // Returns whether the close button should be highlighted after a remove.
   bool ShouldHighlightCloseButtonAfterRemove();
-
-  // Returns the width needed for the new tab button (and padding).
-  int GetNewTabButtonWidth(bool is_incognito) const;
 
   // If the new tab button position is AFTER_TABS, returns the spacing to use
   // between the trailing edge of the tabs and the leading edge of the new tab
@@ -538,7 +521,6 @@ class TabStrip : public views::View,
   // Starts various types of TabStrip animations.
   void StartResizeLayoutAnimation();
   void StartPinnedTabAnimation();
-  void StartMouseInitiatedRemoveTabAnimation(int model_index);
 
   // Returns true if the specified point in TabStrip coords is within the
   // hit-test region of the specified Tab.
@@ -687,10 +669,6 @@ class TabStrip : public views::View,
   // Timer used when a tab is closed and we need to relayout. Only used when a
   // tab close comes from a touch device.
   base::OneShotTimer resize_layout_timer_;
-
-  // The last tab over which the mouse was hovered which may still have a hover
-  // animation in progress.
-  Tab* last_hovered_tab_ = nullptr;
 
   // This represents the Tabs in |tabs_| that have been selected.
   //

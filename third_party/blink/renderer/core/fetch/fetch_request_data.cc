@@ -4,11 +4,11 @@
 
 #include "third_party/blink/renderer/core/fetch/fetch_request_data.h"
 
-#include "third_party/blink/public/platform/modules/serviceworker/web_service_worker_request.h"
+#include "third_party/blink/public/platform/modules/service_worker/web_service_worker_request.h"
+#include "third_party/blink/public/platform/web_http_body.h"
 #include "third_party/blink/public/platform/web_url_request.h"
 #include "third_party/blink/renderer/core/execution_context/execution_context.h"
 #include "third_party/blink/renderer/core/fetch/blob_bytes_consumer.h"
-#include "third_party/blink/renderer/core/fetch/body_stream_buffer.h"
 #include "third_party/blink/renderer/core/fetch/bytes_consumer.h"
 #include "third_party/blink/renderer/core/fetch/fetch_header_list.h"
 #include "third_party/blink/renderer/core/fetch/form_data_bytes_consumer.h"
@@ -48,9 +48,9 @@ FetchRequestData* FetchRequestData::Create(
         nullptr /* AbortSignal */));
   }
   request->SetContext(web_request.GetRequestContext());
-  request->SetReferrer(
-      Referrer(web_request.ReferrerUrl().GetString(),
-               static_cast<ReferrerPolicy>(web_request.GetReferrerPolicy())));
+  request->SetReferrerString(web_request.ReferrerUrl().GetString());
+  request->SetReferrerPolicy(
+      static_cast<ReferrerPolicy>(web_request.GetReferrerPolicy()));
   request->SetMode(web_request.Mode());
   request->SetCredentials(web_request.CredentialsMode());
   request->SetCacheMode(web_request.CacheMode());
@@ -70,7 +70,8 @@ FetchRequestData* FetchRequestData::CloneExceptBody() {
   request->origin_ = origin_;
   request->same_origin_data_url_flag_ = same_origin_data_url_flag_;
   request->context_ = context_;
-  request->referrer_ = referrer_;
+  request->referrer_string_ = referrer_string_;
+  request->referrer_policy_ = referrer_policy_;
   request->mode_ = mode_;
   request->credentials_ = credentials_;
   request->cache_mode_ = cache_mode_;
@@ -124,7 +125,8 @@ FetchRequestData::FetchRequestData()
       header_list_(FetchHeaderList::Create()),
       context_(WebURLRequest::kRequestContextUnspecified),
       same_origin_data_url_flag_(false),
-      referrer_(Referrer(ClientReferrerString(), kReferrerPolicyDefault)),
+      referrer_string_(Referrer::ClientReferrerString()),
+      referrer_policy_(kReferrerPolicyDefault),
       mode_(network::mojom::FetchRequestMode::kNoCORS),
       credentials_(network::mojom::FetchCredentialsMode::kOmit),
       cache_mode_(mojom::FetchCacheMode::kDefault),

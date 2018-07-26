@@ -100,6 +100,16 @@ const QuicTag kBBR8 = TAG('B', 'B', 'R', '8');   // Disable PROBE_RTT when
                                                  // recently app-limited
 const QuicTag kBBRS = TAG('B', 'B', 'R', 'S');   // Use 1.5x pacing in startup
                                                  // after a loss has occurred.
+const QuicTag kBBQ1 = TAG('B', 'B', 'Q', '1');   // BBR with lower 2.77 STARTUP
+                                                 // pacing and CWND gain.
+const QuicTag kBBQ2 = TAG('B', 'B', 'Q', '2');   // BBR with lower 2.0 STARTUP
+                                                 // CWND gain.
+const QuicTag kBBQ3 = TAG('B', 'B', 'Q', '3');   // BBR with ack aggregation
+                                                 // compensation in STARTUP.
+const QuicTag kBBQ4 = TAG('B', 'B', 'Q', '4');   // Drain gain of 0.75.
+const QuicTag kBBQ5 = TAG('B', 'B', 'Q', '5');   // Expire ack aggregation upon
+                                                 // bandwidth increase in
+                                                 // STARTUP.
 const QuicTag kRENO = TAG('R', 'E', 'N', 'O');   // Reno Congestion Control
 const QuicTag kTPCC = TAG('P', 'C', 'C', '\0');  // Performance-Oriented
                                                  // Congestion Control
@@ -142,13 +152,12 @@ const QuicTag kACKQ = TAG('A', 'C', 'K', 'Q');   // Send an immediate ack after
 const QuicTag kSSLR = TAG('S', 'S', 'L', 'R');   // Slow Start Large Reduction.
 const QuicTag kNPRR = TAG('N', 'P', 'R', 'R');   // Pace at unity instead of PRR
 const QuicTag k5RTO = TAG('5', 'R', 'T', 'O');   // Close connection on 5 RTOs
-const QuicTag k3RTO = TAG('3', 'R', 'T', 'O');   // Close connection on 3 RTOs
 const QuicTag kCONH = TAG('C', 'O', 'N', 'H');   // Conservative Handshake
                                                  // Retransmissions.
 const QuicTag kLFAK = TAG('L', 'F', 'A', 'K');   // Don't invoke FACK on the
                                                  // first ack.
-// TODO(fayang): Remove this connection option in QUIC_VERSION_37, in which
-// MAX_HEADER_LIST_SIZE settings frame should be supported.
+// TODO(fayang): Remove this connection option when QUIC_VERSION_35, is removed
+// Since MAX_HEADER_LIST_SIZE settings frame is supported instead.
 const QuicTag kSMHL = TAG('S', 'M', 'H', 'L');   // Support MAX_HEADER_LIST_SIZE
                                                  // settings frame.
 const QuicTag kNSTP = TAG('N', 'S', 'T', 'P');   // No stop waiting frames.

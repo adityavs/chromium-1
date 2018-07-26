@@ -76,8 +76,8 @@
 
 #if defined(OS_ANDROID)
 #include "chromecast/app/android/crash_handler.h"
+#include "components/crash/content/browser/child_exit_observer_android.h"
 #include "components/crash/content/browser/child_process_crash_observer_android.h"
-#include "components/crash/content/browser/crash_dump_observer_android.h"
 #include "net/android/network_change_notifier_factory_android.h"
 #else
 #include "chromecast/net/network_change_notifier_factory_cast.h"
@@ -396,10 +396,6 @@ void CastBrowserMainParts::PreMainMessageLoopStart() {
 void CastBrowserMainParts::PostMainMessageLoopStart() {
   // Ensure CastMetricsHelper initialized on UI thread.
   metrics::CastMetricsHelper::GetInstance();
-
-#if defined(OS_ANDROID)
-  base::MessageLoopCurrentForUI::Get()->Start();
-#endif  // defined(OS_ANDROID)
 }
 
 void CastBrowserMainParts::ToolkitInitialized() {
@@ -433,9 +429,9 @@ int CastBrowserMainParts::PreCreateThreads() {
   if (!chromecast::CrashHandler::GetCrashDumpLocation(&crash_dumps_dir)) {
     LOG(ERROR) << "Could not find crash dump location.";
   }
-  breakpad::CrashDumpObserver::Create();
-  breakpad::CrashDumpObserver::GetInstance()->RegisterClient(
-      std::make_unique<breakpad::ChildProcessCrashObserver>(
+  crash_reporter::ChildExitObserver::Create();
+  crash_reporter::ChildExitObserver::GetInstance()->RegisterClient(
+      std::make_unique<crash_reporter::ChildProcessCrashObserver>(
           crash_dumps_dir, kAndroidMinidumpDescriptor));
 #else
   base::FilePath home_dir;
@@ -650,6 +646,7 @@ void CastBrowserMainParts::PostMainMessageLoopRun() {
   extensions::ExtensionsBrowserClient::Set(nullptr);
   extensions_browser_client_.reset();
   user_pref_service_.reset();
+  cast_browser_process_->ClearAccessibilityManager();
 #endif
 
 #if defined(OS_ANDROID)

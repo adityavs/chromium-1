@@ -5,7 +5,8 @@
 #ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_PRIORITIZE_COMPOSITING_AFTER_INPUT_EXPERIMENT_H_
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_MAIN_THREAD_PRIORITIZE_COMPOSITING_AFTER_INPUT_EXPERIMENT_H_
 
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
+#include "base/task/sequence_manager/task_queue.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
 
 namespace blink {
 namespace scheduler {

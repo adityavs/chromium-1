@@ -3591,25 +3591,6 @@ TEST_P(PaintPropertyTreeBuilderTest, MainThreadScrollReasonsWithoutScrolling) {
             nullptr);
 }
 
-static unsigned NumFragments(const LayoutObject* obj) {
-  unsigned count = 0;
-  auto* fragment = &obj->FirstFragment();
-  while (fragment) {
-    count++;
-    fragment = fragment->NextFragment();
-  }
-  return count;
-}
-
-static const FragmentData& FragmentAt(const LayoutObject* obj, unsigned count) {
-  auto* fragment = &obj->FirstFragment();
-  while (count > 0) {
-    count--;
-    fragment = fragment->NextFragment();
-  }
-  return *fragment;
-}
-
 TEST_P(PaintPropertyTreeBuilderTest, PaintOffsetsUnderMultiColumnScrolled) {
   SetBodyInnerHTML(R"HTML(
     <!doctype HTML>
@@ -3633,9 +3614,10 @@ TEST_P(PaintPropertyTreeBuilderTest, PaintOffsetsUnderMultiColumnScrolled) {
                                  .To2DTranslation());
 }
 
-TEST_P(PaintPropertyTreeBuilderTest, PaintOffsetsUnderMultiColumnWithOutline) {
+TEST_P(PaintPropertyTreeBuilderTest,
+       PaintOffsetsUnderMultiColumnWithVisualOverflow) {
   SetBodyInnerHTML(R"HTML(
-    <div style='columns: 2; height: 100px'>
+    <div style='columns: 2; width: 300px; column-gap: 0; height: 100px'>
       <div id=target1 style='outline: 2px solid black; width: 100px;
           height: 100px'></div>
       <div id=target2 style='outline: 2px solid black; width: 100px;
@@ -3652,10 +3634,31 @@ TEST_P(PaintPropertyTreeBuilderTest, PaintOffsetsUnderMultiColumnWithOutline) {
   EXPECT_FALSE(target1->FirstFragment().NextFragment());
 
   LayoutObject* target2 = GetLayoutObjectByElementId("target2");
-  EXPECT_EQ(LayoutPoint(LayoutUnit(400.5f), LayoutUnit(8.0f)),
-            target2->FirstFragment().PaintOffset());
+  EXPECT_EQ(LayoutPoint(158, 8), target2->FirstFragment().PaintOffset());
   // |target2| is only in the second column.
   EXPECT_FALSE(target2->FirstFragment().NextFragment());
+}
+
+TEST_P(PaintPropertyTreeBuilderTest,
+       PaintOffsetsUnderMultiColumnWithLayoutOverflow) {
+  SetBodyInnerHTML(R"HTML(
+    <div style='columns: 2; width: 300px; column-gap: 0; height: 100px'>
+      <div id='parent' style='outline: 2px solid black;
+          width: 100px; height: 100px'>
+        <div id='child' style='width: 100px; height: 200px'></div>
+      </div>
+    </div>
+  )HTML");
+
+  LayoutObject* parent = GetLayoutObjectByElementId("parent");
+  // Parent has 1 fragment regardless of the overflowing child.
+  ASSERT_EQ(1u, NumFragments(parent));
+  EXPECT_EQ(LayoutPoint(8, 8), FragmentAt(parent, 0).PaintOffset());
+
+  LayoutObject* child = GetLayoutObjectByElementId("child");
+  ASSERT_EQ(2u, NumFragments(child));
+  EXPECT_EQ(LayoutPoint(8, 8), FragmentAt(child, 0).PaintOffset());
+  EXPECT_EQ(LayoutPoint(158, -92), FragmentAt(child, 1).PaintOffset());
 }
 
 TEST_P(PaintPropertyTreeBuilderTest, SpanFragmentsLimitedToSize) {
@@ -4836,7 +4839,7 @@ TEST_P(PaintPropertyTreeBuilderTest, FrameBorderRadius) {
   )HTML");
 
   const auto* properties = PaintPropertiesForElement("iframe");
-  const auto* border_radius_clip = properties->InnerBorderRadiusClip();
+  const auto* border_radius_clip = properties->OverflowClip();
   ASSERT_NE(nullptr, border_radius_clip);
   FloatSize radius(30, 30);
   EXPECT_EQ(FloatRoundedRect(FloatRect(28, 28, 200, 200), radius, radius,
@@ -4844,7 +4847,7 @@ TEST_P(PaintPropertyTreeBuilderTest, FrameBorderRadius) {
             border_radius_clip->ClipRect());
   EXPECT_EQ(DocContentClip(), border_radius_clip->Parent());
   EXPECT_EQ(DocPreTranslation(), border_radius_clip->LocalTransformSpace());
-  EXPECT_EQ(nullptr, properties->OverflowClip());
+  EXPECT_EQ(nullptr, properties->InnerBorderRadiusClip());
 }
 
 TEST_P(PaintPropertyTreeBuilderTest, NoPropertyForSVGTextWithReflection) {
@@ -4863,7 +4866,7 @@ TEST_P(PaintPropertyTreeBuilderTest, ImageBorderRadius) {
   )HTML");
 
   const auto* properties = PaintPropertiesForElement("img");
-  const auto* border_radius_clip = properties->InnerBorderRadiusClip();
+  const auto* border_radius_clip = properties->OverflowClip();
   ASSERT_NE(nullptr, border_radius_clip);
   FloatSize radius(20, 20);
   EXPECT_EQ(FloatRoundedRect(FloatRect(18, 18, 50, 50), radius, radius, radius,
@@ -4871,7 +4874,7 @@ TEST_P(PaintPropertyTreeBuilderTest, ImageBorderRadius) {
             border_radius_clip->ClipRect());
   EXPECT_EQ(DocContentClip(), border_radius_clip->Parent());
   EXPECT_EQ(DocPreTranslation(), border_radius_clip->LocalTransformSpace());
-  EXPECT_EQ(nullptr, properties->OverflowClip());
+  EXPECT_EQ(nullptr, properties->InnerBorderRadiusClip());
 }
 
 TEST_P(PaintPropertyTreeBuilderTest, FrameClipWhenPrinting) {
@@ -5501,7 +5504,7 @@ TEST_P(PaintPropertyTreeBuilderTest, ImageWithInvertFilterUpdated) {
   ToLayoutImage(GetLayoutObjectByElementId("img"))
       ->UpdateShouldInvertColorForTest(false);
   GetDocument().View()->UpdateAllLifecyclePhases();
-  EXPECT_EQ(nullptr, PaintPropertiesForElement("img"));
+  EXPECT_EQ(nullptr, PaintPropertiesForElement("img")->Filter());
 }
 
 TEST_P(PaintPropertyTreeBuilderTest, LayeredImageWithInvertFilter) {
@@ -5534,7 +5537,101 @@ TEST_P(PaintPropertyTreeBuilderTest, LayeredImageWithInvertFilterUpdated) {
   ToLayoutImage(GetLayoutObjectByElementId("img"))
       ->UpdateShouldInvertColorForTest(false);
   GetDocument().View()->UpdateAllLifecyclePhases();
-  EXPECT_EQ(nullptr, PaintPropertiesForElement("img"));
+  EXPECT_EQ(nullptr, PaintPropertiesForElement("img")->Filter());
+}
+
+TEST_P(PaintPropertyTreeBuilderTest,
+       FloatPaintOffsetInContainerWithScrollbars) {
+  SetBodyInnerHTML(R"HTML(
+    <style>
+      ::-webkit-scrollbar {width: 15px; height: 15px}
+      .container {
+        position: absolute; width: 200px; height: 200px; overflow: scroll;
+      }
+      .float-left {float: left; width: 100px; height: 100px;}
+      .float-right {float: right; width: 100px; height: 100px;}
+    </style>
+    <div class="container">
+      <div id="float-left" class="float-left"></div>
+      <div id="float-right" class="float-right"></div>
+    </div>
+    <div class="container" style="direction: rtl">
+      <div id="float-left-rtl" class="float-left"></div>
+      <div id="float-right-rtl" class="float-right"></div>
+    </div>
+    <div class="container" style="writing-mode: vertical-rl">
+      <div id="float-left-vrl" class="float-left"></div>
+      <div id="float-right-vrl" class="float-right"></div>
+    </div>
+    <div class="container" style="writing-mode: vertical-rl; direction: rtl">
+      <div id="float-left-rtl-vrl" class="float-left"></div>
+      <div id="float-right-rtl-vrl" class="float-right"></div>
+    </div>
+    <div class="container" style="writing-mode: vertical-lr">
+      <div id="float-left-vlr" class="float-left"></div>
+      <div id="float-right-vlr" class="float-right"></div>
+    </div>
+    <div class="container" style="writing-mode: vertical-lr; direction: rtl">
+      <div id="float-left-rtl-vlr" class="float-left"></div>
+      <div id="float-right-rtl-vlr" class="float-right"></div>
+    </div>
+  )HTML");
+
+  auto paint_offset = [this](const char* id) {
+    return GetLayoutObjectByElementId(id)->FirstFragment().PaintOffset();
+  };
+  EXPECT_EQ(LayoutPoint(0, 0), paint_offset("float-left"));
+  EXPECT_EQ(LayoutPoint(85, 100), paint_offset("float-right"));
+  EXPECT_EQ(LayoutPoint(15, 0), paint_offset("float-left-rtl"));
+  EXPECT_EQ(LayoutPoint(100, 100), paint_offset("float-right-rtl"));
+  EXPECT_EQ(LayoutPoint(100, 0), paint_offset("float-left-vrl"));
+  EXPECT_EQ(LayoutPoint(0, 85), paint_offset("float-right-vrl"));
+  EXPECT_EQ(LayoutPoint(100, 0), paint_offset("float-left-rtl-vrl"));
+  EXPECT_EQ(LayoutPoint(0, 85), paint_offset("float-right-rtl-vrl"));
+  EXPECT_EQ(LayoutPoint(0, 0), paint_offset("float-left-vlr"));
+  EXPECT_EQ(LayoutPoint(100, 85), paint_offset("float-right-vlr"));
+  EXPECT_EQ(LayoutPoint(0, 0), paint_offset("float-left-rtl-vlr"));
+  EXPECT_EQ(LayoutPoint(100, 85), paint_offset("float-right-rtl-vlr"));
+}
+
+TEST_P(PaintPropertyTreeBuilderTest, ClipInvalidationForReplacedElement) {
+  // This test verifies clip nodes are correctly updated in response to
+  // content box mutation.
+  SetBodyInnerHTML(R"HTML(
+    <style>
+    img {
+      box-sizing: border-box;
+      width: 8px;
+      height: 8px;
+      object-fit: none;
+    }
+    </style>
+    <!-- An image of 10x10 white pixels. -->
+    <img id="target" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAA
+        AAKCAIAAAACUFjqAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4gcVABQvx8CBmA
+        AAAB1pVFh0Q29tbWVudAAAAAAAQ3JlYXRlZCB3aXRoIEdJTVBkLmUHAAAAFUlEQVQY02P
+        8//8/A27AxIAXjFRpAKXjAxH/0Dm5AAAAAElFTkSuQmCC"/>
+  )HTML");
+
+  {
+    const auto* properties = PaintPropertiesForElement("target");
+    ASSERT_TRUE(properties);
+    ASSERT_TRUE(properties->OverflowClip());
+    EXPECT_EQ(FloatRect(8, 8, 8, 8),
+              properties->OverflowClip()->ClipRect().Rect());
+  }
+
+  GetDocument().getElementById("target")->setAttribute(
+      HTMLNames::styleAttr, "padding: 1px 2px 3px 4px;");
+  GetDocument().View()->UpdateAllLifecyclePhases();
+
+  {
+    const auto* properties = PaintPropertiesForElement("target");
+    ASSERT_TRUE(properties);
+    ASSERT_TRUE(properties->OverflowClip());
+    EXPECT_EQ(FloatRect(12, 9, 2, 4),
+              properties->OverflowClip()->ClipRect().Rect());
+  }
 }
 
 }  // namespace blink

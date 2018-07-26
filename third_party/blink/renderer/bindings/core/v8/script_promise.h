@@ -32,7 +32,6 @@
 #define THIRD_PARTY_BLINK_RENDERER_BINDINGS_CORE_V8_SCRIPT_PROMISE_H_
 
 #include "base/memory/scoped_refptr.h"
-#include "third_party/blink/renderer/bindings/core/v8/script_function.h"
 #include "third_party/blink/renderer/bindings/core/v8/script_value.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/platform/heap/handle.h"
@@ -140,7 +139,9 @@ class CORE_EXPORT ScriptPromise final {
   static void IncreaseInstanceCount();
   static void DecreaseInstanceCount();
 
-  scoped_refptr<ScriptState> script_state_;
+  // TODO(peria): Move ScriptPromise to Oilpan heap.
+  GC_PLUGIN_IGNORE("813731")
+  Persistent<ScriptState> script_state_;
   ScriptValue promise_;
 };
 

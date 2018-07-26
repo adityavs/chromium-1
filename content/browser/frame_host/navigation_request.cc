@@ -726,7 +726,9 @@ void NavigationRequest::ResetForCrossDocumentRestart() {
       FrameMsg_Navigate_Type::IsSameDocument(common_params_.navigation_type));
 
   // Reset the NavigationHandle, which is now incorrectly marked as
-  // same-document.
+  // same-document. Ensure |loader_| does not exist as it can hold raw pointers
+  // to objects owned by the handle (see the comment in the header).
+  DCHECK(!loader_);
   navigation_handle_.reset();
 
   // Convert the navigation type to the appropriate cross-document one.
@@ -923,6 +925,7 @@ void NavigationRequest::OnResponseStarted(
     const GlobalRequestID& request_id,
     bool is_download,
     bool is_stream,
+    PreviewsState previews_state,
     base::Optional<SubresourceLoaderParams> subresource_loader_params) {
   DCHECK(state_ == STARTED);
   DCHECK(response);
@@ -991,8 +994,7 @@ void NavigationRequest::OnResponseStarted(
   }
 
   // Update the previews state of the request.
-  common_params_.previews_state =
-      static_cast<PreviewsState>(response->head.previews_state);
+  common_params_.previews_state = previews_state;
 
   // Select an appropriate renderer to commit the navigation.
   RenderFrameHostImpl* render_frame_host = nullptr;
@@ -1289,6 +1291,11 @@ void NavigationRequest::OnStartChecksComplete(
   StoragePartition* partition = BrowserContext::GetStoragePartition(
       browser_context, navigating_frame_host->GetSiteInstance());
   DCHECK(partition);
+
+  // |loader_| should not exist if the service worker handle and app cache
+  // handles will be destroyed, since it holds raw pointers to them. See the
+  // comment in the header for |loader_|.
+  DCHECK(!loader_);
 
   // Only initialize the ServiceWorkerNavigationHandle if it can be created for
   // this frame.
@@ -1596,9 +1603,9 @@ void NavigationRequest::CommitErrorPage(
   }
 
   navigation_handle_->ReadyToCommitNavigation(render_frame_host, true);
-  render_frame_host->FailedNavigation(common_params_, request_params_,
-                                      has_stale_copy_in_cache_, net_error_,
-                                      error_page_content);
+  render_frame_host->FailedNavigation(
+      navigation_handle_->GetNavigationId(), common_params_, request_params_,
+      has_stale_copy_in_cache_, net_error_, error_page_content);
 }
 
 void NavigationRequest::CommitNavigation() {
@@ -1639,8 +1646,9 @@ void NavigationRequest::CommitNavigation() {
     associated_site_instance_id_.reset();
   }
   render_frame_host->CommitNavigation(
-      response_.get(), std::move(url_loader_client_endpoints_), common_params_,
-      request_params_, is_view_source_, std::move(subresource_loader_params_),
+      navigation_handle_->GetNavigationId(), response_.get(),
+      std::move(url_loader_client_endpoints_), common_params_, request_params_,
+      is_view_source_, std::move(subresource_loader_params_),
       std::move(subresource_overrides_), devtools_navigation_token_);
 
   // Give SpareRenderProcessHostManager a heads-up about the most recently used

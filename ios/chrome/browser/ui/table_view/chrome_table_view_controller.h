@@ -59,12 +59,24 @@ typedef NS_ENUM(NSInteger, ChromeTableViewControllerStyle) {
 - (void)stopLoadingIndicatorWithCompletion:(ProceduralBlock)completion;
 
 // Adds an empty table view in the center of the ChromeTableViewController which
-// displays |message| with |image| on top. This will remove any existing table
-// view background views.
+// displays |message| with |image| on top.  |message| will be rendered using
+// default styling.  This will remove any existing table view background views.
 - (void)addEmptyTableViewWithMessage:(NSString*)message image:(UIImage*)image;
+
+// Adds an empty table view in the center of the ChromeTableViewController which
+// displays |attributedMessage| with |image| on top.  This will remove any
+// existing table view background views.
+- (void)addEmptyTableViewWithAttributedMessage:
+            (NSAttributedString*)attributedMessage
+                                         image:(UIImage*)image;
 
 // Removes the empty table view, if one is present.
 - (void)removeEmptyTableView;
+
+// Performs batch table view updates described by |updates|, using |completion|
+// as the completion block.
+- (void)performBatchTableViewUpdates:(void (^)(void))updates
+                          completion:(void (^)(BOOL finished))completion;
 
 // Methods for reconfiguring and reloading the table view are provided by
 // ChromeTableViewConsumer.

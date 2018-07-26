@@ -148,6 +148,11 @@ are triggered for this method or attribute.
 
 Usage: `[CEReactions]` takes no arguments.
 
+`[CEReacionts]` doesn't work with `[Custom]`. Custom binding code should use
+`blink::CEReactionsScope` if the method or the attribute has `[CEReactions]`.
+
+Note that `blink::CEReactionsScope` must be constructed after `blink::ExceptionState`.
+
 ### [Clamp] _(a, p)_
 
 Standard: [Clamp](https://heycam.github.io/webidl/#Clamp)
@@ -618,7 +623,7 @@ String Example::func(ScriptState* state, bool a, bool b);
 ```
 
 Be careful when you use `[CallWith=ScriptState]`.
-You should not store the passed-in ScriptState on a DOM object (using scoped_refptr<ScriptState>).
+You should not store the passed-in ScriptState on a DOM object.
 This is because if the stored ScriptState is used by some method called by a different
 world (note that the DOM object is shared among multiple worlds), it leaks the ScriptState
 to the world. ScriptState must be carefully maintained in a way that doesn't leak
@@ -704,7 +709,7 @@ scoped_refptr<XXX> XXX::create(ExecutionContext* context, float x, float y, Stri
 ```
 
 Be careful when you use `[ConstructorCallWith=ScriptState]`.
-You should not store the passed-in ScriptState on a DOM object (using scoped_refptr<ScriptState>).
+You should not store the passed-in ScriptState on a DOM object.
 This is because if the stored ScriptState is used by some method called by a different
 world (note that the DOM object is shared among multiple worlds), it leaks the ScriptState
 to the world. ScriptState must be carefully maintained in a way that doesn't leak

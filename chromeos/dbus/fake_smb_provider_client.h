@@ -36,6 +36,9 @@ class CHROMEOS_EXPORT FakeSmbProviderClient : public SmbProviderClient {
 
   void Remount(const base::FilePath& share_path,
                int32_t mount_id,
+               const std::string& workgroup,
+               const std::string& username,
+               base::ScopedFD password_fd,
                StatusCallback callback) override;
   void Unmount(int32_t mount_id, StatusCallback callback) override;
   void ReadDirectory(int32_t mount_id,
@@ -106,6 +109,15 @@ class CHROMEOS_EXPORT FakeSmbProviderClient : public SmbProviderClient {
   void ParseNetBiosPacket(const std::vector<uint8_t>& packet,
                           uint16_t transaction_id,
                           ParseNetBiosPacketCallback callback) override;
+
+  void StartCopy(int32_t mount_id,
+                 const base::FilePath& source_path,
+                 const base::FilePath& target_path,
+                 StartCopyCallback callback) override;
+
+  void ContinueCopy(int32_t mount_id,
+                    int32_t copy_token,
+                    StatusCallback callback) override;
 
   // Adds |share| to the list of shares for |server_url| in |shares_|.
   void AddToShares(const std::string& server_url, const std::string& share);

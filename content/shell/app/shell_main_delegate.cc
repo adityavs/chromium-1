@@ -248,6 +248,7 @@ bool ShellMainDelegate::BasicStartupComplete(int* exit_code) {
     command_line.AppendSwitch(switches::kEnablePreciseMemoryInfo);
 
     command_line.AppendSwitchASCII(network::switches::kHostResolverRules,
+                                   "MAP nonexistent.*.test ~NOTFOUND,"
                                    "MAP *.test 127.0.0.1");
 
     command_line.AppendSwitch(switches::kEnablePartialRaster);
@@ -270,6 +271,12 @@ bool ShellMainDelegate::BasicStartupComplete(int* exit_code) {
     // Always run with fake media devices.
     command_line.AppendSwitch(switches::kUseFakeUIForMediaStream);
     command_line.AppendSwitch(switches::kUseFakeDeviceForMediaStream);
+
+    // Always disable the unsandbox GPU process for DX12 and Vulkan Info
+    // collection to avoid interference. This GPU process is launched 15
+    // seconds after chrome starts.
+    command_line.AppendSwitch(
+        switches::kDisableGpuProcessForDX12VulkanInfoCollection);
 
     if (!BlinkTestPlatformInitialize()) {
       *exit_code = 1;

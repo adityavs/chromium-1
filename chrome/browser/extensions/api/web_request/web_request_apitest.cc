@@ -267,6 +267,19 @@ class ExtensionWebRequestApiTest : public ExtensionApiTest {
       bool wait_for_extension_loaded_in_incognito,
       const char* expected_content_regular_window,
       const char* exptected_content_incognito_window);
+
+  network::mojom::URLLoaderFactoryPtr CreateURLLoaderFactory() {
+    network::mojom::URLLoaderFactoryParamsPtr params =
+        network::mojom::URLLoaderFactoryParams::New();
+    params->process_id = network::mojom::kBrowserProcessId;
+    params->is_corb_enabled = false;
+    network::mojom::URLLoaderFactoryPtr loader_factory;
+    content::BrowserContext::GetDefaultStoragePartition(profile())
+        ->GetNetworkContext()
+        ->CreateURLLoaderFactory(mojo::MakeRequest(&loader_factory),
+                                 std::move(params));
+    return loader_factory;
+  }
 };
 
 class DevToolsFrontendInWebRequestApiTest : public ExtensionApiTest {
@@ -544,7 +557,12 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
 IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
                        MAYBE_WebRequestDeclarative2) {
   ASSERT_TRUE(StartEmbeddedTestServer());
-  ASSERT_TRUE(RunExtensionSubtest("webrequest", "test_declarative2.html"))
+  const char* network_service_arg =
+      base::FeatureList::IsEnabled(network::features::kNetworkService)
+          ? "NetworkServiceEnabled"
+          : "NetworkServiceDisabled";
+  ASSERT_TRUE(RunExtensionSubtestWithArg("webrequest", "test_declarative2.html",
+                                         network_service_arg))
       << message_;
 }
 
@@ -805,7 +823,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
   ScriptingPermissionsModifier(profile(), base::WrapRefCounted(extension))
-      .SetWithholdAllUrls(true);
+      .SetWithholdHostPermissions(true);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 
   // Navigate the browser to a page in a new tab.
@@ -916,7 +934,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
   ScriptingPermissionsModifier(profile(), base::WrapRefCounted(extension))
-      .SetWithholdAllUrls(true);
+      .SetWithholdHostPermissions(true);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 
   ui_test_utils::NavigateToURL(
@@ -1435,6 +1453,37 @@ IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest, MinimumAccessInitiator) {
   }
 }
 
+IN_PROC_BROWSER_TEST_F(ExtensionWebRequestApiTest,
+                       WebRequestApiClearsBindingOnFirstListener) {
+  if (!base::FeatureList::IsEnabled(network::features::kNetworkService))
+    return;
+
+  auto loader_factory = CreateURLLoaderFactory();
+  bool has_connection_error = false;
+  loader_factory.set_connection_error_handler(
+      base::BindLambdaForTesting([&]() { has_connection_error = true; }));
+
+  auto* web_request_api =
+      extensions::BrowserContextKeyedAPIFactory<extensions::WebRequestAPI>::Get(
+          profile());
+  web_request_api->OnListenerAdded(
+      EventListenerInfo("name", "id1", GURL(), profile()));
+  content::BrowserContext::GetDefaultStoragePartition(profile())
+      ->FlushNetworkInterfaceForTesting();
+  EXPECT_TRUE(has_connection_error);
+
+  // The second time there should be no connection error.
+  loader_factory = CreateURLLoaderFactory();
+  has_connection_error = false;
+  loader_factory.set_connection_error_handler(
+      base::BindLambdaForTesting([&]() { has_connection_error = true; }));
+  web_request_api->OnListenerAdded(
+      EventListenerInfo("name", "id2", GURL(), profile()));
+  content::BrowserContext::GetDefaultStoragePartition(profile())
+      ->FlushNetworkInterfaceForTesting();
+  EXPECT_FALSE(has_connection_error);
+}
+
 // Test fixture which sets a custom NTP Page.
 class NTPInterceptionWebRequestAPITest : public ExtensionApiTest {
  public:
@@ -1605,14 +1654,8 @@ class LocalNTPInterceptionWebRequestAPITest
   DISALLOW_COPY_AND_ASSIGN(LocalNTPInterceptionWebRequestAPITest);
 };
 
-// Flaky on Win7x64 and Linux. See https://crbug.com/853118.
-#if defined(OS_WIN) || defined(OS_LINUX)
-#define MAYBE_OneGoogleBarRequestsHidden DISABLED_OneGoogleBarRequestsHidden
-#else
-#define MAYBE_OneGoogleBarRequestsHidden OneGoogleBarRequestsHidden
-#endif
 IN_PROC_BROWSER_TEST_F(LocalNTPInterceptionWebRequestAPITest,
-                       MAYBE_OneGoogleBarRequestsHidden) {
+                       OneGoogleBarRequestsHidden) {
   // Loads an extension which tries to intercept requests to the OneGoogleBar.
   ExtensionTestMessageListener listener("ready", true /*will_reply*/);
   const Extension* extension =
@@ -1832,7 +1875,7 @@ IN_PROC_BROWSER_TEST_F(ExtensionApiTestWithManagementPolicy,
       LoadExtension(test_data_dir_.AppendASCII("webrequest_activetab"));
   ASSERT_TRUE(extension) << message_;
   ScriptingPermissionsModifier(profile(), base::WrapRefCounted(extension))
-      .SetWithholdAllUrls(true);
+      .SetWithholdHostPermissions(true);
   EXPECT_TRUE(listener.WaitUntilSatisfied());
 
   // Navigate the browser to a page in a new tab.

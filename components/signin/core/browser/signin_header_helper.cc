@@ -8,10 +8,10 @@
 
 #include "base/logging.h"
 #include "base/macros.h"
+#include "base/metrics/histogram_functions.h"
 #include "base/strings/string_split.h"
 #include "components/google/core/browser/google_util.h"
 #include "components/signin/core/browser/chrome_connected_header_helper.h"
-#include "components/signin/core/browser/cookie_settings_util.h"
 #include "google_apis/gaia/gaia_auth_util.h"
 #include "net/base/escape.h"
 #include "net/url_request/url_request.h"
@@ -21,6 +21,16 @@
 #endif
 
 namespace signin {
+
+namespace {
+// Buckes of the |Signin.RequestHeaderOperation.Dice| and
+// |SigninRequestHeaderOperation.Mirror| histograms.
+enum class RequestHeaderOperation {
+  kHeaderAdded = 0,
+  kHeaderRemoved = 1,
+  kMaxValue = kHeaderRemoved
+};
+}  // namespace
 
 const char kChromeConnectedHeader[] = "X-Chrome-Connected";
 const char kDiceRequestHeader[] = "X-Chrome-ID-Consistency-Request";
@@ -96,6 +106,10 @@ std::string BuildMirrorRequestCookieIfPossible(
       url, account_id, account_consistency, cookie_settings, profile_mode_mask);
 }
 
+SigninHeaderHelper::SigninHeaderHelper(const std::string& histogram_suffix)
+    : histogram_suffix_(histogram_suffix){};
+SigninHeaderHelper::~SigninHeaderHelper() = default;
+
 bool SigninHeaderHelper::AppendOrRemoveRequestHeader(
     RequestAdapter* request,
     const GURL& redirect_url,
@@ -108,10 +122,16 @@ bool SigninHeaderHelper::AppendOrRemoveRequestHeader(
     if (!redirect_url.is_empty() && request->HasHeader(header_name) &&
         IsUrlEligibleForRequestHeader(request->GetUrl()) &&
         !IsUrlEligibleForRequestHeader(redirect_url)) {
+      base::UmaHistogramEnumeration(
+          GetSuffixedHistogramName("Signin.RequestHeaderOperation"),
+          RequestHeaderOperation::kHeaderRemoved);
       request->RemoveRequestHeaderByName(header_name);
     }
     return false;
   }
+  base::UmaHistogramEnumeration(
+      GetSuffixedHistogramName("Signin.RequestHeaderOperation"),
+      RequestHeaderOperation::kHeaderAdded);
   request->SetExtraHeaderByName(header_name, header_value);
   return true;
 }
@@ -139,18 +159,9 @@ SigninHeaderHelper::ParseAccountConsistencyResponseHeader(
   return dictionary;
 }
 
-bool SigninHeaderHelper::ShouldBuildRequestHeader(
-    const GURL& url,
-    const content_settings::CookieSettings* cookie_settings) {
-  // If signin cookies are not allowed, don't add the header.
-  if (!SettingsAllowSigninCookies(cookie_settings))
-    return false;
-
-  // Check if url is eligible for the header.
-  if (!IsUrlEligibleForRequestHeader(url))
-    return false;
-
-  return true;
+std::string SigninHeaderHelper::GetSuffixedHistogramName(
+    const std::string& histogram_name) {
+  return histogram_name + "." + histogram_suffix_;
 }
 
 void AppendOrRemoveMirrorRequestHeader(
@@ -179,7 +190,8 @@ bool AppendOrRemoveDiceRequestHeader(
     bool sync_enabled,
     bool sync_has_auth_error,
     AccountConsistencyMethod account_consistency,
-    const content_settings::CookieSettings* cookie_settings) {
+    const content_settings::CookieSettings* cookie_settings,
+    const std::string& device_id) {
 #if BUILDFLAG(ENABLE_DICE_SUPPORT)
   const GURL& url = redirect_url.is_empty() ? request->GetUrl() : redirect_url;
   DiceHeaderHelper dice_helper(
@@ -188,7 +200,7 @@ bool AppendOrRemoveDiceRequestHeader(
   std::string dice_header_value;
   if (dice_helper.ShouldBuildRequestHeader(url, cookie_settings)) {
     dice_header_value = dice_helper.BuildRequestHeader(
-        sync_enabled ? account_id : std::string());
+        sync_enabled ? account_id : std::string(), device_id);
   }
   return dice_helper.AppendOrRemoveRequestHeader(
       request, redirect_url, kDiceRequestHeader, dice_header_value);

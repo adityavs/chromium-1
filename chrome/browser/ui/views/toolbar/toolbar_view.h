@@ -75,10 +75,6 @@ class ToolbarView : public views::AccessiblePaneView,
   // as well.
   void Update(content::WebContents* tab);
 
-  // Reverts user modifications to the omnibox text. Delegates to
-  // LocationBarView.
-  void RevertUrl();
-
   // Clears the current state for |tab|.
   void ResetTabState(content::WebContents* tab);
 
@@ -196,6 +192,7 @@ class ToolbarView : public views::AccessiblePaneView,
   BrowserActionsContainer* GetBrowserActionsContainer() override;
   PageActionIconContainerView* GetPageActionIconContainerView() override;
   AppMenuButton* GetAppMenuButton() override;
+  gfx::Rect GetFindBarBoundingBox(int contents_height) const override;
   void FocusToolbar() override;
   views::AccessiblePaneView* GetAsAccessiblePaneView() override;
 

@@ -62,6 +62,7 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
   void OnSwapBuffers(uint64_t swap_id, uint32_t flags) override;
+  void ScheduleGrContextCleanup() override {}
 
   // Template to call glGenXXX functions.
   template <typename T>
@@ -205,8 +206,8 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
                            GLsizei count_in_header,
                            char str_end);
 
-  void set_memory_tracker(MemoryTracker* memory_tracker) {
-    memory_tracker_ = memory_tracker;
+  void set_memory_tracker(std::unique_ptr<MemoryTracker> memory_tracker) {
+    memory_tracker_ = std::move(memory_tracker);
   }
 
   struct InitState {
@@ -698,7 +699,7 @@ class GLES2DecoderTestBase : public ::testing::TestWithParam<bool>,
   TraceOutputter outputter_;
   std::unique_ptr<MockGLES2Decoder> mock_decoder_;
   std::unique_ptr<GLES2Decoder> decoder_;
-  MemoryTracker* memory_tracker_;
+  std::unique_ptr<MemoryTracker> memory_tracker_;
 
   bool surface_supports_draw_rectangle_ = false;
 
@@ -847,6 +848,7 @@ class GLES2DecoderPassthroughTestBase : public testing::Test,
   void OnDescheduleUntilFinished() override;
   void OnRescheduleAfterFinished() override;
   void OnSwapBuffers(uint64_t swap_id, uint32_t flags) override;
+  void ScheduleGrContextCleanup() override {}
 
   void SetUp() override;
   void TearDown() override;

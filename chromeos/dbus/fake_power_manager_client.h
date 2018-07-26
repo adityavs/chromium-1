@@ -43,6 +43,7 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
   int num_set_is_projecting_calls() const {
     return num_set_is_projecting_calls_;
   }
+  int num_defer_screen_dim_calls() const { return num_defer_screen_dim_calls_; }
   double screen_brightness_percent() const {
     return screen_brightness_percent_.value();
   }
@@ -78,6 +79,8 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
   void GetScreenBrightnessPercent(DBusMethodCallback<double> callback) override;
   void DecreaseKeyboardBrightness() override;
   void IncreaseKeyboardBrightness() override;
+  void GetKeyboardBrightnessPercent(
+      DBusMethodCallback<double> callback) override;
   const base::Optional<power_manager::PowerSupplyProperties>& GetLastStatus()
       override;
   void RequestStatusUpdate() override;
@@ -109,6 +112,7 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
                      VoidDBusMethodCallback callback) override;
   void DeleteArcTimers(const std::string& tag,
                        VoidDBusMethodCallback callback) override;
+  void DeferScreenDim() override;
 
   // Pops the first report from |video_activity_reports_|, returning whether the
   // activity was fullscreen or not. There must be at least one report.
@@ -132,6 +136,9 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
 
   // Notifies observers that the power button has been pressed or released.
   void SendPowerButtonEvent(bool down, const base::TimeTicks& timestamp);
+
+  // Notifies observers that the screen is about to be dimmed.
+  void SendScreenDimImminent();
 
   // Sets |lid_state_| or |tablet_mode_| and notifies |observers_| about the
   // change.
@@ -164,6 +171,10 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
     screen_brightness_percent_ = percent;
   }
 
+  void set_keyboard_brightness_percent(const base::Optional<double>& percent) {
+    keyboard_brightness_percent_ = percent;
+  }
+
  private:
   // Callback that will be run by asynchronous suspend delays to report
   // readiness.
@@ -186,12 +197,16 @@ class CHROMEOS_EXPORT FakePowerManagerClient : public PowerManagerClient {
   int num_set_policy_calls_ = 0;
   int num_set_is_projecting_calls_ = 0;
   int num_set_backlights_forced_off_calls_ = 0;
+  int num_defer_screen_dim_calls_ = 0;
 
   // Number of pending suspend readiness callbacks.
   int num_pending_suspend_readiness_callbacks_ = 0;
 
   // Current screen brightness in the range [0.0, 100.0].
   base::Optional<double> screen_brightness_percent_;
+
+  // Current keyboard brightness in the range [0.0, 100.0].
+  base::Optional<double> keyboard_brightness_percent_;
 
   // Last screen brightness requested via SetScreenBrightnessPercent().
   // Unlike |screen_brightness_percent_|, this value will not be changed by

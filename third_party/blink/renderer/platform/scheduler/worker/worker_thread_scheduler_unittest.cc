@@ -8,10 +8,10 @@
 #include "base/macros.h"
 #include "base/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
+#include "base/task/sequence_manager/test/sequence_manager_for_test.h"
 #include "base/test/scoped_task_environment.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/blink/renderer/platform/scheduler/base/test/task_queue_manager_for_test.h"
 
 using testing::ElementsAreArray;
 
@@ -92,7 +92,7 @@ class WorkerThreadSchedulerTest : public testing::Test {
             base::test::ScopedTaskEnvironment::MainThreadType::MOCK_TIME,
             base::test::ScopedTaskEnvironment::ExecutionMode::QUEUED),
         scheduler_(new WorkerThreadSchedulerForTest(
-            base::sequence_manager::TaskQueueManagerForTest::Create(
+            base::sequence_manager::SequenceManagerForTest::Create(
                 nullptr,
                 task_environment_.GetMainThreadTaskRunner(),
                 task_environment_.GetMockTickClock()),
@@ -101,7 +101,7 @@ class WorkerThreadSchedulerTest : public testing::Test {
     // Null clock might trigger some assertions.
     task_environment_.FastForwardBy(base::TimeDelta::FromMilliseconds(5));
     scheduler_->Init();
-    default_task_runner_ = scheduler_->CreateTaskRunner();
+    default_task_runner_ = scheduler_->CreateTaskRunner("test_tq");
     idle_task_runner_ = scheduler_->IdleTaskRunner();
   }
 

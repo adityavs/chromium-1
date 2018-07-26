@@ -6,18 +6,22 @@ package org.chromium.chrome.browser.toolbar;
 
 import android.content.res.Resources;
 import android.view.View.OnClickListener;
-import android.view.View.OnTouchListener;
 
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.compositor.layouts.Layout;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManager;
 import org.chromium.chrome.browser.compositor.layouts.OverviewModeBehavior;
 import org.chromium.chrome.browser.compositor.layouts.OverviewModeBehavior.OverviewModeObserver;
+import org.chromium.chrome.browser.compositor.layouts.SceneChangeObserver;
+import org.chromium.chrome.browser.compositor.layouts.ToolbarSwipeLayout;
 import org.chromium.chrome.browser.compositor.layouts.eventfilter.EdgeSwipeHandler;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchManager;
 import org.chromium.chrome.browser.contextualsearch.ContextualSearchObserver;
 import org.chromium.chrome.browser.fullscreen.ChromeFullscreenManager;
 import org.chromium.chrome.browser.fullscreen.ChromeFullscreenManager.FullscreenListener;
 import org.chromium.chrome.browser.gsa.GSAContextDisplaySelection;
+import org.chromium.ui.base.WindowAndroid;
+import org.chromium.ui.base.WindowAndroid.KeyboardVisibilityListener;
 import org.chromium.ui.resources.ResourceManager;
 
 import javax.annotation.Nullable;
@@ -27,8 +31,9 @@ import javax.annotation.Nullable;
  * coordinators, running most of the business logic associated with the bottom toolbar, and updating
  * the model accordingly.
  */
-class BottomToolbarMediator
-        implements FullscreenListener, OverviewModeObserver, ContextualSearchObserver {
+class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListener,
+                                       KeyboardVisibilityListener, OverviewModeObserver,
+                                       SceneChangeObserver {
     /** The model for the bottom toolbar that holds all of its state. */
     private BottomToolbarModel mModel;
 
@@ -41,6 +46,15 @@ class BottomToolbarMediator
     /** The manager for Contextual Search to observe appearance/disappearance of the feature. */
     private ContextualSearchManager mContextualSearchManger;
 
+    /** A {@link WindowAndroid} for watching keyboard visibility events. */
+    private WindowAndroid mWindowAndroid;
+
+    /** The previous height of the bottom toolbar. */
+    private int mBottomToolbarHeightBeforeHide;
+
+    /** Whether the swipe layout is currently active. */
+    private boolean mIsInSwipeLayout;
+
     /**
      * Build a new mediator that handles events from outside the bottom toolbar.
      * @param model The {@link BottomToolbarModel} that holds all the state for the bottom toolbar.
@@ -48,8 +62,8 @@ class BottomToolbarMediator
      *                          controls.
      * @param resources Android {@link Resources} to pull dimensions from.
      */
-    public BottomToolbarMediator(BottomToolbarModel model,
-            ChromeFullscreenManager fullscreenManager, Resources resources) {
+    BottomToolbarMediator(BottomToolbarModel model, ChromeFullscreenManager fullscreenManager,
+            Resources resources) {
         mModel = model;
         mFullscreenManager = fullscreenManager;
         mFullscreenManager.addListener(this);
@@ -70,10 +84,14 @@ class BottomToolbarMediator
     /**
      * Clean up anything that needs to be when the bottom toolbar is destroyed.
      */
-    public void destroy() {
+    void destroy() {
         mFullscreenManager.removeListener(this);
         if (mContextualSearchManger != null) mContextualSearchManger.removeObserver(this);
         if (mOverviewModeBehavior != null) mOverviewModeBehavior.removeOverviewModeObserver(this);
+        if (mWindowAndroid != null) mWindowAndroid.removeKeyboardVisibilityListener(this);
+        if (mModel.getValue(BottomToolbarModel.LAYOUT_MANAGER) != null) {
+            mModel.getValue(BottomToolbarModel.LAYOUT_MANAGER).removeSceneChangeObserver(this);
+        }
     }
 
     @Override
@@ -124,36 +142,71 @@ class BottomToolbarMediator
         mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, true);
     }
 
-    public void setButtonListeners(
-            OnClickListener searchAcceleratorListener, OnTouchListener menuButtonListener) {
+    void setSearchAcceleratorListener(OnClickListener searchAcceleratorListener) {
         mModel.setValue(BottomToolbarModel.SEARCH_ACCELERATOR_LISTENER, searchAcceleratorListener);
-        mModel.setValue(BottomToolbarModel.MENU_BUTTON_LISTENER, menuButtonListener);
     }
 
-    public void setLayoutManager(LayoutManager layoutManager) {
+    @Override
+    public void keyboardVisibilityChanged(boolean isShowing) {
+        // The toolbars are force shown when the keyboard is visible, so we can blindly set
+        // the bottom toolbar view to visible or invisible regardless of the previous state.
+        ChromeFullscreenManager fullscreenManager =
+                mModel.getValue(BottomToolbarModel.LAYOUT_MANAGER).getFullscreenManager();
+        if (isShowing) {
+            mBottomToolbarHeightBeforeHide = fullscreenManager.getBottomControlsHeight();
+            mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, false);
+            mModel.setValue(BottomToolbarModel.COMPOSITED_VIEW_VISIBLE, false);
+            fullscreenManager.setBottomControlsHeight(0);
+        } else {
+            fullscreenManager.setBottomControlsHeight(mBottomToolbarHeightBeforeHide);
+            mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, true);
+            mModel.setValue(BottomToolbarModel.COMPOSITED_VIEW_VISIBLE, true);
+        }
+    }
+
+    void setLayoutManager(LayoutManager layoutManager) {
         mModel.setValue(BottomToolbarModel.LAYOUT_MANAGER, layoutManager);
+        layoutManager.addSceneChangeObserver(this);
     }
 
-    public void setResourceManager(ResourceManager resourceManager) {
+    @Override
+    public void onTabSelectionHinted(int tabId) {}
+
+    @Override
+    public void onSceneChange(Layout layout) {
+        if (layout instanceof ToolbarSwipeLayout) {
+            mIsInSwipeLayout = true;
+            mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, false);
+        } else if (mIsInSwipeLayout) {
+            // Only change to visible if leaving the swipe layout.
+            mIsInSwipeLayout = false;
+            mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, true);
+        }
+    }
+
+    void setResourceManager(ResourceManager resourceManager) {
         mModel.setValue(BottomToolbarModel.RESOURCE_MANAGER, resourceManager);
     }
 
-    public void setOverviewModeBehavior(OverviewModeBehavior overviewModeBehavior) {
+    void setOverviewModeBehavior(OverviewModeBehavior overviewModeBehavior) {
         mOverviewModeBehavior = overviewModeBehavior;
         mOverviewModeBehavior.addOverviewModeObserver(this);
     }
 
-    public void setUpdateBadgeVisibility(boolean visible) {
-        mModel.setValue(BottomToolbarModel.UPDATE_BADGE_VISIBLE, visible);
-    }
-
-    public boolean isShowingAppMenuUpdateBadge() {
-        return mModel.getValue(BottomToolbarModel.UPDATE_BADGE_VISIBLE);
-    }
-
-    public void setContextualSearchManager(ContextualSearchManager contextualSearchManager) {
+    void setContextualSearchManager(ContextualSearchManager contextualSearchManager) {
         mContextualSearchManger = contextualSearchManager;
         if (mContextualSearchManger == null) return;
         mContextualSearchManger.addObserver(this);
+    }
+
+    void setToolbarSwipeLayout(ToolbarSwipeLayout layout) {
+        mModel.setValue(BottomToolbarModel.TOOLBAR_SWIPE_LAYOUT, layout);
+    }
+
+    void setWindowAndroid(WindowAndroid windowAndroid) {
+        assert mWindowAndroid == null : "#setWindowAndroid should only be called once per toolbar.";
+        // Watch for keyboard events so we can hide the bottom toolbar when the keyboard is showing.
+        mWindowAndroid = windowAndroid;
+        mWindowAndroid.addKeyboardVisibilityListener(this);
     }
 }

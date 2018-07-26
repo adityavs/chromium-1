@@ -47,9 +47,8 @@
 #include "third_party/blink/renderer/modules/webgl/webgl_texture.h"
 #include "third_party/blink/renderer/modules/webgl/webgl_vertex_array_object_base.h"
 #include "third_party/blink/renderer/modules/xr/xr_device.h"
+#include "third_party/blink/renderer/platform/bindings/name_client.h"
 #include "third_party/blink/renderer/platform/bindings/script_state.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable.h"
-#include "third_party/blink/renderer/platform/bindings/script_wrappable_visitor.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/drawing_buffer.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/extensions_3d_util.h"
 #include "third_party/blink/renderer/platform/graphics/gpu/webgl_image_conversion.h"
@@ -144,11 +143,11 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   static std::unique_ptr<WebGraphicsContext3DProvider>
   CreateWebGraphicsContext3DProvider(CanvasRenderingContextHost*,
                                      const CanvasContextCreationAttributesCore&,
-                                     unsigned web_gl_version,
+                                     Platform::ContextType context_type,
                                      bool* using_gpu_compositing);
   static void ForceNextWebGLContextCreationToFail();
 
-  unsigned Version() const { return version_; }
+  Platform::ContextType ContextType() const { return context_type_; }
 
   int drawingBufferWidth() const;
   int drawingBufferHeight() const;
@@ -595,7 +594,10 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   scoped_refptr<StaticBitmapImage> GetImage(
       AccelerationHint = kPreferAcceleration) const override;
   void SetFilterQuality(SkFilterQuality) override;
-  bool IsWebGL2OrHigher() { return Version() >= 2; }
+  bool IsWebGL2OrHigher() {
+    return context_type_ == Platform::kWebGL2ContextType ||
+           context_type_ == Platform::kWebGL2ComputeContextType;
+  }
 
   void getHTMLOrOffscreenCanvas(HTMLCanvasElementOrOffscreenCanvas&) const;
 
@@ -639,7 +641,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                             std::unique_ptr<WebGraphicsContext3DProvider>,
                             bool using_gpu_compositing,
                             const CanvasContextCreationAttributesCore&,
-                            unsigned);
+                            Platform::ContextType);
   scoped_refptr<DrawingBuffer> CreateDrawingBuffer(
       std::unique_ptr<WebGraphicsContext3DProvider>,
       bool using_gpu_compositing);
@@ -825,7 +827,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   };
 
   class ExtensionTracker : public GarbageCollected<ExtensionTracker>,
-                           public TraceWrapperBase {
+                           public NameClient {
    public:
     ExtensionTracker(ExtensionFlags flags, const char* const* prefixes)
         : draft_(flags & kDraftExtension), prefixes_(prefixes) {}
@@ -1677,12 +1679,12 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                             std::unique_ptr<WebGraphicsContext3DProvider>,
                             bool using_gpu_compositing,
                             const CanvasContextCreationAttributesCore&,
-                            unsigned);
+                            Platform::ContextType);
   static bool SupportOwnOffscreenSurface(ExecutionContext*);
   static std::unique_ptr<WebGraphicsContext3DProvider>
   CreateContextProviderInternal(CanvasRenderingContextHost*,
                                 const CanvasContextCreationAttributesCore&,
-                                unsigned web_gl_version,
+                                Platform::ContextType context_type,
                                 bool* using_gpu_compositing);
   void TexImageCanvasByGPU(TexImageFunctionID,
                            HTMLCanvasElement*,
@@ -1698,7 +1700,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                            GLint,
                            const IntRect&);
 
-  const unsigned version_;
+  const Platform::ContextType context_type_;
 
   bool IsPaintable() const final { return GetDrawingBuffer(); }
 
@@ -1709,6 +1711,14 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   bool CopyRenderingResultsFromDrawingBuffer(CanvasResourceProvider*,
                                              SourceDrawingBuffer) const;
   void HoldReferenceToDrawingBuffer(DrawingBuffer*);
+
+  static void InitializeWebGLContextLimits(
+      const DrawingBuffer::WebGLContextLimits&);
+  static unsigned CurrentMaxGLContexts();
+
+  static bool webgl_context_limits_initialized_;
+  static unsigned max_active_webgl_contexts_;
+  static unsigned max_active_webgl_contexts_on_worker_;
 };
 
 // TODO(fserb): remove this.

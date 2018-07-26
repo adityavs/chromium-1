@@ -6,6 +6,10 @@
 #define CHROME_BROWSER_ANDROID_VR_ARCORE_DEVICE_ARCORE_DEVICE_H_
 
 #include <jni.h>
+#include <memory>
+#include <utility>
+#include <vector>
+
 #include "base/android/jni_android.h"
 #include "base/macros.h"
 #include "base/optional.h"
@@ -48,12 +52,11 @@ class ARCoreDevice : public VRDeviceBase {
   // VRDeviceBase implementation
   bool ShouldPauseTrackingWhenFrameDataRestricted() override;
   void OnMagicWindowFrameDataRequest(
-      const gfx::Size& frame_size,
-      display::Display::Rotation display_rotation,
-      mojom::VRMagicWindowProvider::GetFrameDataCallback callback) override;
+      mojom::XRFrameDataProvider::GetFrameDataCallback callback) override;
   void RequestHitTest(
       mojom::XRRayPtr ray,
-      mojom::VRMagicWindowProvider::RequestHitTestCallback callback) override;
+      mojom::XREnviromentIntegrationProvider::RequestHitTestCallback callback)
+      override;
 
   void OnMailboxBridgeReady();
   void OnARCoreGlThreadInitialized();
@@ -116,6 +119,10 @@ class ARCoreDevice : public VRDeviceBase {
 
   bool is_arcore_gl_thread_initialized_ = false;
   bool is_arcore_gl_initialized_ = false;
+
+  // If we get a requestSession before we are completely initialized, store it
+  // until we are intialized.
+  base::OnceClosure pending_request_session_callback_;
 
   // This object is not paused when it is created. Although it is not
   // necessarily running during initialization, it is not paused. If it is

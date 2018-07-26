@@ -25,7 +25,7 @@
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
 #include "chrome/app/chrome_command_ids.h"
-#include "chrome/browser/apps/app_browsertest_util.h"
+#include "chrome/browser/apps/platform_apps/app_browsertest_util.h"
 #include "chrome/browser/chrome_content_browser_client.h"
 #include "chrome/browser/content_settings/host_content_settings_map_factory.h"
 #include "chrome/browser/download/download_core_service.h"
@@ -857,17 +857,13 @@ class WebViewTest : public extensions::PlatformAppBrowserTest {
   content::WebContents* embedder_web_contents_;
 };
 
-class WebViewNewWindowTest : public WebViewTest {};
-
-class WebViewSizeTest : public WebViewTest {};
-
-class WebViewVisibilityTest : public WebViewTest {};
-
-class WebViewSpeechAPITest : public WebViewTest {};
-
 // The following test suites are created to group tests based on specific
 // features of <webview>.
-class WebViewAccessibilityTest : public WebViewTest {};
+using WebViewNewWindowTest = WebViewTest;
+using WebViewSizeTest = WebViewTest;
+using WebViewVisibilityTest = WebViewTest;
+using WebViewSpeechAPITest = WebViewTest;
+using WebViewAccessibilityTest = WebViewTest;
 
 class WebViewDPITest : public WebViewTest {
  protected:
@@ -3944,31 +3940,9 @@ IN_PROC_BROWSER_TEST_P(WebViewGuestScrollTest, TestGuestWheelScrollsBubble) {
   }
 }
 
-// Tests scroll latching behaviour with WebViews.
-// Only applicable with OOPIF-based guests when scroll latching is enabled.
-// We can move these tests to a more general fixture once the features
-// have landed (crbug.com/533069 and crbug.com/526463).
-class WebViewGuestScrollLatchingTest : public WebViewTest {
- protected:
-  WebViewGuestScrollLatchingTest() {}
-  ~WebViewGuestScrollLatchingTest() override {}
-
-  void SetUpCommandLine(base::CommandLine* command_line) override {
-    WebViewTest::SetUpCommandLine(command_line);
-    feature_list_.InitWithFeatures({features::kTouchpadAndWheelScrollLatching,
-                                    features::kAsyncWheelEvents},
-                                   {});
-  }
-
- private:
-  base::test::ScopedFeatureList feature_list_;
-
-  DISALLOW_COPY_AND_ASSIGN(WebViewGuestScrollLatchingTest);
-};
-
 // Test that when we bubble scroll from a guest, the guest does not also
 // consume the scroll.
-IN_PROC_BROWSER_TEST_F(WebViewGuestScrollLatchingTest,
+IN_PROC_BROWSER_TEST_P(WebViewGuestScrollTest,
                        ScrollLatchingPreservedInGuests) {
   LoadAppWithGuest("web_view/scrollable_embedder_and_guest");
 

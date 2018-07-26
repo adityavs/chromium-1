@@ -43,11 +43,14 @@ using extensions::Extension;
 
 namespace {
 
+// The tallest tab height in any mode.
+constexpr int kTallestTabHeight = 41;
+
 // Version number of the current theme pack. We just throw out and rebuild
 // theme packs that aren't int-equal to this. Increment this number if you
 // change default theme assets or if you need themes to recreate their generated
 // images (which are cached).
-const int kThemePackVersion = 49;
+const int kThemePackVersion = 51;
 
 // IDs that are in the DataPack won't clash with the positive integer
 // uint16_t. kHeaderID should always have the maximum value because we want the
@@ -61,10 +64,6 @@ const int kColorsID = kMaxID - 3;
 const int kDisplayPropertiesID = kMaxID - 4;
 const int kSourceImagesID = kMaxID - 5;
 const int kScaleFactorsID = kMaxID - 6;
-
-// The sum of kFrameBorderThickness and kNonClientRestoredExtraThickness from
-// OpaqueBrowserFrameView.
-const int kRestoredTabVerticalOffset = 15;
 
 // Persistent constants for the main images that we need. These have the same
 // names as their IDR_* counterparts but these values will always stay the
@@ -307,7 +306,6 @@ const struct CropEntry kImagesToCrop[] = {
   { PRS_THEME_WINDOW_CONTROL_BACKGROUND, 50, false },
 };
 
-
 // A list of images that don't need tinting or any other modification and can
 // be byte-copied directly into the finished DataPack. This should contain the
 // persistent IDs for all themeable image IDs that aren't in kFrameTintMap,
@@ -515,10 +513,13 @@ class TabBackgroundImageSource: public gfx::CanvasImageSource {
                            size().height());
     }
 
-    // If they've provided a custom image, overlay it.
+    // If they've provided a custom image, overlay it.  Since tabs have grown
+    // taller over time, not all themes have a sufficiently tall image; tiling
+    // by vertically mirroring in this case is the least-glitchy-looking option.
     if (!overlay_.isNull()) {
-      canvas->TileImageInt(overlay_, 0, 0, size().width(),
-                           overlay_.height());
+      canvas->TileImageInt(overlay_, 0, 0, 0, 0, size().width(),
+                           size().height(), 1.0f, SkShader::kRepeat_TileMode,
+                           SkShader::kMirror_TileMode);
     }
   }
 
@@ -1253,11 +1254,11 @@ void BrowserThemePack::CreateTabBackgroundImages(ImageCache* images) const {
   for (size_t i = 0; i < arraysize(kTabBackgroundMap); ++i) {
     int prs_id = kTabBackgroundMap[i][0];
 
-    // We need to generate the background tab images if we were provided with
-    // custom frame or background tab images; in the former case the theme
-    // author may want the background tabs to appear to tint the frame, and in
-    // the latter case the provided background tab image may have transparent
-    // regions, which must be made opaque by overlaying atop the original frame.
+    // Generate background tab images when provided with custom frame or
+    // background tab images; in the former case the theme author may want the
+    // background tabs to appear to tint the frame, and in the latter case the
+    // provided background tab image may have transparent regions, which must be
+    // made opaque by overlaying atop the original frame.
     ImageCache::const_iterator frame_it = images->find(kTabBackgroundMap[i][1]);
     ImageCache::const_iterator tab_it = images->find(prs_id);
     if (frame_it != images->end() || tab_it != images->end()) {
@@ -1269,18 +1270,28 @@ void BrowserThemePack::CreateTabBackgroundImages(ImageCache* images) const {
         image_to_tint = (frame_it->second).AsImageSkia();
 
       gfx::ImageSkia overlay;
-      int vertical_offset = 0;
-      if (tab_it != images->end()) {
+      if (tab_it != images->end())
         overlay = tab_it->second.AsImageSkia();
-        vertical_offset = kRestoredTabVerticalOffset;
-      }
+
+      // The height of the frame above the tabstrip in restored mode.
+      // Offsetting by this allows using semitransparent tab background images
+      // that will appear to overlay the frame at the correct position.
+      // Offsetting in all cases, and not just when there is an overlay, allows
+      // the tab painting code to avoid conditional positioning.
+      // TODO(pkasting): https://crbug.com/866671  For backwards-compat with
+      // existing themes, we should probably force this to 16 and update the
+      // frame and tab drawing code to match.  This might make themes with art
+      // right at the top of the frame look bad, though.
+      constexpr int kRestoredTabVerticalOffset = 8;
 
       auto source = std::make_unique<TabBackgroundImageSource>(
           background_color, image_to_tint, overlay,
           GetTintInternal(ThemeProperties::TINT_BACKGROUND_TAB),
-          vertical_offset);
+          kRestoredTabVerticalOffset);
+      gfx::Size dest_size = image_to_tint.size();
+      dest_size.SetToMax(gfx::Size(0, kTallestTabHeight));
       temp_output[prs_id] =
-          gfx::Image(gfx::ImageSkia(std::move(source), image_to_tint.size()));
+          gfx::Image(gfx::ImageSkia(std::move(source), dest_size));
     }
   }
   MergeImageCaches(temp_output, images);

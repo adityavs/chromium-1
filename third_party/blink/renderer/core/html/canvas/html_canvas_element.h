@@ -75,10 +75,17 @@ class Image;
 class ImageBitmapOptions;
 class IntSize;
 
+#if defined(SUPPORT_WEBGL2_COMPUTE_CONTEXT)
+class
+    CanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrWebGL2ComputeRenderingContextOrImageBitmapRenderingContextOrXRPresentationContext;
+typedef CanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrWebGL2ComputeRenderingContextOrImageBitmapRenderingContextOrXRPresentationContext
+    RenderingContext;
+#else
 class
     CanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrImageBitmapRenderingContextOrXRPresentationContext;
 typedef CanvasRenderingContext2DOrWebGLRenderingContextOrWebGL2RenderingContextOrImageBitmapRenderingContextOrXRPresentationContext
     RenderingContext;
+#endif
 
 class CORE_EXPORT HTMLCanvasElement final
     : public HTMLElement,
@@ -149,9 +156,6 @@ class CORE_EXPORT HTMLCanvasElement final
     return context_.Get();
   }
 
-  scoped_refptr<Image> CopiedImage(SourceDrawingBuffer, AccelerationHint);
-  void ClearCopiedImage();
-
   bool OriginClean() const override;
   void SetOriginTainted() override { origin_clean_ = false; }
 
@@ -178,6 +182,11 @@ class CORE_EXPORT HTMLCanvasElement final
 
   void FinalizeFrame() override;
 
+  CanvasResourceDispatcher* GetOrCreateResourceDispatcher() override;
+
+  void PushFrame(scoped_refptr<CanvasResource> image,
+                 const SkIRect& damage_rect) override;
+
   // ContextLifecycleObserver and PageVisibilityObserver implementation
   void ContextDestroyed(ExecutionContext*) override;
 
@@ -203,6 +212,9 @@ class CORE_EXPORT HTMLCanvasElement final
   void NotifyGpuContextLost() override;
   void SetNeedsCompositingUpdate() override;
   void UpdateMemoryUsage() override;
+  bool ShouldAccelerate2dContext() const override;
+  unsigned GetMSAASampleCountFor2dContext() const override;
+  SkFilterQuality FilterQuality() const override;
 
   void DisableAcceleration(std::unique_ptr<Canvas2DLayerBridge>
                                unaccelerated_bridge_used_for_testing = nullptr);
@@ -284,6 +296,9 @@ class CORE_EXPORT HTMLCanvasElement final
 
   bool LowLatencyEnabled() const { return !!frame_dispatcher_; }
 
+  scoped_refptr<StaticBitmapImage> Snapshot(SourceDrawingBuffer,
+                                            AccelerationHint) const;
+
  protected:
   void DidMoveToNewDocument(Document& old_document) override;
 
@@ -308,17 +323,13 @@ class CORE_EXPORT HTMLCanvasElement final
 
   void Reset();
 
-  std::unique_ptr<Canvas2DLayerBridge> CreateAccelerated2dBuffer(
-      int* msaa_sample_count);
+  std::unique_ptr<Canvas2DLayerBridge> CreateAccelerated2dBuffer();
   std::unique_ptr<Canvas2DLayerBridge> CreateUnaccelerated2dBuffer();
   void SetCanvas2DLayerBridgeInternal(std::unique_ptr<Canvas2DLayerBridge>);
 
   void SetSurfaceSize(const IntSize&);
 
   bool PaintsIntoCanvasBuffer() const;
-
-  scoped_refptr<StaticBitmapImage> ToStaticBitmapImage(SourceDrawingBuffer,
-                                                       AccelerationHint) const;
 
   String ToDataURLInternal(const String& mime_type,
                            const double& quality,
@@ -336,6 +347,8 @@ class CORE_EXPORT HTMLCanvasElement final
   // Used only for WebGL currently.
   bool context_creation_was_blocked_;
 
+  bool canvas_is_clear_ = true;
+
   bool ignore_reset_;
   FloatRect dirty_rect_;
 
@@ -351,10 +364,6 @@ class CORE_EXPORT HTMLCanvasElement final
   // Canvas2DLayerBridge is used when canvas has 2d rendering context
   std::unique_ptr<Canvas2DLayerBridge> canvas2d_bridge_;
   void ReplaceExisting2dLayerBridge(std::unique_ptr<Canvas2DLayerBridge>);
-
-  // FIXME: This is temporary for platforms that have to copy the image buffer
-  // to render (and for CSSCanvasValue).
-  mutable scoped_refptr<Image> copied_image_;
 
   // Used for OffscreenCanvas that controls this HTML canvas element
   // and for low latency mode.

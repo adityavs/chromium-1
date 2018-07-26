@@ -21,6 +21,7 @@
 #include "base/containers/stack_container.h"
 #include "base/location.h"
 #include "base/macros.h"
+#include "base/metrics/histogram_macros.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/default_tick_clock.h"
 #include "base/trace_event/memory_dump_manager.h"
@@ -381,7 +382,7 @@ void CopyRowsToI420Buffer(int first_row,
   } else {
     const int scale = 0x10000 >> (bit_depth - 8);
     libyuv::Convert16To8Plane(
-        reinterpret_cast<const uint16*>(source + source_stride * first_row),
+        reinterpret_cast<const uint16_t*>(source + source_stride * first_row),
         source_stride / 2, output + dest_stride * first_row, dest_stride, scale,
         bytes_per_row, rows);
   }
@@ -589,6 +590,11 @@ void GpuMemoryBufferVideoFramePool::PoolImpl::CreateHardwareFrame(
     case PIXEL_FORMAT_YUV444P12:
     case PIXEL_FORMAT_Y16:
     case PIXEL_FORMAT_UNKNOWN:
+      if (!video_frame->HasTextures()) {
+        UMA_HISTOGRAM_ENUMERATION(
+            "Media.GpuMemoryBufferVideoFramePool.UnsupportedFormat",
+            video_frame->format(), PIXEL_FORMAT_MAX + 1);
+      }
       passthrough = true;
   }
   // TODO(dcastagna): Handle odd positioned video frame input, see
@@ -633,18 +639,8 @@ bool GpuMemoryBufferVideoFramePool::PoolImpl::OnMemoryDump(
         dump->AddScalar("free_size",
                         base::trace_event::MemoryAllocatorDump::kUnitsBytes,
                         frame_resources->is_used() ? 0 : buffer_size_in_bytes);
-        auto shared_memory_guid =
-            plane_resource.gpu_memory_buffer->GetHandle().handle.GetGUID();
-        if (!shared_memory_guid.is_empty()) {
-          pmd->CreateSharedMemoryOwnershipEdge(dump->guid(), shared_memory_guid,
-                                               kImportance);
-        } else {
-          auto shared_buffer_guid =
-              plane_resource.gpu_memory_buffer->GetGUIDForTracing(
-                  tracing_process_id);
-          pmd->CreateSharedGlobalAllocatorDump(shared_buffer_guid);
-          pmd->AddOwnershipEdge(dump->guid(), shared_buffer_guid, kImportance);
-        }
+        plane_resource.gpu_memory_buffer->OnMemoryDump(
+            pmd, dump->guid(), tracing_process_id, kImportance);
       }
     }
   }

@@ -80,7 +80,6 @@ class TestPasswordManagerDriver : public StubPasswordManagerDriver {
   }
 
   MOCK_METHOD0(AllowToRunFormClassifier, void());
-  MOCK_METHOD0(MatchingBlacklistedFormFound, void());
 
  private:
   PasswordManager password_manager_;
@@ -326,7 +325,8 @@ TEST_F(PasswordGenerationManagerTest, ProcessPasswordRequirements) {
 
     std::string response_string;
     ASSERT_TRUE(response.SerializeToString(&response_string));
-    autofill::FormStructure::ParseQueryResponse(response_string, forms);
+    autofill::FormStructure::ParseQueryResponse(response_string, forms,
+                                                nullptr);
 
     EXPECT_CALL(*client_, GetHistorySyncState())
         .WillRepeatedly(testing::Return(test.allowed_to_fetch_specs
@@ -426,7 +426,7 @@ TEST_F(PasswordGenerationManagerTest, DetectFormsEligibleForGeneration) {
 
   std::string response_string;
   ASSERT_TRUE(response.SerializeToString(&response_string));
-  autofill::FormStructure::ParseQueryResponse(response_string, forms);
+  autofill::FormStructure::ParseQueryResponse(response_string, forms, nullptr);
 
   DetectFormsEligibleForGeneration(forms);
   EXPECT_EQ(2u, GetTestDriver()->GetFoundEligibleForGenerationForms().size());

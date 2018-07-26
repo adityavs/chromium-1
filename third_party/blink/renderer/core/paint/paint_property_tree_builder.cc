@@ -5,7 +5,9 @@
 #include "third_party/blink/renderer/core/paint/paint_property_tree_builder.h"
 
 #include <memory>
+#include "third_party/blink/renderer/core/animation/scroll_timeline.h"
 #include "third_party/blink/renderer/core/dom/dom_node_ids.h"
+#include "third_party/blink/renderer/core/frame/link_highlights.h"
 #include "third_party/blink/renderer/core/frame/local_frame.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
@@ -133,6 +135,7 @@ class FragmentPaintPropertyTreeBuilder {
   ALWAYS_INLINE void UpdateTransform();
   ALWAYS_INLINE void UpdateTransformForNonRootSVG();
   ALWAYS_INLINE void UpdateEffect();
+  ALWAYS_INLINE void UpdateLinkHighlightEffect();
   ALWAYS_INLINE void UpdateFilter();
   ALWAYS_INLINE void UpdateFragmentClip();
   ALWAYS_INLINE void UpdateCssClip();
@@ -187,7 +190,10 @@ class FragmentPaintPropertyTreeBuilder {
 static bool NeedsScrollNode(const LayoutObject& object) {
   if (!object.HasOverflowClip())
     return false;
-  return ToLayoutBox(object).GetScrollableArea()->ScrollsOverflow();
+  // TODO(crbug.com/839341): Remove ScrollTimeline check once we support
+  // main-thread AnimationWorklet and don't need to promote the scroll-source.
+  return ToLayoutBox(object).GetScrollableArea()->ScrollsOverflow() ||
+         ScrollTimeline::HasActiveScrollTimeline(object.GetNode());
 }
 
 static CompositingReasons CompositingReasonsForScroll(const LayoutBox& box) {
@@ -689,6 +695,39 @@ void FragmentPaintPropertyTreeBuilder::UpdateEffect() {
   }
 }
 
+static bool NeedsLinkHighlightEffect(const LayoutObject& object) {
+  auto* page = object.GetFrame()->GetPage();
+  return page->GetLinkHighlights().NeedsHighlightEffect(object);
+}
+
+void FragmentPaintPropertyTreeBuilder::UpdateLinkHighlightEffect() {
+  if (NeedsPaintPropertyUpdate()) {
+    if (NeedsLinkHighlightEffect(object_)) {
+      // While the link highlight uses the current transform space for
+      // positioning, it's parent effect is the root so that it is not affected
+      // by enclosing filters.
+      const auto& parent = EffectPaintPropertyNode::Root();
+      EffectPaintPropertyNode::State link_highlight_state;
+      link_highlight_state.local_transform_space = context_.current.transform;
+      link_highlight_state.compositor_element_id =
+          object_.GetFrame()->GetPage()->GetLinkHighlights().element_id(
+              object_);
+      link_highlight_state.direct_compositing_reasons =
+          CompositingReason::kActiveOpacityAnimation;
+      // Unlike other property nodes, link highlight effect nodes are guaranteed
+      // to be leaf nodes and do not require subtree invalidation, so we do not
+      // call |OnUpdate| here.
+      properties_->UpdateLinkHighlightEffect(parent,
+                                             std::move(link_highlight_state));
+    } else {
+      // Unlike other property nodes, link highlight effect nodes are guaranteed
+      // to be leaf nodes and do not require subtree invalidation, so we do not
+      // call |OnClear| here.
+      properties_->ClearLinkHighlightEffect();
+    }
+  }
+}
+
 static bool NeedsFilter(const LayoutObject& object) {
   // TODO(trchen): SVG caches filters in SVGResources. Implement it.
   if (object.IsBoxModelObject() && ToLayoutBoxModelObject(object).Layer() &&
@@ -911,7 +950,27 @@ static bool IsPrintingRootLayoutView(const LayoutObject& object) {
   return !ToLocalFrame(parent_frame)->GetDocument()->Printing();
 }
 
+static bool NeedsOverflowClipForReplacedContents(
+    const LayoutReplaced& replaced) {
+  // <svg> may optionally allow overflow. If an overflow clip is required,
+  // always create it without checking whether the actual content overflows.
+  if (replaced.IsSVGRoot())
+    return ToLayoutSVGRoot(replaced).ShouldApplyViewportClip();
+
+  if (replaced.StyleRef().HasBorderRadius())
+    return true;
+
+  // Embedded objects are always sized to fit the content rect.
+  if (replaced.IsLayoutEmbeddedContent())
+    return false;
+
+  return true;
+}
+
 static bool NeedsOverflowClip(const LayoutObject& object) {
+  if (object.IsLayoutReplaced())
+    return NeedsOverflowClipForReplacedContents(ToLayoutReplaced(object));
+
   if (object.IsSVGViewportContainer() &&
       SVGLayoutSupport::IsOverflowHidden(object))
     return true;
@@ -939,16 +998,15 @@ bool FragmentPaintPropertyTreeBuilder::NeedsOverflowControlsClip() const {
 }
 
 static bool NeedsInnerBorderRadiusClip(const LayoutObject& object) {
-  if (!object.StyleRef().HasBorderRadius())
+  // Replaced elements don't have scrollbars thus needs no separate clip
+  // for the padding box (InnerBorderRadiusClip) and the client box (padding
+  // box minus scrollbar, OverflowClip).
+  // Furthermore, replaced elements clip to the content box instead,
+  if (object.IsLayoutReplaced())
     return false;
-  if (object.IsBox() && NeedsOverflowClip(object))
-    return true;
-  // LayoutReplaced applies inner border-radius clip on the foreground. This
-  // doesn't apply to SVGRoot which uses the NeedsOverflowClip() rule above.
-  // This includes iframes which applies border-radius clip on the subdocument.
-  if (object.IsLayoutReplaced() && !object.IsSVGRoot())
-    return true;
-  return false;
+
+  return object.StyleRef().HasBorderRadius() && object.IsBox() &&
+         NeedsOverflowClip(object);
 }
 
 static LayoutPoint VisualOffsetFromPaintOffsetRoot(
@@ -1003,18 +1061,8 @@ void FragmentPaintPropertyTreeBuilder::UpdateInnerBorderRadiusClip() {
       const LayoutBox& box = ToLayoutBox(object_);
       ClipPaintPropertyNode::State state;
       state.local_transform_space = context_.current.transform;
-      if (box.IsLayoutReplaced()) {
-        // LayoutReplaced clips the foreground by rounded inner content box.
-        state.clip_rect = box.StyleRef().GetRoundedInnerBorderFor(
-            LayoutRect(context_.current.paint_offset, box.Size()),
-            LayoutRectOutsets(-(box.PaddingTop() + box.BorderTop()),
-                              -(box.PaddingRight() + box.BorderRight()),
-                              -(box.PaddingBottom() + box.BorderBottom()),
-                              -(box.PaddingLeft() + box.BorderLeft())));
-      } else {
-        state.clip_rect = box.StyleRef().GetRoundedInnerBorderFor(
-            LayoutRect(context_.current.paint_offset, box.Size()));
-      }
+      state.clip_rect = box.StyleRef().GetRoundedInnerBorderFor(
+          LayoutRect(context_.current.paint_offset, box.Size()));
       OnUpdateClip(properties_->UpdateInnerBorderRadiusClip(
           *context_.current.clip, std::move(state)));
     } else {
@@ -1047,6 +1095,15 @@ static bool CanOmitOverflowClip(const LayoutObject& object) {
   if (block.HasControlClip() || block.ShouldPaintCarets())
     return false;
 
+  if (object.IsLayoutReplaced()) {
+    const LayoutReplaced& replaced = ToLayoutReplaced(object);
+    if (replaced.StyleRef().HasBorderRadius())
+      return false;
+    LayoutRect replaced_content_rect = replaced.ReplacedContentRect();
+    return replaced_content_rect.IsEmpty() ||
+           replaced.ContentBoxRect().Contains(replaced_content_rect);
+  }
+
   // We need OverflowClip for hit-testing if the clip rect excluding overlay
   // scrollbars is different from the normal clip rect.
   auto clip_rect = block.OverflowClipRect(LayoutPoint());
@@ -1065,7 +1122,26 @@ void FragmentPaintPropertyTreeBuilder::UpdateOverflowClip() {
       ClipPaintPropertyNode::State state;
       state.local_transform_space = context_.current.transform;
 
-      if (object_.IsBox()) {
+      if (object_.IsLayoutReplaced()) {
+        const LayoutReplaced& replaced = ToLayoutReplaced(object_);
+        // LayoutReplaced clips the foreground by rounded content box.
+        state.clip_rect = replaced.StyleRef().GetRoundedInnerBorderFor(
+            LayoutRect(context_.current.paint_offset, replaced.Size()),
+            LayoutRectOutsets(
+                -(replaced.PaddingTop() + replaced.BorderTop()),
+                -(replaced.PaddingRight() + replaced.BorderRight()),
+                -(replaced.PaddingBottom() + replaced.BorderBottom()),
+                -(replaced.PaddingLeft() + replaced.BorderLeft())));
+        if (replaced.IsLayoutEmbeddedContent()) {
+          // Embedded objects are always sized to fit the content rect, but
+          // they could overflow by 1px due to pre-snapping. Adjust clip rect
+          // to match pre-snapped box as a special case.
+          FloatRect adjusted_rect = state.clip_rect.Rect();
+          adjusted_rect.SetSize(
+              FloatSize(replaced.ReplacedContentRect().Size()));
+          state.clip_rect.SetRect(adjusted_rect);
+        }
+      } else if (object_.IsBox()) {
         state.clip_rect = ToClipRect(ToLayoutBox(object_).OverflowClipRect(
             context_.current.paint_offset));
         state.clip_rect_excluding_overlay_scrollbars =
@@ -1235,8 +1311,38 @@ void FragmentPaintPropertyTreeBuilder::UpdateScrollAndScrollTranslation() {
 
       OnUpdate(properties_->UpdateScroll(*context_.current.scroll,
                                          std::move(state)));
+
+      if (scrollable_area->VerticalScrollbar() ||
+          scrollable_area->HasLayerForVerticalScrollbar()) {
+        EffectPaintPropertyNode::State state;
+        state.local_transform_space = context_.current.transform;
+        state.direct_compositing_reasons =
+            CompositingReason::kActiveOpacityAnimation;
+        state.compositor_element_id = scrollable_area->GetScrollbarElementId(
+            ScrollbarOrientation::kVerticalScrollbar);
+        OnUpdate(properties_->UpdateVerticalScrollbarEffect(
+            *context_.current_effect, std::move(state)));
+      } else {
+        OnClear(properties_->ClearVerticalScrollbarEffect());
+      }
+
+      if (scrollable_area->HorizontalScrollbar() ||
+          scrollable_area->HasLayerForHorizontalScrollbar()) {
+        EffectPaintPropertyNode::State state;
+        state.local_transform_space = context_.current.transform;
+        state.direct_compositing_reasons =
+            CompositingReason::kActiveOpacityAnimation;
+        state.compositor_element_id = scrollable_area->GetScrollbarElementId(
+            ScrollbarOrientation::kHorizontalScrollbar);
+        OnUpdate(properties_->UpdateHorizontalScrollbarEffect(
+            *context_.current_effect, std::move(state)));
+      } else {
+        OnClear(properties_->ClearHorizontalScrollbarEffect());
+      }
     } else {
       OnClear(properties_->ClearScroll());
+      OnClear(properties_->ClearVerticalScrollbarEffect());
+      OnClear(properties_->ClearHorizontalScrollbarEffect());
     }
 
     // A scroll translation node is created for static offset (e.g., overflow
@@ -1273,8 +1379,15 @@ void FragmentPaintPropertyTreeBuilder::UpdateOutOfFlowContext() {
   if (!object_.IsBoxModelObject() && !properties_)
     return;
 
-  if (object_.IsLayoutBlock())
+  if (object_.IsLayoutBlockFlow()) {
     context_.paint_offset_for_float = context_.current.paint_offset;
+    // TODO(crbug.com/858843): For now floating object's PhysicalLocation() is
+    // in the scrolling contents space, so if there is scrollbar on the left,
+    // we adjust the paint offset origin.
+    const auto& box = ToLayoutBox(object_);
+    if (box.ShouldPlaceBlockDirectionScrollbarOnLogicalLeft())
+      context_.paint_offset_for_float.Move(box.VerticalScrollbarWidth(), 0);
+  }
 
   if (object_.CanContainAbsolutePositionObjects()) {
     context_.absolute_position = context_.current;
@@ -1571,6 +1684,10 @@ void FragmentPaintPropertyTreeBuilder::SetNeedsPaintPropertyUpdateIfNeeded() {
       box.GetMutableForPainting().SetNeedsPaintPropertyUpdate();
   }
 
+  if (box.IsLayoutReplaced() &&
+      box.PreviousContentBoxRect() != box.ContentBoxRect())
+    box.GetMutableForPainting().SetNeedsPaintPropertyUpdate();
+
   if (box.Size() == box.PreviousSize())
     return;
 
@@ -1681,6 +1798,7 @@ void FragmentPaintPropertyTreeBuilder::UpdateForSelf() {
     UpdateTransform();
     UpdateClipPathClip(false);
     UpdateEffect();
+    UpdateLinkHighlightEffect();
     UpdateClipPathClip(true);  // Special pass for SPv1 composited clip-path.
     UpdateCssClip();
     UpdateFilter();
@@ -2182,20 +2300,27 @@ void PaintPropertyTreeBuilder::CreateFragmentContextsInFlowThread(
     new_fragment_contexts.push_back(
         ContextForFragment(fragment_clip, logical_top_in_flow_thread));
 
-    base::Optional<LayoutUnit> old_logical_top_in_flow_thread;
     if (current_fragment_data) {
-      if (const auto* old_fragment = current_fragment_data->NextFragment())
-        old_logical_top_in_flow_thread = old_fragment->LogicalTopInFlowThread();
+      if (!current_fragment_data->NextFragment())
+        fragments_changed = true;
       current_fragment_data = &current_fragment_data->EnsureNextFragment();
     } else {
       current_fragment_data = &object_.GetMutableForPainting().FirstFragment();
-      old_logical_top_in_flow_thread =
-          current_fragment_data->LogicalTopInFlowThread();
     }
 
-    if (!old_logical_top_in_flow_thread ||
-        *old_logical_top_in_flow_thread != logical_top_in_flow_thread)
-      fragments_changed = true;
+    fragments_changed |= logical_top_in_flow_thread !=
+                         current_fragment_data->LogicalTopInFlowThread();
+    if (!fragments_changed) {
+      const ClipPaintPropertyNode* old_fragment_clip = nullptr;
+      if (const auto* properties = current_fragment_data->PaintProperties())
+        old_fragment_clip = properties->FragmentClip();
+      const base::Optional<LayoutRect>& new_fragment_clip =
+          new_fragment_contexts.back().fragment_clip;
+      fragments_changed =
+          !!old_fragment_clip != !!new_fragment_clip ||
+          (old_fragment_clip && new_fragment_clip &&
+           old_fragment_clip->ClipRect() != ToClipRect(*new_fragment_clip));
+    }
 
     InitFragmentPaintProperties(
         *current_fragment_data,
@@ -2318,10 +2443,11 @@ bool PaintPropertyTreeBuilder::UpdateFragments() {
   bool needs_paint_properties =
       object_.StyleRef().ClipPath() || NeedsPaintOffsetTranslation(object_) ||
       NeedsTransform(object_) || NeedsClipPathClip(object_) ||
-      NeedsEffect(object_) || NeedsTransformForNonRootSVG(object_) ||
-      NeedsFilter(object_) || NeedsCssClip(object_) ||
-      NeedsInnerBorderRadiusClip(object_) || NeedsOverflowClip(object_) ||
-      NeedsPerspective(object_) || NeedsSVGLocalToBorderBoxTransform(object_) ||
+      NeedsEffect(object_) || NeedsLinkHighlightEffect(object_) ||
+      NeedsTransformForNonRootSVG(object_) || NeedsFilter(object_) ||
+      NeedsCssClip(object_) || NeedsInnerBorderRadiusClip(object_) ||
+      NeedsOverflowClip(object_) || NeedsPerspective(object_) ||
+      NeedsSVGLocalToBorderBoxTransform(object_) ||
       NeedsScrollOrScrollTranslation(object_);
   // Need of fragmentation clip will be determined in CreateFragmentContexts().
 

@@ -107,7 +107,7 @@ GpuChannel* GpuChannelTestCommon::CreateChannel(int32_t client_id,
                                                 bool is_gpu_host) {
   uint64_t kClientTracingId = 1;
   GpuChannel* channel = channel_manager()->EstablishChannel(
-      client_id, kClientTracingId, is_gpu_host);
+      client_id, kClientTracingId, is_gpu_host, true);
   channel->Init(std::make_unique<TestSinkFilteredSender>());
   base::ProcessId kProcessId = 1;
   channel->OnChannelConnected(kProcessId);
@@ -155,10 +155,9 @@ void GpuChannelTestCommon::HandleMessage(GpuChannel* channel,
   delete msg;
 }
 
-base::SharedMemoryHandle GpuChannelTestCommon::GetSharedHandle() {
-  base::SharedMemory shared_memory;
-  shared_memory.CreateAnonymous(10);
-  return shared_memory.handle().Duplicate();
+base::UnsafeSharedMemoryRegion GpuChannelTestCommon::GetSharedMemoryRegion() {
+  return base::UnsafeSharedMemoryRegion::Create(
+      sizeof(CommandBufferSharedState));
 }
 
 }  // namespace gpu

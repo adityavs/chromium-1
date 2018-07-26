@@ -13,11 +13,26 @@ namespace {
 const float kStackViewVerticalSpacing = 23.0;
 // The StackView width.
 const float kStackViewWidth = 227.0;
+// Returns |message| as an attributed string with default styling.
+NSAttributedString* GetAttributedMessage(NSString* message) {
+  NSMutableParagraphStyle* paragraph_style =
+      [[NSMutableParagraphStyle alloc] init];
+  paragraph_style.lineBreakMode = NSLineBreakByWordWrapping;
+  paragraph_style.alignment = NSTextAlignmentCenter;
+  NSDictionary* default_attributes = @{
+    NSFontAttributeName :
+        [UIFont preferredFontForTextStyle:UIFontTextStyleBody],
+    NSForegroundColorAttributeName : [UIColor grayColor],
+    NSParagraphStyleAttributeName : paragraph_style
+  };
+  return [[NSAttributedString alloc] initWithString:message
+                                         attributes:default_attributes];
+}
 }
 
 @interface TableViewEmptyView ()
 // The message that will be displayed.
-@property(nonatomic, copy) NSString* message;
+@property(nonatomic, copy) NSAttributedString* message;
 // The image that will be displayed.
 @property(nonatomic, strong) UIImage* image;
 @end
@@ -29,13 +44,32 @@ const float kStackViewWidth = 227.0;
 - (instancetype)initWithFrame:(CGRect)frame
                       message:(NSString*)message
                         image:(UIImage*)image {
-  self = [super initWithFrame:frame];
-  if (self) {
-    self.message = message;
-    self.image = image;
+  if (self = [super initWithFrame:frame]) {
+    _message = GetAttributedMessage(message);
+    _image = image;
+    self.accessibilityIdentifier = [[self class] accessibilityIdentifier];
   }
   return self;
 }
+
+- (instancetype)initWithFrame:(CGRect)frame
+            attributedMessage:(NSAttributedString*)message
+                        image:(UIImage*)image {
+  if (self = [super initWithFrame:frame]) {
+    _message = message;
+    _image = image;
+    self.accessibilityIdentifier = [[self class] accessibilityIdentifier];
+  }
+  return self;
+}
+
+#pragma mark - Public
+
++ (NSString*)accessibilityIdentifier {
+  return @"TableViewEmptyView";
+}
+
+#pragma mark - UIView
 
 - (void)willMoveToSuperview:(UIView*)newSuperview {
   // Return if the subviews have already been created and added.
@@ -47,12 +81,8 @@ const float kStackViewWidth = 227.0;
   imageView.clipsToBounds = YES;
 
   UILabel* messageLabel = [[UILabel alloc] init];
-  messageLabel.text = self.message;
   messageLabel.numberOfLines = 0;
-  messageLabel.lineBreakMode = NSLineBreakByWordWrapping;
-  messageLabel.textAlignment = NSTextAlignmentCenter;
-  messageLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
-  messageLabel.textColor = [UIColor grayColor];
+  messageLabel.attributedText = self.message;
 
   // Vertical stack view that holds the image and message.
   UIStackView* verticalStack = [[UIStackView alloc]

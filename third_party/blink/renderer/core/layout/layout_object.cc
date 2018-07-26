@@ -32,11 +32,11 @@
 #include <memory>
 
 #include "third_party/blink/public/platform/web_scroll_into_view_params.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/animation/element_animations.h"
 #include "third_party/blink/renderer/core/css/resolver/style_resolver.h"
 #include "third_party/blink/renderer/core/css/style_change_reason.h"
 #include "third_party/blink/renderer/core/css/style_engine.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/first_letter_pseudo_element.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
@@ -947,12 +947,27 @@ void LayoutObject::ClearPreferredLogicalWidthsDirty() {
   bitfields_.SetPreferredLogicalWidthsDirty(false);
 }
 
+static inline bool NGKeepInvalidatingBeyond(LayoutObject* o) {
+  // Because LayoutNG does not work on individual inline objects, we can't
+  // use a dirty width on an inline as a signal that it is safe to stop --
+  // inlines never get marked as clean. Instead, we need to keep going to the
+  // next block container.
+  // Atomic inlines do not have this problem as they are treated like blocks
+  // in this context.
+  if (!RuntimeEnabledFeatures::LayoutNGEnabled())
+    return false;
+  if (o->IsLayoutInline() || o->IsText())
+    return true;
+  return false;
+}
+
 inline void LayoutObject::InvalidateContainerPreferredLogicalWidths() {
   // In order to avoid pathological behavior when inlines are deeply nested, we
   // do include them in the chain that we mark dirty (even though they're kind
   // of irrelevant).
   LayoutObject* o = IsTableCell() ? ContainingBlock() : Container();
-  while (o && !o->PreferredLogicalWidthsDirty()) {
+  while (o &&
+         (!o->PreferredLogicalWidthsDirty() || NGKeepInvalidatingBeyond(o))) {
     // Don't invalidate the outermost object of an unrooted subtree. That object
     // will be invalidated when the subtree is added to the document.
     LayoutObject* container =
@@ -972,7 +987,7 @@ inline void LayoutObject::InvalidateContainerPreferredLogicalWidths() {
 LayoutObject* LayoutObject::ContainerForAbsolutePosition(
     AncestorSkipInfo* skip_info) const {
   return FindAncestorByPredicate(this, skip_info, [](LayoutObject* candidate) {
-    if (!candidate->CanContainAbsolutePositionObjects() &&
+    if (!candidate->StyleRef().CanContainAbsolutePositionObjects() &&
         candidate->ShouldApplyLayoutContainment()) {
       UseCounter::Count(candidate->GetDocument(),
                         WebFeature::kCSSContainLayoutPositionedDescendants);
@@ -985,7 +1000,8 @@ LayoutObject* LayoutObject::ContainerForFixedPosition(
     AncestorSkipInfo* skip_info) const {
   DCHECK(!IsText());
   return FindAncestorByPredicate(this, skip_info, [](LayoutObject* candidate) {
-    if (!candidate->CanContainFixedPositionObjects() &&
+    if (!candidate->StyleRef().CanContainFixedPositionObjects(
+            candidate->IsDocumentElement()) &&
         candidate->ShouldApplyLayoutContainment()) {
       UseCounter::Count(candidate->GetDocument(),
                         WebFeature::kCSSContainLayoutPositionedDescendants);
@@ -1015,7 +1031,7 @@ const LayoutBlock* LayoutObject::InclusiveContainingBlock() const {
 LayoutBlock* LayoutObject::ContainingBlock(AncestorSkipInfo* skip_info) const {
   LayoutObject* object = Parent();
   if (!object && IsLayoutScrollbarPart())
-    object = ToLayoutScrollbarPart(this)->ScrollbarStyleSource();
+    object = ToLayoutScrollbarPart(this)->GetScrollableArea()->GetLayoutBox();
   if (!IsTextOrSVGChild()) {
     if (style_->GetPosition() == EPosition::kFixed)
       return ContainingBlockForFixedPosition(skip_info);
@@ -1325,7 +1341,7 @@ IntRect LayoutObject::AbsoluteBoundingBoxRectIncludingDescendants() const {
   return result;
 }
 
-void LayoutObject::Paint(const PaintInfo&, const LayoutPoint&) const {}
+void LayoutObject::Paint(const PaintInfo&) const {}
 
 const LayoutBoxModelObject& LayoutObject::ContainerForPaintInvalidation()
     const {
@@ -1687,8 +1703,9 @@ HitTestResult LayoutObject::HitTestForOcclusion(
       HitTestRequest::kListBased | HitTestRequest::kPenetratingList |
       HitTestRequest::kIgnorePointerEventsNone | HitTestRequest::kReadOnly |
       HitTestRequest::kIgnoreClipping;
-  return frame->GetEventHandler().HitTestResultAtRect(hit_rect, hit_type, this,
-                                                      true);
+  HitTestLocation location(hit_rect);
+  return frame->GetEventHandler().HitTestResultAtLocation(location, hit_type,
+                                                          this, true);
 }
 
 void LayoutObject::DirtyLinesFromChangedChild(LayoutObject*, MarkingBehavior) {}
@@ -2063,8 +2080,10 @@ void LayoutObject::SetStyle(scoped_refptr<ComputedStyle> style) {
   // call SetNeedsRepaint to cause re-generation of PaintChunks.
   if (!IsText() && (diff.TransformChanged() || diff.OpacityChanged() ||
                     diff.ZIndexChanged() || diff.FilterChanged() ||
-                    diff.BackdropFilterChanged() || diff.CssClipChanged()))
+                    diff.BackdropFilterChanged() || diff.CssClipChanged() ||
+                    diff.BlendModeChanged())) {
     SetNeedsPaintPropertyUpdate();
+  }
 }
 
 void LayoutObject::StyleWillChange(StyleDifference diff,
@@ -3166,6 +3185,9 @@ void LayoutObject::SetNeedsPaintPropertyUpdate() {
   bitfields_.SetNeedsPaintPropertyUpdate(true);
 
   LayoutObject* ancestor = ParentCrossingFrames();
+
+  GetFrameView()->SetNeedsIntersectionObservation(LocalFrameView::kDesired);
+
   while (ancestor && !ancestor->DescendantNeedsPaintPropertyUpdate()) {
     ancestor->bitfields_.SetDescendantNeedsPaintPropertyUpdate(true);
     ancestor = ancestor->ParentCrossingFrames();
@@ -3523,6 +3545,10 @@ bool LayoutObject::WillRenderImage() {
 
   // We will not render a new image when PausableObjects is paused
   if (GetDocument().IsContextPaused())
+    return false;
+
+  // Suspend animations when the page is not visible.
+  if (GetDocument().hidden())
     return false;
 
   // If we're not in a window (i.e., we're dormant from being in a background

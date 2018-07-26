@@ -33,6 +33,7 @@
 #include "content/browser/download/download_manager_impl.h"
 #include "content/browser/indexed_db/indexed_db_context_impl.h"
 #include "content/browser/loader/resource_dispatcher_host_impl.h"
+#include "content/browser/permissions/permission_controller_impl.h"
 #include "content/browser/push_messaging/push_messaging_router.h"
 #include "content/browser/service_manager/common_browser_interfaces.h"
 #include "content/browser/storage_partition_impl_map.h"
@@ -105,6 +106,7 @@ class ContentServiceDelegateHolder : public base::SupportsUserData::Data {
 // Key names on BrowserContext.
 const char kBrowsingDataRemoverKey[] = "browsing-data-remover";
 const char kContentServiceDelegateKey[] = "content-service-delegate";
+const char kPermissionControllerKey[] = "permission-controller";
 const char kDownloadManagerKeyName[] = "download_manager";
 const char kMojoWasInitialized[] = "mojo-was-initialized";
 const char kServiceManagerConnection[] = "service-manager-connection";
@@ -288,6 +290,20 @@ content::BrowsingDataRemover* content::BrowserContext::GetBrowsingDataRemover(
       context->GetUserData(kBrowsingDataRemoverKey));
 }
 
+// static
+content::PermissionController* content::BrowserContext::GetPermissionController(
+    BrowserContext* context) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+
+  if (!context->GetUserData(kPermissionControllerKey)) {
+    context->SetUserData(kPermissionControllerKey,
+                         std::make_unique<PermissionControllerImpl>(context));
+  }
+
+  return static_cast<PermissionControllerImpl*>(
+      context->GetUserData(kPermissionControllerKey));
+}
+
 StoragePartition* BrowserContext::GetStoragePartition(
     BrowserContext* browser_context,
     SiteInstance* site_instance,
@@ -397,6 +413,12 @@ void BrowserContext::NotifyWillBeDestroyed(BrowserContext* browser_context) {
   if (browser_context->was_notify_will_be_destroyed_called_)
     return;
   browser_context->was_notify_will_be_destroyed_called_ = true;
+
+  // Subclasses of BrowserContext may expect there to be no more
+  // RenderProcessHosts using them by the time this function returns. We
+  // therefore explicitly tear down embedded Content Service instances now to
+  // ensure that all their WebContents (and therefore RPHs) are torn down too.
+  browser_context->RemoveUserData(kContentServiceDelegateKey);
 
   // Service Workers must shutdown before the browser context is destroyed,
   // since they keep render process hosts alive and the codebase assumes that
@@ -670,6 +692,11 @@ media::VideoDecodePerfHistory* BrowserContext::GetVideoDecodePerfHistory() {
   }
 
   return decode_history;
+}
+
+download::InProgressDownloadManager*
+BrowserContext::RetriveInProgressDownloadManager() {
+  return nullptr;
 }
 
 }  // namespace content

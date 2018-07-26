@@ -29,6 +29,10 @@
 namespace blink {
 class WebNode;
 class WebView;
+class WebString;
+class WebFormControlElement;
+template <typename T>
+class WebVector;
 }
 
 namespace autofill {
@@ -64,7 +68,7 @@ class AutofillAgent : public content::RenderFrameObserver,
 
   const mojom::AutofillDriverPtr& GetAutofillDriver();
 
-  const mojom::PasswordManagerDriverPtr& GetPasswordManagerDriver();
+  const mojom::PasswordManagerDriverAssociatedPtr& GetPasswordManagerDriver();
 
   // mojom::AutofillAgent:
   void FillForm(int32_t id, const FormData& form) override;
@@ -93,11 +97,6 @@ class AutofillAgent : public content::RenderFrameObserver,
 
   base::WeakPtr<AutofillAgent> GetWeakPtr() {
     return weak_ptr_factory_.GetWeakPtr();
-  }
-
-  // Returns the input element that was last focused.
-  blink::WebInputElement GetLastFocusedInput() const {
-    return last_input_element_;
   }
 
   // FormTracker::Observer
@@ -154,6 +153,10 @@ class AutofillAgent : public content::RenderFrameObserver,
     // Specifies that only show a suggestions box if |element| is part of a
     // password form, otherwise show no suggestions.
     bool show_password_suggestions_only;
+
+    // Specifies that the first suggestion must be auto-selected when the
+    // dropdown is shown. Enabled when the user presses ARROW_DOWN on a field.
+    bool autoselect_first_suggestion;
   };
 
   // content::RenderFrameObserver:
@@ -213,7 +216,8 @@ class AutofillAgent : public content::RenderFrameObserver,
 
   // Queries the browser for Autocomplete and Autofill suggestions for the given
   // |element|.
-  void QueryAutofillSuggestions(const blink::WebFormControlElement& element);
+  void QueryAutofillSuggestions(const blink::WebFormControlElement& element,
+                                bool autoselect_first_suggestion);
 
   // Sets the element value to reflect the selected |suggested_value|.
   void DoAcceptDataListSuggestion(const base::string16& suggested_value);
@@ -266,10 +270,24 @@ class AutofillAgent : public content::RenderFrameObserver,
   // cleared in this method.
   void OnFormNoLongerSubmittable();
 
+  // For no name forms, and unowned elements, try to see if there is a unique
+  // element in the updated form that corresponds to the old |element_|.
+  // Returns false if more than one element matches the |element_|.
+  bool FindTheUniqueNewVersionOfOldElement(
+      blink::WebVector<blink::WebFormControlElement>& elements,
+      bool& element_found,
+      const blink::WebString& original_element_section,
+      const blink::WebFormControlElement& original_element);
+
   // Check whether |element_| was removed or replaced dynamically on the page.
   // If so, looks for the same element in the updated |form| and replaces the
   // |element_| with it if it's found.
   void ReplaceElementIfNowInvalid(const FormData& form);
+
+  // Trigger a refill if needed for dynamic forms. A refill is needed if some
+  // properties of the form (name, number of fields), or fields (name, id,
+  // label, visibility, control type) have changed after an autofill.
+  void TriggerRefillIfNeeded(const FormData& form);
 
   // Formerly cached forms for all frames, now only caches forms for the current
   // frame.
@@ -290,9 +308,6 @@ class AutofillAgent : public content::RenderFrameObserver,
 
   // Last form which was interacted with by the user.
   blink::WebFormElement last_interacted_form_;
-
-  // Last input element the user interacted with.
-  blink::WebInputElement last_input_element_;
 
   // When dealing with forms that don't use a <form> tag, we keep track of the
   // elements the user has modified so we can determine when submission occurs.

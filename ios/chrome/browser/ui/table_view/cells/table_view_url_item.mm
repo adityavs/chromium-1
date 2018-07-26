@@ -7,6 +7,7 @@
 #include "base/mac/foundation_util.h"
 #include "base/strings/sys_string_conversions.h"
 #import "ios/chrome/browser/ui/table_view/cells/table_view_cells_constants.h"
+#import "ios/chrome/browser/ui/table_view/cells/table_view_url_cell_favicon_badge_view.h"
 #import "ios/chrome/browser/ui/table_view/chrome_table_view_styler.h"
 #include "ios/chrome/browser/ui/ui_util.h"
 #import "ios/chrome/browser/ui/uikit_ui_util.h"
@@ -32,27 +33,6 @@ const char kDefaultSupplementalURLTextDelimiter[] = "•";
 
 #pragma mark - TableViewURLCellFaviconBadgeView
 
-// View used to display the favicon badge image.  This class automatically
-// updates |hidden| to YES when its |image| is set to nil, rather than the
-// default UIImageView behavior which applies a default highlight to the view
-// for nil images.
-@interface TableViewURLCellFaviconBadgeView : UIImageView
-@end
-
-@implementation TableViewURLCellFaviconBadgeView
-
-- (instancetype)init {
-  if (self = [super init])
-    self.hidden = YES;
-  return self;
-}
-
-- (void)setImage:(UIImage*)image {
-  [super setImage:image];
-  self.hidden = !image;
-}
-
-@end
 
 #pragma mark - TableViewURLItem
 
@@ -136,6 +116,14 @@ const char kDefaultSupplementalURLTextDelimiter[] = "•";
 
 #pragma mark - TableViewURLCell
 
+@interface TableViewURLCell ()
+// If the cell's accessibility label has not been manually set via
+// |-setAccessibilityLabel:|, this property will be YES, and
+// |-accessibilityLabel| will return a lazily created label based on the
+// text values of the UILabel subviews.
+@property(nonatomic, assign) BOOL shouldGenerateAccessibilityLabel;
+@end
+
 @implementation TableViewURLCell
 @synthesize faviconView = _faviconView;
 @synthesize faviconContainerView = _faviconContainerView;
@@ -144,6 +132,8 @@ const char kDefaultSupplementalURLTextDelimiter[] = "•";
 @synthesize titleLabel = _titleLabel;
 @synthesize URLLabel = _URLLabel;
 @synthesize cellUniqueIdentifier = _cellUniqueIdentifier;
+@synthesize shouldGenerateAccessibilityLabel =
+    _shouldGenerateAccessibilityLabel;
 
 - (instancetype)initWithStyle:(UITableViewCellStyle)style
               reuseIdentifier:(NSString*)reuseIdentifier {
@@ -252,18 +242,27 @@ const char kDefaultSupplementalURLTextDelimiter[] = "•";
   self.faviconBadgeView.image = nil;
 }
 
+- (void)setAccessibilityLabel:(NSString*)accessibilityLabel {
+  self.shouldGenerateAccessibilityLabel = !accessibilityLabel.length;
+  [super setAccessibilityLabel:accessibilityLabel];
+}
+
 - (NSString*)accessibilityLabel {
-  NSString* accessibilityLabel = self.titleLabel.text;
-  if (self.URLLabel.text.length > 0) {
-    accessibilityLabel = [NSString
-        stringWithFormat:@"%@, %@", accessibilityLabel, self.URLLabel.text];
+  if (self.shouldGenerateAccessibilityLabel) {
+    NSString* accessibilityLabel = self.titleLabel.text;
+    if (self.URLLabel.text.length > 0) {
+      accessibilityLabel = [NSString
+          stringWithFormat:@"%@, %@", accessibilityLabel, self.URLLabel.text];
+    }
+    if (self.metadataLabel.text.length > 0) {
+      accessibilityLabel =
+          [NSString stringWithFormat:@"%@, %@", accessibilityLabel,
+                                     self.metadataLabel.text];
+    }
+    return accessibilityLabel;
+  } else {
+    return [super accessibilityLabel];
   }
-  if (self.metadataLabel.text.length > 0) {
-    accessibilityLabel =
-        [NSString stringWithFormat:@"%@, %@", accessibilityLabel,
-                                   self.metadataLabel.text];
-  }
-  return accessibilityLabel;
 }
 
 - (NSString*)accessibilityIdentifier {

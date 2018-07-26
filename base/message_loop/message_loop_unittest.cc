@@ -23,7 +23,9 @@
 #include "base/single_thread_task_runner.h"
 #include "base/synchronization/waitable_event.h"
 #include "base/task_scheduler/task_scheduler.h"
+#include "base/test/bind_test_util.h"
 #include "base/test/gtest_util.h"
+#include "base/test/metrics/histogram_tester.h"
 #include "base/test/test_simple_task_runner.h"
 #include "base/test/test_timeouts.h"
 #include "base/threading/platform_thread.h"
@@ -1627,6 +1629,8 @@ TEST_P(MessageLoopTypedTest, RunLoopQuitOrderAfter) {
   ThreadTaskRunnerHandle::Get()->PostTask(FROM_HERE,
                                           BindOnce(&FuncThatQuitsNow));
 
+  run_loop.allow_quit_current_deprecated_ = true;
+
   RunLoop outer_run_loop;
   outer_run_loop.Run();
 
@@ -1756,6 +1760,63 @@ TEST_P(MessageLoopTypedTest, NestableTasksAllowedManually) {
   run_loop.Run();
 }
 
+#if defined(OS_MACOSX)
+// This metric is a bit broken on Mac OS because CFRunLoop doesn't
+// deterministically invoke MessageLoop::DoIdleWork(). This being a temporary
+// diagnosis metric, we let this fly and simply not test it on Mac.
+#define MAYBE_MetricsOnlyFromUILoops DISABLED_MetricsOnlyFromUILoops
+#else
+#define MAYBE_MetricsOnlyFromUILoops MetricsOnlyFromUILoops
+#endif
+
+TEST_P(MessageLoopTypedTest, MAYBE_MetricsOnlyFromUILoops) {
+  MessageLoop loop(GetMessageLoopType());
+
+  const bool histograms_expected = GetMessageLoopType() == MessageLoop::TYPE_UI;
+
+  HistogramTester histogram_tester;
+
+  // A delay which is expected to give enough time for the MessageLoop to go
+  // idle after triaging it.
+  TimeDelta delay_that_leads_to_idle = TimeDelta::FromMilliseconds(1);
+
+  // On some platforms testing under emulation, 1 ms is not enough. See how long
+  // it takes to resolve a 1ms delayed task and use 10X that for the real test.
+  {
+    TimeTicks begin_run_loop = TimeTicks::Now();
+
+    RunLoop run_loop;
+    loop.task_runner()->PostDelayedTask(FROM_HERE, run_loop.QuitClosure(),
+                                        delay_that_leads_to_idle);
+    run_loop.Run();
+
+    delay_that_leads_to_idle = 10 * (TimeTicks::Now() - begin_run_loop);
+  }
+
+  SCOPED_TRACE(delay_that_leads_to_idle);
+
+  // Loop that goes idle with one pending task.
+  RunLoop run_loop;
+  loop.task_runner()->PostDelayedTask(FROM_HERE, run_loop.QuitClosure(),
+                                      delay_that_leads_to_idle);
+  run_loop.Run();
+
+  const std::vector<Bucket> buckets = histogram_tester.GetAllSamples(
+      "MessageLoop.DelayedTaskQueueForUI.PendingTasksCountOnIdle");
+  if (histograms_expected) {
+    // DoIdleWork() should have triggered at least once in the second RunLoop.
+    // It may also have triggered in the first one if the test environment is
+    // fast enough. It can sometimes also trigger additional times when a system
+    // message (e.g. system ping) interrupts the sleep. All cases should
+    // nonetheless report in the "1" bucket.
+    EXPECT_EQ(buckets.size(), 1U);
+    EXPECT_EQ(buckets[0].min, 1);
+    EXPECT_GE(buckets[0].count, 1);
+  } else {
+    EXPECT_TRUE(buckets.empty());
+  }
+}
+
 INSTANTIATE_TEST_CASE_P(
     ,
     MessageLoopTypedTest,
@@ -1785,13 +1846,14 @@ INSTANTIATE_TEST_CASE_P(
 // Run()ning explicitly, via QuitClosure() etc (see https://crbug.com/720078)
 TEST_P(MessageLoopTest, WmQuitIsIgnored) {
   MessageLoop loop(MessageLoop::TYPE_UI);
-  RunLoop run_loop;
+
   // Post a WM_QUIT message to the current thread.
   ::PostQuitMessage(0);
 
   // Post a task to the current thread, with a small delay to make it less
   // likely that we process the posted task before looking for WM_* messages.
   bool task_was_run = false;
+  RunLoop run_loop;
   loop.task_runner()->PostDelayedTask(
       FROM_HERE,
       BindOnce(
@@ -1805,6 +1867,29 @@ TEST_P(MessageLoopTest, WmQuitIsIgnored) {
   // Run the loop, and ensure that the posted task is processed before we quit.
   run_loop.Run();
   EXPECT_TRUE(task_was_run);
+}
+
+TEST_P(MessageLoopTest, WmQuitIsNotIgnoredWithEnableWmQuit) {
+  MessageLoop loop(MessageLoop::TYPE_UI);
+  static_cast<MessageLoopForUI*>(&loop)->EnableWmQuit();
+
+  // Post a WM_QUIT message to the current thread.
+  ::PostQuitMessage(0);
+
+  // Post a task to the current thread, with a small delay to make it less
+  // likely that we process the posted task before looking for WM_* messages.
+  RunLoop run_loop;
+  loop.task_runner()->PostDelayedTask(FROM_HERE,
+                                      BindOnce(
+                                          [](OnceClosure closure) {
+                                            ADD_FAILURE();
+                                            std::move(closure).Run();
+                                          },
+                                          run_loop.QuitClosure()),
+                                      TestTimeouts::tiny_timeout());
+
+  // Run the loop. It should not result in ADD_FAILURE() getting called.
+  run_loop.Run();
 }
 
 TEST_P(MessageLoopTest, PostDelayedTask_SharedTimer_SubPump) {
@@ -2181,6 +2266,13 @@ TEST_P(MessageLoopTest, SequenceLocalStorageDifferentMessageLoops) {
   EXPECT_NE(slot.Get(), 11);
 }
 
+INSTANTIATE_TEST_CASE_P(
+    ,
+    MessageLoopTest,
+    ::testing::Values(TaskSchedulerAvailability::NO_TASK_SCHEDULER,
+                      TaskSchedulerAvailability::WITH_TASK_SCHEDULER),
+    MessageLoopTest::ParamInfoToString);
+
 namespace {
 
 class PostTaskOnDestroy {
@@ -2210,7 +2302,7 @@ class PostTaskOnDestroy {
 //  1) Not getting stuck clearing its task queue.
 //  2) DCHECKing when clearing pending tasks many times still doesn't yield an
 //     empty queue.
-TEST_P(MessageLoopTest, ExpectDeathWithStubbornPostTaskOnDestroy) {
+TEST(MessageLoopDestructionTest, ExpectDeathWithStubbornPostTaskOnDestroy) {
   std::unique_ptr<MessageLoop> loop = std::make_unique<MessageLoop>();
 
   EXPECT_DCHECK_DEATH({
@@ -2219,18 +2311,11 @@ TEST_P(MessageLoopTest, ExpectDeathWithStubbornPostTaskOnDestroy) {
   });
 }
 
-TEST_P(MessageLoopTest, DestroysFineWithReasonablePostTaskOnDestroy) {
+TEST(MessageLoopDestructionTest, DestroysFineWithReasonablePostTaskOnDestroy) {
   std::unique_ptr<MessageLoop> loop = std::make_unique<MessageLoop>();
 
   PostTaskOnDestroy::PostTaskWithPostingDestructor(10);
   loop.reset();
 }
-
-INSTANTIATE_TEST_CASE_P(
-    ,
-    MessageLoopTest,
-    ::testing::Values(TaskSchedulerAvailability::NO_TASK_SCHEDULER,
-                      TaskSchedulerAvailability::WITH_TASK_SCHEDULER),
-    MessageLoopTest::ParamInfoToString);
 
 }  // namespace base

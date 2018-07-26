@@ -35,7 +35,7 @@
 #include "mojo/public/cpp/bindings/binding.h"
 #include "third_party/blink/public/platform/modules/permissions/permission.mojom-blink.h"
 #include "third_party/blink/public/platform/modules/permissions/permission_status.mojom-blink.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache_base.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache_base.h"
 #include "third_party/blink/renderer/core/dom/context_lifecycle_observer.h"
 #include "third_party/blink/renderer/modules/accessibility/ax_object.h"
 #include "third_party/blink/renderer/modules/modules_export.h"
@@ -65,6 +65,7 @@ class MODULES_EXPORT AXObjectCacheImpl
     kAXChildrenChanged,
     kAXClicked,
     kAXDocumentSelectionChanged,
+    kAXDocumentTitleChanged,
     kAXExpandedChanged,
     kAXFocusedUIElementChanged,
     kAXHide,
@@ -129,6 +130,7 @@ class MODULES_EXPORT AXObjectCacheImpl
   // changed.
   void TextChanged(LayoutObject*) override;
   void TextChanged(AXObject*, Node* optional_node = nullptr);
+  void DocumentTitleChanged() override;
   // Called when a node has just been attached, so we can make sure we have the
   // right subclass of AXObject.
   void UpdateCacheAfterNodeIsAttached(Node*) override;
@@ -150,6 +152,8 @@ class MODULES_EXPORT AXObjectCacheImpl
   void HandleLoadComplete(Document*) override;
   void HandleLayoutComplete(Document*) override;
   void HandleClicked(Node*) override;
+  void HandleAttributeChanged(const QualifiedName& attr_name,
+                              AccessibleNode*) override;
 
   void SetCanvasObjectBounds(HTMLCanvasElement*,
                              Element*,

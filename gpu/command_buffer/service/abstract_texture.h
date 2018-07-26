@@ -5,6 +5,7 @@
 #ifndef GPU_COMMAND_BUFFER_SERVICE_ABSTRACT_TEXTURE_H_
 #define GPU_COMMAND_BUFFER_SERVICE_ABSTRACT_TEXTURE_H_
 
+#include "base/callback.h"
 #include "gpu/command_buffer/service/texture_base.h"
 #include "gpu/gpu_gles2_export.h"
 
@@ -41,6 +42,8 @@ class GLStreamTextureImage;
 // texture will be cleaned up properly, as needed.
 class GPU_GLES2_EXPORT AbstractTexture {
  public:
+  using CleanupCallback = base::OnceCallback<void(AbstractTexture*)>;
+
   // The texture is guaranteed to be around while |this| exists, as long as
   // the decoder isn't destroyed / context isn't lost.
   virtual ~AbstractTexture() = default;
@@ -57,6 +60,10 @@ class GPU_GLES2_EXPORT AbstractTexture {
   // guarantee that CopyTexImage() is called before drawing, so that |image|
   // may update the stream texture.  This will do nothing if the texture has
   // been destroyed.
+  //
+  // It is not required to SetCleared() if one binds an image.
+  //
+  // The context must be current.
   virtual void BindStreamTextureImage(GLStreamTextureImage* image,
                                       GLuint service_id) = 0;
 
@@ -64,7 +71,34 @@ class GPU_GLES2_EXPORT AbstractTexture {
   // the decoder does not call GLImage::Copy/Bind.  Further, the decoder
   // guarantees that ScheduleOverlayPlane will be called if the texture is ever
   // promoted to an overlay.
+  //
+  // It is not required to SetCleared() if one binds an image.
+  //
+  // The context must be current.
   virtual void BindImage(gl::GLImage* image, bool client_managed) = 0;
+
+  // Unbind and release any image bound to this texture, and return it to an
+  // uncleared state.
+  //
+  // The context must be current.
+  virtual void ReleaseImage() = 0;
+
+  // Return the image, if any.
+  virtual gl::GLImage* GetImage() const = 0;
+
+  // Marks the texture as cleared, to help prevent sending an uninitialized
+  // texture to the (untrusted) renderer.  One should call this only when one
+  // has actually initialized the texture.
+  virtual void SetCleared() = 0;
+
+  // Set a callback that will be called when the AbstractTexture is going to
+  // drop its reference to the underlying TextureBase.  We can't guarantee that
+  // the TextureBase will be destroyed, but it is the last time that we can
+  // guarantee that it won't be.  Typically, this callback will happen when the
+  // AbstractTexture is destroyed, or when our stub is destroyed.  Do not change
+  // the current context during this callback.  Also, do not assume that one
+  // has a current context.
+  virtual void SetCleanupCallback(CleanupCallback cleanup_callback) = 0;
 
   unsigned int service_id() const { return GetTextureBase()->service_id(); }
 };

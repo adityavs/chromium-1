@@ -19,9 +19,9 @@ namespace base {
 namespace sequence_manager {
 
 class SequenceManager;
-class TaskQueueManagerImpl;
 
 namespace internal {
+class SequenceManagerImpl;
 class TaskQueueImpl;
 }  // namespace internal
 
@@ -32,7 +32,7 @@ class TaskQueueImpl;
 // TaskQueue maintains its own next wake-up time and communicates it
 // to the TimeDomain, which aggregates wake-ups across registered TaskQueues
 // into a global wake-up, which ultimately gets passed to the ThreadController.
-class PLATFORM_EXPORT TimeDomain {
+class BASE_EXPORT TimeDomain {
  public:
   virtual ~TimeDomain();
 
@@ -84,12 +84,13 @@ class PLATFORM_EXPORT TimeDomain {
 
  private:
   friend class internal::TaskQueueImpl;
-  friend class TaskQueueManagerImpl;
+  friend class internal::SequenceManagerImpl;
   friend class TestTimeDomain;
 
   // Called when the TimeDomain is registered.
   // TODO(kraynov): Pass SequenceManager in the constructor.
-  void OnRegisterWithSequenceManager(TaskQueueManagerImpl* sequence_manager);
+  void OnRegisterWithSequenceManager(
+      internal::SequenceManagerImpl* sequence_manager);
 
   // Schedule TaskQueue to wake up at certain time, repeating calls with
   // the same |queue| invalidate previous requests.
@@ -125,7 +126,7 @@ class PLATFORM_EXPORT TimeDomain {
     }
   };
 
-  TaskQueueManagerImpl* sequence_manager_;  // Not owned.
+  internal::SequenceManagerImpl* sequence_manager_;  // Not owned.
   internal::IntrusiveHeap<ScheduledDelayedWakeUp> delayed_wake_up_queue_;
 
   ThreadChecker main_thread_checker_;

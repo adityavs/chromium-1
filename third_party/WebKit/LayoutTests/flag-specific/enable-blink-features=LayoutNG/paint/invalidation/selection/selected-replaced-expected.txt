@@ -18,26 +18,6 @@
       "backgroundColor": "#FFFFFF",
       "paintInvalidations": [
         {
-          "object": "NGPaintFragment",
-          "rect": [369, 16, 418, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [369, 16, 418, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [60, 16, 305, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [60, 16, 305, 19],
-          "reason": "disappeared"
-        },
-        {
           "object": "LayoutImage (relative positioned) IMG id='test' class='moved'",
           "rect": [8, 132, 214, 232],
           "reason": "subtree"
@@ -46,53 +26,13 @@
           "object": "LayoutImage (relative positioned) IMG id='test' class='moved'",
           "rect": [8, 52, 214, 232],
           "reason": "subtree"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 16, 52, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [8, 16, 52, 19],
-          "reason": "disappeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [365, 16, 4, 19],
-          "reason": "appeared"
-        },
-        {
-          "object": "NGPaintFragment",
-          "rect": [365, 16, 4, 19],
-          "reason": "disappeared"
         }
       ]
     }
   ],
   "objectPaintInvalidations": [
     {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
-      "reason": "subtree"
-    },
-    {
-      "object": "NGPaintFragment",
+      "object": "NGPhysicalBoxFragment LayoutNGBlockFlow (anonymous)",
       "reason": "subtree"
     },
     {

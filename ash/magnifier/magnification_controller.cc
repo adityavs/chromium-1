@@ -372,7 +372,7 @@ void MagnificationController::OnImplicitAnimationsCompleted() {
         aura::client::GetCursorClient(root_window_);
     if (cursor_client)
       cursor_client->EnableMouseEvents();
-    else if (Shell::GetAshConfig() == Config::MASH)
+    else if (Shell::GetAshConfig() == Config::MASH_DEPRECATED)
       ShellPort::Get()->SetCursorTouchVisible(true);
   }
 
@@ -515,21 +515,24 @@ ui::EventRewriteStatus MagnificationController::RewriteEvent(
     // cancells existing touches.
     consume_touch_event_ = true;
 
-    auto it = press_event_map_.begin();
+    for (const auto& it : press_event_map_) {
+      ui::TouchEvent touch_cancel_event(ui::ET_TOUCH_CANCELLED, gfx::Point(),
+                                        touch_event->time_stamp(),
+                                        it.second->pointer_details());
+      touch_cancel_event.set_location_f(it.second->location_f());
+      touch_cancel_event.set_root_location_f(it.second->root_location_f());
+      touch_cancel_event.set_flags(it.second->flags());
 
-    std::unique_ptr<ui::TouchEvent> rewritten_touch_event =
-        std::make_unique<ui::TouchEvent>(ui::ET_TOUCH_CANCELLED, gfx::Point(),
-                                         touch_event->time_stamp(),
-                                         it->second->pointer_details());
-    rewritten_touch_event->set_location_f(it->second->location_f());
-    rewritten_touch_event->set_root_location_f(it->second->root_location_f());
-    rewritten_touch_event->set_flags(it->second->flags());
-    *rewritten_event = std::move(rewritten_touch_event);
-
-    // The other event is cancelled in NextDispatchEvent.
-    press_event_map_.erase(it);
-
-    return ui::EVENT_REWRITE_DISPATCH_ANOTHER;
+      // TouchExplorationController is watching event stream and managing its
+      // internal state. If an event rewriter (MagnificationController) rewrites
+      // event stream, the next event rewriter won't get the event, which makes
+      // TouchExplorationController confused. Send cancelled event for recorded
+      // touch events to the next event rewriter here instead of rewriting an
+      // event in the stream.
+      SendEventToEventSource(root_window_->GetHost()->GetEventSource(),
+                             &touch_cancel_event);
+    }
+    press_event_map_.clear();
   }
 
   bool discard = consume_touch_event_;
@@ -558,23 +561,8 @@ ui::EventRewriteStatus MagnificationController::RewriteEvent(
 ui::EventRewriteStatus MagnificationController::NextDispatchEvent(
     const ui::Event& last_event,
     std::unique_ptr<ui::Event>* new_event) {
-  DCHECK_EQ(1u, press_event_map_.size());
-
-  auto it = press_event_map_.begin();
-
-  std::unique_ptr<ui::TouchEvent> event = std::make_unique<ui::TouchEvent>(
-      ui::ET_TOUCH_CANCELLED, gfx::Point(), last_event.time_stamp(),
-      it->second->pointer_details());
-  event->set_location_f(it->second->location_f());
-  event->set_root_location_f(it->second->root_location_f());
-  event->set_flags(it->second->flags());
-  *new_event = std::move(event);
-
-  press_event_map_.erase(it);
-
-  DCHECK_EQ(0u, press_event_map_.size());
-
-  return ui::EVENT_REWRITE_REWRITTEN;
+  NOTREACHED();
+  return ui::EVENT_REWRITE_CONTINUE;
 }
 
 bool MagnificationController::Redraw(const gfx::PointF& position,
@@ -727,7 +715,7 @@ void MagnificationController::OnMouseMove(const gfx::Point& location) {
   bool reduce_bottom_margin = false;
   if (keyboard::KeyboardController::Get()->enabled()) {
     reduce_bottom_margin =
-        keyboard::KeyboardController::Get()->keyboard_visible();
+        keyboard::KeyboardController::Get()->IsKeyboardVisible();
   }
 
   MoveMagnifierWindowFollowPoint(mouse, margin, margin, margin, margin,
@@ -746,7 +734,7 @@ void MagnificationController::AfterAnimationMoveCursorTo(
     if (!cursor_client->IsCursorVisible())
       return;
     cursor_client->DisableMouseEvents();
-  } else if (Shell::GetAshConfig() == Config::MASH) {
+  } else if (Shell::GetAshConfig() == Config::MASH_DEPRECATED) {
     ShellPort::Get()->SetCursorTouchVisible(false);
   }
   move_cursor_after_animation_ = true;
@@ -928,7 +916,7 @@ void MagnificationController::MoveMagnifierWindowCenterPoint(
   // Reduce the viewport bounds if the keyboard is up.
   if (keyboard::KeyboardController::Get()->enabled()) {
     gfx::Rect keyboard_rect = keyboard::KeyboardController::Get()
-                                  ->GetContentsWindow()
+                                  ->GetKeyboardWindow()
                                   ->GetBoundsInScreen();
     window_rect.set_height(window_rect.height() -
                            keyboard_rect.height() / scale_);

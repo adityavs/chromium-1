@@ -31,7 +31,6 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
-#include "content/public/common/presentation_connection_message.h"
 
 #define DVLOG_WITH_INSTANCE(level) \
   DVLOG(level) << "MR #" << instance_id_ << ": "
@@ -811,7 +810,7 @@ void MediaRouterMojoImpl::DetachRouteController(
 
 void MediaRouterMojoImpl::OnRouteMessagesReceived(
     const std::string& route_id,
-    const std::vector<content::PresentationConnectionMessage>& messages) {
+    std::vector<mojom::RouteMessagePtr> messages) {
   DVLOG_WITH_INSTANCE(1) << "OnRouteMessagesReceived";
 
   if (messages.empty())
@@ -821,8 +820,16 @@ void MediaRouterMojoImpl::OnRouteMessagesReceived(
   if (it == message_observers_.end())
     return;
 
-  for (auto& observer : *it->second)
-    observer.OnMessagesReceived(messages);
+  for (auto& observer : *it->second) {
+    // TODO(mfoltz): We have to clone the messages here in case there are
+    // multiple observers.  This can be removed once we stop passing messages
+    // through the MR and use the PresentationConnectionPtr directly.
+    std::vector<mojom::RouteMessagePtr> messages_copy;
+    for (auto& message : messages)
+      messages_copy.emplace_back(message->Clone());
+
+    observer.OnMessagesReceived(std::move(messages_copy));
+  }
 }
 
 void MediaRouterMojoImpl::OnSinkAvailabilityUpdated(

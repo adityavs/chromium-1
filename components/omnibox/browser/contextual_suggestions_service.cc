@@ -35,15 +35,12 @@ const char kDefaultExperimentalServerAddress[] =
 
 void AddVariationHeaders(network::ResourceRequest* request) {
   // Add Chrome experiment state to the request headers.
-  // Note: It's OK to pass SignedIn::kNo if it's unknown, as it does not affect
-  // transmission of experiments coming from the variations server.
   //
   // Note: It's OK to pass InIncognito::kNo since we are expected to be in
   // non-incognito state here (i.e. contextual sugestions are not served in
   // incognito mode).
-  variations::AppendVariationHeaders(request->url, variations::InIncognito::kNo,
-                                     variations::SignedIn::kNo,
-                                     &request->headers);
+  variations::AppendVariationHeadersUnknownSignedIn(
+      request->url, variations::InIncognito::kNo, &request->headers);
 }
 
 // Returns API request body. The final result depends on the following input
@@ -306,8 +303,8 @@ void ContextualSuggestionsService::CreateExperimentalRequest(
   // Create the oauth2 token fetcher.
   const OAuth2TokenService::ScopeSet scopes{
       "https://www.googleapis.com/auth/cusco-chrome-extension"};
-  token_fetcher_ = identity_manager_->CreateAccessTokenFetcherForPrimaryAccount(
-      "contextual_suggestions_service", scopes,
+  token_fetcher_ = std::make_unique<identity::PrimaryAccountAccessTokenFetcher>(
+      "contextual_suggestions_service", identity_manager_, scopes,
       base::BindOnce(&ContextualSuggestionsService::AccessTokenAvailable,
                      base::Unretained(this), std::move(request),
                      std::move(request_body), traffic_annotation,
@@ -322,16 +319,17 @@ void ContextualSuggestionsService::AccessTokenAvailable(
     StartCallback start_callback,
     CompletionCallback completion_callback,
     GoogleServiceAuthError error,
-    std::string access_token) {
+    identity::AccessTokenInfo access_token_info) {
   DCHECK(token_fetcher_);
   token_fetcher_.reset();
 
   // If there were no errors obtaining the access token, append it to the
   // request as a header.
   if (error.state() == GoogleServiceAuthError::NONE) {
-    DCHECK(!access_token.empty());
+    DCHECK(!access_token_info.token.empty());
     request->headers.SetHeader(
-        "Authorization", base::StringPrintf("Bearer %s", access_token.c_str()));
+        "Authorization",
+        base::StringPrintf("Bearer %s", access_token_info.token.c_str()));
   }
 
   StartDownloadAndTransferLoader(std::move(request), std::move(request_body),

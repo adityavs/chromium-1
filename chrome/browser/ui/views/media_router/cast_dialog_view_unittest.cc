@@ -11,6 +11,7 @@
 
 #include "base/run_loop.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/media_router/cast_dialog_controller.h"
 #include "chrome/browser/ui/media_router/cast_dialog_model.h"
@@ -23,8 +24,10 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "ui/base/l10n/l10n_util.h"
 #include "ui/events/base_event_utils.h"
+#include "ui/views/bubble/bubble_border.h"
 #include "ui/views/controls/scroll_view.h"
 #include "ui/views/widget/widget.h"
+#include "ui/views/window/dialog_client_view.h"
 
 using testing::_;
 using testing::Invoke;
@@ -100,8 +103,9 @@ class CastDialogViewTest : public ChromeViewsTestBase {
             WithArg<0>(Invoke([this](CastDialogController::Observer* observer) {
               dialog_ = static_cast<CastDialogView*>(observer);
             })));
-    CastDialogView::ShowDialog(anchor_widget_->GetContentsView(), &controller_,
-                               nullptr);
+    CastDialogView::ShowDialog(anchor_widget_->GetContentsView(),
+                               views::BubbleBorder::TOP_RIGHT, &controller_,
+                               nullptr, base::Time::Now());
 
     dialog_->OnModelUpdated(model);
   }
@@ -130,6 +134,10 @@ class CastDialogViewTest : public ChromeViewsTestBase {
     return dialog_->sources_menu_runner_for_test();
   }
 
+  views::LabelButton* main_button() {
+    return dialog_->GetDialogClientView()->ok_button();
+  }
+
   content::TestBrowserThreadBundle test_thread_bundle_;
   std::unique_ptr<views::Widget> anchor_widget_;
   MockCastDialogController controller_;
@@ -147,8 +155,9 @@ TEST_F(CastDialogViewTest, MAYBE_ShowAndHideDialog) {
   EXPECT_EQ(nullptr, CastDialogView::GetCurrentDialogWidget());
 
   EXPECT_CALL(controller_, AddObserver(_));
-  CastDialogView::ShowDialog(anchor_widget_->GetContentsView(), &controller_,
-                             nullptr);
+  CastDialogView::ShowDialog(anchor_widget_->GetContentsView(),
+                             views::BubbleBorder::TOP_RIGHT, &controller_,
+                             nullptr, base::Time::Now());
   base::RunLoop().RunUntilIdle();
   EXPECT_TRUE(CastDialogView::IsShowing());
   EXPECT_NE(nullptr, CastDialogView::GetCurrentDialogWidget());
@@ -286,6 +295,50 @@ TEST_F(CastDialogViewTest, ShowNoDeviceView) {
   // The scroll view should be shown when there are sinks.
   EXPECT_FALSE(no_sinks_view());
   EXPECT_TRUE(scroll_view()->visible());
+}
+
+TEST_F(CastDialogViewTest, SwitchToNoDeviceView) {
+  // Start with one sink. The main button should be enabled.
+  CastDialogModel model = CreateModelWithSinks({CreateAvailableSink()});
+  InitializeDialogWithModel(model);
+  EXPECT_TRUE(dialog_->GetDialogClientView()->ok_button()->enabled());
+
+  // Remove the sink. The no-device view should be shown, and the main button
+  // should be disabled.
+  model.set_media_sinks({});
+  dialog_->OnModelUpdated(model);
+  EXPECT_TRUE(no_sinks_view()->visible());
+  EXPECT_FALSE(scroll_view());
+  EXPECT_FALSE(dialog_->GetDialogClientView()->ok_button()->enabled());
+}
+
+TEST_F(CastDialogViewTest, ReenableStopButtonWithUpdate) {
+  std::vector<UIMediaSink> media_sinks = {CreateConnectedSink()};
+  media_sinks[0].state = UIMediaSinkState::DISCONNECTING;
+  CastDialogModel model = CreateModelWithSinks(media_sinks);
+  InitializeDialogWithModel(model);
+  // The main button should be disabled while the sink is disconnecting.
+  EXPECT_FALSE(main_button()->enabled());
+
+  // Updating the model should re-enable the main button.
+  media_sinks[0].state = UIMediaSinkState::AVAILABLE;
+  media_sinks[0].route_id = "";
+  model.set_media_sinks(std::move(media_sinks));
+  dialog_->OnModelUpdated(model);
+  EXPECT_TRUE(main_button()->enabled());
+}
+
+TEST_F(CastDialogViewTest, ReenableStopButtonWithSinkSelection) {
+  std::vector<UIMediaSink> media_sinks = {CreateConnectedSink(),
+                                          CreateAvailableSink()};
+  media_sinks[0].state = UIMediaSinkState::DISCONNECTING;
+  InitializeDialogWithModel(CreateModelWithSinks(media_sinks));
+  // The main button should be disabled while the sink is disconnecting.
+  EXPECT_FALSE(main_button()->enabled());
+
+  // Selecting another sink should re-enable the main button.
+  SelectSinkAtIndex(1);
+  EXPECT_TRUE(main_button()->enabled());
 }
 
 }  // namespace media_router

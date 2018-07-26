@@ -45,6 +45,7 @@
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/frame/local_frame_view.h"
 #include "third_party/blink/renderer/core/frame/settings.h"
+#include "third_party/blink/renderer/core/frame/viewport_data.h"
 #include "third_party/blink/renderer/core/html/forms/html_input_element.h"
 #include "third_party/blink/renderer/core/html/html_head_element.h"
 #include "third_party/blink/renderer/core/html/html_link_element.h"
@@ -1066,7 +1067,7 @@ class ViewportFitDocumentTest : public DocumentTest {
   }
 
   mojom::ViewportFit GetViewportFit() const {
-    return GetDocument().GetCurrentViewportFitForTests();
+    return GetDocument().GetViewportData().GetCurrentViewportFitForTests();
   }
 };
 
@@ -1099,15 +1100,15 @@ TEST_F(ViewportFitDocumentTest, ForceExpandIntoCutout) {
   EXPECT_EQ(mojom::ViewportFit::kContain, GetViewportFit());
 
   // Now override the viewport fit value and expect it to be kCover.
-  GetDocument().SetExpandIntoDisplayCutout(true);
-  EXPECT_EQ(mojom::ViewportFit::kCover, GetViewportFit());
+  GetDocument().GetViewportData().SetExpandIntoDisplayCutout(true);
+  EXPECT_EQ(mojom::ViewportFit::kCoverForcedByUserAgent, GetViewportFit());
 
   // Test that even if we change the value we ignore it.
   SetHtmlInnerHTML("<meta name='viewport' content='viewport-fit=auto'>");
-  EXPECT_EQ(mojom::ViewportFit::kCover, GetViewportFit());
+  EXPECT_EQ(mojom::ViewportFit::kCoverForcedByUserAgent, GetViewportFit());
 
   // Now remove the override and check that it went back to the previous value.
-  GetDocument().SetExpandIntoDisplayCutout(false);
+  GetDocument().GetViewportData().SetExpandIntoDisplayCutout(false);
   EXPECT_EQ(mojom::ViewportFit::kAuto, GetViewportFit());
 }
 

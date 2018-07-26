@@ -34,6 +34,7 @@
 #include "third_party/blink/renderer/core/dom/element_traversal.h"
 #include "third_party/blink/renderer/core/dom/events/event_path.h"
 #include "third_party/blink/renderer/core/dom/id_target_observer_registry.h"
+#include "third_party/blink/renderer/core/dom/node_child_removal_tracker.h"
 #include "third_party/blink/renderer/core/dom/node_computed_style.h"
 #include "third_party/blink/renderer/core/dom/shadow_root.h"
 #include "third_party/blink/renderer/core/dom/tree_scope_adopter.h"
@@ -115,7 +116,13 @@ Element* TreeScope::getElementById(const AtomicString& element_id) const {
     return nullptr;
   if (!elements_by_id_)
     return nullptr;
-  return elements_by_id_->GetElementById(element_id, *this);
+  Element* element = elements_by_id_->GetElementById(element_id, *this);
+  if (element && &RootNode() == &GetDocument() &&
+      GetDocument().InDOMNodeRemovedHandler()) {
+    if (NodeChildRemovalTracker::IsBeingRemoved(element))
+      GetDocument().CountDetachingNodeAccessInDOMNodeRemovedHandler();
+  }
+  return element;
 }
 
 const HeapVector<Member<Element>>& TreeScope::GetAllElementsById(
@@ -223,8 +230,9 @@ HitTestResult HitTestInDocument(Document* document,
   if (!PointInFrameContentIfVisible(*document, hit_point))
     return HitTestResult();
 
-  HitTestResult result(request, LayoutPoint(hit_point));
-  document->GetLayoutView()->HitTest(result);
+  HitTestLocation location(hit_point);
+  HitTestResult result(request, location);
+  document->GetLayoutView()->HitTest(location, result);
   return result;
 }
 
@@ -278,8 +286,8 @@ static bool ShouldAcceptNonElementNode(const Node& node) {
 
 HeapVector<Member<Element>> TreeScope::ElementsFromHitTestResult(
     HitTestResult& result) const {
+  DCHECK(RootNode().isConnected());
   HeapVector<Member<Element>> elements;
-
   Node* last_node = nullptr;
   for (const auto rect_based_node : result.ListBasedTestResult()) {
     Node* node = rect_based_node.Get();
@@ -296,14 +304,10 @@ HeapVector<Member<Element>> TreeScope::ElementsFromHitTestResult(
       last_node = node;
     }
   }
-
-  if (RootNode().IsDocumentNode()) {
-    if (Element* root_element = ToDocument(RootNode()).documentElement()) {
-      if (elements.IsEmpty() || elements.back() != root_element)
-        elements.push_back(root_element);
-    }
+  if (Element* document_element = GetDocument().documentElement()) {
+    if (elements.IsEmpty() || elements.back() != document_element)
+      elements.push_back(document_element);
   }
-
   return elements;
 }
 
@@ -314,11 +318,12 @@ HeapVector<Member<Element>> TreeScope::ElementsFromPoint(double x,
   if (!PointInFrameContentIfVisible(document, hit_point))
     return HeapVector<Member<Element>>();
 
+  HitTestLocation location(hit_point);
   HitTestRequest request(HitTestRequest::kReadOnly | HitTestRequest::kActive |
                          HitTestRequest::kListBased |
                          HitTestRequest::kPenetratingList);
-  HitTestResult result(request, LayoutPoint(hit_point));
-  document.GetLayoutView()->HitTest(result);
+  HitTestResult result(request, location);
+  document.GetLayoutView()->HitTest(location, result);
 
   return ElementsFromHitTestResult(result);
 }
@@ -327,22 +332,6 @@ SVGTreeScopeResources& TreeScope::EnsureSVGTreeScopedResources() {
   if (!svg_tree_scoped_resources_)
     svg_tree_scoped_resources_ = new SVGTreeScopeResources(this);
   return *svg_tree_scoped_resources_;
-}
-
-bool TreeScope::HasMoreStyleSheets() const {
-  return more_style_sheets_ && more_style_sheets_->length() > 0;
-}
-
-StyleSheetList& TreeScope::MoreStyleSheets() {
-  if (!more_style_sheets_)
-    SetMoreStyleSheets(StyleSheetList::Create());
-  return *more_style_sheets_;
-}
-
-void TreeScope::SetMoreStyleSheets(StyleSheetList* more_style_sheets) {
-  GetDocument().GetStyleEngine().MoreStyleSheetsWillChange(
-      *this, more_style_sheets_, more_style_sheets);
-  more_style_sheets_ = more_style_sheets;
 }
 
 DOMSelection* TreeScope::GetSelection() const {
@@ -600,7 +589,6 @@ void TreeScope::Trace(blink::Visitor* visitor) {
   visitor->Trace(scoped_style_resolver_);
   visitor->Trace(radio_button_group_scope_);
   visitor->Trace(svg_tree_scoped_resources_);
-  visitor->Trace(more_style_sheets_);
 }
 
 }  // namespace blink

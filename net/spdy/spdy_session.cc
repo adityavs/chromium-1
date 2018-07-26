@@ -54,7 +54,7 @@
 #include "net/ssl/channel_id_service.h"
 #include "net/ssl/ssl_cipher_suite_names.h"
 #include "net/ssl/ssl_connection_status_flags.h"
-#include "net/third_party/quic/core/spdy_utils.h"
+#include "net/third_party/quic/core/http/spdy_utils.h"
 #include "net/third_party/spdy/core/spdy_frame_builder.h"
 #include "net/third_party/spdy/core/spdy_protocol.h"
 #include "url/url_constants.h"
@@ -175,6 +175,16 @@ bool IsSpdySettingAtDefaultInitialValue(spdy::SpdySettingsId setting_id,
       // Undefined parameters have no initial value.
       return false;
   }
+}
+
+bool IsPushEnabled(const spdy::SettingsMap& initial_settings) {
+  const auto it = initial_settings.find(spdy::SETTINGS_ENABLE_PUSH);
+
+  // Push is enabled by default.
+  if (it == initial_settings.end())
+    return true;
+
+  return it->second == 1;
 }
 
 std::unique_ptr<base::Value> NetLogSpdyHeadersSentCallback(
@@ -820,6 +830,7 @@ SpdySession::SpdySession(
           enable_ping_based_connection_checking),
       support_ietf_format_quic_altsvc_(support_ietf_format_quic_altsvc),
       is_trusted_proxy_(is_trusted_proxy),
+      enable_push_(IsPushEnabled(initial_settings)),
       support_websocket_(false),
       connection_at_risk_of_loss_time_(
           base::TimeDelta::FromSeconds(kDefaultConnectionAtRiskOfLossSeconds)),
@@ -903,6 +914,7 @@ void SpdySession::CancelPush(const GURL& url) {
     return;
 
   DCHECK(IsStreamActive(stream_id));
+  RecordSpdyPushedStreamFateHistogram(SpdyPushedStreamFate::kAlreadyInCache);
   ResetStream(stream_id, ERR_ABORTED, "Cancelled push stream.");
 }
 
@@ -1637,6 +1649,19 @@ void SpdySession::ProcessPendingStreamRequests() {
 void SpdySession::TryCreatePushStream(spdy::SpdyStreamId stream_id,
                                       spdy::SpdyStreamId associated_stream_id,
                                       spdy::SpdyHeaderBlock headers) {
+  // Pushed streams are speculative, so they start at an IDLE priority.
+  // TODO(bnc): Send pushed stream cancellation with higher priority to avoid
+  // wasting bandwidth.
+  const RequestPriority request_priority = IDLE;
+
+  if (!enable_push_) {
+    RecordSpdyPushedStreamFateHistogram(SpdyPushedStreamFate::kPushDisabled);
+    EnqueueResetStreamFrame(stream_id, request_priority,
+                            spdy::ERROR_CODE_REFUSED_STREAM,
+                            "Push is disabled.");
+    return;
+  }
+
   if ((stream_id & 0x1) != 0) {
     std::string description = base::StringPrintf(
         "Received invalid pushed stream id %d (must be even) on stream id %d.",
@@ -1675,9 +1700,6 @@ void SpdySession::TryCreatePushStream(spdy::SpdyStreamId stream_id,
   DCHECK(!IsStreamActive(stream_id));
 
   last_accepted_push_stream_id_ = stream_id;
-
-  // Pushed streams are speculative, so they start at an IDLE priority.
-  const RequestPriority request_priority = IDLE;
 
   if (availability_state_ == STATE_GOING_AWAY) {
     RecordSpdyPushedStreamFateHistogram(SpdyPushedStreamFate::kGoingAway);

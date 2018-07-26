@@ -744,8 +744,7 @@ void FetchManager::Loader::PerformNetworkError(const String& message) {
 }
 
 void FetchManager::Loader::PerformHTTPFetch(ExceptionState& exception_state) {
-  // CORS preflight fetch procedure is implemented inside
-  // DocumentThreadableLoader.
+  // CORS preflight fetch procedure is implemented inside ThreadableLoader.
 
   // "1. Let |HTTPRequest| be a copy of |request|, except that |HTTPRequest|'s
   //  body is a tee of |request|'s body."
@@ -807,12 +806,13 @@ void FetchManager::Loader::PerformHTTPFetch(ExceptionState& exception_state) {
           ? execution_context_->GetReferrerPolicy()
           : fetch_request_data_->GetReferrerPolicy();
   const String referrer_string =
-      fetch_request_data_->ReferrerString() ==
-              FetchRequestData::ClientReferrerString()
+      fetch_request_data_->ReferrerString() == Referrer::ClientReferrerString()
           ? execution_context_->OutgoingReferrer()
           : fetch_request_data_->ReferrerString();
   // Note that generateReferrer generates |no-referrer| from |no-referrer|
   // referrer string (i.e. String()).
+  // TODO(domfarolino): Can we use ResourceRequest's SetReferrerString() and
+  // SetReferrerPolicy() instead of calling SetHTTPReferrer()?
   request.SetHTTPReferrer(SecurityPolicy::GenerateReferrer(
       referrer_policy, fetch_request_data_->Url(), referrer_string));
   request.SetSkipServiceWorker(is_isolated_world_);
@@ -836,7 +836,7 @@ void FetchManager::Loader::PerformHTTPFetch(ExceptionState& exception_state) {
   // |HTTPRequest|'s origin, serialized and utf-8 encoded, to |HTTPRequest|'s
   // header list."
   // We set Origin header in updateRequestForAccessControl() called from
-  // DocumentThreadableLoader::makeCrossOriginAccessRequest
+  // ThreadableLoader::makeCrossOriginAccessRequest
 
   // "5. Let |credentials flag| be set if either |HTTPRequest|'s credentials
   // mode is |include|, or |HTTPRequest|'s credentials mode is |same-origin|
@@ -854,12 +854,10 @@ void FetchManager::Loader::PerformHTTPFetch(ExceptionState& exception_state) {
         std::move(factory_clone));
   }
 
-  ThreadableLoaderOptions threadable_loader_options;
-
   probe::willStartFetch(execution_context_, this);
-  threadable_loader_ = ThreadableLoader::Create(*execution_context_, this,
-                                                threadable_loader_options,
-                                                resource_loader_options);
+  threadable_loader_ = new ThreadableLoader(*execution_context_, this,
+                                            resource_loader_options,
+                                            base::nullopt);
   threadable_loader_->Start(request);
 }
 
@@ -884,12 +882,10 @@ void FetchManager::Loader::PerformDataFetch() {
   resource_loader_options.data_buffering_policy = kDoNotBufferData;
   resource_loader_options.security_origin = fetch_request_data_->Origin().get();
 
-  ThreadableLoaderOptions threadable_loader_options;
-
   probe::willStartFetch(execution_context_, this);
-  threadable_loader_ = ThreadableLoader::Create(*execution_context_, this,
-                                                threadable_loader_options,
-                                                resource_loader_options);
+  threadable_loader_ = new ThreadableLoader(*execution_context_, this,
+                                            resource_loader_options,
+                                            base::nullopt);
   threadable_loader_->Start(request);
 }
 

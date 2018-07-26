@@ -325,7 +325,7 @@ bool ThemePainterMac::PaintSliderTrack(const LayoutObject& o,
   PaintSliderTicks(o, paint_info, r);
 
   float zoom_level = o.StyleRef().EffectiveZoom();
-  FloatRect unzoomed_rect = r;
+  FloatRect unzoomed_rect(r);
 
   if (o.StyleRef().Appearance() == kSliderHorizontalPart ||
       o.StyleRef().Appearance() == kMediaSliderPart) {
@@ -473,7 +473,7 @@ bool ThemePainterMac::PaintSliderThumb(const Node* node,
   paint_info.context.FillEllipse(border_bounds);
   paint_info.context.SetDrawLooper(nullptr);
 
-  IntRect fill_bounds = EnclosedIntRect(unzoomed_rect);
+  FloatRect fill_bounds = FloatRect(EnclosedIntRect(unzoomed_rect));
   scoped_refptr<Gradient> fill_gradient = Gradient::CreateLinear(
       fill_bounds.MinXMinYCorner(), fill_bounds.MinXMaxYCorner());
   fill_gradient->AddColorStop(0.0, fill_gradient_top_color);

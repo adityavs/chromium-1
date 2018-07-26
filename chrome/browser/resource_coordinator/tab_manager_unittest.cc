@@ -23,8 +23,11 @@
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/browser_process.h"
+#include "chrome/browser/metrics/desktop_session_duration/desktop_session_duration_tracker.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/resource_coordinator/background_tab_navigation_throttle.h"
+#include "chrome/browser/resource_coordinator/local_site_characteristics_data_unittest_utils.h"
+#include "chrome/browser/resource_coordinator/local_site_characteristics_webcontents_observer.h"
 #include "chrome/browser/resource_coordinator/tab_helper.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit.h"
 #include "chrome/browser/resource_coordinator/tab_lifecycle_unit_external.h"
@@ -39,7 +42,6 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/test_tab_strip_model_delegate.h"
 #include "chrome/common/url_constants.h"
-#include "chrome/test/base/chrome_render_view_host_test_harness.h"
 #include "chrome/test/base/test_browser_window.h"
 #include "chrome/test/base/testing_profile.h"
 #include "components/variations/variations_associated_data.h"
@@ -48,6 +50,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/test/mock_render_process_host.h"
 #include "content/public/test/web_contents_tester.h"
+#include "net/base/network_change_notifier.h"
 #include "services/resource_coordinator/public/cpp/resource_coordinator_features.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "url/gurl.h"
@@ -75,6 +78,8 @@ constexpr base::TimeDelta kModerateOccludedTimeout =
 constexpr base::TimeDelta kHighOccludedTimeout =
     base::TimeDelta::FromMinutes(1);
 constexpr base::TimeDelta kFreezeTimeout = base::TimeDelta::FromMinutes(10);
+constexpr base::TimeDelta kUnfreezeTimeout = base::TimeDelta::FromMinutes(10);
+constexpr base::TimeDelta kRefreezeTimeout = base::TimeDelta::FromSeconds(5);
 
 class NonResumingBackgroundTabNavigationThrottle
     : public BackgroundTabNavigationThrottle {
@@ -110,9 +115,20 @@ enum TestIndicies {
   kInternalPage,
 };
 
+// Helper class to simulate being offline. NetworkChangeNotifier is a
+// singleton, making this instance is actually globally accessible. Users of
+// this class should first create a net::NetworkChangeNotifier::DisableForTest
+// object to allow the creation of this new NetworkChangeNotifier.
+class FakeOfflineNetworkChangeNotifier : public net::NetworkChangeNotifier {
+ public:
+  ConnectionType GetCurrentConnectionType() const override {
+    return NetworkChangeNotifier::CONNECTION_NONE;
+  }
+};
+
 }  // namespace
 
-class TabManagerTest : public ChromeRenderViewHostTestHarness {
+class TabManagerTest : public testing::ChromeTestHarnessWithLocalDB {
  public:
   TabManagerTest()
       : scoped_context_(
@@ -120,18 +136,29 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
                 task_runner_)),
         scoped_set_tick_clock_for_testing_(task_runner_->GetMockTickClock()) {
     base::MessageLoopCurrent::Get()->SetTaskRunner(task_runner_);
+
+    // Start with a non-zero time.
+    task_runner_->FastForwardBy(base::TimeDelta::FromSeconds(42));
   }
 
   std::unique_ptr<WebContents> CreateWebContents() {
     std::unique_ptr<WebContents> web_contents = CreateTestWebContents();
+    ResourceCoordinatorTabHelper::CreateForWebContents(web_contents.get());
     // Commit an URL to allow discarding.
     content::WebContentsTester::For(web_contents.get())
         ->NavigateAndCommit(GURL("https://www.example.com"));
+
+    base::RepeatingClosure run_loop_cb = base::BindRepeating(
+        &base::TestMockTimeTaskRunner::RunUntilIdle, task_runner_);
+
+    testing::WaitForLocalDBEntryToBeInitialized(web_contents.get(),
+                                                run_loop_cb);
+    testing::ExpireLocalDBObservationWindows(web_contents.get());
     return web_contents;
   }
 
   void SetUp() override {
-    ChromeRenderViewHostTestHarness::SetUp();
+    ChromeTestHarnessWithLocalDB::SetUp();
     tab_manager_ = g_browser_process->GetTabManager();
   }
 
@@ -146,7 +173,7 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
     throttle3_.reset();
 
     // WebContents must be deleted before
-    // ChromeRenderViewHostTestHarness::TearDown() deletes the
+    // ChromeTestHarnessWithLocalDB::TearDown() deletes the
     // RenderProcessHost.
     contents1_.reset();
     contents2_.reset();
@@ -158,7 +185,7 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
 
     task_runner_->RunUntilIdle();
     scoped_context_.reset();
-    ChromeRenderViewHostTestHarness::TearDown();
+    ChromeTestHarnessWithLocalDB::TearDown();
   }
 
   void PrepareTabs(const char* url1 = kTestUrl,
@@ -215,6 +242,18 @@ class TabManagerTest : public ChromeRenderViewHostTestHarness {
             ->GetState();
     return state == LifecycleUnitState::PENDING_FREEZE ||
            state == LifecycleUnitState::FROZEN;
+  }
+
+  void SimulateFreezeCompletion(content::WebContents* content) {
+    static_cast<TabLifecycleUnitSource::TabLifecycleUnit*>(
+        TabLifecycleUnitExternal::FromWebContents(content))
+        ->UpdateLifecycleState(mojom::LifecycleState::kFrozen);
+  }
+
+  void SimulateUnfreezeCompletion(content::WebContents* content) {
+    static_cast<TabLifecycleUnitSource::TabLifecycleUnit*>(
+        TabLifecycleUnitExternal::FromWebContents(content))
+        ->UpdateLifecycleState(mojom::LifecycleState::kRunning);
   }
 
   virtual void CheckThrottleResults(
@@ -295,6 +334,10 @@ class TabManagerWithProactiveDiscardExperimentEnabledTest
     scoped_feature_list_.InitAndEnableFeature(
         features::kProactiveTabFreezeAndDiscard);
 
+    // Pretend that Chrome is in use.
+    metrics::DesktopSessionDurationTracker::Initialize();
+    MarkChromeInUse(true);
+
     TabManagerTest::SetUp();
 
     // Use test constants for proactive discarding parameters.
@@ -302,11 +345,27 @@ class TabManagerWithProactiveDiscardExperimentEnabledTest
         GetTestProactiveDiscardParams();
   }
 
+  void TearDown() override {
+    TabManagerTest::TearDown();
+    metrics::DesktopSessionDurationTracker::CleanupForTesting();
+  }
+
+  void MarkChromeInUse(bool in_use) {
+    auto* tracker = metrics::DesktopSessionDurationTracker::Get();
+    if (in_use) {
+      tracker->OnVisibilityChanged(true, base::TimeDelta());
+      tracker->OnUserEvent();
+    } else {
+      tracker->OnVisibilityChanged(false, base::TimeDelta());
+    }
+  }
+
   ProactiveTabFreezeAndDiscardParams GetTestProactiveDiscardParams() {
     // Return a ProactiveTabFreezeAndDiscardParams struct with default test
     // parameters.
     ProactiveTabFreezeAndDiscardParams params = {};
     params.should_proactively_discard = true;
+    params.should_periodically_unfreeze = true;
     params.low_occluded_timeout = kLowOccludedTimeout;
     params.moderate_occluded_timeout = kModerateOccludedTimeout;
     params.high_occluded_timeout = kHighOccludedTimeout;
@@ -314,6 +373,8 @@ class TabManagerWithProactiveDiscardExperimentEnabledTest
     params.moderate_loaded_tab_count = kModerateLoadedTabCount;
     params.high_loaded_tab_count = kHighLoadedTabCount;
     params.freeze_timeout = kFreezeTimeout;
+    params.unfreeze_timeout = kUnfreezeTimeout;
+    params.refreeze_timeout = kRefreezeTimeout;
     return params;
   }
 
@@ -1452,6 +1513,155 @@ TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest, FreezeOnceLoaded) {
 }
 
 TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
+       FreezeUnfreezeRefreeze) {
+  constexpr base::TimeDelta kShortTimeout = base::TimeDelta::FromSeconds(1);
+
+  auto window = std::make_unique<TestBrowserWindow>();
+  Browser::CreateParams params(profile(), true);
+  params.type = Browser::TYPE_TABBED;
+  params.window = window.get();
+  auto browser = std::make_unique<Browser>(params);
+  TabStripModel* tab_strip = browser->tab_strip_model();
+
+  // Create 3 tabs.
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/true);
+  tab_strip->GetWebContentsAt(0)->WasShown();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(0), TabLoadTracker::LoadingState::LOADED);
+
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/false);
+  tab_strip->GetWebContentsAt(1)->WasHidden();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(1), TabLoadTracker::LoadingState::LOADED);
+
+  task_runner_->FastForwardBy(kShortTimeout);
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/false);
+  tab_strip->GetWebContentsAt(2)->WasHidden();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(2), TabLoadTracker::LoadingState::LOADED);
+
+  // No tab should be frozen initially.
+  task_runner_->RunUntilIdle();
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+
+  // After the freeze timeout, the first background tab should be frozen.
+  task_runner_->FastForwardBy(kFreezeTimeout - kShortTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(1));
+
+  // After the short delay, the second background tab should be frozen.
+  task_runner_->FastForwardBy(kShortTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(2));
+
+  // After the unfreeze timeout, the first background tab should be unfrozen.
+  task_runner_->FastForwardBy(kUnfreezeTimeout - kShortTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateUnfreezeCompletion(tab_strip->GetWebContentsAt(1));
+
+  // The second background tab shouldn't be unfrozen before the first background
+  // tab is refrozen.
+  task_runner_->FastForwardBy(kShortTimeout * 2);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+
+  // After the refreeze timeout, the first background tab should be re-frozen
+  // and the second background tab should be unfrozen.
+  task_runner_->FastForwardBy(kRefreezeTimeout - kShortTimeout * 2);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(1));
+  SimulateUnfreezeCompletion(tab_strip->GetWebContentsAt(2));
+
+  // After the refreeze timeout, both background tabs should be frozen.
+  task_runner_->FastForwardBy(kRefreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(2));
+
+  // Once the freeze timeout has expired since the first background tab was
+  // refrozen, it should be unfrozen again.
+  task_runner_->FastForwardBy(kUnfreezeTimeout - kRefreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateUnfreezeCompletion(tab_strip->GetWebContentsAt(1));
+
+  // After the refreeze timeout has expired, the first background tab should be
+  // frozen and the second background tab should be unfrozen.
+  task_runner_->FastForwardBy(kRefreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(1));
+  SimulateUnfreezeCompletion(tab_strip->GetWebContentsAt(2));
+
+  // Finally, after the refreeze timeout has expired, both background tabs
+  // should be frozen.
+  task_runner_->FastForwardBy(kRefreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(2)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(2));
+
+  tab_strip->CloseAllTabs();
+}
+
+TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
+       NoUnfreezeWhenUnfreezingVariationParamDisabled) {
+  tab_manager_->proactive_freeze_discard_params_.should_periodically_unfreeze =
+      false;
+
+  auto window = std::make_unique<TestBrowserWindow>();
+  Browser::CreateParams params(profile(), true);
+  params.type = Browser::TYPE_TABBED;
+  params.window = window.get();
+  auto browser = std::make_unique<Browser>(params);
+  TabStripModel* tab_strip = browser->tab_strip_model();
+
+  // Create 2 tabs.
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/true);
+  tab_strip->GetWebContentsAt(0)->WasShown();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(0), TabLoadTracker::LoadingState::LOADED);
+
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/false);
+  tab_strip->GetWebContentsAt(1)->WasHidden();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(1), TabLoadTracker::LoadingState::LOADED);
+
+  // No tab should be frozen initially.
+  task_runner_->RunUntilIdle();
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+
+  // After the freeze timeout, the background tab should be frozen.
+  task_runner_->FastForwardBy(kFreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  SimulateFreezeCompletion(tab_strip->GetWebContentsAt(1));
+
+  // After the unfreeze timeout, the background tab should still be frozen as
+  // the unfreeze feature is disabled..
+  task_runner_->FastForwardBy(kUnfreezeTimeout);
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+
+  tab_strip->CloseAllTabs();
+}
+
+TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
        NoProactiveDiscardWhenDiscardingVariationParamDisabled) {
   tab_manager_->proactive_freeze_discard_params_.should_proactively_discard =
       false;
@@ -1497,6 +1707,103 @@ TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
   task_runner_->FastForwardBy(kFreezeTimeout);
 
   EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+
+  tab_strip->CloseAllTabs();
+}
+
+TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
+       NoProactiveDiscardWhenOffline) {
+  auto window = std::make_unique<TestBrowserWindow>();
+  Browser::CreateParams params(profile(), true);
+  params.type = Browser::TYPE_TABBED;
+  params.window = window.get();
+  auto browser = std::make_unique<Browser>(params);
+  TabStripModel* tab_strip = browser->tab_strip_model();
+
+  // Simulate being offline.
+  net::NetworkChangeNotifier::DisableForTest disable_for_test;
+  FakeOfflineNetworkChangeNotifier fake_offline_state;
+
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/true);
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/false);
+  tab_strip->GetWebContentsAt(1)->WasShown();
+  tab_strip->GetWebContentsAt(1)->WasHidden();
+
+  task_runner_->FastForwardBy(kLowOccludedTimeout);
+
+  // The background tab shouldn't have been discarded while offline.
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
+
+  tab_strip->CloseAllTabs();
+}
+
+TEST_F(TabManagerWithProactiveDiscardExperimentEnabledTest,
+       NoProactiveDiscardWhenChromeNotInUse) {
+  auto window = std::make_unique<TestBrowserWindow>();
+  Browser::CreateParams params(profile(), true);
+  params.type = Browser::TYPE_TABBED;
+  params.window = window.get();
+  auto browser = std::make_unique<Browser>(params);
+  TabStripModel* tab_strip = browser->tab_strip_model();
+
+  // Create 2 tabs.
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/true);
+  tab_strip->GetWebContentsAt(0)->WasShown();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(0), TabLoadTracker::LoadingState::LOADED);
+
+  tab_strip->AppendWebContents(CreateWebContents(), /*foreground=*/false);
+  tab_strip->GetWebContentsAt(1)->WasHidden();
+  TabLoadTracker::Get()->TransitionStateForTesting(
+      tab_strip->GetWebContentsAt(1), TabLoadTracker::LoadingState::LOADED);
+
+  // Run tasks to let state transitions happen.
+  task_runner_->RunUntilIdle();
+
+  // No tab should be frozen or discarded initially.
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
+
+  // Fast-forward time when Chrome is not in use.
+  MarkChromeInUse(false);
+  task_runner_->FastForwardBy(kFreezeTimeout);
+
+  // The background tab should be frozen normally.
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
+
+  // Fast-forward time again when Chrome is not in use.
+  task_runner_->FastForwardBy(base::TimeDelta::FromDays(1));
+
+  // No discard should happen when Chrome is not in use.
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
+
+  // Fast-forward time less than the discard timeout when Chrome is in use.
+  constexpr base::TimeDelta kShortDelay = base::TimeDelta::FromSeconds(42);
+  MarkChromeInUse(true);
+  task_runner_->FastForwardBy(kShortDelay);
+
+  // No discard should happen yet.
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
+
+  // Fast-forward time enough for the discard timeout to expire.
+  task_runner_->FastForwardBy(kLowOccludedTimeout - kShortDelay);
+
+  // The background tab should be discarded.
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(0)));
+  EXPECT_FALSE(IsTabFrozen(tab_strip->GetWebContentsAt(1)));
+  EXPECT_FALSE(IsTabDiscarded(tab_strip->GetWebContentsAt(0)));
+  EXPECT_TRUE(IsTabDiscarded(tab_strip->GetWebContentsAt(1)));
 
   tab_strip->CloseAllTabs();
 }

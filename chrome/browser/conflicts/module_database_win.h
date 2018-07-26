@@ -18,6 +18,10 @@
 #include "chrome/browser/conflicts/third_party_metrics_recorder_win.h"
 #include "content/public/common/process_type.h"
 
+#if defined(GOOGLE_CHROME_BUILD)
+#include "chrome/browser/conflicts/module_load_attempt_log_listener_win.h"
+#endif
+
 class ModuleDatabaseObserver;
 
 #if defined(GOOGLE_CHROME_BUILD)
@@ -98,6 +102,16 @@ class ModuleDatabase : public ModuleDatabaseEventSource {
                     uint32_t module_time_date_stamp,
                     uintptr_t module_load_address);
 
+  void OnModuleBlocked(const base::FilePath& module_path,
+                       uint32_t module_size,
+                       uint32_t module_time_date_stamp);
+
+  // Marks the module as added to the module blacklist cache, which means it
+  // will be blocked on the next browser launch.
+  void OnModuleAddedToBlacklist(const base::FilePath& module_path,
+                                uint32_t module_size,
+                                uint32_t module_time_date_stamp);
+
   // TODO(chrisha): Module analysis code, and various accessors for use by
   // chrome://conflicts.
 
@@ -147,10 +161,16 @@ class ModuleDatabase : public ModuleDatabaseEventSource {
   // corresponding process type. Exposed in the header for testing.
   static content::ProcessType BitIndexToProcessType(uint32_t bit_index);
 
-  // Finds or creates a mutable ModuleInfo entry.
-  ModuleInfo* FindOrCreateModuleInfo(const base::FilePath& module_path,
-                                     uint32_t module_size,
-                                     uint32_t module_time_date_stamp);
+  ModuleInfo* CreateModuleInfo(const base::FilePath& module_path,
+                               uint32_t module_size,
+                               uint32_t module_time_date_stamp);
+
+  // Finds or creates a mutable ModuleInfo entry. Returns true if the module
+  // info was created.
+  bool FindOrCreateModuleInfo(const base::FilePath& module_path,
+                              uint32_t module_size,
+                              uint32_t module_time_date_stamp,
+                              ModuleInfo** module_info);
 
   // Returns true if the enumeration of the IMEs and the shell extensions is
   // finished.
@@ -198,7 +218,7 @@ class ModuleDatabase : public ModuleDatabaseEventSource {
   // A map of all known modules.
   ModuleMap modules_;
 
-  base::Timer idle_timer_;
+  base::RetainingOneShotTimer idle_timer_;
 
   // Indicates if the ModuleDatabase has started processing module load events.
   bool has_started_processing_;
@@ -208,6 +228,10 @@ class ModuleDatabase : public ModuleDatabaseEventSource {
 
   // Indicates if all input method editors have been enumerated.
   bool ime_enumerated_;
+
+#if defined(GOOGLE_CHROME_BUILD)
+  ModuleLoadAttemptLogListener module_load_attempt_log_listener_;
+#endif
 
   // Inspects new modules on a blocking task runner.
   ModuleInspector module_inspector_;

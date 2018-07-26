@@ -25,6 +25,7 @@
 #include "gpu/command_buffer/client/raster_implementation_gles.h"
 #include "gpu/command_buffer/client/shared_memory_limits.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
+#include "gpu/command_buffer/service/gr_shader_cache.h"
 #include "gpu/config/gpu_switches.h"
 #include "gpu/ipc/gl_in_process_context.h"
 #include "gpu/skia_bindings/grcontext_for_gles2_interface.h"
@@ -52,17 +53,17 @@ scoped_refptr<DisplayItemList> MakeNoopDisplayItemList() {
   return display_item_list;
 }
 
-class OopPixelTest : public testing::Test {
+constexpr size_t kCacheLimitBytes = 1024 * 1024;
+
+class OopPixelTest : public testing::Test,
+                     public gpu::raster::GrShaderCache::Client {
  public:
+  OopPixelTest() : gr_shader_cache_(kCacheLimitBytes, this) {}
+
   void SetUp() override {
-    raster_context_provider_ =
-        base::MakeRefCounted<TestInProcessContextProvider>(
-            /*enable_oop_rasterization=*/true, /*support_locking=*/true);
+    InitializeOOPContext();
     const int raster_max_texture_size =
         raster_context_provider_->ContextCapabilities().max_texture_size;
-    oop_image_cache_.reset(new GpuImageDecodeCache(
-        raster_context_provider_.get(), true, kRGBA_8888_SkColorType,
-        kWorkingSetSize, raster_max_texture_size));
 
     gles2_context_provider_ =
         base::MakeRefCounted<TestInProcessContextProvider>(
@@ -74,6 +75,25 @@ class OopPixelTest : public testing::Test {
         kWorkingSetSize, gles2_max_texture_size));
 
     ASSERT_EQ(raster_max_texture_size, gles2_max_texture_size);
+  }
+
+  // gpu::raster::GrShaderCache::Client implementation.
+  void StoreShader(const std::string& key, const std::string& shader) override {
+  }
+
+  void InitializeOOPContext() {
+    if (oop_image_cache_)
+      oop_image_cache_.reset();
+
+    raster_context_provider_ =
+        base::MakeRefCounted<TestInProcessContextProvider>(
+            /*enable_oop_rasterization=*/true, /*support_locking=*/true,
+            &gr_shader_cache_, &activity_flags_);
+    const int raster_max_texture_size =
+        raster_context_provider_->ContextCapabilities().max_texture_size;
+    oop_image_cache_.reset(new GpuImageDecodeCache(
+        raster_context_provider_.get(), true, kRGBA_8888_SkColorType,
+        kWorkingSetSize, raster_max_texture_size));
   }
 
   class RasterOptions {
@@ -112,8 +132,9 @@ class OopPixelTest : public testing::Test {
 
   SkBitmap Raster(scoped_refptr<DisplayItemList> display_item_list,
                   const RasterOptions& options) {
+    GURL url("https://example.com/foo");
     TestInProcessContextProvider::ScopedRasterContextLock lock(
-        raster_context_provider_.get());
+        raster_context_provider_.get(), url.possibly_invalid_spec().c_str());
 
     PlaybackImageProvider image_provider(oop_image_cache_.get(),
                                          options.color_space,
@@ -138,18 +159,21 @@ class OopPixelTest : public testing::Test {
 
     RasterColorSpace color_space(options.color_space, ++color_space_id_);
 
+    gpu::Mailbox mailbox;
+    raster_implementation->ProduceTextureDirect(raster_texture_id,
+                                                mailbox.name);
     if (options.preclear) {
       raster_implementation->BeginRasterCHROMIUM(
-          raster_texture_id, options.preclear_color, options.msaa_sample_count,
-          options.use_lcd_text, options.color_type, color_space);
+          options.preclear_color, options.msaa_sample_count,
+          options.use_lcd_text, options.color_type, color_space, mailbox.name);
       raster_implementation->EndRasterCHROMIUM();
     }
 
     // "Out of process" raster! \o/
 
     raster_implementation->BeginRasterCHROMIUM(
-        raster_texture_id, options.background_color, options.msaa_sample_count,
-        options.use_lcd_text, options.color_type, color_space);
+        options.background_color, options.msaa_sample_count,
+        options.use_lcd_text, options.color_type, color_space, mailbox.name);
     raster_implementation->RasterCHROMIUM(
         display_item_list.get(), &image_provider, options.content_size,
         options.full_raster_rect, options.playback_rect, options.post_translate,
@@ -161,12 +185,6 @@ class OopPixelTest : public testing::Test {
           options.post_translate, options.post_scale, options.requires_clear);
     }
     raster_implementation->EndRasterCHROMIUM();
-
-    // Produce a mailbox and insert an ordering barrier (assumes the raster
-    // interface and gl are on the same scheduling group).
-    gpu::Mailbox mailbox;
-    raster_implementation->ProduceTextureDirect(raster_texture_id,
-                                                mailbox.name);
     raster_implementation->OrderingBarrierCHROMIUM();
 
     EXPECT_EQ(raster_implementation->GetError(),
@@ -312,6 +330,8 @@ class OopPixelTest : public testing::Test {
   gl::DisableNullDrawGLBindings enable_pixel_output_;
   std::unique_ptr<ImageProvider> image_provider_;
   int color_space_id_ = 0;
+  gpu::raster::GrShaderCache gr_shader_cache_;
+  gpu::GpuProcessActivityFlags activity_flags_;
 };
 
 class OopImagePixelTest : public OopPixelTest,
@@ -1464,6 +1484,34 @@ TEST_F(OopPixelTest, DrawTextMultipleRasterCHROMIUM) {
       base::BindOnce(&ClearFontCache, &event));
   event.Wait();
   EXPECT_EQ(SkGraphics::GetFontCacheUsed(), 0u);
+}
+
+TEST_F(OopPixelTest, DrawTextBlobPersistentShaderCache) {
+  RasterOptions options;
+  options.resource_size = gfx::Size(100, 100);
+  options.content_size = options.resource_size;
+  options.full_raster_rect = gfx::Rect(options.content_size);
+  options.playback_rect = options.full_raster_rect;
+  options.color_space = gfx::ColorSpace::CreateSRGB();
+
+  auto display_item_list = base::MakeRefCounted<DisplayItemList>();
+  display_item_list->StartPaint();
+  PaintFlags flags;
+  flags.setStyle(PaintFlags::kFill_Style);
+  flags.setColor(SK_ColorGREEN);
+  display_item_list->push<DrawTextBlobOp>(BuildTextBlob(), 0u, 0u, flags);
+  display_item_list->EndPaintOfUnpaired(options.full_raster_rect);
+  display_item_list->Finalize();
+
+  auto expected = RasterExpectedBitmap(display_item_list, options);
+  auto actual = Raster(display_item_list, options);
+  ExpectEquals(actual, expected);
+
+  // Re-create the context so we start with an uninitialized skia memory cache
+  // and use shaders from the persistent cache.
+  InitializeOOPContext();
+  actual = Raster(display_item_list, options);
+  ExpectEquals(actual, expected);
 }
 
 INSTANTIATE_TEST_CASE_P(P, OopImagePixelTest, ::testing::Bool());

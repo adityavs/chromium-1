@@ -202,7 +202,7 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::OnComplete(
       status.error_code);
 
   // Deletes |this|.
-  factory_->RemoveRequest(network_service_request_id_);
+  factory_->RemoveRequest(network_service_request_id_, request_id_);
 }
 
 void WebRequestProxyingURLLoaderFactory::InProgressRequest::HandleAuthRequest(
@@ -337,16 +337,15 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::ContinueAuthRequest(
   }
 
   info_->AddResponseInfoFromResourceResponse(current_response_);
+  auto continuation =
+      base::BindRepeating(&InProgressRequest::OnAuthRequestHandled,
+                          weak_factory_.GetWeakPtr(), base::Passed(&callback));
 
   auth_credentials_.emplace();
   net::NetworkDelegate::AuthRequiredResponse response =
       ExtensionWebRequestEventRouter::GetInstance()->OnAuthRequired(
           factory_->browser_context_, factory_->info_map_, &info_.value(),
-          *auth_info,
-          base::BindRepeating(&InProgressRequest::OnAuthRequestHandled,
-                              weak_factory_.GetWeakPtr(),
-                              base::Passed(&callback)),
-          &auth_credentials_.value());
+          *auth_info, continuation, &auth_credentials_.value());
 
   // At least one extension has a blocking handler for this request, so we'll
   // just wait for them to finish. |OnAuthRequestHandled()| will be invoked
@@ -357,10 +356,7 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::ContinueAuthRequest(
   // We're not touching this auth request. Let the default browser behavior
   // proceed.
   DCHECK_EQ(response, net::NetworkDelegate::AUTH_REQUIRED_RESPONSE_NO_ACTION);
-  content::BrowserThread::PostTask(
-      content::BrowserThread::UI, FROM_HERE,
-      base::BindOnce(std::move(callback), base::nullopt,
-                     false /* should_cancel */));
+  continuation.Run(response);
 }
 
 void WebRequestProxyingURLLoaderFactory::InProgressRequest::
@@ -402,6 +398,9 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
     return;
   }
 
+  if (override_headers_)
+    current_response_.headers = override_headers_;
+
   std::string redirect_location;
   if (override_headers_ && override_headers_->IsRedirect(&redirect_location)) {
     // The response headers may have been overridden by an |onHeadersReceived|
@@ -419,8 +418,6 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::
     redirect_info.new_method = request_.method;
     redirect_info.new_url = new_url;
     redirect_info.new_site_for_cookies = new_url;
-
-    current_response_.headers = override_headers_;
 
     // These will get re-bound when a new request is initiated after Restart()
     // below.
@@ -506,7 +503,7 @@ void WebRequestProxyingURLLoaderFactory::InProgressRequest::OnRequestError(
       true /* started */, status.error_code);
 
   // Deletes |this|.
-  factory_->RemoveRequest(network_service_request_id_);
+  factory_->RemoveRequest(network_service_request_id_, request_id_);
 }
 
 WebRequestProxyingURLLoaderFactory::WebRequestProxyingURLLoaderFactory(
@@ -572,6 +569,12 @@ void WebRequestProxyingURLLoaderFactory::CreateLoaderAndStart(
     const net::MutableNetworkTrafficAnnotationTag& traffic_annotation) {
   DCHECK_CURRENTLY_ON(content::BrowserThread::IO);
 
+  // The request ID doesn't really matter in the Network Service path. It just
+  // needs to be unique per-BrowserContext so extensions can make sense of it.
+  // Note that |network_service_request_id_| by contrast is not necessarily
+  // unique, so we don't use it for identity here.
+  const uint64_t web_request_id = request_id_generator_->Generate();
+
   if (request_id) {
     // Only requests with a non-zero request ID can have their proxy associated
     // with said ID. This is necessary to support correlation against any auth
@@ -579,13 +582,8 @@ void WebRequestProxyingURLLoaderFactory::CreateLoaderAndStart(
     // do not support dispatching |WebRequest.onAuthRequired| events.
     proxies_->AssociateProxyWithRequestId(
         this, content::GlobalRequestID(render_process_id_, request_id));
+    network_request_id_to_web_request_id_.emplace(request_id, web_request_id);
   }
-
-  // The request ID doesn't really matter in the Network Service path. It just
-  // needs to be unique per-BrowserContext so extensions can make sense of it.
-  // Note that |network_service_request_id_| by contrast is not necessarily
-  // unique, so we don't use it for identity here.
-  const uint64_t web_request_id = request_id_generator_->Generate();
 
   // The WebRequest API treats browser-originated non-navigation requests with a
   // few additional restrictions, so we deduce and propagate that information
@@ -599,7 +597,6 @@ void WebRequestProxyingURLLoaderFactory::CreateLoaderAndStart(
           this, web_request_id, request_id, routing_id, options,
           is_non_navigation_browser_request, request, traffic_annotation,
           std::move(loader_request), std::move(client)));
-  network_request_id_to_web_request_id_.emplace(request_id, web_request_id);
   result.first->second->Restart();
 }
 
@@ -650,13 +647,10 @@ void WebRequestProxyingURLLoaderFactory::OnProxyBindingError() {
 }
 
 void WebRequestProxyingURLLoaderFactory::RemoveRequest(
-    int32_t network_service_request_id) {
-  auto it =
-      network_request_id_to_web_request_id_.find(network_service_request_id);
-  DCHECK(it != network_request_id_to_web_request_id_.end());
-  uint64_t web_request_id = it->second;
-  network_request_id_to_web_request_id_.erase(it);
-  requests_.erase(web_request_id);
+    int32_t network_service_request_id,
+    uint64_t request_id) {
+  network_request_id_to_web_request_id_.erase(network_service_request_id);
+  requests_.erase(request_id);
 }
 
 }  // namespace extensions

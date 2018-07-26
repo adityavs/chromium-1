@@ -640,17 +640,8 @@ TEST_F(WidgetWithDestroyedNativeViewTest, Test) {
 
 class WidgetObserverTest : public WidgetTest, public WidgetObserver {
  public:
-  WidgetObserverTest()
-      : active_(nullptr),
-        widget_closed_(nullptr),
-        widget_activated_(nullptr),
-        widget_shown_(nullptr),
-        widget_hidden_(nullptr),
-        widget_bounds_changed_(nullptr),
-        widget_to_close_on_hide_(nullptr) {
-  }
-
-  ~WidgetObserverTest() override {}
+  WidgetObserverTest() = default;
+  ~WidgetObserverTest() override = default;
 
   // Set a widget to Close() the next time the Widget being observed is hidden.
   void CloseOnNextHide(Widget* widget) {
@@ -721,16 +712,16 @@ class WidgetObserverTest : public WidgetTest, public WidgetObserver {
   const Widget* widget_bounds_changed() const { return widget_bounds_changed_; }
 
  private:
-  Widget* active_;
+  Widget* active_ = nullptr;
 
-  Widget* widget_closed_;
-  Widget* widget_activated_;
-  Widget* widget_deactivated_;
-  Widget* widget_shown_;
-  Widget* widget_hidden_;
-  Widget* widget_bounds_changed_;
+  Widget* widget_closed_ = nullptr;
+  Widget* widget_activated_ = nullptr;
+  Widget* widget_deactivated_ = nullptr;
+  Widget* widget_shown_ = nullptr;
+  Widget* widget_hidden_ = nullptr;
+  Widget* widget_bounds_changed_ = nullptr;
 
-  Widget* widget_to_close_on_hide_;
+  Widget* widget_to_close_on_hide_ = nullptr;
 };
 
 // This test appears to be flaky on Mac.
@@ -741,17 +732,14 @@ class WidgetObserverTest : public WidgetTest, public WidgetObserver {
 #endif
 
 TEST_F(WidgetObserverTest, MAYBE_ActivationChange) {
-  WidgetAutoclosePtr toplevel(CreateTopLevelPlatformWidget());
   WidgetAutoclosePtr toplevel1(NewWidget());
   WidgetAutoclosePtr toplevel2(NewWidget());
 
   toplevel1->Show();
   toplevel2->Show();
-
   reset();
 
   toplevel1->Activate();
-
   RunPendingMessages();
   EXPECT_EQ(toplevel1.get(), widget_activated());
 
@@ -947,6 +935,65 @@ TEST_F(WidgetObserverTest, WidgetBoundsChangedNative) {
   // No bounds change when closing.
   widget->CloseNow();
   EXPECT_FALSE(widget_bounds_changed());
+}
+
+namespace {
+
+class MoveTrackingTestDesktopWidgetDelegate : public TestDesktopWidgetDelegate {
+ public:
+  int move_count() const { return move_count_; }
+
+  // WidgetDelegate:
+  void OnWidgetMove() override { ++move_count_; }
+
+ private:
+  int move_count_ = 0;
+};
+
+}  // namespace
+
+// An extension to the WidgetBoundsChangedNative test above to ensure move
+// notifications propagate to the WidgetDelegate.
+TEST_F(WidgetObserverTest, OnWidgetMovedWhenOriginChangesNative) {
+  MoveTrackingTestDesktopWidgetDelegate delegate;
+  Widget::InitParams params = CreateParams(Widget::InitParams::TYPE_WINDOW);
+  delegate.InitWidget(params);
+  Widget* widget = delegate.GetWidget();
+  widget->Show();
+  widget->SetBounds(gfx::Rect(100, 100, 300, 200));
+
+  const int moves_during_init = delegate.move_count();
+
+#if defined(OS_WIN)
+  // Windows reliably notifies twice per origin change. https://crbug.com/864938
+  constexpr int kDeltaPerMove = 2;
+#else
+  constexpr int kDeltaPerMove = 1;
+#endif
+
+  // Resize without changing origin. No move.
+  widget->SetBounds(gfx::Rect(100, 100, 310, 210));
+  EXPECT_EQ(moves_during_init, delegate.move_count());
+
+  // Move without changing size. Moves.
+  widget->SetBounds(gfx::Rect(110, 110, 310, 210));
+  EXPECT_EQ(moves_during_init + kDeltaPerMove, delegate.move_count());
+
+  // Changing both moves.
+  widget->SetBounds(gfx::Rect(90, 90, 330, 230));
+  EXPECT_EQ(moves_during_init + 2 * kDeltaPerMove, delegate.move_count());
+
+  // Just grow vertically. On Mac, this changes the AppKit origin since it is
+  // from the bottom left of the screen, but there is no move as far as views is
+  // concerned.
+  widget->SetBounds(gfx::Rect(90, 90, 330, 240));
+  // No change.
+  EXPECT_EQ(moves_during_init + 2 * kDeltaPerMove, delegate.move_count());
+
+  // For a similar reason, move the widget down by the same amount that it grows
+  // vertically. The AppKit origin does not change, but it is a move.
+  widget->SetBounds(gfx::Rect(90, 100, 330, 250));
+  EXPECT_EQ(moves_during_init + 3 * kDeltaPerMove, delegate.move_count());
 }
 
 // Test correct behavior when widgets close themselves in response to visibility

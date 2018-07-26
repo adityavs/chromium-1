@@ -42,11 +42,13 @@
 #include "third_party/blink/renderer/core/dom/weak_identifier_map.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
 #include "third_party/blink/renderer/core/frame/frame_types.h"
+#include "third_party/blink/renderer/core/frame/use_counter.h"
 #include "third_party/blink/renderer/core/html/parser/parser_synchronization_policy.h"
 #include "third_party/blink/renderer/core/loader/document_load_timing.h"
 #include "third_party/blink/renderer/core/loader/frame_loader_types.h"
 #include "third_party/blink/renderer/core/loader/link_loader.h"
 #include "third_party/blink/renderer/core/loader/navigation_policy.h"
+#include "third_party/blink/renderer/core/loader/previews_resource_loading_hints.h"
 #include "third_party/blink/renderer/core/page/viewport_description.h"
 #include "third_party/blink/renderer/platform/loader/fetch/client_hints_preferences.h"
 #include "third_party/blink/renderer/platform/loader/fetch/raw_resource.h"
@@ -120,6 +122,13 @@ class CORE_EXPORT DocumentLoader
   void SetSubresourceFilter(SubresourceFilter*);
   SubresourceFilter* GetSubresourceFilter() const {
     return subresource_filter_.Get();
+  }
+  void SetPreviewsResourceLoadingHints(
+      PreviewsResourceLoadingHints* resource_loading_hints) {
+    resource_loading_hints_ = resource_loading_hints;
+  }
+  PreviewsResourceLoadingHints* GetPreviewsResourceLoadingHints() const {
+    return resource_loading_hints_;
   }
 
   const SubstituteData& GetSubstituteData() const { return substitute_data_; }
@@ -259,6 +268,17 @@ class CORE_EXPORT DocumentLoader
     return content_security_policy_.Get();
   }
 
+  // Updates navigation timings with provided values. This
+  // should be called before WebLocalFrameClient::didCommitProvisionalLoad.
+  // Calling it later may confuse users, because JavaScript may have run and
+  // the user may have already recorded the original value.
+  // Note: if |redirect_start_time| is null, redirect timings are not updated.
+  void UpdateNavigationTimings(base::TimeTicks navigation_start_time,
+                               base::TimeTicks redirect_start_time,
+                               base::TimeTicks redirect_end_time,
+                               base::TimeTicks fetch_start_time);
+  UseCounter& GetUseCounter() { return use_counter_; }
+
  protected:
   DocumentLoader(LocalFrame*,
                  const ResourceRequest&,
@@ -352,6 +372,9 @@ class CORE_EXPORT DocumentLoader
 
   Member<SubresourceFilter> subresource_filter_;
 
+  // Stores the resource loading hints for this document.
+  Member<PreviewsResourceLoadingHints> resource_loading_hints_;
+
   // A reference to actual request used to create the data source.
   // The only part of this request that should change is the url, and
   // that only in the case of a same-document navigation.
@@ -409,6 +432,12 @@ class CORE_EXPORT DocumentLoader
 
   // Whether this load request comes from a user activation.
   bool user_activated_;
+  // This UseCounter tracks feature usage associated with the lifetime of the
+  // document load. Features recorded prior to commit will be recorded locally.
+  // Once commited, feature usage will be piped to the browser side page load
+  // metrics that aggregates usage from frames to one page load and report
+  // feature usage to UMA histograms per page load.
+  UseCounter use_counter_;
 };
 
 DECLARE_WEAK_IDENTIFIER_MAP(DocumentLoader);

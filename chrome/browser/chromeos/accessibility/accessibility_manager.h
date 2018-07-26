@@ -77,7 +77,7 @@ typedef base::CallbackList<void(const AccessibilityStatusEventDetails&)>
 typedef AccessibilityStatusCallbackList::Subscription
     AccessibilityStatusSubscription;
 
-class ChromeVoxPanelWidgetObserver;
+class AccessibilityPanelWidgetObserver;
 
 enum class PlaySoundOption {
   // The sound is always played.
@@ -268,12 +268,6 @@ class AccessibilityManager
     return keyboard_listener_extension_id_;
   }
 
-  // Whether keyboard listener extension gets to capture keys.
-  void set_keyboard_listener_capture(bool val) {
-    keyboard_listener_capture_ = val;
-  }
-  bool keyboard_listener_capture() { return keyboard_listener_capture_; }
-
   // Set the keys to be captured by Switch Access.
   void SetSwitchAccessKeys(const std::set<int>& key_codes);
 
@@ -281,19 +275,20 @@ class AccessibilityManager
   bool ToggleDictation();
 
   // Sets the focus ring color.
-  void SetFocusRingColor(SkColor color);
+  void SetFocusRingColor(SkColor color, std::string caller_id);
 
   // Resets the focus ring color back to the default.
-  void ResetFocusRingColor();
+  void ResetFocusRingColor(std::string caller_id);
 
   // Draws a focus ring around the given set of rects in screen coordinates. Use
   // |focus_ring_behavior| to specify whether the focus ring should persist or
   // fade out.
   void SetFocusRing(const std::vector<gfx::Rect>& rects_in_screen,
-                    ash::mojom::FocusRingBehavior focus_ring_behavior);
+                    ash::mojom::FocusRingBehavior focus_ring_behavior,
+                    std::string caller_id);
 
   // Hides focus ring on screen.
-  void HideFocusRing();
+  void HideFocusRing(std::string caller_id);
 
   // Draws a highlight at the given rects in screen coordinates. Rects may be
   // overlapping and will be merged into one layer. This looks similar to
@@ -324,6 +319,7 @@ class AccessibilityManager
   void PostSwitchChromeVoxProfile();
 
   void PostUnloadSelectToSpeak();
+  void PostUnloadSwitchAccess();
   void UpdateAlwaysShowMenuFromPref();
   void OnLargeCursorChanged();
   void OnStickyKeysChanged();
@@ -395,7 +391,7 @@ class AccessibilityManager
   bool braille_ime_current_;
 
   ChromeVoxPanel* chromevox_panel_;
-  std::unique_ptr<ChromeVoxPanelWidgetObserver>
+  std::unique_ptr<AccessibilityPanelWidgetObserver>
       chromevox_panel_widget_observer_;
 
   std::string keyboard_listener_extension_id_;

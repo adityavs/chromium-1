@@ -9,6 +9,8 @@
 #include <string>
 
 #include "base/macros.h"
+#include "base/metrics/histogram_macros.h"
+#include "base/metrics/user_metrics.h"
 #include "base/strings/utf_string_conversions.h"
 #include "build/build_config.h"
 #include "chrome/app/vector_icons/vector_icons.h"
@@ -338,6 +340,7 @@ void ProfileChooserView::ShowBubble(
   profile_bubble_->SetAlignment(views::BubbleBorder::ALIGN_EDGE_TO_ANCHOR_EDGE);
   profile_bubble_->SetArrowPaintType(views::BubbleBorder::PAINT_NONE);
   widget->Show();
+  base::RecordAction(base::UserMetricsAction("ProfileChooser_Show"));
   if (is_source_keyboard)
     profile_bubble_->FocusFirstProfileButton();
 }
@@ -608,16 +611,23 @@ bool ProfileChooserView::HandleContextMenu(
 void ProfileChooserView::ButtonPressed(views::Button* sender,
                                        const ui::Event& event) {
   if (sender == passwords_button_) {
+    base::RecordAction(
+        base::UserMetricsAction("ProfileChooser_PasswordsClicked"));
     chrome::ShowSettingsSubPage(browser_, chrome::kPasswordManagerSubPage);
   } else if (sender == credit_cards_button_) {
+    base::RecordAction(
+        base::UserMetricsAction("ProfileChooser_PaymentsClicked"));
     chrome::ShowSettingsSubPage(browser_, chrome::kAutofillSubPage);
   } else if (sender == addresses_button_) {
+    base::RecordAction(
+        base::UserMetricsAction("ProfileChooser_AddressesClicked"));
     chrome::ShowSettingsSubPage(browser_, chrome::kAutofillSubPage);
   } else if (sender == guest_profile_button_) {
     PrefService* service = g_browser_process->local_state();
     DCHECK(service);
     DCHECK(service->GetBoolean(prefs::kBrowserGuestModeEnabled));
     profiles::SwitchToGuestProfile(ProfileManager::CreateCallback());
+    base::RecordAction(base::UserMetricsAction("ProfileChooser_GuestClicked"));
   } else if (sender == users_button_) {
     // If this is a guest session, close all the guest browser windows.
     if (browser_->profile()->IsGuestSession()) {
@@ -636,6 +646,8 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
     PostActionPerformed(ProfileMetrics::PROFILE_DESKTOP_MENU_LOCK);
   } else if (sender == close_all_windows_button_) {
     profiles::CloseProfileWindows(browser_->profile());
+    base::RecordAction(
+        base::UserMetricsAction("ProfileChooser_CloseAllClicked"));
   } else if (sender == sync_error_button_) {
     sync_ui_util::AvatarSyncErrorType error =
         static_cast<sync_ui_util::AvatarSyncErrorType>(sender->id());
@@ -670,6 +682,8 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
         NOTREACHED();
         break;
     }
+    base::RecordAction(
+        base::UserMetricsAction("ProfileChooser_SignInAgainClicked"));
   } else if (sender == remove_account_button_) {
     RemoveAccount();
   } else if (sender == account_removal_cancel_button_) {
@@ -703,6 +717,7 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
     ShowViewFromMode(view_mode_ == profiles::BUBBLE_VIEW_MODE_ACCOUNT_MANAGEMENT
                          ? profiles::BUBBLE_VIEW_MODE_PROFILE_CHOOSER
                          : profiles::BUBBLE_VIEW_MODE_ACCOUNT_MANAGEMENT);
+    base::RecordAction(base::UserMetricsAction("ProfileChooser_ManageClicked"));
   } else if (sender == signin_current_profile_button_) {
     ShowViewFromMode(profiles::BUBBLE_VIEW_MODE_GAIA_SIGNIN);
   } else if (sender == signin_with_gaia_account_button_) {
@@ -716,12 +731,6 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
     // one from the list because it is already shown in a separate button.
     std::vector<AccountInfo> accounts(dice_sync_promo_accounts_.begin() + 1,
                                       dice_sync_promo_accounts_.end());
-    if (accounts.empty()) {
-      // If there is no account to list for the submenu, directly open the
-      // sign-in page.
-      ShowViewFromMode(profiles::BUBBLE_VIEW_MODE_GAIA_SIGNIN);
-      return;
-    }
     // Display the submenu to list |accounts|.
     // Using base::Unretained(this) is safe here because |dice_accounts_menu_|
     // is owned by |ProfileChooserView|, i.e. |this|.
@@ -729,6 +738,9 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
         accounts, GetImagesForAccounts(accounts, browser_->profile()),
         base::BindOnce(&ProfileChooserView::EnableSync,
                        base::Unretained(this)));
+    // Add sign-out button.
+    dice_accounts_menu_->SetSignOutButtonCallback(base::BindOnce(
+        &ProfileChooserView::SignOutAllWebAccounts, base::Unretained(this)));
     dice_accounts_menu_->Show(sender, sync_to_another_account_button_);
   } else {
     // Either one of the "other profiles", or one of the profile accounts
@@ -740,6 +752,8 @@ void ProfileChooserView::ButtonPressed(views::Button* sender,
           profile_match->second, ui::DispositionFromEventFlags(event.flags()) ==
                                      WindowOpenDisposition::NEW_WINDOW,
           ProfileMetrics::SWITCH_PROFILE_ICON);
+      base::RecordAction(
+          base::UserMetricsAction("ProfileChooser_ProfileClicked"));
       Hide();
     } else {
       // This was a profile accounts button.
@@ -852,14 +866,19 @@ views::View* ProfileChooserView::CreateProfileChooserView(
   }
 
   if (autofill_home_view) {
+    const int content_list_vert_spacing =
+        ChromeLayoutProvider::Get()->GetDistanceMetric(
+            DISTANCE_CONTENT_LIST_VERTICAL_MULTI);
     if (!current_profile_signed_in) {
       // If the user is signed in then the autofill data is a part of the
       // account logically. Otherwise, use a separator.
       layout->StartRow(0, 0);
       layout->AddView(new views::Separator());
+      layout->AddPaddingRow(1.0, content_list_vert_spacing);
     }
     layout->StartRow(0, 0);
     layout->AddView(autofill_home_view);
+    layout->AddPaddingRow(1.0, content_list_vert_spacing);
   }
 
   layout->StartRow(views::GridLayout::kFixedSize, 0);
@@ -999,6 +1018,8 @@ views::View* ProfileChooserView::CreateDiceSyncErrorView(
   sync_error_button_ = views::MdTextButton::CreateSecondaryUiBlueButton(
       this, l10n_util::GetStringUTF16(button_string_id));
   sync_error_button_->set_id(error);
+  base::RecordAction(
+      base::UserMetricsAction("ProfileChooser_SignInAgainDisplayed"));
   // Add horizontal and bottom margin to blue button.
   views::View* padded_view = new views::View();
   padded_view->SetLayoutManager(std::make_unique<views::FillLayout>());
@@ -1192,37 +1213,20 @@ views::View* ProfileChooserView::CreateDiceSigninView() {
         profiles::GetPlaceholderAvatarIconResourceID());
   }
   dice_signin_button_view_ =
-      new DiceSigninButtonView(dice_promo_default_account, account_icon, this);
-  dice_signin_button_view_->SetBorder(
+      new DiceSigninButtonView(dice_promo_default_account, account_icon, this,
+                               true /* show_drop_down_arrow */);
+  views::View* signin_button_container = new views::View();
+  // Create a container for the signin button, so the special highlighting of
+  // the button won't go over the border. (DiceSigninButtonView sets a custom
+  // highlighting view with |HoverButton::SetHighlightingView|.)
+  signin_button_container->SetLayoutManager(
+      std::make_unique<views::FillLayout>());
+  signin_button_container->SetBorder(
       views::CreateEmptyBorder(gfx::Insets(kMenuEdgeMargin)));
-  view->AddChildView(dice_signin_button_view_);
+  signin_button_container->AddChildView(dice_signin_button_view_);
+  view->AddChildView(signin_button_container);
   signin_with_gaia_account_button_ = dice_signin_button_view_->signin_button();
-
-  // Create a button to sync to another account.
-  constexpr int kSmallMenuIconSize = 16;
-  std::unique_ptr<views::ImageView> switch_account_icon_view(
-      new views::ImageView());
-  switch_account_icon_view->SetImage(gfx::CreateVectorIcon(
-      kSyncSwitchAccountIcon, kSmallMenuIconSize, gfx::kChromeIconGrey));
-  // The accounts submenu is only needed when there are additional accounts to
-  // list, i.e. when there is more than 1 account (the first account has it's
-  // own button).
-  std::unique_ptr<views::ImageView> submenu_arrow_icon_view;
-  if (dice_sync_promo_accounts_.size() > 1) {
-    constexpr int kSubmenuArrowSize = 12;
-    submenu_arrow_icon_view = std::make_unique<views::ImageView>();
-    submenu_arrow_icon_view->SetImage(gfx::CreateVectorIcon(
-        kUserMenuRightArrowIcon, kSubmenuArrowSize, gfx::kChromeIconGrey));
-    // Make sure that the arrow is flipped in RTL mode.
-    submenu_arrow_icon_view->EnableCanvasFlippingForRTLUI(true);
-  }
-  LOG(ERROR) << "----------- use secondary icon";
-  sync_to_another_account_button_ = new HoverButton(
-      this, std::move(switch_account_icon_view),
-      l10n_util::GetStringUTF16(
-          IDS_PROFILES_DICE_SIGNIN_WITH_ANOTHER_ACCOUNT_BUTTON),
-      base::string16() /* subtitle */, std::move(submenu_arrow_icon_view));
-  view->AddChildView(sync_to_another_account_button_);
+  sync_to_another_account_button_ = dice_signin_button_view_->drop_down_arrow();
   return view;
 }
 
@@ -1262,8 +1266,7 @@ views::View* ProfileChooserView::CreateOptionsView(bool display_lock,
   }
   for (size_t i : ordered_item_indices) {
     const AvatarMenu::Item& item = avatar_menu->GetItemAt(i);
-    if (!item.active ||
-        (dice_enabled_ && avatar_menu->GetNumberOfItems() >= 2)) {
+    if (!item.active) {
       gfx::Image image = profiles::GetSizedAvatarIcon(
           item.icon, true, kIconSize, kIconSize, profiles::SHAPE_CIRCLE);
       views::LabelButton* button =
@@ -1277,6 +1280,9 @@ views::View* ProfileChooserView::CreateOptionsView(bool display_lock,
       layout->AddView(button);
     }
   }
+
+  UMA_HISTOGRAM_BOOLEAN("ProfileChooser.HasProfilesShown",
+                        first_profile_button_);
 
   // Add the "Guest" button for browsing as guest
   if (!is_guest && !browser_->profile()->IsSupervised()) {
@@ -1590,6 +1596,12 @@ void ProfileChooserView::EnableSync(
                                         false /* is_default_promo_account */);
   else
     ShowViewFromMode(profiles::BUBBLE_VIEW_MODE_GAIA_SIGNIN);
+}
+
+void ProfileChooserView::SignOutAllWebAccounts() {
+  Hide();
+  ProfileOAuth2TokenServiceFactory::GetForProfile(browser_->profile())
+      ->RevokeAllCredentials();
 }
 
 int ProfileChooserView::GetDiceSigninPromoShowCount() const {

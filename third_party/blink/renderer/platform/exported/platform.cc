@@ -40,7 +40,6 @@
 #include "third_party/blink/public/platform/interface_provider.h"
 #include "third_party/blink/public/platform/modules/webmidi/web_midi_accessor.h"
 #include "third_party/blink/public/platform/web_canvas_capture_handler.h"
-#include "third_party/blink/public/platform/web_gesture_curve.h"
 #include "third_party/blink/public/platform/web_graphics_context_3d_provider.h"
 #include "third_party/blink/public/platform/web_image_capture_frame_grabber.h"
 #include "third_party/blink/public/platform/web_media_recorder_handler.h"
@@ -65,6 +64,7 @@
 #include "third_party/blink/renderer/platform/partition_alloc_memory_dump_provider.h"
 #include "third_party/blink/renderer/platform/web_task_runner.h"
 #include "third_party/blink/renderer/platform/wtf/hash_map.h"
+#include "third_party/webrtc/api/rtpparameters.h"
 
 namespace blink {
 
@@ -220,13 +220,6 @@ Platform::CreateSharedOffscreenGraphicsContext3DProvider() {
   return nullptr;
 }
 
-std::unique_ptr<WebGestureCurve> Platform::CreateFlingAnimationCurve(
-    WebGestureDevice device_source,
-    const WebFloatPoint& velocity,
-    const WebSize& cumulative_scroll) {
-  return nullptr;
-}
-
 std::unique_ptr<WebRTCPeerConnectionHandler>
 Platform::CreateRTCPeerConnectionHandler(
     WebRTCPeerConnectionHandlerClient*,
@@ -255,13 +248,18 @@ std::unique_ptr<WebCanvasCaptureHandler> Platform::CreateCanvasCaptureHandler(
   return nullptr;
 }
 
-std::unique_ptr<WebSocketHandshakeThrottle>
-Platform::CreateWebSocketHandshakeThrottle() {
+std::unique_ptr<WebImageCaptureFrameGrabber>
+Platform::CreateImageCaptureFrameGrabber() {
   return nullptr;
 }
 
-std::unique_ptr<WebImageCaptureFrameGrabber>
-Platform::CreateImageCaptureFrameGrabber() {
+std::unique_ptr<webrtc::RtpCapabilities> Platform::GetRtpSenderCapabilities(
+    const WebString& kind) {
+  return nullptr;
+}
+
+std::unique_ptr<webrtc::RtpCapabilities> Platform::GetRtpReceiverCapabilities(
+    const WebString& kind) {
   return nullptr;
 }
 

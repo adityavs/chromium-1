@@ -66,6 +66,10 @@ void PlatformNotificationContextImpl::Initialize() {
       browser_context_,
       base::Bind(&PlatformNotificationContextImpl::DidGetNotificationsOnUI,
                  this));
+
+  ukm_callback_ = base::BindRepeating(
+      &PlatformNotificationService::RecordNotificationUkmEvent,
+      base::Unretained(service), browser_context_);
 }
 
 void PlatformNotificationContextImpl::DidGetNotificationsOnUI(
@@ -308,17 +312,20 @@ void PlatformNotificationContextImpl::
 }
 
 void PlatformNotificationContextImpl::WriteNotificationData(
+    int64_t persistent_notification_id,
     const GURL& origin,
     const NotificationDatabaseData& database_data,
     const WriteResultCallback& callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
   LazyInitialize(
       base::Bind(&PlatformNotificationContextImpl::DoWriteNotificationData,
-                 this, origin, database_data, callback),
+                 this, persistent_notification_id, origin, database_data,
+                 callback),
       base::Bind(callback, false /* success */, "" /* notification_id */));
 }
 
 void PlatformNotificationContextImpl::DoWriteNotificationData(
+    int64_t persistent_notification_id,
     const GURL& origin,
     const NotificationDatabaseData& database_data,
     const WriteResultCallback& callback) {
@@ -355,7 +362,7 @@ void PlatformNotificationContextImpl::DoWriteNotificationData(
   write_database_data.notification_id =
       notification_id_generator_.GenerateForPersistentNotification(
           origin, database_data.notification_data.tag,
-          database_->GetNextPersistentNotificationId());
+          persistent_notification_id);
 
   NotificationDatabase::Status status =
       database_->WriteNotificationData(origin, write_database_data);
@@ -487,7 +494,7 @@ void PlatformNotificationContextImpl::OpenDatabase(
     return;
   }
 
-  database_.reset(new NotificationDatabase(GetDatabasePath()));
+  database_.reset(new NotificationDatabase(GetDatabasePath(), ukm_callback_));
   NotificationDatabase::Status status =
       database_->Open(true /* create_if_missing */);
 
@@ -499,7 +506,7 @@ void PlatformNotificationContextImpl::OpenDatabase(
     prune_database_on_open_ = false;
     DestroyDatabase();
 
-    database_.reset(new NotificationDatabase(GetDatabasePath()));
+    database_.reset(new NotificationDatabase(GetDatabasePath(), ukm_callback_));
     status = database_->Open(true /* create_if_missing */);
 
     // TODO(peter): Find the appropriate UMA to cover in regards to
@@ -510,7 +517,8 @@ void PlatformNotificationContextImpl::OpenDatabase(
   // away the contents of the directory and try re-opening the database.
   if (status == NotificationDatabase::STATUS_ERROR_CORRUPTED) {
     if (DestroyDatabase()) {
-      database_.reset(new NotificationDatabase(GetDatabasePath()));
+      database_.reset(
+          new NotificationDatabase(GetDatabasePath(), ukm_callback_));
       status = database_->Open(true /* create_if_missing */);
 
       UMA_HISTOGRAM_ENUMERATION(

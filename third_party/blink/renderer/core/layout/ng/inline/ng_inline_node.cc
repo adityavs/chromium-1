@@ -28,7 +28,7 @@
 #include "third_party/blink/renderer/core/layout/ng/ng_positioned_float.h"
 #include "third_party/blink/renderer/core/layout/ng/ng_unpositioned_float.h"
 #include "third_party/blink/renderer/core/style/computed_style.h"
-#include "third_party/blink/renderer/platform/fonts/shaping/harf_buzz_shaper.h"
+#include "third_party/blink/renderer/platform/fonts/shaping/harfbuzz_shaper.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/run_segmenter.h"
 #include "third_party/blink/renderer/platform/fonts/shaping/shape_result_spacing.h"
 #include "third_party/blink/renderer/platform/wtf/text/character_names.h"
@@ -108,7 +108,8 @@ void CollectInlinesInternal(
                             kObjectReplacementCharacter, nullptr, node);
 
     } else if (node->IsOutOfFlowPositioned()) {
-      builder->AppendOpaque(NGInlineItem::kOutOfFlowPositioned, nullptr, node);
+      builder->AppendOpaque(NGInlineItem::kOutOfFlowPositioned,
+                            kObjectReplacementCharacter, nullptr, node);
 
     } else if (node->IsAtomicInlineLevel()) {
       if (node->IsLayoutNGListMarker()) {
@@ -206,19 +207,8 @@ bool NGInlineNode::InLineHeightQuirksMode() const {
 }
 
 bool NGInlineNode::CanContainFirstFormattedLine() const {
-  // TODO(kojii): In LayoutNG, leading OOF creates an anonymous block box,
-  // and that |LayoutBlockFlow::CanContainFirstFormattedLine()| does not work.
-  // crbug.com/734554
-  LayoutObject* layout_object = GetLayoutBlockFlow();
-  if (!layout_object->IsAnonymousBlock())
-    return true;
-  for (;;) {
-    layout_object = layout_object->PreviousSibling();
-    if (!layout_object)
-      return true;
-    if (!layout_object->IsFloatingOrOutOfFlowPositioned())
-      return false;
-  }
+  DCHECK(GetLayoutBlockFlow());
+  return GetLayoutBlockFlow()->CanContainFirstFormattedLine();
 }
 
 NGInlineNodeData* NGInlineNode::MutableData() {
@@ -339,16 +329,26 @@ void NGInlineNode::CollectInlines(NGInlineNodeData* data,
 void NGInlineNode::SegmentText(NGInlineNodeData* data) {
   SegmentBidiRuns(data);
   SegmentScriptRuns(data);
+  SegmentFontOrientation(data);
 }
 
 // Segment NGInlineItem by script, Emoji, and orientation using RunSegmenter.
 void NGInlineNode::SegmentScriptRuns(NGInlineNodeData* data) {
-  Vector<NGInlineItem>& items = data->items;
-  String& text_content = data->text_content;
-  text_content.Ensure16Bit();
+  if (data->text_content.Is8Bit() && !data->is_bidi_enabled_) {
+    if (data->items.size()) {
+      RunSegmenter::RunSegmenterRange range = {
+          0u, data->text_content.length(), USCRIPT_LATIN,
+          OrientationIterator::kOrientationKeep, FontFallbackPriority::kText};
+      NGInlineItem::PopulateItemsFromRun(data->items, 0, range);
+    }
+    return;
+  }
 
   // Segment by script and Emoji.
   // Orientation is segmented separately, because it may vary by items.
+  Vector<NGInlineItem>& items = data->items;
+  String& text_content = data->text_content;
+  text_content.Ensure16Bit();
   RunSegmenter segmenter(text_content.Characters16(), text_content.length(),
                          FontOrientation::kHorizontal);
   RunSegmenter::RunSegmenterRange range = RunSegmenter::NullRange();
@@ -356,8 +356,6 @@ void NGInlineNode::SegmentScriptRuns(NGInlineNodeData* data) {
     DCHECK_EQ(items[item_index].start_offset_, range.start);
     item_index = NGInlineItem::PopulateItemsFromRun(items, item_index, range);
   }
-
-  SegmentFontOrientation(data);
 }
 
 void NGInlineNode::SegmentFontOrientation(NGInlineNodeData* data) {
@@ -365,8 +363,11 @@ void NGInlineNode::SegmentFontOrientation(NGInlineNodeData* data) {
   // 'text-orientation: mixed'.
   if (GetLayoutBlockFlow()->IsHorizontalWritingMode())
     return;
+
   Vector<NGInlineItem>& items = data->items;
   String& text_content = data->text_content;
+  text_content.Ensure16Bit();
+
   for (unsigned item_index = 0; item_index < items.size();) {
     NGInlineItem& item = items[item_index];
     if (item.Type() != NGInlineItem::kText ||
@@ -435,8 +436,6 @@ void NGInlineNode::SegmentBidiRuns(NGInlineNodeData* data) {
 
 void NGInlineNode::ShapeText(NGInlineItemsData* data,
                              NGInlineItemsData* previous_data) {
-  // TODO(eae): Add support for shaping latin-1 text?
-  data->text_content.Ensure16Bit();
   ShapeText(data->text_content, &data->items,
             previous_data ? &previous_data->text_content : nullptr);
 }
@@ -445,7 +444,7 @@ void NGInlineNode::ShapeText(const String& text_content,
                              Vector<NGInlineItem>* items,
                              const String* previous_text) {
   // Provide full context of the entire node to the shaper.
-  HarfBuzzShaper shaper(text_content.Characters16(), text_content.length());
+  HarfBuzzShaper shaper(text_content);
   ShapeResultSpacing<String> spacing(text_content);
 
   for (unsigned index = 0; index < items->size();) {
@@ -479,8 +478,7 @@ void NGInlineNode::ShapeText(const String& text_content,
           break;
         end_offset = item.EndOffset();
       } else if (item.Type() == NGInlineItem::kOpenTag ||
-                 item.Type() == NGInlineItem::kCloseTag ||
-                 item.Type() == NGInlineItem::kOutOfFlowPositioned) {
+                 item.Type() == NGInlineItem::kCloseTag) {
         // These items are opaque to shaping.
         // Opaque items cannot have text, such as Object Replacement Characters,
         // since such characters can affect shaping.
@@ -675,15 +673,18 @@ static LayoutUnit ComputeContentSize(NGInlineNode node,
   LayoutUnit result;
   LayoutUnit previous_floats_inline_size =
       input.float_left_inline_size + input.float_right_inline_size;
+  DCHECK_GE(previous_floats_inline_size, 0);
   while (!break_token || !break_token->IsFinished()) {
     unpositioned_floats.clear();
 
-    NGLineBreaker line_breaker(node, mode, *space, &positioned_floats,
-                               &unpositioned_floats,
-                               nullptr /* container_builder */,
-                               &empty_exclusion_space, 0u, break_token.get());
     NGLineInfo line_info;
-    if (!line_breaker.NextLine(line_opportunity, &line_info))
+    NGLineBreaker line_breaker(
+        node, mode, *space, &positioned_floats, &unpositioned_floats,
+        nullptr /* container_builder */, &empty_exclusion_space, 0u,
+        line_opportunity, break_token.get());
+    line_breaker.NextLine(&line_info);
+
+    if (line_info.Results().IsEmpty())
       break;
 
     break_token = line_breaker.CreateBreakToken(line_info, nullptr);
@@ -729,7 +730,10 @@ static LayoutUnit ComputeContentSize(NGInlineNode node,
           floats_inline_size = LayoutUnit();
         }
 
-        floats_inline_size += child_sizes.max_size + child_inline_margins;
+        // When negative margins move the float outside the content area,
+        // such float should not affect the content size.
+        floats_inline_size +=
+            (child_sizes.max_size + child_inline_margins).ClampNegativeToZero();
         previous_float_type = float_style.Floating();
       }
     }

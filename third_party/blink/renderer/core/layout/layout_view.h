@@ -63,8 +63,9 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
 
   // hitTest() will update layout, style and compositing first while
   // hitTestNoLifecycleUpdate() does not.
-  bool HitTest(HitTestResult&);
-  bool HitTestNoLifecycleUpdate(HitTestResult&);
+  bool HitTest(const HitTestLocation& location, HitTestResult&);
+  bool HitTestNoLifecycleUpdate(const HitTestLocation& location,
+                                HitTestResult&);
 
   // Returns the total count of calls to HitTest, for testing.
   unsigned HitTestCount() const { return hit_test_count_; }
@@ -140,9 +141,10 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
 
   void InvalidatePaintForViewAndCompositedLayers();
 
-  void Paint(const PaintInfo&, const LayoutPoint&) const override;
-  void PaintBoxDecorationBackground(const PaintInfo&,
-                                    const LayoutPoint&) const override;
+  void Paint(const PaintInfo&) const override;
+  void PaintBoxDecorationBackground(
+      const PaintInfo&,
+      const LayoutPoint& paint_offset) const override;
 
   void ClearSelection();
   void CommitPendingSelection();
@@ -239,13 +241,7 @@ class CORE_EXPORT LayoutView final : public LayoutBlockFlow {
   void SetShouldDoFullPaintInvalidationOnResizeIfNeeded(bool width_changed,
                                                         bool height_changed);
 
-  // The document scrollbar is always on the right, even in RTL. This is to
-  // prevent it from moving around on navigations.
-  // TODO(skobes): This is not quite the ideal behavior, see
-  // http://crbug.com/250514 and http://crbug.com/249860.
-  bool ShouldPlaceBlockDirectionScrollbarOnLogicalLeft() const override {
-    return false;
-  }
+  bool ShouldPlaceBlockDirectionScrollbarOnLogicalLeft() const override;
 
   LayoutRect DebugRect() const override;
 

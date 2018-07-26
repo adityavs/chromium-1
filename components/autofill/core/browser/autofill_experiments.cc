@@ -34,12 +34,10 @@ const base::Feature kAutofillCreditCardAssist{
     "AutofillCreditCardAssist", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillScanCardholderName{
     "AutofillScanCardholderName", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kAutofillCreditCardBankNameDisplay{
-    "AutofillCreditCardBankNameDisplay", base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kAutofillCreditCardAblationExperiment{
     "AutofillCreditCardAblationExperiment", base::FEATURE_DISABLED_BY_DEFAULT};
-const base::Feature kAutofillCreditCardLastUsedDateDisplay{
-    "AutofillCreditCardLastUsedDateDisplay", base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kAutofillCreditCardLocalCardMigration{
+    "AutofillCreditCardLocalCardMigration", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillDeleteDisusedAddresses{
     "AutofillDeleteDisusedAddresses", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillDeleteDisusedCreditCards{
@@ -50,6 +48,9 @@ const base::Feature kAutofillPreferServerNamePredictions{
     "AutofillPreferServerNamePredictions", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillRationalizeFieldTypePredictions{
     "AutofillRationalizeFieldTypePredictions",
+    base::FEATURE_ENABLED_BY_DEFAULT};
+const base::Feature kAutofillSaveCardDialogUnlabeledExpirationDate{
+    "AutofillSaveCardDialogUnlabeledExpirationDate",
     base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kAutofillSuggestInvalidProfileData{
     "AutofillSuggestInvalidProfileData", base::FEATURE_ENABLED_BY_DEFAULT};
@@ -64,6 +65,9 @@ const base::Feature kAutofillUpstreamAllowAllEmailDomains{
 const base::Feature kAutofillUpstreamAlwaysRequestCardholderName{
     "AutofillUpstreamAlwaysRequestCardholderName",
     base::FEATURE_DISABLED_BY_DEFAULT};
+const base::Feature kAutofillUpstreamBlankCardholderNameField{
+    "AutofillUpstreamBlankCardholderNameField",
+    base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillUpstreamEditableCardholderName{
     "AutofillUpstreamEditableCardholderName",
     base::FEATURE_DISABLED_BY_DEFAULT};
@@ -71,13 +75,11 @@ const base::Feature kAutofillUpstreamSendPanFirstSix{
     "AutofillUpstreamSendPanFirstSix", base::FEATURE_DISABLED_BY_DEFAULT};
 const base::Feature kAutofillUpstreamUpdatePromptExplanation{
     "AutofillUpstreamUpdatePromptExplanation",
-    base::FEATURE_DISABLED_BY_DEFAULT};
+    base::FEATURE_ENABLED_BY_DEFAULT};
 const base::Feature kAutofillVoteUsingInvalidProfileData{
     "AutofillVoteUsingInvalidProfileData", base::FEATURE_ENABLED_BY_DEFAULT};
 
 const char kCreditCardSigninPromoImpressionLimitParamKey[] = "impression_limit";
-const char kAutofillCreditCardLastUsedDateShowExpirationDateKey[] =
-    "show_expiration_date";
 
 #if defined(OS_MACOSX)
 const base::Feature kMacViewsAutofillPopup{"MacViewsAutofillPopup",
@@ -102,19 +104,8 @@ bool IsAutofillCreditCardAssistEnabled() {
 #endif
 }
 
-bool IsAutofillCreditCardLastUsedDateDisplayExperimentEnabled() {
-  return base::FeatureList::IsEnabled(kAutofillCreditCardLastUsedDateDisplay);
-}
-
-bool IsAutofillCreditCardBankNameDisplayExperimentEnabled() {
-  return base::FeatureList::IsEnabled(kAutofillCreditCardBankNameDisplay);
-}
-
-bool ShowExpirationDateInAutofillCreditCardLastUsedDate() {
-  const std::string param_value = variations::GetVariationParamValueByFeature(
-      kAutofillCreditCardLastUsedDateDisplay,
-      kAutofillCreditCardLastUsedDateShowExpirationDateKey);
-  return param_value == "true";
+bool IsAutofillCreditCardLocalCardMigrationExperimentEnabled() {
+  return base::FeatureList::IsEnabled(kAutofillCreditCardLocalCardMigration);
 }
 
 bool OfferStoreUnmaskedCards() {
@@ -192,6 +183,11 @@ bool IsAutofillUpstreamAlwaysRequestCardholderNameExperimentEnabled() {
       kAutofillUpstreamAlwaysRequestCardholderName);
 }
 
+bool IsAutofillUpstreamBlankCardholderNameFieldExperimentEnabled() {
+  return base::FeatureList::IsEnabled(
+      kAutofillUpstreamBlankCardholderNameField);
+}
+
 bool IsAutofillUpstreamEditableCardholderNameExperimentEnabled() {
   return base::FeatureList::IsEnabled(kAutofillUpstreamEditableCardholderName);
 }
@@ -222,6 +218,11 @@ bool ShouldUseNativeViews() {
 #else
   return false;
 #endif
+}
+
+bool IsAutofillSaveCardDialogUnlabeledExpirationDateEnabled() {
+  return base::FeatureList::IsEnabled(
+      kAutofillSaveCardDialogUnlabeledExpirationDate);
 }
 
 }  // namespace autofill

@@ -6,9 +6,11 @@
 #define THIRD_PARTY_BLINK_RENDERER_PLATFORM_SCHEDULER_COMMON_METRICS_HELPER_H_
 
 #include "base/optional.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/time/time.h"
 #include "third_party/blink/public/platform/web_thread_type.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
+#include "third_party/blink/renderer/platform/platform_export.h"
+#include "third_party/blink/renderer/platform/scheduler/common/total_duration_metric_reporter.h"
 #include "third_party/blink/renderer/platform/scheduler/util/task_duration_metric_reporter.h"
 
 namespace base {
@@ -31,28 +33,28 @@ namespace scheduler {
 // own instantiation of this class.
 class PLATFORM_EXPORT MetricsHelper {
  public:
-  explicit MetricsHelper(WebThreadType thread_type);
+  MetricsHelper(WebThreadType thread_type, bool has_cpu_timing_for_each_task);
   ~MetricsHelper();
 
  protected:
-  bool ShouldDiscardTask(base::sequence_manager::TaskQueue* queue,
-                         const base::sequence_manager::TaskQueue::Task& task,
-                         base::TimeTicks start_time,
-                         base::TimeTicks end_time,
-                         base::Optional<base::TimeDelta> thread_time);
+  bool ShouldDiscardTask(
+      base::sequence_manager::TaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
   // Record task metrics which are shared between threads.
   void RecordCommonTaskMetrics(
       base::sequence_manager::TaskQueue* queue,
       const base::sequence_manager::TaskQueue::Task& task,
-      base::TimeTicks start_time,
-      base::TimeTicks end_time,
-      base::Optional<base::TimeDelta> thread_time);
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
  protected:
-  WebThreadType thread_type_;
+  const WebThreadType thread_type_;
+  const bool has_cpu_timing_for_each_task_;
 
  private:
+  base::ThreadTicks last_known_time_;
+
   TaskDurationMetricReporter<WebThreadType> thread_task_duration_reporter_;
   TaskDurationMetricReporter<WebThreadType> thread_task_cpu_duration_reporter_;
   TaskDurationMetricReporter<WebThreadType>
@@ -63,6 +65,8 @@ class PLATFORM_EXPORT MetricsHelper {
       background_thread_task_duration_reporter_;
   TaskDurationMetricReporter<WebThreadType>
       background_thread_task_cpu_duration_reporter_;
+  TaskDurationMetricReporter<WebThreadType> tracked_cpu_duration_reporter_;
+  TaskDurationMetricReporter<WebThreadType> non_tracked_cpu_duration_reporter_;
 
   DISALLOW_COPY_AND_ASSIGN(MetricsHelper);
 };

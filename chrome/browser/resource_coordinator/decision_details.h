@@ -68,6 +68,14 @@ enum class DecisionFailureReason : int32_t {
   LIVE_STATE_USING_WEB_USB,
   // The tab is opted out of the intervention as it is currently visible.
   LIVE_STATE_VISIBLE,
+  // The tab is opted out of the intervention as it's currently using DevTools.
+  LIVE_STATE_DEVTOOLS_OPEN,
+  // The tab is opted out of the intervention as it's currently capturing a
+  // window or screen.
+  LIVE_STATE_DESKTOP_CAPTURE,
+  // This tab is sharing its BrowsingInstance with another tab, and so could
+  // want to communicate with it.
+  LIVE_STATE_SHARING_BROWSING_INSTANCE,
   // This must remain last.
   MAX,
 };

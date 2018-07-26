@@ -31,6 +31,7 @@
 #include "cc/tiles/software_image_decode_cache.h"
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/web_data.h"
+#include "third_party/blink/renderer/platform/drag_image.h"
 #include "third_party/blink/renderer/platform/geometry/float_point.h"
 #include "third_party/blink/renderer/platform/geometry/float_rect.h"
 #include "third_party/blink/renderer/platform/geometry/float_size.h"
@@ -368,7 +369,7 @@ void Image::DrawPattern(GraphicsContext& context,
   flags.setColor(SK_ColorBLACK);
   flags.setBlendMode(composite_op);
   flags.setFilterQuality(
-      context.ComputeFilterQuality(this, dest_rect, subset_rect));
+      context.ComputeFilterQuality(this, dest_rect, FloatRect(subset_rect)));
   flags.setAntiAlias(context.ShouldAntialias());
   flags.setShader(CreatePatternShader(
       image, local_matrix, flags,
@@ -447,6 +448,30 @@ FloatRect Image::ComputeSubsetForBackground(const FloatRect& phase_and_size,
                    (subset.Y() - phase_and_size.Y()) / scale.Height(),
                    subset.Width() / scale.Width(),
                    subset.Height() / scale.Height());
+}
+
+SkBitmap Image::AsSkBitmapForCurrentFrame(
+    RespectImageOrientationEnum should_respect_image_orientation) {
+  PaintImage paint_image = PaintImageForCurrentFrame();
+  if (!paint_image)
+    return {};
+
+  if (should_respect_image_orientation == kRespectImageOrientation &&
+      IsBitmapImage()) {
+    ImageOrientation orientation =
+        ToBitmapImage(this)->CurrentFrameOrientation();
+    paint_image = DragImage::ResizeAndOrientImage(paint_image, orientation);
+    if (!paint_image)
+      return {};
+  }
+
+  sk_sp<SkImage> sk_image = paint_image.GetSkImage();
+  if (!sk_image)
+    return {};
+
+  SkBitmap bitmap;
+  sk_image->asLegacyBitmap(&bitmap);
+  return bitmap;
 }
 
 }  // namespace blink

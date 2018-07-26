@@ -165,18 +165,22 @@ Polymer({
 
   showModal: function() {
     this.$.dialog.showModal();
-    this.open = this.$.dialog.open;
+    assert(this.$.dialog.open);
+    this.open = true;
+    this.fire('cr-dialog-open');
   },
 
   cancel: function() {
     this.fire('cancel');
     this.$.dialog.close();
-    this.open = this.$.dialog.open;
+    assert(!this.$.dialog.open);
+    this.open = false;
   },
 
   close: function() {
     this.$.dialog.close('success');
-    this.open = this.$.dialog.open;
+    assert(!this.$.dialog.open);
+    this.open = false;
   },
 
   /**
@@ -194,6 +198,10 @@ Polymer({
    * @private
    */
   onNativeDialogClose_: function(e) {
+    // Ignore any 'close' events not fired directly by the <dialog> element.
+    if (e.target !== this.getNative())
+      return;
+
     // TODO(dpapad): This is necessary to make the code work both for Polymer 1
     // and Polymer 2. Remove once migration to Polymer 2 is completed.
     e.stopPropagation();
@@ -242,10 +250,7 @@ Polymer({
       return;
 
     // Accept Enter keys from either the dialog, or a child input element.
-    // TODO(scottchen): remove 'paper-input' from this white-list once it is
-    //                  removed from the codebase.
-    if (e.target != this &&
-        !['PAPER-INPUT', 'CR-INPUT'].includes(e.target.tagName))
+    if (e.target != this && e.target.tagName != 'CR-INPUT')
       return;
 
     var actionButton =

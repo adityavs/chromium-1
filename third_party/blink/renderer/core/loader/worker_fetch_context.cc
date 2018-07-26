@@ -96,6 +96,8 @@ WorkerFetchContext::WorkerFetchContext(
       web_context_(std::move(web_context)),
       loading_task_runner_(
           global_scope_->GetTaskRunner(TaskType::kInternalLoading)),
+      fetch_client_settings_object_(
+          new FetchClientSettingsObjectImpl(*global_scope_)),
       save_data_enabled_(GetNetworkStateNotifier().SaveDataEnabled()) {
   web_context_->InitializeOnWorkerThread();
   std::unique_ptr<blink::WebDocumentSubresourceFilter> web_filter =
@@ -105,6 +107,10 @@ WorkerFetchContext::WorkerFetchContext(
         SubresourceFilter::Create(global_scope, std::move(web_filter));
   }
 }
+const FetchClientSettingsObject*
+WorkerFetchContext::GetFetchClientSettingsObject() const {
+  return fetch_client_settings_object_.Get();
+}
 
 KURL WorkerFetchContext::GetSiteForCookies() const {
   return web_context_->SiteForCookies();
@@ -112,6 +118,11 @@ KURL WorkerFetchContext::GetSiteForCookies() const {
 
 SubresourceFilter* WorkerFetchContext::GetSubresourceFilter() const {
   return subresource_filter_.Get();
+}
+
+PreviewsResourceLoadingHints*
+WorkerFetchContext::GetPreviewsResourceLoadingHints() const {
+  return nullptr;
 }
 
 bool WorkerFetchContext::AllowScriptFromSource(const KURL& url) const {
@@ -160,8 +171,7 @@ bool WorkerFetchContext::ShouldBlockWebSocketByMixedContentCheck(
     const KURL& url) const {
   // Worklets don't support WebSocket.
   DCHECK(global_scope_->IsWorkerGlobalScope());
-  return !MixedContentChecker::IsWebSocketAllowed(
-      ToWorkerGlobalScope(global_scope_), web_context_.get(), url);
+  return !MixedContentChecker::IsWebSocketAllowed(*this, url);
 }
 
 std::unique_ptr<WebSocketHandshakeThrottle>
@@ -176,8 +186,8 @@ bool WorkerFetchContext::ShouldBlockFetchByMixedContentCheck(
     const KURL& url,
     SecurityViolationReportingPolicy reporting_policy) const {
   return MixedContentChecker::ShouldBlockFetchOnWorker(
-      global_scope_, web_context_.get(), request_context, frame_type,
-      redirect_status, url, reporting_policy);
+      *this, request_context, redirect_status, url, reporting_policy,
+      global_scope_->IsWorkletGlobalScope());
 }
 
 bool WorkerFetchContext::ShouldBlockFetchAsCredentialedSubresource(
@@ -199,14 +209,6 @@ bool WorkerFetchContext::ShouldBlockFetchAsCredentialedSubresource(
   return false;
 }
 
-ReferrerPolicy WorkerFetchContext::GetReferrerPolicy() const {
-  return global_scope_->GetReferrerPolicy();
-}
-
-String WorkerFetchContext::GetOutgoingReferrer() const {
-  return global_scope_->OutgoingReferrer();
-}
-
 const KURL& WorkerFetchContext::Url() const {
   return global_scope_->Url();
 }
@@ -221,8 +223,7 @@ const SecurityOrigin* WorkerFetchContext::GetParentSecurityOrigin() const {
 
 base::Optional<mojom::IPAddressSpace> WorkerFetchContext::GetAddressSpace()
     const {
-  return base::make_optional(
-      global_scope_->GetSecurityContext().AddressSpace());
+  return base::make_optional(GetSecurityContext().AddressSpace());
 }
 
 const ContentSecurityPolicy* WorkerFetchContext::GetContentSecurityPolicy()
@@ -235,12 +236,11 @@ void WorkerFetchContext::AddConsoleMessage(ConsoleMessage* message) const {
 }
 
 const SecurityOrigin* WorkerFetchContext::GetSecurityOrigin() const {
-  return global_scope_->GetSecurityOrigin();
+  return GetFetchClientSettingsObject()->GetSecurityOrigin();
 }
 
 std::unique_ptr<WebURLLoader> WorkerFetchContext::CreateURLLoader(
     const ResourceRequest& request,
-    scoped_refptr<base::SingleThreadTaskRunner> task_runner,
     const ResourceLoaderOptions& options) {
   CountUsage(WebFeature::kOffMainThreadFetch);
   WrappedResourceRequest wrapped(request);
@@ -263,19 +263,22 @@ std::unique_ptr<WebURLLoader> WorkerFetchContext::CreateURLLoader(
   if (url_loader_factory) {
     return web_context_
         ->WrapURLLoaderFactory(url_loader_factory.PassInterface().PassHandle())
-        ->CreateURLLoader(wrapped, task_runner);
+        ->CreateURLLoader(wrapped, CreateResourceLoadingTaskRunnerHandle());
   }
 
   if (request.GetRequestContext() == WebURLRequest::kRequestContextScript) {
     if (!script_loader_factory_)
       script_loader_factory_ = web_context_->CreateScriptLoaderFactory();
-    if (script_loader_factory_)
-      return script_loader_factory_->CreateURLLoader(wrapped, task_runner);
+    if (script_loader_factory_) {
+      return script_loader_factory_->CreateURLLoader(
+          wrapped, CreateResourceLoadingTaskRunnerHandle());
+    }
   }
 
   if (!url_loader_factory_)
     url_loader_factory_ = web_context_->CreateURLLoaderFactory();
-  return url_loader_factory_->CreateURLLoader(wrapped, task_runner);
+  return url_loader_factory_->CreateURLLoader(
+      wrapped, CreateResourceLoadingTaskRunnerHandle());
 }
 
 blink::mojom::ControllerServiceWorkerMode
@@ -408,10 +411,31 @@ WorkerFetchContext::GetLoadingTaskRunner() {
   return loading_task_runner_;
 }
 
+std::unique_ptr<blink::scheduler::WebResourceLoadingTaskRunnerHandle>
+WorkerFetchContext::CreateResourceLoadingTaskRunnerHandle() {
+  return scheduler::WebResourceLoadingTaskRunnerHandle::CreateUnprioritized(
+      GetLoadingTaskRunner());
+}
+
+SecurityContext& WorkerFetchContext::GetSecurityContext() const {
+  return global_scope_->GetSecurityContext();
+}
+
+WorkerSettings* WorkerFetchContext::GetWorkerSettings() const {
+  if (!global_scope_->IsWorkerGlobalScope())
+    return nullptr;
+  return ToWorkerGlobalScope(global_scope_)->GetWorkerSettings();
+}
+
+WorkerContentSettingsClient*
+WorkerFetchContext::GetWorkerContentSettingsClient() const {
+  return WorkerContentSettingsClient::From(*global_scope_);
+}
+
 void WorkerFetchContext::Trace(blink::Visitor* visitor) {
   visitor->Trace(global_scope_);
   visitor->Trace(subresource_filter_);
-  visitor->Trace(resource_fetcher_);
+  visitor->Trace(fetch_client_settings_object_);
   BaseFetchContext::Trace(visitor);
 }
 

@@ -12,9 +12,9 @@
 #include "base/strings/string_split.h"
 #include "base/strings/stringprintf.h"
 #include "base/time/time.h"
+#include "chrome/browser/vr/input_event.h"
 #include "chrome/browser/vr/model/camera_model.h"
 #include "chrome/browser/vr/vr_gl_util.h"
-#include "third_party/blink/public/platform/web_gesture_event.h"
 #include "third_party/skia/include/core/SkRRect.h"
 #include "third_party/skia/include/core/SkRect.h"
 #include "ui/gfx/geometry/angle_conversions.h"
@@ -225,13 +225,13 @@ void UiElement::OnTouchMove(const gfx::PointF& position,
   }
 }
 
-void UiElement::OnFlingCancel(std::unique_ptr<blink::WebGestureEvent> gesture,
+void UiElement::OnFlingCancel(std::unique_ptr<InputEvent> gesture,
                               const gfx::PointF& position) {}
-void UiElement::OnScrollBegin(std::unique_ptr<blink::WebGestureEvent> gesture,
+void UiElement::OnScrollBegin(std::unique_ptr<InputEvent> gesture,
                               const gfx::PointF& position) {}
-void UiElement::OnScrollUpdate(std::unique_ptr<blink::WebGestureEvent> gesture,
+void UiElement::OnScrollUpdate(std::unique_ptr<InputEvent> gesture,
                                const gfx::PointF& position) {}
-void UiElement::OnScrollEnd(std::unique_ptr<blink::WebGestureEvent> gesture,
+void UiElement::OnScrollEnd(std::unique_ptr<InputEvent> gesture,
                             const gfx::PointF& position) {}
 
 void UiElement::OnFocusChanged(bool focused) {
@@ -297,9 +297,11 @@ bool UiElement::PrepareToDraw() {
   return false;
 }
 
-bool UiElement::UpdateTexture() {
+bool UiElement::HasDirtyTexture() const {
   return false;
 }
+
+void UiElement::UpdateTexture() {}
 
 bool UiElement::IsHitTestable() const {
   return IsVisible() && hit_testable_;
@@ -319,7 +321,7 @@ void UiElement::SetVisible(bool visible) {
 
 void UiElement::SetVisibleImmediately(bool visible) {
   opacity_ = visible ? opacity_when_visible_ : 0.0;
-  animation_.RemoveKeyframeModelsWithProperty(OPACITY);
+  animation_.RemoveKeyframeModels(OPACITY);
 }
 
 bool UiElement::IsVisible() const {
@@ -807,12 +809,12 @@ void UiElement::AddKeyframeModel(
   animation_.AddKeyframeModel(std::move(keyframe_model));
 }
 
-void UiElement::RemoveKeyframeModels() {
-  animation_.RemoveKeyframeModels();
+void UiElement::RemoveKeyframeModel(int keyframe_model_id) {
+  animation_.RemoveKeyframeModel(keyframe_model_id);
 }
 
-void UiElement::RemoveKeyframeModelsWithProperty(int target_property) {
-  animation_.RemoveKeyframeModelsWithProperty(target_property);
+void UiElement::RemoveKeyframeModels(int target_property) {
+  animation_.RemoveKeyframeModels(target_property);
 }
 
 bool UiElement::IsAnimatingProperty(TargetProperty property) const {

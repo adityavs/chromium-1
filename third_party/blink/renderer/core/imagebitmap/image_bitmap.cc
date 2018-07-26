@@ -17,7 +17,7 @@
 #include "third_party/blink/renderer/platform/graphics/canvas_resource_provider.h"
 #include "third_party/blink/renderer/platform/graphics/skia/skia_utils.h"
 #include "third_party/blink/renderer/platform/image-decoders/image_decoder.h"
-#include "third_party/blink/renderer/platform/threading/background_task_runner.h"
+#include "third_party/blink/renderer/platform/scheduler/public/background_scheduler.h"
 #include "third_party/skia/include/core/SkCanvas.h"
 #include "third_party/skia/include/core/SkColorSpaceXformCanvas.h"
 #include "third_party/skia/include/core/SkImageInfo.h"
@@ -447,20 +447,8 @@ scoped_refptr<StaticBitmapImage> ScaleImage(
 scoped_refptr<StaticBitmapImage> ApplyColorSpaceConversion(
     scoped_refptr<StaticBitmapImage>&& image,
     ImageBitmap::ParsedOptions& options) {
-  SkTransferFunctionBehavior transfer_function_behavior =
-      SkTransferFunctionBehavior::kRespect;
-  // We normally expect to respect transfer function. However, in two scenarios
-  // we have to ignore the transfer function. First, when the source image is
-  // unpremul. Second, when the source image is drawn using a
-  // SkColorSpaceXformCanvas.
-  sk_sp<SkImage> skia_image = image->PaintImageForCurrentFrame().GetSkImage();
-  if (!skia_image->colorSpace() ||
-      skia_image->alphaType() == kUnpremul_SkAlphaType)
-    transfer_function_behavior = SkTransferFunctionBehavior::kIgnore;
-
   return image->ConvertToColorSpace(
-      options.color_params.GetSkColorSpaceForSkSurfaces(),
-      transfer_function_behavior);
+      options.color_params.GetSkColorSpaceForSkSurfaces());
 }
 
 scoped_refptr<StaticBitmapImage> MakeBlankImage(
@@ -1008,7 +996,7 @@ ScriptPromise ImageBitmap::CreateAsync(ImageElementBase* image,
                                      draw_dst_rect, parsed_options.flip_y);
   std::unique_ptr<ParsedOptions> passed_parsed_options =
       std::make_unique<ParsedOptions>(parsed_options);
-  BackgroundTaskRunner::PostOnBackgroundThread(
+  BackgroundScheduler::PostOnBackgroundThread(
       FROM_HERE,
       CrossThreadBind(&RasterizeImageOnBackgroundThread,
                       WrapCrossThreadPersistent(resolver),

@@ -33,10 +33,6 @@
   <!-- Make sure paper-button is imported to use in user_pod_template.html -->
   <link rel="import" href="chrome://resources/polymer/v1_0/paper-button/paper-button.html">
   <style is="custom-style" include="shared-styles">
-    body {
-      background-color: var(--md-background-color);
-    }
-
     user-manager-pages,
     #login-header-bar {
       bottom: 0;
@@ -87,7 +83,7 @@
     .pod {
       @apply --cr-card-elevation;
       border-radius: var(--cr-card-border-radius);
-      color: var(--primary-text-color);
+      color: var(--cr-primary-text-color);
       cursor: default;
       height: auto;
       transform: none;
@@ -133,7 +129,6 @@
 
     .pod .main-pane .name-container .name,
     .reauth-hint-container .reauth-name-hint {
-      color: inherit;
       font-size: inherit;
       margin: 0;
       padding: 0;
@@ -176,7 +171,7 @@
     }
 
     .pod.locked.child .locked-indicator {
-      -webkit-margin-start: 8px;
+      margin-inline-start: 8px;
     }
 
     .pod.legacy-supervised .legacy-supervised-indicator {
@@ -282,8 +277,12 @@
       height: auto;
     }
 
+    .action-box-menu-title-name {
+      color: var(--cr-primary-text-color);
+    }
+
     .action-box-menu-title-email {
-      color: var(--paper-grey-600);
+      color: var(--cr-secondary-text-color);
     }
 
     .action-box-menu-remove {

@@ -39,7 +39,6 @@
 #include "chrome/browser/ui/browser_instant_controller.h"
 #include "chrome/browser/ui/browser_list.h"
 #include "chrome/browser/ui/browser_window_state.h"
-#import "chrome/browser/ui/browser_window_touch_bar_mac.h"
 #import "chrome/browser/ui/cocoa/background_gradient_view.h"
 #import "chrome/browser/ui/cocoa/bookmarks/bookmark_bar_controller.h"
 #import "chrome/browser/ui/cocoa/bookmarks/bookmark_bubble_observer_cocoa.h"
@@ -58,7 +57,7 @@
 #import "chrome/browser/ui/cocoa/find_bar/find_bar_bridge.h"
 #import "chrome/browser/ui/cocoa/find_bar/find_bar_cocoa_controller.h"
 #import "chrome/browser/ui/cocoa/framed_browser_window.h"
-#import "chrome/browser/ui/cocoa/fullscreen/fullscreen_toolbar_controller.h"
+#import "chrome/browser/ui/cocoa/fullscreen/fullscreen_toolbar_controller_cocoa.h"
 #import "chrome/browser/ui/cocoa/fullscreen/fullscreen_toolbar_visibility_lock_controller.h"
 #include "chrome/browser/ui/cocoa/fullscreen_placeholder_view.h"
 #import "chrome/browser/ui/cocoa/fullscreen_window.h"
@@ -78,8 +77,8 @@
 #import "chrome/browser/ui/cocoa/tabs/tab_view.h"
 #import "chrome/browser/ui/cocoa/toolbar/app_toolbar_button.h"
 #import "chrome/browser/ui/cocoa/toolbar/toolbar_controller.h"
+#import "chrome/browser/ui/cocoa/touchbar/browser_window_touch_bar_controller.h"
 #include "chrome/browser/ui/cocoa/translate/translate_bubble_bridge_views.h"
-#import "chrome/browser/ui/cocoa/translate/translate_bubble_controller.h"
 #include "chrome/browser/ui/exclusive_access/fullscreen_controller.h"
 #include "chrome/browser/ui/location_bar/location_bar.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
@@ -311,7 +310,7 @@ bool IsTabDetachingInFullscreenEnabled() {
     [[self tabContentArea] addSubview:[devToolsController_ view]];
 
     // Create the overlayable contents controller.  This provides the switch
-    // view that TabStripController needs.
+    // view that TabStripControllerCocoa needs.
     overlayableContentsController_.reset(
         [[OverlayableContentsController alloc] init]);
     [[overlayableContentsController_ view]
@@ -489,7 +488,7 @@ bool IsTabDetachingInFullscreenEnabled() {
   return toolbarController_.get();
 }
 
-- (TabStripController*)tabStripController {
+- (TabStripControllerCocoa*)tabStripController {
   return tabStripController_.get();
 }
 
@@ -1217,7 +1216,7 @@ bool IsTabDetachingInFullscreenEnabled() {
   std::vector<TabStripModelDelegate::NewStripContents> contentses;
   TabStripModel* model = browser_->tab_strip_model();
 
-  for (TabView* tabView in tabViews) {
+  for (TabViewCocoa* tabView in tabViews) {
     // Fetch the tab contents for the tab being dragged.
     int index = [tabStripController_ modelIndexForTabView:tabView];
     bool isPinned = model->IsTabPinned(index);
@@ -1255,7 +1254,7 @@ bool IsTabDetachingInFullscreenEnabled() {
   }
 
   // And make sure we use the correct frame in the new view.
-  TabStripController* tabStripController = [controller tabStripController];
+  TabStripControllerCocoa* tabStripController = [controller tabStripController];
   NSView* tabStrip = [self tabStripView];
   NSEnumerator* tabEnumerator = [tabViews objectEnumerator];
   for (NSView* newView in [tabStripController tabViews]) {
@@ -1269,7 +1268,7 @@ bool IsTabDetachingInFullscreenEnabled() {
       NSRect tabRect =
           NSOffsetRect(sourceTabRect, -tabOverflow.width, -tabOverflow.height);
       // Force the added tab to the right size (remove stretching.)
-      tabRect.size.height = [TabStripController defaultTabHeight];
+      tabRect.size.height = [TabStripControllerCocoa defaultTabHeight];
 
       [tabStripController setFrame:tabRect ofTabView:newView];
     }
@@ -1297,8 +1296,7 @@ bool IsTabDetachingInFullscreenEnabled() {
   }
 }
 
-- (void)insertPlaceholderForTab:(TabView*)tab
-                          frame:(NSRect)frame {
+- (void)insertPlaceholderForTab:(TabViewCocoa*)tab frame:(NSRect)frame {
   [super insertPlaceholderForTab:tab frame:frame];
   [tabStripController_ insertPlaceholderForTab:tab frame:frame];
 }
@@ -1327,7 +1325,7 @@ bool IsTabDetachingInFullscreenEnabled() {
   return ![self isInAnyFullscreenMode] || [self overlayWindow];
 }
 
-- (BOOL)isTabFullyVisible:(TabView*)tab {
+- (BOOL)isTabFullyVisible:(TabViewCocoa*)tab {
   return [tabStripController_ isTabFullyVisible:tab];
 }
 
@@ -1600,54 +1598,8 @@ bool IsTabDetachingInFullscreenEnabled() {
                                      step:(translate::TranslateStep)step
                                 errorType:(translate::TranslateErrors::Type)
                                 errorType {
-  if (chrome::ShowAllDialogsWithViewsToolkit()) {
-    ShowTranslateBubbleViews([self window], [self locationBarBridge], contents,
-                             step, errorType, true);
-    return;
-  }
-  // TODO(hajimehoshi): The similar logic exists at TranslateBubbleView::
-  // ShowBubble. This should be unified.
-  if (translateBubbleController_) {
-    // When the user reads the advanced setting panel, the bubble should not be
-    // changed because they are focusing on the bubble.
-    if (translateBubbleController_.webContents == contents &&
-        translateBubbleController_.model->GetViewState() ==
-        TranslateBubbleModel::VIEW_STATE_ADVANCED) {
-      return;
-    }
-    if (step != translate::TRANSLATE_STEP_TRANSLATE_ERROR) {
-      TranslateBubbleModel::ViewState viewState =
-          TranslateBubbleModelImpl::TranslateStepToViewState(step);
-      [translateBubbleController_ switchView:viewState];
-    } else {
-      [translateBubbleController_ switchToErrorView:errorType];
-    }
-    return;
-  }
-
-  std::string sourceLanguage;
-  std::string targetLanguage;
-  ChromeTranslateClient::GetTranslateLanguages(
-      contents, &sourceLanguage, &targetLanguage);
-
-  std::unique_ptr<translate::TranslateUIDelegate> uiDelegate(
-      new translate::TranslateUIDelegate(
-          ChromeTranslateClient::GetManagerFromWebContents(contents)
-              ->GetWeakPtr(),
-          sourceLanguage, targetLanguage));
-  std::unique_ptr<TranslateBubbleModel> model(
-      new TranslateBubbleModelImpl(step, std::move(uiDelegate)));
-  translateBubbleController_ =
-      [[TranslateBubbleController alloc] initWithParentWindow:self
-                                                        model:std::move(model)
-                                                  webContents:contents];
-  [translateBubbleController_ showWindow:nil];
-
-  NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
-  [center addObserver:self
-             selector:@selector(translateBubbleWindowWillClose:)
-                 name:NSWindowWillCloseNotification
-               object:[translateBubbleController_ window]];
+  ShowTranslateBubbleViews([self window], [self locationBarBridge], contents,
+                           step, errorType, true);
 }
 
 - (void)dismissPermissionBubble {
@@ -1656,24 +1608,13 @@ bool IsTabDetachingInFullscreenEnabled() {
     delegate->Closing();
 }
 
-// Nil out the weak translate bubble controller reference.
-- (void)translateBubbleWindowWillClose:(NSNotification*)notification {
-  DCHECK_EQ([notification object], [translateBubbleController_ window]);
-
-  NSNotificationCenter* center = [NSNotificationCenter defaultCenter];
-  [center removeObserver:self
-                    name:NSWindowWillCloseNotification
-                  object:[translateBubbleController_ window]];
-  translateBubbleController_ = nil;
-}
-
 // If the browser is in incognito mode or has multi-profiles, install the image
 // view to decorate the window at the upper right. Use the same base y
 // coordinate as the tab strip.
 - (void)installAvatar {
   // Install the image into the badge view. Hide it for now; positioning and
   // sizing will be done by the layout code. The AvatarIcon will choose which
-  // image to display based on the browser. The AvatarButton will display
+  // image to display based on the browser. The AvatarButtonCocoa will display
   // the browser profile's name unless the browser is incognito.
   NSView* view;
   if ([self shouldUseNewAvatarButton]) {
@@ -1864,17 +1805,18 @@ willAnimateFromState:(BookmarkBar::State)oldState
   [sheet orderOut:self];
 }
 
-- (FullscreenToolbarController*)fullscreenToolbarController {
+- (FullscreenToolbarControllerCocoa*)fullscreenToolbarController {
   return fullscreenToolbarController_.get();
 }
 
 - (void)setFullscreenToolbarController:
-    (FullscreenToolbarController*)controller {
+    (FullscreenToolbarControllerCocoa*)controller {
   fullscreenToolbarController_.reset([controller retain]);
 }
 
-- (void)setBrowserWindowTouchBar:(BrowserWindowTouchBar*)touchBar {
-  touchBar_.reset([touchBar retain]);
+- (void)setBrowserWindowTouchBarController:
+    (BrowserWindowTouchBarController*)touchBarController {
+  touchBarController_.reset([touchBarController retain]);
 }
 
 - (void)executeExtensionCommand:(const std::string&)extension_id
@@ -1895,14 +1837,14 @@ willAnimateFromState:(BookmarkBar::State)oldState
   return static_cast<BrowserWindowCocoa*>([self browserWindow])->alert_state();
 }
 
-- (BrowserWindowTouchBar*)browserWindowTouchBar {
-  if (!touchBar_) {
-    touchBar_.reset([[BrowserWindowTouchBar alloc]
+- (BrowserWindowTouchBarController*)browserWindowTouchBarController {
+  if (!touchBarController_) {
+    touchBarController_.reset([[BrowserWindowTouchBarController alloc]
         initWithBrowser:browser_.get()
                  window:[self window]]);
   }
 
-  return touchBar_.get();
+  return touchBarController_.get();
 }
 
 - (BOOL)isToolbarShowing {

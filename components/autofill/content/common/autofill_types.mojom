@@ -100,6 +100,13 @@ enum LabelSource {
   VALUE,
 };
 
+// autofill::FillingStatus
+enum FillingStatus {
+  SUCCESS,
+  ERROR_NO_VALID_FIELD,
+  ERROR_NOT_ALLOWED,
+};
+
 // autofill::FormFieldData
 struct FormFieldData {
   mojo_base.mojom.String16 label;
@@ -178,6 +185,7 @@ struct PasswordFormFillData {
   url.mojom.Url action;
   FormFieldData username_field;
   FormFieldData password_field;
+  bool username_may_use_prefilled_placeholder;
   string preferred_realm;
   map<mojo_base.mojom.String16, PasswordAndRealm> additional_logins;
   bool wait_for_username;
@@ -198,6 +206,7 @@ struct PasswordGenerationUIData {
   gfx.mojom.RectF bounds;
   int32 max_length;
   mojo_base.mojom.String16 generation_element;
+  mojo_base.mojom.TextDirection text_direction;
   PasswordForm password_form;
 };
 
@@ -247,6 +256,7 @@ struct PasswordForm {
   bool is_affiliation_based_match;
   PasswordFormSubmissionIndicatorEvent submission_event;
   bool only_for_fallback_saving;
+  bool is_gaia_with_skip_save_password_form;
 };
 
 // TODO(leonhsl): Use map directly after http://crbug.com/628104 solved.

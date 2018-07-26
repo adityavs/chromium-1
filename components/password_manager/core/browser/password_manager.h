@@ -123,6 +123,9 @@ class PasswordManager : public LoginModel, public FormSubmissionObserver {
 
   // Handles a password form being submitted, assumes that submission is
   // successful and does not do any checks on success of submission.
+  // For example, this is called if |password_form| was filled
+  // upon in-page navigation. This often means history.pushState being
+  // called from JavaScript.
   void OnPasswordFormSubmittedNoChecks(
       password_manager::PasswordManagerDriver* driver,
       const autofill::PasswordForm& password_form);
@@ -140,13 +143,6 @@ class PasswordManager : public LoginModel, public FormSubmissionObserver {
 
   // Handles a request to hide manual fallback for password saving.
   void HideManualFallbackForSaving();
-
-  // Called if |password_form| was filled upon in-page navigation. This often
-  // means history.pushState being called from JavaScript. If this causes false
-  // positive in password saving, update http://crbug.com/357696.
-  // TODO(https://crbug.com/795462): find better name for this function.
-  void OnSameDocumentNavigation(password_manager::PasswordManagerDriver* driver,
-                                const autofill::PasswordForm& password_form);
 
   void ProcessAutofillPredictions(
       password_manager::PasswordManagerDriver* driver,
@@ -176,9 +172,20 @@ class PasswordManager : public LoginModel, public FormSubmissionObserver {
   const std::vector<std::unique_ptr<NewPasswordFormManager>>& form_managers() {
     return form_managers_;
   }
+
+  const PasswordFormManager* provisional_save_manager() {
+    return provisional_save_manager_.get();
+  }
 #endif
 
   NavigationEntryToCheck entry_to_check() const { return entry_to_check_; }
+
+  // Reports the priority of a PasswordGenerationRequirementsSpec for a
+  // generated password. See
+  // PasswordFormMetricsRecorder::ReportSpecPriorityForGeneratedPassword.
+  void ReportSpecPriorityForGeneratedPassword(
+      const autofill::PasswordForm& password_form,
+      uint32_t spec_priority);
 
  private:
   FRIEND_TEST_ALL_PREFIXES(
@@ -205,11 +212,10 @@ class PasswordManager : public LoginModel, public FormSubmissionObserver {
   bool ShouldBlockPasswordForSameOriginButDifferentScheme(
       const autofill::PasswordForm& form) const;
 
-  // Returns true if the user needs to be prompted before a password can be
-  // saved (instead of automatically saving
-  // the password), based on inspecting the state of
-  // |provisional_save_manager_|.
-  bool ShouldPromptUserToSavePassword() const;
+  // The old version of ShouldPromptUserToSavePassword, it is left for
+  // comparison and metric sending.
+  // TODO(crbug.com/856543): Remove it after M-70.
+  bool ShouldPromptUserToSavePasswordOld() const;
 
   // Called when the login was deemed successful. It handles the special case
   // when the provisionally saved password is a sync credential, and otherwise

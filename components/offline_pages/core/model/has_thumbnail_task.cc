@@ -36,7 +36,8 @@ HasThumbnailTask::~HasThumbnailTask() = default;
 void HasThumbnailTask::Run() {
   store_->Execute(base::BindOnce(ThumbnailExistsSync, std::move(offline_id_)),
                   base::BindOnce(&HasThumbnailTask::OnThumbnailExists,
-                                 weak_ptr_factory_.GetWeakPtr()));
+                                 weak_ptr_factory_.GetWeakPtr()),
+                  false);
 }
 
 void HasThumbnailTask::OnThumbnailExists(bool exists) {

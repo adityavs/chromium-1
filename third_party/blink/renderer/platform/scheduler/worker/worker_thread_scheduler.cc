@@ -10,12 +10,12 @@
 #include "base/metrics/field_trial_params.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/strings/string_number_conversions.h"
+#include "base/task/sequence_manager/sequence_manager.h"
+#include "base/task/sequence_manager/task_queue.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "base/trace_event/trace_event.h"
 #include "base/trace_event/trace_event_argument.h"
 #include "third_party/blink/renderer/platform/histogram.h"
-#include "third_party/blink/renderer/platform/scheduler/base/sequence_manager_forward.h"
-#include "third_party/blink/renderer/platform/scheduler/base/task_queue_forward.h"
 #include "third_party/blink/renderer/platform/scheduler/child/features.h"
 #include "third_party/blink/renderer/platform/scheduler/child/task_queue_with_task_type.h"
 #include "third_party/blink/renderer/platform/scheduler/common/throttling/task_queue_throttler.h"
@@ -95,10 +95,10 @@ base::Optional<base::TimeDelta> GetMaxThrottlingDelay() {
 
 WorkerThreadScheduler::WorkerThreadScheduler(
     WebThreadType thread_type,
-    std::unique_ptr<base::sequence_manager::SequenceManager> task_queue_manager,
+    std::unique_ptr<base::sequence_manager::SequenceManager> sequence_manager,
     WorkerSchedulerProxy* proxy)
     : NonMainThreadSchedulerImpl(std::make_unique<NonMainThreadSchedulerHelper>(
-          std::move(task_queue_manager),
+          std::move(sequence_manager),
           this,
           TaskType::kWorkerThreadTaskQueueDefault)),
       idle_helper_(helper(),
@@ -113,7 +113,7 @@ WorkerThreadScheduler::WorkerThreadScheduler(
                     kUnspecifiedWorkerThreadLoadTrackerReportingInterval),
       lifecycle_state_(proxy ? proxy->lifecycle_state()
                              : SchedulingLifecycleState::kNotThrottled),
-      worker_metrics_helper_(thread_type) {
+      worker_metrics_helper_(thread_type, helper()->HasCPUTimingForEachTask()) {
   thread_start_time_ = helper()->NowTicks();
   load_tracker_.Resume(thread_start_time_);
   helper()->AddTaskTimeObserver(this);
@@ -214,14 +214,13 @@ void WorkerThreadScheduler::InitImpl() {
 void WorkerThreadScheduler::OnTaskCompleted(
     NonMainThreadTaskQueue* worker_task_queue,
     const TaskQueue::Task& task,
-    base::TimeTicks start,
-    base::TimeTicks end,
-    base::Optional<base::TimeDelta> thread_time) {
-  worker_metrics_helper_.RecordTaskMetrics(worker_task_queue, task, start, end,
-                                           thread_time);
+    const TaskQueue::TaskTiming& task_timing) {
+  worker_metrics_helper_.RecordTaskMetrics(worker_task_queue, task,
+                                           task_timing);
 
   if (task_queue_throttler_) {
-    task_queue_throttler_->OnTaskRunTimeReported(worker_task_queue, start, end);
+    task_queue_throttler_->OnTaskRunTimeReported(
+        worker_task_queue, task_timing.start_time(), task_timing.end_time());
   }
 }
 

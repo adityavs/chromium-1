@@ -153,26 +153,19 @@ void SyncAuthManager::ConnectionStatusChanged(syncer::ConnectionStatus status) {
       if (!request_access_token_retry_timer_.IsRunning()) {
         request_access_token_backoff_.Reset();
       }
-      ClearAuthError();
+      last_auth_error_ = GoogleServiceAuthError::AuthErrorNone();
       break;
     case syncer::CONNECTION_SERVER_ERROR:
-      UpdateAuthErrorState(
-          GoogleServiceAuthError(GoogleServiceAuthError::CONNECTION_FAILED));
+      // TODO(crbug.com/839834): Verify whether CONNECTION_FAILED is really an
+      // appropriate auth error here; maybe SERVICE_ERROR would be better?
+      last_auth_error_ =
+          GoogleServiceAuthError(GoogleServiceAuthError::CONNECTION_FAILED);
       break;
     case syncer::CONNECTION_NOT_ATTEMPTED:
       // The connection status should never change to "not attempted".
       NOTREACHED();
       break;
   }
-}
-
-void SyncAuthManager::UpdateAuthErrorState(
-    const GoogleServiceAuthError& error) {
-  last_auth_error_ = error;
-}
-
-void SyncAuthManager::ClearAuthError() {
-  UpdateAuthErrorState(GoogleServiceAuthError::AuthErrorNone());
 }
 
 void SyncAuthManager::ClearAccessTokenAndRequest() {
@@ -184,7 +177,10 @@ void SyncAuthManager::ClearAccessTokenAndRequest() {
 }
 
 void SyncAuthManager::Clear() {
-  ClearAuthError();
+  // TODO(crbug.com/839834): Clearing the auth error here isn't quite right.
+  // It makes sense to clear any auth error we got from the Sync server, but we
+  // should probably retain any errors from the identity manager.
+  last_auth_error_ = GoogleServiceAuthError::AuthErrorNone();
   ClearAccessTokenAndRequest();
 }
 
@@ -222,7 +218,7 @@ void SyncAuthManager::OnRefreshTokenUpdatedForAccount(
         GoogleServiceAuthError::FromInvalidGaiaCredentialsReason(
             GoogleServiceAuthError::InvalidGaiaCredentialsReason::
                 CREDENTIALS_REJECTED_BY_CLIENT);
-    UpdateAuthErrorState(invalid_token_error);
+    last_auth_error_ = invalid_token_error;
 
     credentials_changed_callback_.Run();
     return;
@@ -248,8 +244,10 @@ void SyncAuthManager::OnRefreshTokenRemovedForAccount(
     return;
   }
 
-  UpdateAuthErrorState(
-      GoogleServiceAuthError(GoogleServiceAuthError::REQUEST_CANCELED));
+  // TODO(crbug.com/839834): REQUEST_CANCELED doesn't seem like the right auth
+  // error to use here. Maybe INVALID_GAIA_CREDENTIALS?
+  last_auth_error_ =
+      GoogleServiceAuthError(GoogleServiceAuthError::REQUEST_CANCELED);
 
   ClearAccessTokenAndRequest();
 
@@ -289,28 +287,28 @@ void SyncAuthManager::RequestAccessToken() {
   token_status_.token_request_time = base::Time::Now();
   token_status_.token_receive_time = base::Time();
   token_status_.next_token_request_time = base::Time();
-  ongoing_access_token_fetch_ =
-      identity_manager_->CreateAccessTokenFetcherForPrimaryAccount(
-          kSyncOAuthConsumerName, oauth2_scopes,
-          base::BindOnce(&SyncAuthManager::AccessTokenFetched,
-                         base::Unretained(this)),
-          identity::PrimaryAccountAccessTokenFetcher::Mode::
-              kWaitUntilAvailable);
+  ongoing_access_token_fetch_ = std::make_unique<
+      identity::PrimaryAccountAccessTokenFetcher>(
+      kSyncOAuthConsumerName, identity_manager_, oauth2_scopes,
+      base::BindOnce(&SyncAuthManager::AccessTokenFetched,
+                     base::Unretained(this)),
+      identity::PrimaryAccountAccessTokenFetcher::Mode::kWaitUntilAvailable);
 }
 
-void SyncAuthManager::AccessTokenFetched(GoogleServiceAuthError error,
-                                         std::string access_token) {
+void SyncAuthManager::AccessTokenFetched(
+    GoogleServiceAuthError error,
+    identity::AccessTokenInfo access_token_info) {
   DCHECK(ongoing_access_token_fetch_);
   ongoing_access_token_fetch_.reset();
 
-  access_token_ = access_token;
+  access_token_ = access_token_info.token;
   token_status_.last_get_token_error = error;
 
   switch (error.state()) {
     case GoogleServiceAuthError::NONE:
       token_status_.token_receive_time = base::Time::Now();
       sync_prefs_->SetSyncAuthError(false);
-      ClearAuthError();
+      last_auth_error_ = GoogleServiceAuthError::AuthErrorNone();
       break;
     case GoogleServiceAuthError::CONNECTION_FAILED:
     case GoogleServiceAuthError::REQUEST_CANCELED:
@@ -328,11 +326,11 @@ void SyncAuthManager::AccessTokenFetched(GoogleServiceAuthError error,
       break;
     case GoogleServiceAuthError::INVALID_GAIA_CREDENTIALS:
       sync_prefs_->SetSyncAuthError(true);
-      UpdateAuthErrorState(error);
+      last_auth_error_ = error;
       break;
     default:
       LOG(ERROR) << "Unexpected persistent error: " << error.ToString();
-      UpdateAuthErrorState(error);
+      last_auth_error_ = error;
   }
 
   credentials_changed_callback_.Run();

@@ -16,6 +16,8 @@ namespace test {
 
 class QuicFramerPeer {
  public:
+  QuicFramerPeer() = delete;
+
   static QuicPacketNumber CalculatePacketNumberFromWire(
       QuicFramer* framer,
       QuicPacketNumberLength packet_number_length,
@@ -143,9 +145,10 @@ class QuicFramerPeer {
   static bool ProcessNewConnectionIdFrame(QuicFramer* framer,
                                           QuicDataReader* reader,
                                           QuicNewConnectionIdFrame* frame);
-
- private:
-  DISALLOW_COPY_AND_ASSIGN(QuicFramerPeer);
+  static size_t ComputeFrameLength(QuicFramer* framer,
+                                   const QuicFrame& frame,
+                                   bool last_frame_in_packet,
+                                   QuicPacketNumberLength packet_number_length);
 };
 
 }  // namespace test

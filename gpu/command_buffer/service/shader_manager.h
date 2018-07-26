@@ -27,6 +27,10 @@ enum ShaderVariableBaseType {
   SHADER_VARIABLE_UNDEFINED_TYPE = 0x00
 };
 
+// Compiles shader_source into shader and gives informative logging if
+// the compilation fails.
+void CompileShaderWithLog(GLuint shader, const char* shader_source);
+
 // This is used to keep the source code for a shader. This is because in order
 // to emluate GLES2 the shaders will have to be re-written before passed to
 // the underlying OpenGL. But, when the user calls glGetShaderSource they
@@ -49,6 +53,9 @@ class GPU_GLES2_EXPORT Shader : public base::RefCounted<Shader> {
   void RequestCompile(scoped_refptr<ShaderTranslatorInterface> translator,
                       TranslatedShaderSourceType type);
 
+  // Returns true if we are ready to call DoCompile. If we have not yet called
+  // RequestCompile or if we've already compiled, returns false.
+  bool CanCompile() { return shader_state_ == kShaderStateCompileRequested; }
   void DoCompile();
   void RefreshTranslatedShaderSource();
 

@@ -22,6 +22,10 @@ AccountInfo FakeSyncService::GetAuthenticatedAccountInfo() const {
   return account_info_;
 }
 
+void FakeSyncService::SetConfigurationDone(bool configuration_done) {
+  configuration_done_ = configuration_done;
+}
+
 // Dummy methods
 
 FakeSyncService::FakeSyncService()
@@ -31,7 +35,8 @@ FakeSyncService::FakeSyncService()
 FakeSyncService::~FakeSyncService() {}
 
 int FakeSyncService::GetDisableReasons() const {
-  return DISABLE_REASON_NONE;
+  // Note: Most subclasses will want to override this.
+  return DISABLE_REASON_PLATFORM_OVERRIDE;
 }
 
 syncer::SyncService::State FakeSyncService::GetState() const {
@@ -44,33 +49,16 @@ syncer::SyncService::State FakeSyncService::GetState() const {
   }
   // From this point on, Sync can start in principle.
   DCHECK(CanSyncStart());
-  // Note: We don't distinguish here if the engine doesn't exist at all, or
-  // exists but hasn't finished initializing.
-  if (!IsEngineInitialized()) {
-    return State::INITIALIZING;
-  }
-  if (GetAuthError() != GoogleServiceAuthError::AuthErrorNone()) {
-    return State::AUTH_ERROR;
-  }
   if (!IsFirstSetupComplete()) {
-    return State::WAITING_FOR_CONSENT;
+    return State::PENDING_DESIRED_CONFIGURATION;
   }
-  DCHECK(IsSyncActive());
-  if (!ConfigurationDone()) {
+  if (!configuration_done_) {
     return State::CONFIGURING;
   }
   return State::ACTIVE;
 }
 
 bool FakeSyncService::IsFirstSetupComplete() const {
-  return false;
-}
-
-bool FakeSyncService::IsSyncAllowed() const {
-  return false;
-}
-
-bool FakeSyncService::IsSyncActive() const {
   return false;
 }
 
@@ -96,10 +84,6 @@ bool FakeSyncService::HasObserver(const SyncServiceObserver* observer) const {
   return false;
 }
 
-bool FakeSyncService::CanSyncStart() const {
-  return false;
-}
-
 void FakeSyncService::OnDataTypeRequestsSyncStartup(ModelType type) {}
 
 void FakeSyncService::RequestStop(SyncService::SyncStopDataFate data_fate) {}
@@ -115,10 +99,6 @@ void FakeSyncService::OnUserChoseDatatypes(bool sync_everything,
 
 void FakeSyncService::SetFirstSetupComplete() {}
 
-bool FakeSyncService::IsFirstSetupInProgress() const {
-  return false;
-}
-
 std::unique_ptr<SyncSetupInProgressHandle>
 FakeSyncService::GetSetupInProgressHandle() {
   return nullptr;
@@ -128,20 +108,8 @@ bool FakeSyncService::IsSetupInProgress() const {
   return false;
 }
 
-bool FakeSyncService::ConfigurationDone() const {
-  return false;
-}
-
 const GoogleServiceAuthError& FakeSyncService::GetAuthError() const {
   return error_;
-}
-
-bool FakeSyncService::HasUnrecoverableError() const {
-  return false;
-}
-
-bool FakeSyncService::IsEngineInitialized() const {
-  return false;
 }
 
 sync_sessions::OpenTabsUIDelegate* FakeSyncService::GetOpenTabsUIDelegate() {
@@ -192,20 +160,12 @@ syncer::SyncTokenStatus FakeSyncService::GetSyncTokenStatus() const {
   return syncer::SyncTokenStatus();
 }
 
-std::string FakeSyncService::QuerySyncStatusSummaryString() {
-  return "";
-}
-
-bool FakeSyncService::QueryDetailedSyncStatus(SyncStatus* result) {
+bool FakeSyncService::QueryDetailedSyncStatus(SyncStatus* result) const {
   return false;
 }
 
 base::Time FakeSyncService::GetLastSyncedTime() const {
   return base::Time();
-}
-
-std::string FakeSyncService::GetEngineInitializationStateString() const {
-  return std::string();
 }
 
 SyncCycleSnapshot FakeSyncService::GetLastCycleSnapshot() const {

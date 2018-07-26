@@ -25,6 +25,7 @@ class GaiaAuthFetcher;
 class GaiaCookieRequest;
 class GoogleServiceAuthError;
 class OAuth2TokenService;
+class SigninCookieChangeSubscription;
 
 namespace network {
 class SharedURLLoaderFactory;
@@ -180,11 +181,11 @@ class GaiaCookieManagerService : public KeyedService,
                                    const std::string& access_token,
                                    const std::string& source);
 
-  // Returns if the listed accounts are up to date or not (ignore the out
-  // parameter if return is false). The parameter will be assigned the current
-  // cached accounts. If the accounts are not up to date, a ListAccounts fetch
-  // is sent GAIA and Observer::OnGaiaAccountsInCookieUpdated will be called.
-  // If either of |accounts| or |signed_out_accounts| is null, the corresponding
+  // Returns if the listed accounts are up to date or not. The out parameter
+  // will be assigned the current cached accounts (whether they are not up to
+  // date or not). If the accounts are not up to date, a ListAccounts fetch is
+  // sent GAIA and Observer::OnGaiaAccountsInCookieUpdated will be called.  If
+  // either of |accounts| or |signed_out_accounts| is null, the corresponding
   // accounts returned from /ListAccounts are ignored.
   bool ListAccounts(std::vector<gaia::ListedAccount>* accounts,
                     std::vector<gaia::ListedAccount>* signed_out_accounts,
@@ -232,12 +233,13 @@ class GaiaCookieManagerService : public KeyedService,
     return &fetcher_backoff_;
   }
 
+  // Can be overridden by tests.
+  virtual scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory();
+
  private:
   net::URLRequestContextGetter* request_context() {
     return signin_client_->GetURLRequestContext();
   }
-
-  scoped_refptr<network::SharedURLLoaderFactory> GetURLLoaderFactory();
 
   // Returns the source value to use for GaiaFetcher requests.  This is
   // virtual to allow tests and fake classes to override.
@@ -295,8 +297,8 @@ class GaiaCookieManagerService : public KeyedService,
   std::unique_ptr<UbertokenFetcher> uber_token_fetcher_;
   ExternalCcResultFetcher external_cc_result_fetcher_;
 
-  // If the GaiaAuthFetcher or URLFetcher fails, retry with exponential backoff
-  // and network delay.
+  // If the GaiaAuthFetcher or SimpleURLLoader fails, retry with exponential
+  // backoff and network delay.
   net::BackoffEntry fetcher_backoff_;
   base::OneShotTimer fetcher_timer_;
   int fetcher_retries_;
@@ -308,8 +310,7 @@ class GaiaCookieManagerService : public KeyedService,
   std::string access_token_;
 
   // Subscription to be called whenever the GAIA cookies change.
-  std::unique_ptr<SigninClient::CookieChangeSubscription>
-      cookie_change_subscription_;
+  std::unique_ptr<SigninCookieChangeSubscription> cookie_change_subscription_;
 
   // A worklist for this class. Stores any pending requests that couldn't be
   // executed right away, since this class only permits one request to be

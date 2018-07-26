@@ -16,14 +16,14 @@ namespace scheduler {
 
 class PLATFORM_EXPORT WorkerMetricsHelper : public MetricsHelper {
  public:
-  explicit WorkerMetricsHelper(WebThreadType thread_type);
+  explicit WorkerMetricsHelper(WebThreadType thread_type,
+                               bool has_cpu_timing_for_each_task);
   ~WorkerMetricsHelper();
 
-  void RecordTaskMetrics(NonMainThreadTaskQueue* queue,
-                         const base::sequence_manager::TaskQueue::Task& task,
-                         base::TimeTicks start_time,
-                         base::TimeTicks end_time,
-                         base::Optional<base::TimeDelta> thread_time);
+  void RecordTaskMetrics(
+      NonMainThreadTaskQueue* queue,
+      const base::sequence_manager::TaskQueue::Task& task,
+      const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
   void SetParentFrameType(FrameOriginType frame_type);
 

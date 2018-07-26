@@ -37,7 +37,6 @@ class ASH_EXPORT AccessibilityHighlightController
   void HighlightCaret(bool caret);
   void SetFocusHighlightRect(const gfx::Rect& bounds_in_screen);
 
- protected:
   // ui::EventHandler:
   void OnMouseEvent(ui::MouseEvent* event) override;
   void OnKeyEvent(ui::KeyEvent* event) override;
@@ -46,17 +45,15 @@ class ASH_EXPORT AccessibilityHighlightController
   void OnFocus() override {}
   void OnBlur() override {}
   void OnInputMethodDestroyed(const ui::InputMethod* input_method) override {}
-  void OnShowImeIfNeeded() override {}
+  void OnShowVirtualKeyboardIfEnabled() override {}
   void OnTextInputStateChanged(const ui::TextInputClient* client) override;
   void OnCaretBoundsChanged(const ui::TextInputClient* client) override;
 
   // aura::client::CursorClientObserver:
   void OnCursorVisibilityChanged(bool is_visible) override;
 
-  // virtual for testing overridden.
-  virtual bool IsCursorVisible();
-
  private:
+  bool IsCursorVisible();
   bool IsCaretVisible(const gfx::Rect& caret_bounds);
   void UpdateFocusAndCaretHighlights();
   void UpdateCursorHighlight();

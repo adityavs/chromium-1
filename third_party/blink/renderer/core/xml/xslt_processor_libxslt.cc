@@ -109,7 +109,6 @@ static xmlDocPtr DocLoaderFunc(const xmlChar* uri,
       ResourceLoaderOptions fetch_options;
       fetch_options.initiator_info.name = FetchInitiatorTypeNames::xml;
       FetchParameters params(ResourceRequest(url), fetch_options);
-      params.SetOriginRestriction(FetchParameters::kRestrictToSameOrigin);
       params.MutableResourceRequest().SetFetchRequestMode(
           network::mojom::FetchRequestMode::kSameOrigin);
       Resource* resource =
@@ -135,12 +134,13 @@ static xmlDocPtr DocLoaderFunc(const xmlChar* uri,
       xmlParserCtxtPtr ctx = xmlCreatePushParserCtxt(
           nullptr, nullptr, nullptr, 0, reinterpret_cast<const char*>(uri));
       if (ctx && !xmlCtxtUseOptions(ctx, options)) {
-        data->ForEachSegment([&data, &ctx](const char* segment,
-                                           size_t segment_size,
-                                           size_t segment_offset) -> bool {
-          bool final_chunk = segment_offset + segment_size == data->size();
-          return !xmlParseChunk(ctx, segment, segment_size, final_chunk);
-        });
+        size_t offset = 0;
+        for (const auto& span : *data) {
+          bool final_chunk = offset + span.size() == data->size();
+          if (!xmlParseChunk(ctx, span.data(), span.size(), final_chunk))
+            break;
+          offset += span.size();
+        }
 
         if (ctx->wellFormed)
           doc = ctx->myDoc;

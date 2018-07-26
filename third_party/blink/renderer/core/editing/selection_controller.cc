@@ -31,9 +31,9 @@
 
 #include "base/auto_reset.h"
 #include "third_party/blink/public/platform/web_menu_source_type.h"
-#include "third_party/blink/public/web/web_selection.h"
 #include "third_party/blink/renderer/core/dom/document.h"
 #include "third_party/blink/renderer/core/dom/events/event.h"
+#include "third_party/blink/renderer/core/editing/editing_behavior.h"
 #include "third_party/blink/renderer/core/editing/editing_boundary.h"
 #include "third_party/blink/renderer/core/editing/editing_utilities.h"
 #include "third_party/blink/renderer/core/editing/editor.h"
@@ -136,7 +136,8 @@ DocumentMarker* SpellCheckMarkerAtPosition(
 
   const unsigned offset = position.ComputeOffsetInContainerNode();
   return document_marker_controller.FirstMarkerIntersectingOffsetRange(
-      *ToText(node), offset, offset, DocumentMarker::MisspellingMarkers());
+      *ToText(node), offset, offset,
+      DocumentMarker::MarkerTypes::Misspelling());
 }
 
 }  // namespace
@@ -993,8 +994,9 @@ void SelectionController::HandleMouseDraggedEvent(
     return;
   if (selection_state_ != SelectionState::kExtendedSelection) {
     HitTestRequest request(HitTestRequest::kReadOnly | HitTestRequest::kActive);
-    HitTestResult result(request, mouse_down_pos);
-    frame_->GetDocument()->GetLayoutView()->HitTest(result);
+    HitTestLocation location(mouse_down_pos);
+    HitTestResult result(request, location);
+    frame_->GetDocument()->GetLayoutView()->HitTest(location, result);
 
     UpdateSelectionForMouseDrag(result, drag_start_pos,
                                 last_known_mouse_position);
@@ -1015,9 +1017,9 @@ void SelectionController::UpdateSelectionForMouseDrag(
 
   HitTestRequest request(HitTestRequest::kReadOnly | HitTestRequest::kActive |
                          HitTestRequest::kMove);
-  HitTestResult result(request,
-                       view->ViewportToFrame(last_known_mouse_position));
-  layout_view->HitTest(result);
+  HitTestLocation location(view->ViewportToFrame(last_known_mouse_position));
+  HitTestResult result(request, location);
+  layout_view->HitTest(location, result);
   UpdateSelectionForMouseDrag(result, drag_start_pos,
                               last_known_mouse_position);
 }
@@ -1280,9 +1282,5 @@ bool IsExtendingSelection(const MouseEventWithHitTestResults& event) {
              0 &&
          !is_mouse_down_on_link_or_image;
 }
-
-STATIC_ASSERT_ENUM(WebSelection::kNoSelection, kNoSelection);
-STATIC_ASSERT_ENUM(WebSelection::kCaretSelection, kCaretSelection);
-STATIC_ASSERT_ENUM(WebSelection::kRangeSelection, kRangeSelection);
 
 }  // namespace blink

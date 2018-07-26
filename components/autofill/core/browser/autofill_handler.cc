@@ -51,7 +51,10 @@ void AutofillHandler::OnFormsSeen(const std::vector<FormData>& forms,
   for (const FormData& form : forms) {
     const auto parse_form_start_time = TimeTicks::Now();
     FormStructure* form_structure = nullptr;
-    if (!ParseForm(form, /*cached_form=*/nullptr, &form_structure))
+    // Try to find the FormStructure that corresponds to |form|.
+    // |form_structure| may still be nullptr after this call.
+    ignore_result(FindCachedForm(form, &form_structure));
+    if (!ParseForm(form, form_structure, &form_structure))
       continue;
     DCHECK(form_structure);
     if (form_structure == nullptr)
@@ -101,17 +104,20 @@ void AutofillHandler::OnSelectControlDidChange(const FormData& form,
   OnSelectControlDidChangeImpl(form, field, transformed_box);
 }
 
-void AutofillHandler::OnQueryFormFieldAutofill(int query_id,
-                                               const FormData& form,
-                                               const FormFieldData& field,
-                                               const gfx::RectF& bounding_box) {
+void AutofillHandler::OnQueryFormFieldAutofill(
+    int query_id,
+    const FormData& form,
+    const FormFieldData& field,
+    const gfx::RectF& bounding_box,
+    bool autoselect_first_suggestion) {
   if (!IsValidFormData(form) || !IsValidFormFieldData(field))
     return;
 
   gfx::RectF transformed_box =
       driver_->TransformBoundingBoxToViewportCoordinates(bounding_box);
 
-  OnQueryFormFieldAutofillImpl(query_id, form, field, transformed_box);
+  OnQueryFormFieldAutofillImpl(query_id, form, field, transformed_box,
+                               autoselect_first_suggestion);
 }
 
 void AutofillHandler::OnFocusOnFormField(const FormData& form,
@@ -179,6 +185,7 @@ bool AutofillHandler::ParseForm(const FormData& form,
     // We need to keep the server data if available. We need to use them while
     // determining the heuristics.
     form_structure->RetrieveFromCache(*cached_form,
+                                      /*apply_value=*/true,
                                       /*apply_is_autofilled=*/true,
                                       /*only_server_and_autofill_state=*/true);
   }

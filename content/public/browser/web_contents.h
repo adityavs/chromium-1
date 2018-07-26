@@ -390,6 +390,12 @@ class WebContents : public PageNavigator,
   // both renderer accessibility, and a native browser accessibility tree.
   virtual bool IsFullAccessibilityModeForTesting() const = 0;
 
+  virtual ui::AXMode GetAccessibilityMode() const = 0;
+
+  virtual void SetAccessibilityMode(ui::AXMode mode) = 0;
+
+  virtual base::string16 DumpAccessibilityTree(bool internal) = 0;
+
   virtual const PageImportanceSignals& GetPageImportanceSignals() const = 0;
 
   // Tab navigation state ------------------------------------------------------
@@ -513,11 +519,8 @@ class WebContents : public PageNavigator,
   // returns false.
   virtual bool NeedToFireBeforeUnload() = 0;
 
-  // Runs the beforeunload handler for the main frame. See also ClosePage and
-  // SwapOut in RenderViewHost, which run the unload handler.
-  //
-  // TODO(creis): We should run the beforeunload handler for every frame that
-  // has one.
+  // Runs the beforeunload handler for the main frame and all its subframes.
+  // See also ClosePage in RenderViewHostImpl, which runs the unload handler.
   virtual void DispatchBeforeUnload() = 0;
 
   // Attaches this inner WebContents to its container frame
@@ -713,9 +716,7 @@ class WebContents : public PageNavigator,
   virtual void SystemDragEnded(RenderWidgetHost* source_rwh) = 0;
 
   // The user initiated navigation to this page (as opposed to a navigation that
-  // could have been triggered without user interaction). Used to avoid
-  // uninitiated user downloads (aka carpet bombing), see DownloadRequestLimiter
-  // for details.
+  // could have been triggered without user interaction).
   virtual void NavigatedByUser() = 0;
 
   // Indicates if this tab was explicitly closed by the user (control-w, close

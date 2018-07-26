@@ -28,7 +28,7 @@
 #include "third_party/blink/public/platform/platform.h"
 #include "third_party/blink/public/platform/task_type.h"
 #include "third_party/blink/public/platform/web_thread.h"
-#include "third_party/blink/renderer/core/dom/ax_object_cache.h"
+#include "third_party/blink/renderer/core/accessibility/ax_object_cache.h"
 #include "third_party/blink/renderer/core/dom/text.h"
 #include "third_party/blink/renderer/core/editing/ephemeral_range.h"
 #include "third_party/blink/renderer/core/editing/frame_selection.h"
@@ -98,7 +98,9 @@ class SecureTextTimer final : public TimerBase {
   void RestartWithNewText(unsigned last_typed_character_offset) {
     last_typed_character_offset_ = last_typed_character_offset;
     if (Settings* settings = layout_text_->GetDocument().GetSettings()) {
-      StartOneShot(settings->GetPasswordEchoDurationInSeconds(), FROM_HERE);
+      StartOneShot(
+          TimeDelta::FromSecondsD(settings->GetPasswordEchoDurationInSeconds()),
+          FROM_HERE);
     }
   }
   void Invalidate() { last_typed_character_offset_ = -1; }
@@ -354,7 +356,6 @@ static IntRect EllipsisRectForBox(InlineTextBox* box,
   if (truncation == kCNoTruncation)
     return IntRect();
 
-  IntRect rect;
   if (EllipsisBox* ellipsis = box->Root().GetEllipsisBox()) {
     int ellipsis_start_position = std::max<int>(start_pos - box->Start(), 0);
     int ellipsis_end_position =
@@ -478,6 +479,18 @@ void LayoutText::AbsoluteQuadsForRange(Vector<FloatQuad>& quads,
     if (!MapDOMOffsetToTextContentOffset(*mapping, &start, &end))
       return;
 
+    // We don't want to add collapsed (i.e., start == end) quads from text
+    // fragments that intersect [start, end] only at the boundary, unless they
+    // are the only quads found. For example, when we have
+    // - text fragments: ABC  DEF  GHI
+    // - text offsets:   012  345  678
+    // and input range [3, 6], since fragment "DEF" gives non-collapsed quad,
+    // we no longer add quads from "ABC" and "GHI" since they are collapsed.
+    // TODO(layout-dev): This heuristic doesn't cover all cases, as we return
+    // 2 collapsed quads (instead of 1) for range [3, 3] in the above example.
+    bool found_non_collapsed_quad = false;
+    Vector<FloatQuad, 1> collapsed_quads_candidates;
+
     // Find fragments that have text for the specified range.
     DCHECK_LE(start, end);
     auto fragments = NGPaintFragment::InlineFragmentsFor(this);
@@ -487,12 +500,22 @@ void LayoutText::AbsoluteQuadsForRange(Vector<FloatQuad>& quads,
       if (start > text_fragment.EndOffset() ||
           end < text_fragment.StartOffset())
         continue;
+      const unsigned clamped_start =
+          std::max(start, text_fragment.StartOffset());
+      const unsigned clamped_end = std::min(end, text_fragment.EndOffset());
       NGPhysicalOffsetRect rect =
-          text_fragment.LocalRect(std::max(start, text_fragment.StartOffset()),
-                                  std::min(end, text_fragment.EndOffset()));
+          text_fragment.LocalRect(clamped_start, clamped_end);
       rect.offset += fragment->InlineOffsetToContainerBox();
-      quads.push_back(LocalToAbsoluteQuad(rect.ToFloatRect()));
+      const FloatQuad quad = LocalToAbsoluteQuad(rect.ToFloatRect());
+      if (clamped_start < clamped_end) {
+        quads.push_back(quad);
+        found_non_collapsed_quad = true;
+      } else {
+        collapsed_quads_candidates.push_back(quad);
+      }
     }
+    if (!found_non_collapsed_quad)
+      quads.AppendVector(collapsed_quads_candidates);
     return;
   }
 
@@ -681,7 +704,9 @@ PositionWithAffinity LayoutText::PositionForPoint(
         if (LineDirectionPointFitsInBox(point_line_direction.ToInt(), box,
                                         should_affinity_be_downstream)) {
           return CreatePositionWithAffinityForBoxAfterAdjustingOffsetForBiDi(
-              box, box->OffsetForPosition(point_line_direction),
+              box,
+              box->OffsetForPosition(point_line_direction, IncludePartialGlyphs,
+                                     BreakGlyphs),
               should_affinity_be_downstream);
         }
       }
@@ -695,7 +720,9 @@ PositionWithAffinity LayoutText::PositionForPoint(
                                 should_affinity_be_downstream);
     return CreatePositionWithAffinityForBoxAfterAdjustingOffsetForBiDi(
         last_box,
-        last_box->OffsetForPosition(point_line_direction) + last_box->Start(),
+        last_box->OffsetForPosition(point_line_direction, IncludePartialGlyphs,
+                                    BreakGlyphs) +
+            last_box->Start(),
         should_affinity_be_downstream);
   }
   return CreatePositionWithAffinity(0);
@@ -1452,7 +1479,7 @@ UChar32 LayoutText::LastCharacterAfterWhitespaceCollapsing() const {
 }
 
 FloatPoint LayoutText::FirstRunOrigin() const {
-  return IntPoint(FirstRunX(), FirstRunY());
+  return FloatPoint(FirstRunX(), FirstRunY());
 }
 
 float LayoutText::FirstRunX() const {
@@ -2262,7 +2289,6 @@ LayoutRect LayoutText::DebugRect() const {
   FloatPoint first_run_offset;
   if (const NGPhysicalBoxFragment* box_fragment =
           EnclosingBlockFlowFragment()) {
-    NGPhysicalOffsetRect bounding_box;
     const auto fragments =
         NGInlineFragmentTraversal::SelfFragmentsOf(*box_fragment, this);
     if (fragments.size()) {

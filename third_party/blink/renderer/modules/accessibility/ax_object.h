@@ -33,6 +33,7 @@
 #include <ostream>
 
 #include "base/macros.h"
+#include "third_party/blink/renderer/core/accessibility/axid.h"
 #include "third_party/blink/renderer/core/dom/element.h"
 #include "third_party/blink/renderer/core/editing/forward.h"
 #include "third_party/blink/renderer/core/editing/markers/document_marker.h"
@@ -43,6 +44,7 @@
 #include "third_party/blink/renderer/platform/geometry/float_quad.h"
 #include "third_party/blink/renderer/platform/geometry/layout_rect.h"
 #include "third_party/blink/renderer/platform/graphics/color.h"
+#include "third_party/blink/renderer/platform/heap/handle.h"
 #include "third_party/blink/renderer/platform/weborigin/kurl.h"
 #include "third_party/blink/renderer/platform/wtf/vector.h"
 
@@ -67,8 +69,6 @@ enum class AOMIntProperty;
 enum class AOMFloatProperty;
 enum class AOMRelationProperty;
 enum class AOMRelationListProperty;
-
-typedef unsigned AXID;
 
 class AXSparseAttributeClient {
  public:
@@ -558,6 +558,7 @@ class MODULES_EXPORT AXObject : public GarbageCollectedFinalized<AXObject> {
   bool IsDescendantOfLeafNode() const;
   AXObject* LeafNodeAncestor() const;
   bool IsDescendantOfDisabledNode() const;
+  const AXObject* DatetimeAncestor(int max_levels_to_check = 3) const;
   const AXObject* DisabledAncestor() const;
   bool LastKnownIsIgnoredValue() const;
   void SetLastKnownIsIgnoredValue(bool);
@@ -877,8 +878,6 @@ class MODULES_EXPORT AXObject : public GarbageCollectedFinalized<AXObject> {
   virtual void ColumnHeaders(AXObjectVector&) const;
   virtual void RowHeaders(AXObjectVector&) const;
   virtual AXObject* CellForColumnAndRow(unsigned column, unsigned row) const;
-  // an object that contains, as children, all the objects that act as headers
-  virtual AXObject* HeaderContainer() { return nullptr; }
 
   // For a cell.
   virtual unsigned ColumnIndex() const;

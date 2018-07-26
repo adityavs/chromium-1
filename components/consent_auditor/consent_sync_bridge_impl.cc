@@ -51,25 +51,16 @@ std::unique_ptr<EntityData> MoveToEntityData(
   return entity_data;
 }
 
-// TODO(vitaliii): Delete this function both here and in UserEventSyncBridge.
-std::unique_ptr<EntityData> CopyToEntityData(
-    const UserConsentSpecifics specifics) {
-  auto entity_data = std::make_unique<EntityData>();
-  entity_data->non_unique_name =
-      base::Int64ToString(specifics.client_consent_time_usec());
-  *entity_data->specifics.mutable_user_consent() = specifics;
-  return entity_data;
-}
-
 }  // namespace
 
 ConsentSyncBridgeImpl::ConsentSyncBridgeImpl(
     OnceModelTypeStoreFactory store_factory,
     std::unique_ptr<ModelTypeChangeProcessor> change_processor)
-    : ModelTypeSyncBridge(std::move(change_processor)) {
+    : ModelTypeSyncBridge(std::move(change_processor)),
+      weak_ptr_factory_(this) {
   std::move(store_factory)
       .Run(USER_CONSENTS, base::BindOnce(&ConsentSyncBridgeImpl::OnStoreCreated,
-                                         base::AsWeakPtr(this)));
+                                         weak_ptr_factory_.GetWeakPtr()));
 }
 
 ConsentSyncBridgeImpl::~ConsentSyncBridgeImpl() {
@@ -99,22 +90,23 @@ base::Optional<ModelError> ConsentSyncBridgeImpl::ApplySyncChanges(
   }
 
   batch->TakeMetadataChangesFrom(std::move(metadata_change_list));
-  store_->CommitWriteBatch(
-      std::move(batch),
-      base::BindOnce(&ConsentSyncBridgeImpl::OnCommit, base::AsWeakPtr(this)));
+  store_->CommitWriteBatch(std::move(batch),
+                           base::BindOnce(&ConsentSyncBridgeImpl::OnCommit,
+                                          weak_ptr_factory_.GetWeakPtr()));
   return {};
 }
 
 void ConsentSyncBridgeImpl::GetData(StorageKeyList storage_keys,
                                     DataCallback callback) {
-  store_->ReadData(storage_keys,
-                   base::BindOnce(&ConsentSyncBridgeImpl::OnReadData,
-                                  base::AsWeakPtr(this), std::move(callback)));
+  store_->ReadData(
+      storage_keys,
+      base::BindOnce(&ConsentSyncBridgeImpl::OnReadData,
+                     weak_ptr_factory_.GetWeakPtr(), std::move(callback)));
 }
 
 void ConsentSyncBridgeImpl::GetAllDataForDebugging(DataCallback callback) {
   store_->ReadAllData(base::BindOnce(&ConsentSyncBridgeImpl::OnReadAllData,
-                                     base::AsWeakPtr(this),
+                                     weak_ptr_factory_.GetWeakPtr(),
                                      std::move(callback)));
 }
 
@@ -159,7 +151,7 @@ ConsentSyncBridgeImpl::ApplyStopSyncChanges(
 
     store_->CommitWriteBatch(std::move(batch),
                              base::BindOnce(&ConsentSyncBridgeImpl::OnCommit,
-                                            base::AsWeakPtr(this)));
+                                            weak_ptr_factory_.GetWeakPtr()));
   }
 
   return StopSyncResponse::kModelStillReadyToSync;
@@ -169,8 +161,9 @@ void ConsentSyncBridgeImpl::ReadAllDataAndResubmit() {
   DCHECK(!syncing_account_id_.empty());
   DCHECK(change_processor()->IsTrackingMetadata());
   DCHECK(store_);
-  store_->ReadAllData(base::BindOnce(
-      &ConsentSyncBridgeImpl::OnReadAllDataToResubmit, base::AsWeakPtr(this)));
+  store_->ReadAllData(
+      base::BindOnce(&ConsentSyncBridgeImpl::OnReadAllDataToResubmit,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void ConsentSyncBridgeImpl::OnReadAllDataToResubmit(
@@ -219,9 +212,9 @@ void ConsentSyncBridgeImpl::RecordConsentImpl(
 
   change_processor()->Put(storage_key, MoveToEntityData(std::move(specifics)),
                           batch->GetMetadataChangeList());
-  store_->CommitWriteBatch(
-      std::move(batch),
-      base::BindOnce(&ConsentSyncBridgeImpl::OnCommit, base::AsWeakPtr(this)));
+  store_->CommitWriteBatch(std::move(batch),
+                           base::BindOnce(&ConsentSyncBridgeImpl::OnCommit,
+                                          weak_ptr_factory_.GetWeakPtr()));
 }
 
 base::WeakPtr<syncer::ModelTypeControllerDelegate>
@@ -249,8 +242,9 @@ void ConsentSyncBridgeImpl::OnStoreCreated(
   // TODO(vitaliii): Garbage collect old consents if sync is disabled.
 
   store_ = std::move(store);
-  store_->ReadAllMetadata(base::BindOnce(
-      &ConsentSyncBridgeImpl::OnReadAllMetadata, base::AsWeakPtr(this)));
+  store_->ReadAllMetadata(
+      base::BindOnce(&ConsentSyncBridgeImpl::OnReadAllMetadata,
+                     weak_ptr_factory_.GetWeakPtr()));
 }
 
 void ConsentSyncBridgeImpl::OnReadAllMetadata(
@@ -292,11 +286,12 @@ void ConsentSyncBridgeImpl::OnReadAllData(
   }
 
   auto batch = std::make_unique<MutableDataBatch>();
-  UserConsentSpecifics specifics;
   for (const Record& r : *data_records) {
-    if (specifics.ParseFromString(r.value)) {
-      DCHECK_EQ(r.id, GetStorageKeyFromSpecifics(specifics));
-      batch->Put(r.id, CopyToEntityData(specifics));
+    auto specifics = std::make_unique<UserConsentSpecifics>();
+
+    if (specifics->ParseFromString(r.value)) {
+      DCHECK_EQ(r.id, GetStorageKeyFromSpecifics(*specifics));
+      batch->Put(r.id, MoveToEntityData(std::move(specifics)));
     } else {
       change_processor()->ReportError(
           {FROM_HERE, "Failed deserializing user events."});

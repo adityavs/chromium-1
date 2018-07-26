@@ -12,6 +12,8 @@
 #include "base/strings/string16.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "base/test/metrics/histogram_tester.h"
+#include "build/build_config.h"
 #include "components/autofill/core/common/form_data.h"
 #include "components/autofill/core/common/form_field_data.h"
 #include "components/autofill/core/common/password_form.h"
@@ -79,6 +81,7 @@ struct FormParsingTestCase {
   int number_of_all_possible_passwords = -1;
   // null means no checking
   const autofill::ValueElementVector* all_possible_passwords = nullptr;
+  bool username_may_use_prefilled_placeholder = false;
 };
 
 // Returns numbers which are distinct from each other within the scope of one
@@ -240,7 +243,15 @@ void CheckField(const std::vector<FormFieldData>& fields,
                                });
   ASSERT_TRUE(field_it != fields.end())
       << "Could not find a field with renderer ID " << renderer_id;
+
+// On iOS |id| is used for identifying DOM elements, so the parser should return
+// it.
+#if defined(OS_IOS)
+  EXPECT_EQ(element_name, field_it->id);
+#else
   EXPECT_EQ(element_name, field_it->name);
+#endif
+
   if (element_value)
     EXPECT_EQ(*element_value, field_it->value);
 }
@@ -311,6 +322,8 @@ void CheckTestData(const std::vector<FormParsingTestCase>& test_cases) {
         EXPECT_FALSE(parsed_form->blacklisted_by_user);
         EXPECT_EQ(PasswordForm::TYPE_MANUAL, parsed_form->type);
         EXPECT_TRUE(parsed_form->has_renderer_ids);
+        EXPECT_EQ(test_case.username_may_use_prefilled_placeholder,
+                  parsed_form->username_may_use_prefilled_placeholder);
         CheckPasswordFormFields(*parsed_form, form_data, expected_ids);
         CheckAllValuesUnique(parsed_form->all_possible_passwords);
         if (test_case.number_of_all_possible_passwords >= 0) {
@@ -699,18 +712,6 @@ TEST(FormParserTest, TestAutocomplete) {
           },
       },
       {
-          "Partial autocomplete analysis is not complemented by basic "
-          "heuristics",
-          // Username not found because there was a valid autocomplete mark-up
-          // but it did not include the plain text field.
-          {
-              {.form_control_type = "text"},
-              {.role = ElementRole::CURRENT_PASSWORD,
-               .form_control_type = "password",
-               .autocomplete_attribute = "current-password"},
-          },
-      },
-      {
           "Partial autocomplete analysis fails if no passwords are found",
           // The attribute 'username' is ignored, because there was no password
           // marked up.
@@ -930,7 +931,8 @@ TEST(FormParserTest, ServerHints) {
           "Username-only predictions are ignored",
           {
               {.form_control_type = "text",
-               .prediction = {.type = autofill::USERNAME}},
+               .prediction = {.type = autofill::USERNAME,
+                              .may_use_prefilled_placeholder = true}},
               {.role = ElementRole::USERNAME, .form_control_type = "text"},
               {.role = ElementRole::CURRENT_PASSWORD,
                .form_control_type = "password"},
@@ -941,13 +943,16 @@ TEST(FormParserTest, ServerHints) {
           {
               {.role = ElementRole::USERNAME,
                .form_control_type = "text",
-               .prediction = {.type = autofill::USERNAME_AND_EMAIL_ADDRESS}},
+               .prediction = {.type = autofill::USERNAME_AND_EMAIL_ADDRESS,
+                              .may_use_prefilled_placeholder = true}},
               {.form_control_type = "text"},
               {.form_control_type = "password"},
               {.role = ElementRole::CURRENT_PASSWORD,
-               .prediction = {.type = autofill::PASSWORD},
+               .prediction = {.type = autofill::PASSWORD,
+                              .may_use_prefilled_placeholder = true},
                .form_control_type = "password"},
           },
+          .username_may_use_prefilled_placeholder = true,
       },
       {
           .description_for_logging = "Longer predictions work",
@@ -1045,6 +1050,20 @@ TEST(FormParserTest, Interactability) {
                .properties_mask = FieldPropertiesFlags::AUTOFILLED,
                .is_focusable = true},
               {.form_control_type = "text", .is_focusable = true, .value = ""},
+          },
+      },
+      {
+          "Interactability also matters for HTML classifier.",
+          {
+              {.form_control_type = "text",
+               .is_focusable = false,
+               .predicted_username = 0},
+              {.role = ElementRole::USERNAME,
+               .form_control_type = "text",
+               .is_focusable = true},
+              {.role = ElementRole::CURRENT_PASSWORD,
+               .form_control_type = "password",
+               .is_focusable = true},
           },
       },
   });
@@ -1196,6 +1215,178 @@ TEST(FormParserTest, UsernamePredictions) {
           },
       },
   });
+}
+
+// In some situations, server hints or autocomplete mark-up do not provide the
+// username might be omitted. Sometimes this is a truthful signal (there might
+// be no username despite the presence of plain text fields), but often this is
+// just incomplete data. In the long term, the server hints should be complete
+// and also cover cases when the autocomplete mark-up is lacking; at that point,
+// the parser should just trust that the signal is truthful. Until then,
+// however, the parser is trying to complement the signal with its structural
+// heuristics.
+TEST(FormParserTest, ComplementingResults) {
+  CheckTestData({
+      {
+          "Current password from autocomplete analysis, username from basic "
+          "heuristics",
+          {
+              {.role = ElementRole::USERNAME, .form_control_type = "text"},
+              {.role = ElementRole::CURRENT_PASSWORD,
+               .form_control_type = "password",
+               .autocomplete_attribute = "current-password"},
+          },
+      },
+      {
+          "New and confirmation passwords from server, username from basic "
+          "heuristics",
+          {
+              {.role = ElementRole::USERNAME, .form_control_type = "text"},
+              {.role = ElementRole::CONFIRMATION_PASSWORD,
+               .prediction = {.type = autofill::CONFIRMATION_PASSWORD},
+               .form_control_type = "password"},
+              {.form_control_type = "text"},
+              {.role = ElementRole::NEW_PASSWORD,
+               .prediction = {.type = autofill::NEW_PASSWORD},
+               .form_control_type = "password"},
+          },
+      },
+      {
+          "No password from server still means that serve hints are ignored.",
+          {
+              {.prediction = {.type = autofill::USERNAME_AND_EMAIL_ADDRESS},
+               .form_control_type = "text"},
+              {.role = ElementRole::USERNAME, .form_control_type = "text"},
+              {.role = ElementRole::CURRENT_PASSWORD,
+               .form_control_type = "password"},
+          },
+      },
+  });
+}
+
+// Until autofill server learns to provide CVC-related hints, the parser should
+// try to get the hint from the field names.
+TEST(FormParserTest, CVC) {
+  CheckTestData({
+      {
+          "Name of 'verification_type' matches the CVC pattern.",
+          {
+              {.role = ElementRole::USERNAME, .form_control_type = "text"},
+              {.form_control_type = "text", .name = "verification_type"},
+              {.role = ElementRole::CURRENT_PASSWORD,
+               .form_control_type = "password"},
+          },
+      },
+  });
+}
+
+TEST(FormParserTest, HistogramsForUsernameDetectionMethod) {
+  struct HistogramTestCase {
+    FormParsingTestCase parsing_data;
+    UsernameDetectionMethod expected_method;
+  } kHistogramTestCases[] = {
+      {
+          {
+              "No username",
+              {
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password",
+                   .prediction = {.type = autofill::PASSWORD}},
+              },
+          },
+          UsernameDetectionMethod::kNoUsernameDetected,
+      },
+      {
+          {
+              "Reporting server analysis",
+              {
+                  {.role = ElementRole::USERNAME,
+                   .form_control_type = "text",
+                   .prediction = {.type = autofill::USERNAME}},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password",
+                   .prediction = {.type = autofill::PASSWORD}},
+              },
+          },
+          UsernameDetectionMethod::kServerSidePrediction,
+      },
+      {
+          {
+              "Reporting autocomplete analysis",
+              {
+                  {.role = ElementRole::USERNAME,
+                   .form_control_type = "text",
+                   .autocomplete_attribute = "username"},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password",
+                   .autocomplete_attribute = "current-password"},
+              },
+          },
+          UsernameDetectionMethod::kAutocompleteAttribute,
+      },
+      {
+          {
+              "Reporting HTML classifier",
+              {
+                  {.role = ElementRole::USERNAME,
+                   .form_control_type = "text",
+                   .predicted_username = 0},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password"},
+              },
+          },
+          UsernameDetectionMethod::kHtmlBasedClassifier,
+      },
+      {
+          {
+              "Reporting basic heuristics",
+              {
+                  {.role = ElementRole::USERNAME, .form_control_type = "text"},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password"},
+              },
+          },
+          UsernameDetectionMethod::kBaseHeuristic,
+      },
+      {
+          {
+              "Mixing server analysis on password and HTML classifier on "
+              "username is reported as HTML classifier",
+              {
+                  {.role = ElementRole::USERNAME,
+                   .form_control_type = "text",
+                   .predicted_username = 0},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password",
+                   .prediction = {.type = autofill::PASSWORD}},
+              },
+          },
+          UsernameDetectionMethod::kHtmlBasedClassifier,
+      },
+      {
+          {
+              "Mixing autocomplete analysis on password and basic heuristics "
+              "on username is reported as basic heuristics",
+              {
+                  {.role = ElementRole::USERNAME, .form_control_type = "text"},
+                  {.role = ElementRole::CURRENT_PASSWORD,
+                   .form_control_type = "password",
+                   .autocomplete_attribute = "current-password"},
+              },
+          },
+          UsernameDetectionMethod::kBaseHeuristic,
+      },
+  };
+  for (const HistogramTestCase& histogram_test_case : kHistogramTestCases) {
+    base::HistogramTester tester;
+    CheckTestData({histogram_test_case.parsing_data});
+    // Expect two samples, because parsing is done once for filling and once for
+    // saving mode.
+    SCOPED_TRACE(histogram_test_case.parsing_data.description_for_logging);
+    tester.ExpectUniqueSample("PasswordManager.UsernameDetectionMethod",
+                              histogram_test_case.expected_method,
+                              2);
+  }
 }
 
 }  // namespace

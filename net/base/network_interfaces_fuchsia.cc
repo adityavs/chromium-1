@@ -11,6 +11,7 @@
 
 #include "base/format_macros.h"
 #include "base/fuchsia/component_context.h"
+#include "base/fuchsia/fuchsia_logging.h"
 #include "base/strings/stringprintf.h"
 #include "net/base/ip_endpoint.h"
 #include "net/base/network_change_notifier.h"
@@ -98,15 +99,15 @@ std::vector<NetworkInterface> NetInterfaceToNetworkInterfaces(
 bool GetNetworkList(NetworkInterfaceList* networks, int policy) {
   DCHECK(networks);
 
-  fuchsia::netstack::NetstackSync2Ptr netstack =
+  fuchsia::netstack::NetstackSyncPtr netstack =
       base::fuchsia::ComponentContext::GetDefault()
           ->ConnectToServiceSync<fuchsia::netstack::Netstack>();
 
   // TODO(kmarshall): Use NetworkChangeNotifier's cached interface list.
   fidl::VectorPtr<fuchsia::netstack::NetInterface> interfaces;
-  auto status = netstack->GetInterfaces(&interfaces);
-  if (status.statvs != ZX_OK) {
-    ZX_LOG(ERROR, status.statvs) << "fuchsia::netstack::GetInterfaces()";
+  zx_status_t status = netstack->GetInterfaces(&interfaces);
+  if (status != ZX_OK) {
+    ZX_LOG(ERROR, status) << "fuchsia::netstack::GetInterfaces()";
     return false;
   }
 

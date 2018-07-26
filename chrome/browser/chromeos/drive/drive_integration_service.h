@@ -54,8 +54,6 @@ class ResourceMetadata;
 class ResourceMetadataStorage;
 }  // namespace internal
 
-extern const base::Feature kDriveFs;
-
 // Interface for classes that need to observe events from
 // DriveIntegrationService.  All events are notified on UI thread.
 class DriveIntegrationServiceObserver {
@@ -184,6 +182,10 @@ class DriveIntegrationService : public KeyedService,
   // Used to implement ClearCacheAndRemountFileSystem().
   void AddBackDriveMountPoint(const base::Callback<void(bool)>& callback,
                               FileError error);
+
+  // Unregisters drive mount point, and if |remount_delay| is specified
+  // then tries to add it back after that delay.
+  void MaybeRemountFileSystem(base::Optional<base::TimeDelta> remount_delay);
 
   // Initializes the object. This function should be called before any
   // other functions.

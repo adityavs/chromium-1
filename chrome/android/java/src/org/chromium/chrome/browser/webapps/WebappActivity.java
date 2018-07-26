@@ -4,12 +4,11 @@
 
 package org.chromium.chrome.browser.webapps;
 
-import static org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider.CUSTOM_TABS_UI_TYPE_MINIMAL_UI_WEBAPP;
-
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
@@ -54,6 +53,7 @@ import org.chromium.chrome.browser.browserservices.TrustedWebActivityDisclosure;
 import org.chromium.chrome.browser.browserservices.UkmRecorder;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManager;
 import org.chromium.chrome.browser.customtabs.CustomTabAppMenuPropertiesDelegate;
+import org.chromium.chrome.browser.customtabs.CustomTabIntentDataProvider;
 import org.chromium.chrome.browser.customtabs.CustomTabNavigationEventObserver;
 import org.chromium.chrome.browser.customtabs.CustomTabsConnection;
 import org.chromium.chrome.browser.document.ChromeLauncherActivity;
@@ -87,14 +87,16 @@ import java.util.concurrent.TimeUnit;
  */
 public class WebappActivity extends SingleTabActivity {
     public static final String WEBAPP_SCHEME = "webapp";
+
     // The activity type of WebappActivity.
+    @IntDef({ActivityType.WEBAPP, ActivityType.WEBAPK, ActivityType.TWA})
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({ACTIVITY_TYPE_WEBAPP, ACTIVITY_TYPE_WEBAPK, ACTIVITY_TYPE_TWA})
-    public @interface ActivityType {}
-    public static final int ACTIVITY_TYPE_OTHER = -1;
-    public static final int ACTIVITY_TYPE_WEBAPP = 0;
-    public static final int ACTIVITY_TYPE_WEBAPK = 1;
-    public static final int ACTIVITY_TYPE_TWA = 2;
+    public @interface ActivityType {
+        int OTHER = -1;
+        int WEBAPP = 0;
+        int WEBAPK = 1;
+        int TWA = 2;
+    }
 
     private static final String TAG = "WebappActivity";
     private static final String HISTOGRAM_NAVIGATION_STATUS = "Webapp.NavigationStatus";
@@ -198,9 +200,11 @@ public class WebappActivity extends SingleTabActivity {
             }
 
             BrowserServicesMetrics.recordTwaOpened();
-            // Occasionally verification occurs in the background while there is no active Tab.
+            TrustedWebActivityDisclosure.showIfNeeded(WebappActivity.this, packageName);
+
+            // When verification occurs instantly (eg the result is cached) then it returns before
+            // there is an active tab.
             if (areTabModelsInitialized() && getActivityTab() != null) {
-                TrustedWebActivityDisclosure.showIfNeeded(WebappActivity.this, packageName);
                 mUkmRecorder.recordTwaOpened(getActivityTab().getWebContents());
             }
         }
@@ -233,6 +237,15 @@ public class WebappActivity extends SingleTabActivity {
         mNotificationManager = new WebappActionsNotificationManager(this);
     }
 
+    private static LoadUrlParams createLoadUrlParams(WebappInfo info, Intent intent) {
+        LoadUrlParams params =
+                new LoadUrlParams(info.uri().toString(), PageTransition.AUTO_TOPLEVEL);
+        String headers = IntentHandler.getExtraHeadersFromIntent(intent);
+        if (headers != null) params.setVerbatimHeaders(headers);
+
+        return params;
+    }
+
     @Override
     protected void onNewIntent(Intent intent) {
         if (intent == null) return;
@@ -248,8 +261,7 @@ public class WebappActivity extends SingleTabActivity {
             Log.e(TAG, "Failed to parse new Intent: " + intent);
             ApiCompatibilityUtils.finishAndRemoveTask(this);
         } else if (newWebappInfo.shouldForceNavigation() && mIsInitialized) {
-            LoadUrlParams params =
-                    new LoadUrlParams(newWebappInfo.uri().toString(), PageTransition.AUTO_TOPLEVEL);
+            LoadUrlParams params = createLoadUrlParams(newWebappInfo, intent);
             params.setShouldClearHistoryList(true);
             getActivityTab().loadUrl(params);
         }
@@ -271,6 +283,15 @@ public class WebappActivity extends SingleTabActivity {
 
     @Override
     protected void doLayoutInflation() {
+        // Because we delay the layout inflation, the CompositorSurfaceManager and its
+        // SurfaceView(s) are created and attached late (ie after the first draw). At the time of
+        // the first attach of a SurfaceView to the view hierarchy (regardless of the SurfaceView's
+        // actual opacity), the window transparency hint changes (because the window creates a
+        // transparent hole and attaches the SurfaceView to that hole). This may cause older android
+        // versions to destroy the window and redraw it causing a flicker. This line sets the window
+        // transparency hint early so that when the SurfaceView gets attached later, the
+        // transparency hint need not change and no flickering occurs.
+        getWindow().setFormat(PixelFormat.TRANSLUCENT);
         // No need to inflate layout synchronously since splash screen is displayed.
         new Thread() {
             @Override
@@ -293,11 +314,7 @@ public class WebappActivity extends SingleTabActivity {
     }
 
     private void onLayoutInflated(ViewGroup mainView) {
-        View placeHolderView = new View(this);
-        setContentView(placeHolderView);
-        ViewGroup contentParent = (ViewGroup) placeHolderView.getParent();
-        WarmupManager.transferViewHeirarchy(mainView, contentParent);
-        contentParent.removeView(placeHolderView);
+        mSplashController.setViewHierarchyBelowSplashscreen(mainView);
         onInitialLayoutInflationComplete();
     }
 
@@ -315,8 +332,8 @@ public class WebappActivity extends SingleTabActivity {
 
         // We do not load URL when restoring from saved instance states.
         if (savedInstanceState == null) {
-            tab.loadUrl(
-                    new LoadUrlParams(mWebappInfo.uri().toString(), PageTransition.AUTO_TOPLEVEL));
+            LoadUrlParams params = createLoadUrlParams(mWebappInfo, getIntent());
+            tab.loadUrl(params);
         } else {
             if (NetworkChangeNotifier.isOnline()) tab.reloadIgnoringCache();
         }
@@ -385,6 +402,7 @@ public class WebappActivity extends SingleTabActivity {
         setTitle(mWebappInfo.shortName());
 
         super.preInflationStartup();
+        initializeWebappData();
     }
 
     @Override
@@ -605,7 +623,8 @@ public class WebappActivity extends SingleTabActivity {
 
     @Override
     protected AppMenuPropertiesDelegate createAppMenuPropertiesDelegate() {
-        return new CustomTabAppMenuPropertiesDelegate(this, CUSTOM_TABS_UI_TYPE_MINIMAL_UI_WEBAPP,
+        return new CustomTabAppMenuPropertiesDelegate(this,
+                CustomTabIntentDataProvider.CustomTabsUiType.MINIMAL_UI_WEBAPP,
                 new ArrayList<String>(), true /* is opened by Chrome */,
                 true /* should show share */, false /* should show star (bookmarking) */,
                 false /* should show download */);
@@ -613,7 +632,6 @@ public class WebappActivity extends SingleTabActivity {
 
     @Override
     public void postInflationStartup() {
-        initializeWebappData();
         if (getBrowserSession() != null) mTrustedWebContentProvider.verifyRelationship();
 
         super.postInflationStartup();
@@ -687,7 +705,7 @@ public class WebappActivity extends SingleTabActivity {
     @Override
     protected ChromeFullscreenManager createFullscreenManager() {
         // Disable HTML5 fullscreen in PWA fullscreen mode.
-        return new ChromeFullscreenManager(this, ChromeFullscreenManager.CONTROLS_POSITION_TOP) {
+        return new ChromeFullscreenManager(this, ChromeFullscreenManager.ControlsPosition.TOP) {
             @Override
             public void enterPersistentFullscreenMode(FullscreenOptions options) {
                 if (mWebappInfo.displayMode() == WebDisplayMode.FULLSCREEN) return;
@@ -749,8 +767,7 @@ public class WebappActivity extends SingleTabActivity {
             @Override
             public void onFaviconUpdated(Tab tab, Bitmap icon) {
                 // No need to cache the favicon if there is an icon declared in app manifest.
-                if (mWebappInfo.icon() != null) return;
-                if (icon == null) return;
+                if (mWebappInfo.icon() != null || icon == null) return;
                 if (mLargestFavicon == null || icon.getWidth() > mLargestFavicon.getWidth()
                         || icon.getHeight() > mLargestFavicon.getHeight()) {
                     mLargestFavicon = icon;
@@ -798,8 +815,7 @@ public class WebappActivity extends SingleTabActivity {
      *         this is a Trusted Web Activity.
      */
     public CustomTabsSessionToken getBrowserSession() {
-        if (mTrustedWebContentProvider == null) return null;
-        return mTrustedWebContentProvider.getSession();
+        return mTrustedWebContentProvider == null ? null : mTrustedWebContentProvider.getSession();
     }
 
     /**
@@ -811,9 +827,9 @@ public class WebappActivity extends SingleTabActivity {
      * by use-case.
      */
     public @ActivityType int getActivityType() {
-        if (getBrowserSession() != null) return ACTIVITY_TYPE_TWA;
-        if (getNativeClientPackageName() != null) return ACTIVITY_TYPE_WEBAPK;
-        return ACTIVITY_TYPE_WEBAPP;
+        if (getBrowserSession() != null) return ActivityType.TWA;
+        if (getNativeClientPackageName() != null) return ActivityType.WEBAPK;
+        return ActivityType.WEBAPP;
     }
 
     /**

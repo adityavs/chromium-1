@@ -87,6 +87,12 @@ TEST_F(KeyboardShortcutViewTest, ShowAndClose) {
 
 TEST_F(KeyboardShortcutViewTest, StartupTimeHistogram) {
   views::Widget* widget = KeyboardShortcutView::Toggle(base::TimeTicks());
+  base::RunLoop runloop;
+  widget->GetCompositor()->RequestPresentationTimeForNextFrame(base::BindOnce(
+      [](base::RepeatingClosure closure,
+         const gfx::PresentationFeedback& feedback) { closure.Run(); },
+      runloop.QuitClosure()));
+  runloop.Run();
   histograms_.ExpectTotalCount("Keyboard.ShortcutViewer.StartupTime", 1);
   widget->CloseNow();
 }
@@ -201,8 +207,8 @@ TEST_F(KeyboardShortcutViewTest, CloseWindowByAccelerator) {
   views::Widget* widget = KeyboardShortcutView::Toggle(base::TimeTicks());
   EXPECT_FALSE(widget->IsClosed());
 
-  ui::test::EventGenerator& event_generator = GetEventGenerator();
-  event_generator.PressKey(ui::VKEY_W, ui::EF_CONTROL_DOWN);
+  ui::test::EventGenerator* event_generator = GetEventGenerator();
+  event_generator->PressKey(ui::VKEY_W, ui::EF_CONTROL_DOWN);
   EXPECT_TRUE(widget->IsClosed());
 }
 

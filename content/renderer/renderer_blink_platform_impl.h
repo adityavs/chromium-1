@@ -29,9 +29,10 @@
 #include "third_party/blink/public/platform/modules/indexeddb/web_idb_factory.h"
 #include "third_party/blink/public/platform/modules/webdatabase/web_database.mojom.h"
 
-namespace IPC {
-class SyncMessageFilter;
-}
+#if defined(OS_LINUX)
+#include "components/services/font/public/cpp/font_loader.h"  // nogncheck
+#include "third_party/skia/include/core/SkRefCnt.h"           // nogncheck
+#endif
 
 namespace blink {
 namespace scheduler {
@@ -46,20 +47,14 @@ class WebMediaStream;
 class WebSecurityOrigin;
 }  // namespace blink
 
-namespace device {
-class Gamepads;
-}
-
 namespace network {
 class SharedURLLoaderFactory;
 }
 
 namespace content {
 class BlinkInterfaceProviderImpl;
-class GamepadSharedMemoryReader;
 class ChildURLLoaderFactoryBundle;
 class LocalStorageCachedAreas;
-class PlatformEventObserverBase;
 class ThreadSafeSender;
 class WebDatabaseObserverImpl;
 
@@ -126,7 +121,6 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
   blink::WebString FileSystemCreateOriginIdentifier(
       const blink::WebSecurityOrigin& origin) override;
 
-  bool IsThreadedCompositingEnabled() override;
   bool IsThreadedAnimationEnabled() override;
   bool IsGpuCompositingDisabled() override;
   double AudioHardwareSampleRate() override;
@@ -149,7 +143,6 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
       blink::WebMIDIAccessorClient* client) override;
 
   blink::WebBlobRegistry* GetBlobRegistry() override;
-  void SampleGamepads(device::Gamepads&) override;
   std::unique_ptr<blink::WebRTCPeerConnectionHandler>
   CreateRTCPeerConnectionHandler(
       blink::WebRTCPeerConnectionHandlerClient* client,
@@ -173,9 +166,11 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
       blink::WebMediaPlayer* web_media_player) override;
   std::unique_ptr<blink::WebImageCaptureFrameGrabber>
   CreateImageCaptureFrameGrabber() override;
+  std::unique_ptr<webrtc::RtpCapabilities> GetRtpSenderCapabilities(
+      const blink::WebString& kind) override;
+  std::unique_ptr<webrtc::RtpCapabilities> GetRtpReceiverCapabilities(
+      const blink::WebString& kind) override;
   void UpdateWebRTCAPICount(blink::WebRTCAPIName api_name) override;
-  std::unique_ptr<blink::WebSocketHandshakeThrottle>
-  CreateWebSocketHandshakeThrottle() override;
   std::unique_ptr<blink::WebGraphicsContext3DProvider>
   CreateOffscreenGraphicsContext3DProvider(
       const blink::Platform::ContextAttributes& attributes,
@@ -187,9 +182,6 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
   blink::WebString ConvertIDNToUnicode(const blink::WebString& host) override;
   service_manager::Connector* GetConnector() override;
   blink::InterfaceProvider* GetInterfaceProvider() override;
-  void StartListening(blink::WebPlatformEventType,
-                      blink::WebPlatformEventListener*) override;
-  void StopListening(blink::WebPlatformEventType) override;
   blink::WebThread* CurrentThread() override;
   blink::BlameContext* GetTopLevelBlameContext() override;
   void RecordRappor(const char* metric,
@@ -199,14 +191,6 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
   void DidStartWorkerThread() override;
   void WillStopWorkerThread() override;
   void WorkerContextCreated(const v8::Local<v8::Context>& worker) override;
-
-  // Set the PlatformEventObserverBase in |platform_event_observers_| associated
-  // with |type| to |observer|. If there was already an observer associated to
-  // the given |type|, it will be replaced.
-  // Note that |observer| will be owned by this object after the call.
-  void SetPlatformEventObserverForTesting(
-      blink::WebPlatformEventType type,
-      std::unique_ptr<PlatformEventObserverBase> observer);
 
   // Disables the WebSandboxSupport implementation for testing.
   // Tests that do not set up a full sandbox environment should call
@@ -256,15 +240,6 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
  private:
   bool CheckPreparsedJsCachingEnabled() const;
 
-  // TODO(crbug.com/850997): Remove when Device*EventPump classes are
-  // moved to blink
-  void InitDeviceSensorEventPump(blink::WebPlatformEventType type,
-                                 blink::WebPlatformEventListener* listener);
-
-  // TODO(crbug.com/850997): Remove when Device*EventPump classes are
-  // moved to blink
-  void StopDeviceSensorEventPump(blink::WebPlatformEventType type);
-
   // Ensure that the WebDatabaseHost has been initialized.
   void InitializeWebDatabaseHostIfNeeded();
 
@@ -295,17 +270,9 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
   std::unique_ptr<blink::WebBlobRegistry> blob_registry_;
 
   scoped_refptr<base::SingleThreadTaskRunner> default_task_runner_;
-  scoped_refptr<IPC::SyncMessageFilter> sync_message_filter_;
   scoped_refptr<ThreadSafeSender> thread_safe_sender_;
 
   std::unique_ptr<WebDatabaseObserverImpl> web_database_observer_impl_;
-
-  base::IDMap<std::unique_ptr<PlatformEventObserverBase>>
-      platform_event_observers_;
-
-  // TODO(crbug.com/612330): Remove when GamepadSharedMemoryReader class is
-  // moved to blink
-  std::unique_ptr<GamepadSharedMemoryReader> gamepad_shared_memory_reader_;
 
   // NOT OWNED
   blink::scheduler::WebThreadScheduler* main_thread_scheduler_;
@@ -318,6 +285,10 @@ class CONTENT_EXPORT RendererBlinkPlatformImpl : public BlinkPlatformImpl {
 
   blink::mojom::WebDatabaseHostPtrInfo web_database_host_info_;
   scoped_refptr<blink::mojom::ThreadSafeWebDatabaseHostPtr> web_database_host_;
+
+#if defined(OS_LINUX)
+  sk_sp<font_service::FontLoader> font_loader_;
+#endif
 
   THREAD_CHECKER(main_thread_checker_);
 

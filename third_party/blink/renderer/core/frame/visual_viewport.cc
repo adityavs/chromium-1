@@ -572,8 +572,10 @@ void VisualViewport::SetupScrollbar(ScrollbarOrientation orientation) {
   if (!scrollbar_layer_group) {
     ScrollingCoordinator* coordinator = GetPage().GetScrollingCoordinator();
     DCHECK(coordinator);
+
     scrollbar_layer_group = coordinator->CreateSolidColorScrollbarLayer(
-        orientation, thumb_thickness, scrollbar_margin, false);
+        orientation, thumb_thickness, scrollbar_margin, false,
+        GetScrollbarElementId(orientation));
 
     // The compositor will control the scrollbar's visibility. Set to invisible
     // by default so scrollbars don't show up in layout tests.
@@ -603,7 +605,7 @@ void VisualViewport::SetupScrollbar(ScrollbarOrientation orientation) {
                          scrollbar_thickness;
 
   // Use the GraphicsLayer to position the scrollbars.
-  scrollbar_graphics_layer->SetPosition(IntPoint(x_position, y_position));
+  scrollbar_graphics_layer->SetPosition(FloatPoint(x_position, y_position));
   scrollbar_graphics_layer->SetSize(IntSize(width, height));
   scrollbar_graphics_layer->SetContentsRect(IntRect(0, 0, width, height));
 }
@@ -990,6 +992,10 @@ ScrollbarTheme& VisualViewport::GetPageScrollbarTheme() const {
   return GetPage().GetScrollbarTheme();
 }
 
+void VisualViewport::SetOverlayScrollbarsHidden(bool hidden) {
+  ScrollableArea::SetScrollbarsHiddenIfOverlay(hidden);
+}
+
 String VisualViewport::DebugName(const GraphicsLayer* graphics_layer) const {
   String name;
   if (graphics_layer == inner_viewport_container_layer_.get()) {
@@ -1011,6 +1017,13 @@ String VisualViewport::DebugName(const GraphicsLayer* graphics_layer) const {
   }
 
   return name;
+}
+
+const ScrollableArea* VisualViewport::GetScrollableAreaForTesting(
+    const GraphicsLayer* layer) const {
+  if (layer == inner_viewport_scroll_layer_.get())
+    return this;
+  return nullptr;
 }
 
 }  // namespace blink

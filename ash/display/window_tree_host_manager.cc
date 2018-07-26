@@ -27,13 +27,14 @@
 #include "ash/system/tray/system_tray.h"
 #include "ash/system/unified/unified_system_tray.h"
 #include "ash/wm/window_util.h"
+#include "ash/ws/window_service_owner.h"
 #include "base/strings/stringprintf.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/threading/thread_task_runner_handle.h"
+#include "services/ui/ws2/window_service.h"
 #include "ui/aura/client/capture_client.h"
 #include "ui/aura/client/focus_client.h"
 #include "ui/aura/client/screen_position_client.h"
-#include "ui/aura/env.h"
 #include "ui/aura/window.h"
 #include "ui/aura/window_event_dispatcher.h"
 #include "ui/aura/window_tracker.h"
@@ -41,7 +42,6 @@
 #include "ui/base/class_property.h"
 #include "ui/base/ime/input_method_factory.h"
 #include "ui/base/l10n/l10n_util.h"
-#include "ui/base/ui_base_features.h"
 #include "ui/base/ui_base_switches_util.h"
 #include "ui/compositor/compositor.h"
 #include "ui/display/display.h"
@@ -97,11 +97,6 @@ void ClearDisplayPropertiesOnHost(AshWindowTreeHost* ash_host) {
 aura::Window* GetWindow(AshWindowTreeHost* ash_host) {
   CHECK(ash_host->AsWindowTreeHost());
   return ash_host->AsWindowTreeHost()->window();
-}
-
-bool ShouldUpdateMirrorWindowController() {
-  return aura::Env::GetInstance()->mode() == aura::Env::Mode::LOCAL ||
-         !base::FeatureList::IsEnabled(::features::kMash);
 }
 
 }  // namespace
@@ -663,6 +658,15 @@ void WindowTreeHostManager::OnDisplayRemoved(const display::Display& display) {
 void WindowTreeHostManager::OnDisplayMetricsChanged(
     const display::Display& display,
     uint32_t metrics) {
+  // Shell creates |window_service_owner_| from Shell::Init(), but this
+  // function may be called before |window_service_owner_| is created. It's safe
+  // to ignore the call in this case as no clients have connected yet.
+  ui::ws2::WindowService* window_service =
+      Shell::Get()->window_service_owner()
+          ? Shell::Get()->window_service_owner()->window_service()
+          : nullptr;
+  if (window_service)
+    window_service->OnDisplayMetricsChanged(display, metrics);
   if (!(metrics & (DISPLAY_METRIC_BOUNDS | DISPLAY_METRIC_ROTATION |
                    DISPLAY_METRIC_DEVICE_SCALE_FACTOR)))
     return;
@@ -682,9 +686,7 @@ void WindowTreeHostManager::OnHostResized(aura::WindowTreeHost* host) {
   display::DisplayManager* display_manager = GetDisplayManager();
   if (display_manager->UpdateDisplayBounds(display.id(),
                                            host->GetBoundsInPixels())) {
-    // The window server controls mirroring in Mus, not Ash.
-    if (ShouldUpdateMirrorWindowController())
-      mirror_window_controller_->UpdateWindow();
+    mirror_window_controller_->UpdateWindow();
     cursor_window_controller_->UpdateContainer();
   }
 }
@@ -693,9 +695,7 @@ void WindowTreeHostManager::CreateOrUpdateMirroringDisplay(
     const display::DisplayInfoList& info_list) {
   if (GetDisplayManager()->IsInMirrorMode() ||
       GetDisplayManager()->IsInUnifiedMode()) {
-    // The window server controls mirroring in Mus, not Ash.
-    if (ShouldUpdateMirrorWindowController())
-      mirror_window_controller_->UpdateWindow(info_list);
+    mirror_window_controller_->UpdateWindow(info_list);
     cursor_window_controller_->UpdateContainer();
   } else {
     NOTREACHED();
@@ -703,9 +703,7 @@ void WindowTreeHostManager::CreateOrUpdateMirroringDisplay(
 }
 
 void WindowTreeHostManager::CloseMirroringDisplayIfNotNecessary() {
-  // The window server controls mirroring in Mus, not Ash.
-  if (ShouldUpdateMirrorWindowController())
-    mirror_window_controller_->CloseIfNotNecessary();
+  mirror_window_controller_->CloseIfNotNecessary();
   // If cursor_compositing is enabled for large cursor, the cursor window is
   // always on the desktop display (the visible cursor on the non-desktop
   // display is drawn through compositor mirroring). Therefore, it's unnecessary

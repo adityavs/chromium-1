@@ -26,10 +26,6 @@ import colorama
 ERRORPRONE_WARNINGS_TO_TURN_OFF = [
   # TODO(crbug.com/834807): Follow steps in bug
   'DoubleBraceInitialization',
-  # TODO(crbug.com/834801): Follow steps in bug.
-  'ParcelableCreator',
-  # TODO(crbug.com/834796): Follow steps in bug.
-  'OrphanedFormatString',
   # TODO(crbug.com/834790): Follow steps in bug.
   'CatchAndPrintStackTrace',
   # TODO(crbug.com/801210): Follow steps in bug.
@@ -100,7 +96,9 @@ ERRORPRONE_WARNINGS_TO_ERROR = [
   'MissingFail',
   'MissingOverride',
   'NarrowingCompoundAssignment',
+  'OrphanedFormatString',
   'ParameterName',
+  'ParcelableCreator',
   'ReferenceEquality',
   'StaticGuardedByInstance',
   'StaticQualifiedUsingExpression',

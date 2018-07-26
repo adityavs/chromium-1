@@ -35,6 +35,8 @@
 #include "components/download/public/common/download_stats.h"
 #include "components/rappor/public/rappor_utils.h"
 #include "components/url_formatter/url_formatter.h"
+#include "content/browser/accessibility/accessibility_tree_formatter.h"
+#include "content/browser/accessibility/accessibility_tree_formatter_blink.h"
 #include "content/browser/accessibility/browser_accessibility_state_impl.h"
 #include "content/browser/bad_message.h"
 #include "content/browser/browser_plugin/browser_plugin_embedder.h"
@@ -42,6 +44,7 @@
 #include "content/browser/child_process_security_policy_impl.h"
 #include "content/browser/devtools/protocol/page_handler.h"
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
+#include "content/browser/display_cutout/display_cutout_host_impl.h"
 #include "content/browser/dom_storage/dom_storage_context_wrapper.h"
 #include "content/browser/dom_storage/session_storage_namespace_impl.h"
 #include "content/browser/download/mhtml_generation_manager.h"
@@ -154,7 +157,6 @@
 #endif
 
 #if defined(OS_ANDROID)
-#include "content/browser/android/content_video_view.h"
 #include "content/browser/android/date_time_chooser_android.h"
 #include "content/browser/android/java_interfaces_impl.h"
 #include "content/browser/media/android/media_web_contents_observer_android.h"
@@ -238,6 +240,25 @@ RenderFrameHostImpl* FindOpenerRFH(const WebContents::CreateParams& params) {
                                              params.opener_render_frame_id);
   }
   return opener_rfh;
+}
+
+// Returns |true| if |type| is the kind of user input that should trigger the
+// user interaction observers.
+bool IsUserInteractionInputType(blink::WebInputEvent::Type type) {
+  // Ideally, this list would be based more off of
+  // https://whatwg.org/C/interaction.html#triggered-by-user-activation.
+  return type == blink::WebInputEvent::kMouseDown ||
+         type == blink::WebInputEvent::kGestureScrollBegin ||
+         type == blink::WebInputEvent::kTouchStart ||
+         type == blink::WebInputEvent::kRawKeyDown;
+}
+
+// Returns |true| if |type| is the kind of user input that should be used as
+// a user gesture signal for resource load dispatches.
+bool IsResourceLoadUserInteractionInputType(blink::WebInputEvent::Type type) {
+  return type == blink::WebInputEvent::kMouseDown ||
+         type == blink::WebInputEvent::kTouchStart ||
+         type == blink::WebInputEvent::kRawKeyDown;
 }
 
 // Ensures that OnDialogClosed is only called once.
@@ -397,135 +418,6 @@ class WebContentsImpl::ColorChooser : public blink::mojom::ColorChooser {
   blink::mojom::ColorChooserClientPtr client_;
 };
 
-// WebContentsImpl::DisplayCutoutHostImpl --------------------------------------
-
-class WebContentsImpl::DisplayCutoutHostImpl
-    : public blink::mojom::DisplayCutoutHost,
-      public WebContentsObserver {
- public:
-  explicit DisplayCutoutHostImpl(WebContentsImpl* web_contents)
-      : WebContentsObserver(web_contents), bindings_(web_contents, this) {}
-
-  // blink::mojom::DisplayCutoutHost
-  void NotifyViewportFitChanged(blink::mojom::ViewportFit value) override {
-    ViewportFitChangedForFrame(bindings_.GetCurrentTargetFrame(), value);
-  }
-
-  // Stores the updated viewport fit value for a |frame| and notifies observers
-  // if it has changed.
-  void ViewportFitChangedForFrame(RenderFrameHost* rfh,
-                                  blink::mojom::ViewportFit value) {
-    if (GetValueOrDefault(rfh) == value)
-      return;
-
-    values_[rfh] = value;
-
-    // If we are the current |RenderFrameHost| frame then notify
-    // WebContentsObservers about the new value.
-    if (current_rfh_ == rfh)
-      NotifyObservers(value);
-  }
-
-  // WebContentsObserver override.
-  void DidAcquireFullscreen(RenderFrameHost* rfh) override {
-    SetCurrentRenderFrameHost(rfh);
-  }
-
-  // WebContentsObserver override.
-  void DidToggleFullscreenModeForTab(bool entered_fullscreen,
-                                     bool will_cause_resize) override {
-    if (!entered_fullscreen)
-      SetCurrentRenderFrameHost(nullptr);
-  }
-
-  // Removes any state built up by a render frame.
-  void RenderFrameDeleted(RenderFrameHost* rfh) override {
-    values_.erase(rfh);
-
-    // If we were the current |RenderFrameHost| then we should clear that.
-    if (current_rfh_ == rfh)
-      SetCurrentRenderFrameHost(nullptr);
-  }
-
-  // Updates the safe area insets on the current frame.
-  void SetDisplayCutoutSafeArea(gfx::Insets insets) {
-    insets_ = insets;
-
-    if (current_rfh_)
-      SendSafeAreaToFrame(current_rfh_, insets);
-  }
-
- private:
-  // Set the current |RenderFrameHost| that should have control over the
-  // viewport fit value and we should set safe area insets on.
-  void SetCurrentRenderFrameHost(RenderFrameHost* rfh) {
-    if (current_rfh_ == rfh)
-      return;
-
-    // If we had a previous frame then we should clear the insets on that frame.
-    if (current_rfh_)
-      SendSafeAreaToFrame(current_rfh_, gfx::Insets());
-
-    // If the new RenderFrameHost is nullptr we should stop here and notify
-    // observers that the new viewport fit is kAuto (the default).
-    current_rfh_ = rfh;
-    if (!rfh) {
-      NotifyObservers(blink::mojom::ViewportFit::kAuto);
-      return;
-    }
-
-    // Send the current safe area to the new frame.
-    SendSafeAreaToFrame(rfh, insets_);
-
-    // Notify the WebContentsObservers that the viewport fit value has changed.
-    NotifyObservers(GetValueOrDefault(rfh));
-  }
-
-  // Send the safe area insets to a |RenderFrameHost|.
-  void SendSafeAreaToFrame(RenderFrameHost* rfh, gfx::Insets insets) {
-    blink::AssociatedInterfaceProvider* provider =
-        rfh->GetRemoteAssociatedInterfaces();
-    if (!provider)
-      return;
-
-    blink::mojom::DisplayCutoutClientAssociatedPtr client;
-    provider->GetInterface(&client);
-    client->SetSafeArea(blink::mojom::DisplayCutoutSafeArea::New(
-        insets.top(), insets.left(), insets.bottom(), insets.right()));
-  }
-
-  // Notify WebContentsObservers that the viewport fit value has changed.
-  void NotifyObservers(blink::mojom::ViewportFit value) {
-    for (auto& observer : web_contents_impl()->observers_)
-      observer.ViewportFitChanged(value);
-  }
-
-  // Get the stored viewport fit value for a frame or kAuto if there is no
-  // stored value.
-  blink::mojom::ViewportFit GetValueOrDefault(RenderFrameHost* rfh) const {
-    auto value = values_.find(rfh);
-    if (value != values_.end())
-      return value->second;
-    return blink::mojom::ViewportFit::kAuto;
-  }
-
-  WebContentsImpl* web_contents_impl() {
-    return static_cast<WebContentsImpl*>(web_contents());
-  }
-
-  // Stores the current safe area insets.
-  gfx::Insets insets_ = gfx::Insets();
-
-  // Stores the current |RenderFrameHost| that has the applied safe area insets
-  // and is controlling the viewport fit value.
-  RenderFrameHost* current_rfh_ = nullptr;
-
-  // Stores a map of RenderFrameHosts and their current viewport fit values.
-  std::map<RenderFrameHost*, blink::mojom::ViewportFit> values_;
-
-  WebContentsFrameBindingSet<blink::mojom::DisplayCutoutHost> bindings_;
-};
-
 // WebContentsImpl::WebContentsTreeNode ----------------------------------------
 WebContentsImpl::WebContentsTreeNode::WebContentsTreeNode(
     WebContentsImpl* current_web_contents)
@@ -650,7 +542,7 @@ WebContentsImpl::WebContentsImpl(BrowserContext* browser_context)
       force_disable_overscroll_content_(false),
       last_dialog_suppressed_(false),
       accessibility_mode_(
-          BrowserAccessibilityStateImpl::GetInstance()->accessibility_mode()),
+          BrowserAccessibilityStateImpl::GetInstance()->GetAccessibilityMode()),
       audio_stream_monitor_(this),
       bluetooth_connected_device_count_(0),
       media_device_group_id_salt_base_(
@@ -679,7 +571,13 @@ WebContentsImpl::WebContentsImpl(BrowserContext* browser_context)
   host_zoom_map_observer_.reset(new HostZoomMapObserver(this));
 #endif  // !defined(OS_ANDROID)
 
-  display_cutout_host_impl_ = std::make_unique<DisplayCutoutHostImpl>(this);
+#if defined(OS_ANDROID)
+  if (base::FeatureList::IsEnabled(features::kDisplayCutoutAPI)) {
+    display_cutout_host_impl_ = std::make_unique<DisplayCutoutHostImpl>(
+        this, base::BindRepeating(&WebContentsImpl::NotifyViewportFitChanged,
+                                  base::Unretained(this)));
+  }
+#endif
 
   registry_.AddInterface(base::BindRepeating(
       &WebContentsImpl::OnColorChooserFactoryRequest, base::Unretained(this)));
@@ -906,6 +804,8 @@ bool WebContentsImpl::OnMessageReceived(RenderViewHostImpl* render_view_host,
   IPC_BEGIN_MESSAGE_MAP_WITH_PARAM(WebContentsImpl, message, render_view_host)
     IPC_MESSAGE_HANDLER(ViewHostMsg_DidFirstVisuallyNonEmptyPaint,
                         OnFirstVisuallyNonEmptyPaint)
+    IPC_MESSAGE_HANDLER(ViewHostMsg_DidCommitAndDrawCompositorFrame,
+                        OnCommitAndDrawCompositorFrame)
     IPC_MESSAGE_HANDLER(ViewHostMsg_GoToEntryAtOffset, OnGoToEntryAtOffset)
     IPC_MESSAGE_HANDLER(ViewHostMsg_UpdateZoomLimits, OnUpdateZoomLimits)
     IPC_MESSAGE_HANDLER(ViewHostMsg_PageScaleFactorChanged,
@@ -1245,19 +1145,19 @@ void WebContentsImpl::RecursiveRequestAXTreeSnapshotOnFrame(
   }
 }
 
-#if !defined(OS_ANDROID)
+void WebContentsImpl::NotifyViewportFitChanged(
+    blink::mojom::ViewportFit value) {
+  for (auto& observer : observers_)
+    observer.ViewportFitChanged(value);
+}
 
+#if !defined(OS_ANDROID)
 void WebContentsImpl::UpdateZoom() {
   RenderWidgetHostImpl* rwh = GetRenderViewHost()->GetWidget();
   if (rwh->GetView())
     rwh->SynchronizeVisualProperties();
 }
 
-bool WebContentsImpl::UsesTemporaryZoomLevel() const {
-  return HostZoomMap::GetForWebContents(this)->UsesTemporaryZoomLevel(
-      GetMainFrame()->GetProcess()->GetID(),
-      GetRenderViewHost()->GetRoutingID());
-}
 
 void WebContentsImpl::UpdateZoomIfNecessary(const std::string& scheme,
                                             const std::string& host) {
@@ -1392,7 +1292,8 @@ const std::string& WebContentsImpl::GetMediaDeviceGroupIDSaltBase() const {
 #if defined(OS_ANDROID)
 
 void WebContentsImpl::SetDisplayCutoutSafeArea(gfx::Insets insets) {
-  display_cutout_host_impl_->SetDisplayCutoutSafeArea(insets);
+  if (display_cutout_host_impl_)
+    display_cutout_host_impl_->SetDisplayCutoutSafeArea(insets);
 }
 
 #endif
@@ -1787,15 +1688,40 @@ Visibility WebContentsImpl::GetVisibility() const {
   return visibility_;
 }
 
+// TODO(alexmos): rename to NeedToFireBeforeUnloadOrUnload().
 bool WebContentsImpl::NeedToFireBeforeUnload() {
   // TODO(creis): Should we fire even for interstitial pages?
-  return WillNotifyDisconnection() && !ShowingInterstitialPage() &&
-         !GetRenderViewHost()->SuddenTerminationAllowed();
+  if (ShowingInterstitialPage())
+    return false;
+
+  if (!WillNotifyDisconnection())
+    return false;
+
+  // Don't fire if the main frame's RenderViewHost indicates that beforeunload
+  // and unload have already executed (e.g., after receiving a ClosePage ACK)
+  // or should be ignored.
+  if (GetRenderViewHost()->SuddenTerminationAllowed())
+    return false;
+
+  // TODO(alexmos): This checks for both beforeunload and unload handlers from
+  // the whole main frame process.  Remove this and explicitly check whether
+  // the main frame has each of these handlers. This can be done for
+  // beforeunload via RenderFrameHostImpl::ShouldDispatchBeforeUnload(), and
+  // something similar is needed for unload.
+  if (!GetMainFrame()->GetProcess()->SuddenTerminationAllowed())
+    return true;
+
+  // Check whether any subframes need to run beforeunload handlers.
+  //
+  // TODO(alexmos): Also check whether subframes need to run unload handlers in
+  // addition to beforeunload.
+  return GetMainFrame()->ShouldDispatchBeforeUnload(
+      true /* check_subframes_only */);
 }
 
 void WebContentsImpl::DispatchBeforeUnload() {
-  bool for_cross_site_transition = false;
-  GetMainFrame()->DispatchBeforeUnload(for_cross_site_transition, false);
+  GetMainFrame()->DispatchBeforeUnload(
+      RenderFrameHostImpl::BeforeUnloadType::TAB_CLOSE, false);
 }
 
 void WebContentsImpl::AttachToOuterWebContentsFrame(
@@ -1993,9 +1919,12 @@ void WebContentsImpl::Init(const WebContents::CreateParams& params) {
   int32_t view_routing_id = params.routing_id;
   int32_t main_frame_widget_routing_id = params.main_frame_widget_routing_id;
   if (main_frame_widget_routing_id == MSG_ROUTING_NONE) {
-    view_routing_id = main_frame_widget_routing_id =
+    view_routing_id = site_instance->GetProcess()->GetNextRoutingID();
+    main_frame_widget_routing_id =
         site_instance->GetProcess()->GetNextRoutingID();
   }
+
+  DCHECK_NE(view_routing_id, main_frame_widget_routing_id);
 
   GetRenderManager()->Init(
       site_instance.get(), view_routing_id, params.main_frame_routing_id,
@@ -2372,12 +2301,6 @@ void WebContentsImpl::ExitFullscreenMode(bool will_cause_resize) {
         ->ShutdownAndDestroyWidget(true);
   }
 
-#if defined(OS_ANDROID)
-  ContentVideoView* video_view = ContentVideoView::GetInstance();
-  if (video_view != NULL)
-    video_view->ExitFullscreen();
-#endif
-
   if (delegate_) {
     delegate_->ExitFullscreenModeForTab(this);
 
@@ -2737,6 +2660,10 @@ void WebContentsImpl::CreateNewWindow(
     }
     // Save the created window associated with the route so we can show it
     // later.
+    //
+    // TODO(ajwong): This should be keyed off the RenderFrame routing id or the
+    // FrameTreeNode id instead of the routing id of the Widget for the main
+    // frame.  https://crbug.com/545684
     DCHECK_NE(MSG_ROUTING_NONE, main_frame_widget_route_id);
     pending_contents_[std::make_pair(render_process_id,
                                      main_frame_widget_route_id)] =
@@ -3056,6 +2983,13 @@ void WebContentsImpl::AccessibilityLocationChangesReceived(
     const std::vector<AXLocationChangeNotificationDetails>& details) {
   for (auto& observer : observers_)
     observer.AccessibilityLocationChangesReceived(details);
+}
+
+base::string16 WebContentsImpl::DumpAccessibilityTree(bool internal) {
+  auto* ax_mgr = GetOrCreateRootBrowserAccessibilityManager();
+  DCHECK(ax_mgr);
+  return AccessibilityTreeFormatter::DumpAccessibilityTreeFromManager(ax_mgr,
+                                                                      internal);
 }
 
 RenderFrameHost* WebContentsImpl::GetGuestByInstanceID(
@@ -3880,7 +3814,7 @@ void WebContentsImpl::SystemDragEnded(RenderWidgetHost* source_rwh) {
 }
 
 void WebContentsImpl::NavigatedByUser() {
-  OnUserInteraction(blink::WebInputEvent::kUndefined);
+  SendUserGestureForResourceDispatchHost();
 }
 
 void WebContentsImpl::SetClosedByUserGesture(bool value) {
@@ -4150,11 +4084,6 @@ void WebContentsImpl::ReadyToCommitNavigation(
       net::IsCertStatusError(navigation_handle->GetSSLInfo().cert_status));
 
   SetNotWaitingForResponse();
-
-  // Reset the viewport fit
-  display_cutout_host_impl_->ViewportFitChangedForFrame(
-      navigation_handle->GetRenderFrameHost(),
-      blink::mojom::ViewportFit::kAuto);
 }
 
 void WebContentsImpl::DidFinishNavigation(NavigationHandle* navigation_handle) {
@@ -4835,6 +4764,12 @@ void WebContentsImpl::OnFirstVisuallyNonEmptyPaint(RenderViewHostImpl* source) {
   }
 }
 
+void WebContentsImpl::OnCommitAndDrawCompositorFrame(
+    RenderViewHostImpl* source) {
+  for (auto& observer : observers_)
+    observer.DidCommitAndDrawCompositorFrame();
+}
+
 void WebContentsImpl::NotifyBeforeFormRepostWarningShow() {
   for (auto& observer : observers_)
     observer.BeforeFormRepostWarningShow();
@@ -4959,6 +4894,8 @@ void WebContentsImpl::NotifyViewSwapped(RenderViewHost* old_host,
   for (auto& observer : observers_)
     observer.RenderViewHostChanged(old_host, new_host);
 
+  view_->RenderViewHostChanged(old_host, new_host);
+
   // Ensure that the associated embedder gets cleared after a RenderViewHost
   // gets swapped, so we don't reuse the same embedder next time a
   // RenderViewHost is attached to this WebContents.
@@ -4966,7 +4903,8 @@ void WebContentsImpl::NotifyViewSwapped(RenderViewHost* old_host,
 }
 
 void WebContentsImpl::NotifyFrameSwapped(RenderFrameHost* old_host,
-                                         RenderFrameHost* new_host) {
+                                         RenderFrameHost* new_host,
+                                         bool is_main_frame) {
 #if defined(OS_ANDROID)
   // Copy importance from |old_host| if |new_host| is a main frame.
   if (old_host && !new_host->GetParent()) {
@@ -5410,6 +5348,8 @@ void WebContentsImpl::RenderViewReady(RenderViewHost* rvh) {
 
   for (auto& observer : observers_)
     observer.RenderViewReady();
+
+  view_->RenderViewReady();
 }
 
 void WebContentsImpl::RenderViewTerminated(RenderViewHost* rvh,
@@ -5908,12 +5848,7 @@ bool WebContentsImpl::DidAddMessageToConsole(int32_t level,
 void WebContentsImpl::DidReceiveInputEvent(
     RenderWidgetHostImpl* render_widget_host,
     const blink::WebInputEvent::Type type) {
-  // Ideally, this list would be based more off of
-  // https://whatwg.org/C/interaction.html#triggered-by-user-activation.
-  if (type != blink::WebInputEvent::kMouseDown &&
-      type != blink::WebInputEvent::kGestureScrollBegin &&
-      type != blink::WebInputEvent::kTouchStart &&
-      type != blink::WebInputEvent::kRawKeyDown)
+  if (!IsUserInteractionInputType(type))
     return;
 
   // Ignore unless the widget is currently in the frame tree.
@@ -5923,7 +5858,11 @@ void WebContentsImpl::DidReceiveInputEvent(
   if (type != blink::WebInputEvent::kGestureScrollBegin)
     last_interactive_input_event_time_ = ui::EventTimeForNow();
 
-  OnUserInteraction(type);
+  for (auto& observer : observers_)
+    observer.DidGetUserInteraction(type);
+
+  if (IsResourceLoadUserInteractionInputType(type))
+    SendUserGestureForResourceDispatchHost();
 }
 
 void WebContentsImpl::FocusOwningWebContents(
@@ -6024,21 +5963,20 @@ void WebContentsImpl::NotifySwappedFromRenderManager(RenderFrameHost* old_host,
     if (delegate_)
       view_->SetOverscrollControllerEnabled(CanOverscrollContent());
 
-    view_->RenderViewSwappedIn(new_host->GetRenderViewHost());
-
     RenderWidgetHostViewBase* rwhv =
         static_cast<RenderWidgetHostViewBase*>(GetRenderWidgetHostView());
     if (rwhv)
       rwhv->SetMainFrameAXTreeID(GetMainFrame()->GetAXTreeID());
   }
 
-  NotifyFrameSwapped(old_host, new_host);
+  NotifyFrameSwapped(old_host, new_host, is_main_frame);
 }
 
 void WebContentsImpl::NotifyMainFrameSwappedFromRenderManager(
-    RenderViewHost* old_host,
-    RenderViewHost* new_host) {
-  NotifyViewSwapped(old_host, new_host);
+    RenderFrameHost* old_host,
+    RenderFrameHost* new_host) {
+  NotifyViewSwapped(old_host ? old_host->GetRenderViewHost() : nullptr,
+                    new_host->GetRenderViewHost());
 }
 
 NavigationControllerImpl& WebContentsImpl::GetControllerForRenderManager() {
@@ -6312,17 +6250,11 @@ void WebContentsImpl::OnPreferredSizeChanged(const gfx::Size& old_size) {
     delegate_->UpdatePreferredSize(this, new_size);
 }
 
-void WebContentsImpl::OnUserInteraction(const blink::WebInputEvent::Type type) {
-  for (auto& observer : observers_)
-    observer.DidGetUserInteraction(type);
-
-  // TODO(https://crbug.com/827659): This used to check if type != kMouseWheel.
-  // However, due to the caller already filtering event types, this would never
-  // be called with type == kMouseWheel so checking for that here is pointless.
-  // However, mouse wheel events *also* generate a kGestureScrollBegin event...
-  // which is *not* filtered out. Maybe they should be?
+void WebContentsImpl::SendUserGestureForResourceDispatchHost() {
+  // This is null in unittests. =(
   ResourceDispatcherHostImpl* rdh = ResourceDispatcherHostImpl::Get();
-  if (rdh)  // null in unittests. =(
+
+  if (rdh)
     rdh->OnUserGesture();
 }
 

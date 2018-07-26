@@ -69,7 +69,6 @@
 #include "services/device/public/mojom/constants.mojom.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/service_manager/public/cpp/connector.h"
-#include "third_party/blink/public/platform/web_input_event.h"
 #include "ui/android/window_android.h"
 #include "ui/base/page_transition_types.h"
 #include "ui/display/display.h"
@@ -92,9 +91,6 @@ vr::VrShell* g_vr_shell_instance;
 
 constexpr base::TimeDelta kPollCapturingStateInterval =
     base::TimeDelta::FromSecondsD(0.2);
-
-constexpr base::TimeDelta kExitVrDueToUnsupportedModeDelay =
-    base::TimeDelta::FromSeconds(5);
 
 constexpr base::TimeDelta kAssetsComponentWaitDelay =
     base::TimeDelta::FromSeconds(2);
@@ -156,7 +152,6 @@ VrShell::VrShell(JNIEnv* env,
       reprojected_rendering_(reprojected_rendering),
       display_size_meters_(display_width_meters, display_height_meters),
       display_size_pixels_(display_width_pixels, display_height_pixels),
-      waiting_for_assets_component_timer_(false, false),
       gl_surface_created_event_(
           base::WaitableEvent::ResetPolicy::MANUAL,
           base::WaitableEvent::InitialState::NOT_SIGNALED),
@@ -209,6 +204,12 @@ VrShell::VrShell(JNIEnv* env,
 
 void VrShell::Destroy(JNIEnv* env, const JavaParamRef<jobject>& obj) {
   delete this;
+}
+
+bool VrShell::HasUiFinishedLoading(
+    JNIEnv* env,
+    const base::android::JavaParamRef<jobject>& obj) {
+  return ui_finished_loading_;
 }
 
 void VrShell::SwapContents(JNIEnv* env,
@@ -421,11 +422,6 @@ void VrShell::CloseAllIncognitoTabs() {
 void VrShell::OpenFeedback() {
   JNIEnv* env = base::android::AttachCurrentThread();
   Java_VrShellImpl_openFeedback(env, j_vr_shell_);
-}
-
-void VrShell::ExitCct() {
-  JNIEnv* env = base::android::AttachCurrentThread();
-  Java_VrShellImpl_exitCct(env, j_vr_shell_);
 }
 
 void VrShell::CloseHostedDialog() {
@@ -658,8 +654,8 @@ void VrShell::CloseAlertDialog(
 void VrShell::SetDialogBufferSize(
     JNIEnv* env,
     const base::android::JavaParamRef<jobject>& obj,
-    float width,
-    float height) {
+    int width,
+    int height) {
   if (ui_surface_texture_)
     ui_surface_texture_->SetDefaultBufferSize(width, height);
 }
@@ -755,17 +751,8 @@ void VrShell::GvrDelegateReady(gvr::ViewerType viewer_type) {
   delegate_provider_->SetDelegate(this, viewer_type);
 }
 
-void VrShell::SendRequestPresentReply(
-    bool success,
-    device::mojom::VRSubmitFrameClientRequest request,
-    device::mojom::VRPresentationProviderPtrInfo provider_info,
-    device::mojom::VRDisplayFrameTransportOptionsPtr transport_options) {
-  device::mojom::VRPresentationProviderPtr provider;
-  provider.Bind(std::move(provider_info));
-
-  delegate_provider_->SendRequestPresentReply(success, std::move(request),
-                                              std::move(provider),
-                                              std::move(transport_options));
+void VrShell::SendRequestPresentReply(device::mojom::XRSessionPtr session) {
+  delegate_provider_->SendRequestPresentReply(std::move(session));
 }
 
 void VrShell::BufferBoundsChanged(JNIEnv* env,
@@ -867,28 +854,15 @@ void VrShell::LogUnsupportedModeUserMetric(UiUnsupportedMode mode) {
                             UiUnsupportedMode::kCount);
 }
 
-void VrShell::ExitVrDueToUnsupportedMode(UiUnsupportedMode mode) {
-  ui_->SetIsExiting();
-  PostToGlThread(FROM_HERE, base::BindOnce(&VrShellGl::set_is_exiting,
-                                           gl_thread_->GetVrShellGl(), true));
-  main_thread_task_runner_->PostDelayedTask(
-      FROM_HERE,
-      base::BindOnce(&VrShell::ForceExitVr, weak_ptr_factory_.GetWeakPtr()),
-      kExitVrDueToUnsupportedModeDelay);
-  LogUnsupportedModeUserMetric(mode);
-}
-
 content::WebContents* VrShell::GetNonNativePageWebContents() const {
   return !web_contents_is_native_page_ ? web_contents_ : nullptr;
 }
 
 void VrShell::OnUnsupportedMode(UiUnsupportedMode mode) {
   switch (mode) {
-    case UiUnsupportedMode::kUnhandledCodePoint:  // Fall through.
-    case UiUnsupportedMode::kUnhandledCertificateInfo:
-    case UiUnsupportedMode::kUnhandledConnectionSecurityInfo:
-    case UiUnsupportedMode::kGenericUnsupportedFeature:
-      ExitVrDueToUnsupportedMode(mode);
+    case UiUnsupportedMode::kUnhandledCodePoint:
+      // We should never have this case.
+      CHECK(false);
       return;
     case UiUnsupportedMode::kVoiceSearchNeedsRecordAudioOsPermission: {
       JNIEnv* env = base::android::AttachCurrentThread();
@@ -900,20 +874,21 @@ void VrShell::OnUnsupportedMode(UiUnsupportedMode mode) {
       Java_VrShellImpl_onNeedsKeyboardUpdate(env, j_vr_shell_);
       return;
     }
-    // Is not sent by the UI anymore. Enum value still exists to show correct
-    // exit prompt if vr-browsing-native-android-ui flag is false.
+    // These modes are not sent by the UI anymore. Enum values still exist to
+    // show correct exit prompt if vr-browsing-native-android-ui flag is false.
     case UiUnsupportedMode::kUnhandledPageInfo:
+    case UiUnsupportedMode::kUnhandledCertificateInfo:
+    case UiUnsupportedMode::kUnhandledConnectionSecurityInfo:
+    case UiUnsupportedMode::kGenericUnsupportedFeature:
     // kSearchEnginePromo should directly DOFF without showing a promo. So it
     // should never be used from VR ui thread.
     case UiUnsupportedMode::kSearchEnginePromo:
-    // Should never be used as a mode.
     case UiUnsupportedMode::kCount:
       NOTREACHED();
       return;
   }
 
   NOTREACHED();
-  ExitVrDueToUnsupportedMode(mode);
 }
 
 void VrShell::OnExitVrPromptResult(UiUnsupportedMode reason,
@@ -1108,7 +1083,7 @@ void VrShell::ClearFocusedElement() {
   web_contents_->ClearFocusedElement();
 }
 
-void VrShell::ProcessContentGesture(std::unique_ptr<blink::WebInputEvent> event,
+void VrShell::ProcessContentGesture(std::unique_ptr<InputEvent> event,
                                     int content_id) {
   // Block the events if they don't belong to the current content
   if (content_id_ != content_id)
@@ -1117,15 +1092,14 @@ void VrShell::ProcessContentGesture(std::unique_ptr<blink::WebInputEvent> event,
   if (!android_ui_gesture_target_)
     return;
 
-  android_ui_gesture_target_->DispatchWebInputEvent(std::move(event));
+  android_ui_gesture_target_->DispatchInputEvent(std::move(event));
 }
 
-void VrShell::ProcessDialogGesture(
-    std::unique_ptr<blink::WebInputEvent> event) {
+void VrShell::ProcessDialogGesture(std::unique_ptr<InputEvent> event) {
   if (!dialog_gesture_target_)
     return;
 
-  dialog_gesture_target_->DispatchWebInputEvent(std::move(event));
+  dialog_gesture_target_->DispatchInputEvent(std::move(event));
 }
 
 void VrShell::UpdateGamepadData(device::GvrGamepadData pad) {
@@ -1210,6 +1184,7 @@ void VrShell::OnAssetsLoaded(AssetsLoadStatus status,
 
   AssetsLoader::GetInstance()->GetMetricsHelper()->OnAssetsLoaded(
       status, component_version);
+  ui_finished_loading_ = true;
 }
 
 void VrShell::LoadAssets() {
@@ -1231,6 +1206,7 @@ void VrShell::OnAssetsComponentReady() {
 
 void VrShell::OnAssetsComponentWaitTimeout() {
   ui_->OnAssetsUnavailable();
+  ui_finished_loading_ = true;
 }
 
 void VrShell::SetCookieInfo(const CookieInfoList& cookie_info_list) {}
@@ -1320,7 +1296,7 @@ std::unique_ptr<PageInfo> VrShell::CreatePageInfo() {
   helper->GetSecurityInfo(&security_info);
 
   return std::make_unique<PageInfo>(
-      this, ProfileManager::GetActiveUserProfile(),
+      this, Profile::FromBrowserContext(web_contents_->GetBrowserContext()),
       TabSpecificContentSettings::FromWebContents(web_contents_), web_contents_,
       entry->GetVirtualURL(), security_info);
 }
@@ -1337,8 +1313,6 @@ jlong JNI_VrShellImpl_Init(JNIEnv* env,
                            const JavaParamRef<jobject>& obj,
                            const JavaParamRef<jobject>& delegate,
                            jboolean for_web_vr,
-                           jboolean web_vr_autopresentation_expected,
-                           jboolean in_cct,
                            jboolean browsing_disabled,
                            jboolean has_or_can_request_audio_permission,
                            jlong gvr_api,
@@ -1352,14 +1326,9 @@ jlong JNI_VrShellImpl_Init(JNIEnv* env,
                            jboolean is_standalone_vr_device) {
   UiInitialState ui_initial_state;
   ui_initial_state.browsing_disabled = browsing_disabled;
-  ui_initial_state.in_cct = in_cct;
   ui_initial_state.in_web_vr = for_web_vr;
-  ui_initial_state.web_vr_autopresentation_expected =
-      web_vr_autopresentation_expected;
   ui_initial_state.has_or_can_request_audio_permission =
       has_or_can_request_audio_permission;
-  ui_initial_state.skips_redraw_when_not_dirty =
-      base::FeatureList::IsEnabled(features::kVrBrowsingExperimentalRendering);
   ui_initial_state.assets_supported = AssetsLoader::AssetsSupported();
   ui_initial_state.is_standalone_vr_device = is_standalone_vr_device;
   ui_initial_state.create_tabs_view =

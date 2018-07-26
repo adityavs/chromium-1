@@ -53,9 +53,8 @@ class CORE_EXPORT CSSStyleSheet final : public StyleSheet {
  public:
   static const Document* SingleOwnerDocument(const CSSStyleSheet*);
 
-  static CSSStyleSheet* Create(Document&, const String&, ExceptionState&);
+  static CSSStyleSheet* Create(Document&, ExceptionState&);
   static CSSStyleSheet* Create(Document&,
-                               const String&,
                                const CSSStyleSheetInit&,
                                ExceptionState&);
 
@@ -200,12 +199,18 @@ class CORE_EXPORT CSSStyleSheet final : public StyleSheet {
 
   void SetLoadCompleted(bool);
 
+  FRIEND_TEST_ALL_PREFIXES(CSSStyleSheetTest,
+                           CSSStyleSheetConstructionWithEmptyCSSStyleSheetInit);
   FRIEND_TEST_ALL_PREFIXES(
       CSSStyleSheetTest,
-      CSSStyleSheetConstructionWithEmptyCSSStyleSheetInitAndText);
+      CSSStyleSheetConstructionWithNonEmptyCSSStyleSheetInit);
   FRIEND_TEST_ALL_PREFIXES(
       CSSStyleSheetTest,
-      CSSStyleSheetConstructionWithoutEmptyCSSStyleSheetInitAndText);
+      CreateCSSStyleSheetWithEmptyCSSStyleSheetInitAndText);
+  FRIEND_TEST_ALL_PREFIXES(
+      CSSStyleSheetTest,
+      CreateCSSStyleSheetWithNonEmptyCSSStyleSheetInitAndText);
+
   bool AlternateFromConstructor() const { return alternate_from_constructor_; }
 
   Member<StyleSheetContents> contents_;

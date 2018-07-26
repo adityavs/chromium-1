@@ -20,7 +20,9 @@ class AwFormDatabaseService;
 class CookieManager;
 class ScopedAllowInitGLBindings;
 }
-
+namespace audio {
+class OutputDevice;
+}
 namespace cc {
 class CompletionEvent;
 class SingleThreadTaskGraphRunner;
@@ -40,7 +42,6 @@ class BrowserGpuMemoryBufferManager;
 class BrowserMainLoop;
 class BrowserProcessSubThread;
 class BrowserShutdownProfileDumper;
-class BrowserSurfaceViewManager;
 class BrowserTestBase;
 class CategorizedWorkerPool;
 class GpuProcessTransportFactory;
@@ -85,7 +86,7 @@ class TaskService;  // https://crbug.com/796830
 namespace mojo {
 class CoreLibraryInitializer;
 class SyncCallRestrictions;
-namespace edk {
+namespace core {
 class ScopedIPCSupport;
 }
 }
@@ -131,7 +132,7 @@ class ScreenMus;
 }
 
 namespace viz {
-class ServerGpuMemoryBufferManager;
+class HostGpuMemoryBufferManager;
 }
 
 namespace webrtc {
@@ -215,12 +216,42 @@ class BASE_EXPORT ScopedDisallowBlocking {
 //
 // Avoid using this. Prefer making blocking calls from tasks posted to
 // base::TaskScheduler with base::MayBlock().
+//
+// Where unavoidable, put ScopedAllow* instances in the narrowest scope possible
+// in the caller making the blocking call but no further down. That is: if a
+// Cleanup() method needs to do a blocking call, document Cleanup() as blocking
+// and add a ScopedAllowBlocking instance in callers that can't avoid making
+// this call from a context where blocking is banned, as such:
+//   void Client::MyMethod() {
+//     (...)
+//     {
+//       // Blocking is okay here because XYZ.
+//       ScopedAllowBlocking allow_blocking;
+//       my_foo_->Cleanup();
+//     }
+//     (...)
+//   }
+//
+//   // This method can block.
+//   void Foo::Cleanup() {
+//     // Do NOT add the ScopedAllowBlocking in Cleanup() directly as that hides
+//     // its blocking nature from unknowing callers and defeats the purpose of
+//     // these checks.
+//     FlushStateToDisk();
+//   }
+//
+// Note: In rare situations where the blocking call is an implementation detail
+// (i.e. the impl makes a call that invokes AssertBlockingAllowed() but it
+// somehow knows that in practice this will not block), it might be okay to hide
+// the ScopedAllowBlocking instance in the impl with a comment explaining why
+// that's okay.
 class BASE_EXPORT ScopedAllowBlocking {
  private:
   // This can only be instantiated by friends. Use ScopedAllowBlockingForTesting
   // in unit tests to avoid the friend requirement.
   FRIEND_TEST_ALL_PREFIXES(ThreadRestrictionsTest, ScopedAllowBlocking);
   friend class android_webview::ScopedAllowInitGLBindings;
+  friend class audio::OutputDevice;
   friend class content::BrowserProcessSubThread;
   friend class content::GpuProcessTransportFactory;
   friend class cronet::CronetPrefsManager;
@@ -295,11 +326,13 @@ class BASE_EXPORT ScopedAllowBaseSyncPrimitives {
   friend class functions::ExecScriptScopedAllowBaseSyncPrimitives;
   friend class leveldb::LevelDBMojoProxy;
   friend class media::BlockingUrlProtocol;
+  friend class mojo::core::ScopedIPCSupport;
   friend class net::MultiThreadedCertVerifierScopedAllowBaseSyncPrimitives;
   friend class rlz_lib::FinancialPing;
   friend class shell_integration::LaunchXdgUtilityScopedAllowBaseSyncPrimitives;
   friend class webrtc::DesktopConfigurationMonitor;
   friend class content::ServiceWorkerSubresourceLoader;
+  friend class viz::HostGpuMemoryBufferManager;
 
   ScopedAllowBaseSyncPrimitives() EMPTY_BODY_IF_DCHECK_IS_OFF;
   ~ScopedAllowBaseSyncPrimitives() EMPTY_BODY_IF_DCHECK_IS_OFF;
@@ -427,7 +460,6 @@ class BASE_EXPORT ThreadRestrictions {
   friend class base::StackSamplingProfiler;
   friend class content::BrowserMainLoop;
   friend class content::BrowserShutdownProfileDumper;
-  friend class content::BrowserSurfaceViewManager;
   friend class content::BrowserTestBase;
   friend class content::NestedMessagePumpAndroid;
   friend class content::ScopedAllowWaitForAndroidLayoutTests;
@@ -446,7 +478,6 @@ class BASE_EXPORT ThreadRestrictions {
   friend class PlatformThread;
   friend class android::JavaHandlerThread;
   friend class mojo::SyncCallRestrictions;
-  friend class mojo::edk::ScopedIPCSupport;
   friend class ui::CommandBufferClientImpl;
   friend class ui::CommandBufferLocal;
   friend class ui::GpuState;
@@ -473,7 +504,6 @@ class BASE_EXPORT ThreadRestrictions {
   friend class content::SoftwareOutputDeviceMus;  // Interim non-production code
 #endif
   friend class views::ScreenMus;
-  friend class viz::ServerGpuMemoryBufferManager;
 // END USAGE THAT NEEDS TO BE FIXED.
 
 #if DCHECK_IS_ON()

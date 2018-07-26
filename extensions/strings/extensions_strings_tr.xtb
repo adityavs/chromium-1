@@ -13,7 +13,6 @@
 <translation id="2350172092385603347">Yerelleştirme kullanıldı, ancak bildiride default_locale belirtilmedi.</translation>
 <translation id="2576842806987913196">Bu adla bir CRX dosyası zaten var.</translation>
 <translation id="2753617847762399167">Geçersiz yol (mutlak veya '..' ile göreli): '<ph name="IMAGE_PATH" />'</translation>
-<translation id="27822970480436970">Bu uzantı, değişikliğin başka bir uzantıyla çakışması nedeniyle bir ağ isteğini değiştiremedi.</translation>
 <translation id="2785530881066938471">İçerik komut dosyası için '<ph name="RELATIVE_PATH" />' dosyası yüklenemedi. Dosya UTF-8 olarak kodlanmamış.</translation>
 <translation id="2903070246402204397"><ph name="EXTENSION_NAME" /> (uzantı kimliği "<ph name="EXTENSION_ID" />") yönetici tarafından engelleniyor. <ph name="ADMIN_INFO" /></translation>
 <translation id="2988488679308982380">Paket yüklenemedi: '<ph name="ERROR_CODE" />'</translation>
@@ -57,6 +56,7 @@
 <translation id="7003844668372540529"><ph name="VENDOR_NAME" /> tarafından sağlanan <ph name="PRODUCT_ID" /> ürün kimliğine sahip bilinmeyen ürün</translation>
 <translation id="7068383018033524534">Manifest dosyası geçersiz</translation>
 <translation id="7217838517480956708">Bu makinenin yöneticisi <ph name="EXTENSION_NAME" /> yüklenmesini gerektiriyor. Kaldırılamaz veya değiştirilemez.</translation>
+<translation id="7939686037314084444">Uzantı doğru şekilde yüklenemedi. Ağ isteklerine müdahale edemeyebilir.</translation>
 <translation id="7972881773422714442">Seçenekler: <ph name="EXTENSIONOPTIONS_TAG_NAME" /></translation>
 <translation id="8035920974645200807">Ön kamera</translation>
 <translation id="8047248493720652249">Başka bir uzantı (<ph name="EXTENSION_NAME" />) farklı bir dosya adı ("<ph name="ACTUAL_FILENAME" />") belirlediğinden, uzantı indirilen dosyayı "<ph name="ATTEMPTED_FILENAME" />" olarak adlandıramadı.</translation>

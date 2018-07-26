@@ -12,6 +12,7 @@
 #include "webrunner/browser/webrunner_browser_main.h"
 #include "webrunner/browser/webrunner_content_browser_client.h"
 #include "webrunner/common/webrunner_content_client.h"
+#include "webrunner/service/common.h"
 
 namespace webrunner {
 
@@ -46,7 +47,9 @@ void InitializeResourceBundle() {
 
 }  // namespace
 
-WebRunnerMainDelegate::WebRunnerMainDelegate() = default;
+WebRunnerMainDelegate::WebRunnerMainDelegate(zx::channel context_channel)
+    : context_channel_(std::move(context_channel)) {}
+
 WebRunnerMainDelegate::~WebRunnerMainDelegate() = default;
 
 bool WebRunnerMainDelegate::BasicStartupComplete(int* exit_code) {
@@ -73,7 +76,8 @@ int WebRunnerMainDelegate::RunProcess(
 content::ContentBrowserClient*
 WebRunnerMainDelegate::CreateContentBrowserClient() {
   DCHECK(!browser_client_);
-  browser_client_ = std::make_unique<WebRunnerContentBrowserClient>();
+  browser_client_ = std::make_unique<WebRunnerContentBrowserClient>(
+      std::move(context_channel_));
   return browser_client_.get();
 }
 

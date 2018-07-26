@@ -4,14 +4,18 @@
 
 #import "ios/chrome/browser/ui/location_bar/location_bar_view_controller.h"
 
+#include "base/metrics/user_metrics.h"
 #include "components/strings/grit/components_strings.h"
 #import "ios/chrome/browser/ui/commands/activity_service_commands.h"
 #import "ios/chrome/browser/ui/commands/application_commands.h"
 #import "ios/chrome/browser/ui/commands/browser_commands.h"
+#import "ios/chrome/browser/ui/commands/load_query_commands.h"
 #import "ios/chrome/browser/ui/fullscreen/fullscreen_animator.h"
 #include "ios/chrome/browser/ui/location_bar/location_bar_steady_view.h"
+#import "ios/chrome/browser/ui/orchestrator/location_bar_offset_provider.h"
 #import "ios/chrome/browser/ui/util/named_guide.h"
 #import "ios/chrome/common/ui_util/constraints_ui_util.h"
+#import "ios/chrome/grit/ios_strings.h"
 #include "ui/base/l10n/l10n_util.h"
 
 #if !defined(__has_feature) || !__has_feature(objc_arc)
@@ -42,9 +46,17 @@ typedef NS_ENUM(int, TrailingButtonState) {
 // visibility.
 @property(nonatomic, assign) BOOL hideShareButtonWhileOnIncognitoNTP;
 
+// Keeps the share button enabled status. This is necessary to preserve the
+// state of the share button if it's temporarily replaced by the voice search
+// icon (in iPad multitasking).
+@property(nonatomic, assign) BOOL shareButtonEnabled;
+
 // Starts voice search, updating the NamedGuide to be constrained to the
 // trailing button.
 - (void)startVoiceSearch;
+
+// Displays the long press menu.
+- (void)showLongPressMenu:(UILongPressGestureRecognizer*)sender;
 
 @end
 
@@ -58,20 +70,26 @@ typedef NS_ENUM(int, TrailingButtonState) {
 @synthesize trailingButtonState = _trailingButtonState;
 @synthesize hideShareButtonWhileOnIncognitoNTP =
     _hideShareButtonWhileOnIncognitoNTP;
+@synthesize shareButtonEnabled = _shareButtonEnabled;
+@synthesize offsetProvider = _offsetProvider;
 
 #pragma mark - public
 
-- (instancetype)initWithFrame:(CGRect)frame
-                         font:(UIFont*)font
-                    textColor:(UIColor*)textColor
-                    tintColor:(UIColor*)tintColor {
+- (instancetype)init {
   self = [super init];
   if (self) {
     _locationBarSteadyView = [[LocationBarSteadyView alloc] init];
+
     [_locationBarSteadyView.locationButton
                addTarget:self
                   action:@selector(locationBarSteadyViewTapped)
         forControlEvents:UIControlEventTouchUpInside];
+
+    UILongPressGestureRecognizer* recognizer =
+        [[UILongPressGestureRecognizer alloc]
+            initWithTarget:self
+                    action:@selector(showLongPressMenu:)];
+    [_locationBarSteadyView.locationButton addGestureRecognizer:recognizer];
   }
   return self;
 }
@@ -94,9 +112,10 @@ typedef NS_ENUM(int, TrailingButtonState) {
                          : [LocationBarSteadyViewColorScheme standardScheme]];
 }
 
-- (void)setDispatcher:
-    (id<ActivityServiceCommands, BrowserCommands, ApplicationCommands>)
-        dispatcher {
+- (void)setDispatcher:(id<ActivityServiceCommands,
+                          BrowserCommands,
+                          ApplicationCommands,
+                          LoadQueryCommands>)dispatcher {
   _dispatcher = dispatcher;
 }
 
@@ -209,14 +228,86 @@ typedef NS_ENUM(int, TrailingButtonState) {
     // Display a fake "placeholder".
     NSString* placeholderString =
         l10n_util::GetNSString(IDS_OMNIBOX_EMPTY_HINT);
-    UIColor* placeholderColor =
-        [LocationBarSteadyViewColorScheme incognitoScheme].placeholderColor;
+    LocationBarSteadyViewColorScheme* scheme =
+        self.incognito ? [LocationBarSteadyViewColorScheme incognitoScheme]
+                       : [LocationBarSteadyViewColorScheme standardScheme];
+    UIColor* placeholderColor = scheme.placeholderColor;
     self.locationBarSteadyView.locationLabel.attributedText = [
         [NSAttributedString alloc]
         initWithString:placeholderString
             attributes:@{NSForegroundColorAttributeName : placeholderColor}];
   }
   self.hideShareButtonWhileOnIncognitoNTP = isNTP;
+}
+
+- (void)setShareButtonEnabled:(BOOL)enabled {
+  _shareButtonEnabled = enabled;
+  if (self.trailingButtonState == kShareButton) {
+    self.locationBarSteadyView.trailingButton.enabled = enabled;
+  }
+}
+
+#pragma mark - LocationBarAnimatee
+
+- (void)offsetEditViewToMatchSteadyView {
+  CGAffineTransform offsetTransform =
+      CGAffineTransformMakeTranslation([self targetOffset], 0);
+  self.editView.transform = offsetTransform;
+}
+
+- (void)resetEditViewOffsetAndOffsetSteadyViewToMatch {
+  self.locationBarSteadyView.transform =
+      CGAffineTransformMakeTranslation(-self.editView.transform.tx, 0);
+  self.editView.transform = CGAffineTransformIdentity;
+}
+
+- (void)offsetSteadyViewToMatchEditView {
+  CGAffineTransform offsetTransform =
+      CGAffineTransformMakeTranslation(-[self targetOffset], 0);
+  self.locationBarSteadyView.transform = offsetTransform;
+}
+
+- (void)resetSteadyViewOffsetAndOffsetEditViewToMatch {
+  self.editView.transform = CGAffineTransformMakeTranslation(
+      -self.locationBarSteadyView.transform.tx, 0);
+  self.locationBarSteadyView.transform = CGAffineTransformIdentity;
+}
+
+- (void)setSteadyViewFaded:(BOOL)hidden {
+  self.locationBarSteadyView.alpha = hidden ? 0 : 1;
+}
+
+- (void)setEditViewFaded:(BOOL)hidden {
+  self.editView.alpha = hidden ? 0 : 1;
+}
+
+- (void)setEditViewHidden:(BOOL)hidden {
+  self.editView.hidden = hidden;
+}
+- (void)setSteadyViewHidden:(BOOL)hidden {
+  self.locationBarSteadyView.hidden = hidden;
+}
+
+- (void)resetTransforms {
+  self.editView.transform = CGAffineTransformIdentity;
+  self.locationBarSteadyView.transform = CGAffineTransformIdentity;
+}
+
+#pragma mark animation helpers
+
+// Computes the target offset for the focus/defocus animation that allows to
+// visually match the position of edit and steady views.
+- (CGFloat)targetOffset {
+  CGFloat offset = [self.offsetProvider
+      xOffsetForString:self.locationBarSteadyView.locationLabel.text];
+
+  CGRect labelRect = [self.view
+      convertRect:self.locationBarSteadyView.locationLabel.frame
+         fromView:self.locationBarSteadyView.locationLabel.superview];
+  CGRect textFieldRect = self.editView.frame;
+
+  CGFloat targetOffset = labelRect.origin.x - textFieldRect.origin.x - offset;
+  return targetOffset;
 }
 
 #pragma mark - private
@@ -258,11 +349,21 @@ typedef NS_ENUM(int, TrailingButtonState) {
                     action:@selector(sharePage)
           forControlEvents:UIControlEventTouchUpInside];
 
+      // Add self as a target to collect the metrics.
+      [self.locationBarSteadyView.trailingButton
+                 addTarget:self
+                    action:@selector(shareButtonPressed)
+          forControlEvents:UIControlEventTouchUpInside];
+
       [self.locationBarSteadyView.trailingButton
           setImage:
               [[UIImage imageNamed:@"location_bar_share"]
                   imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
           forState:UIControlStateNormal];
+      self.locationBarSteadyView.trailingButton.accessibilityLabel =
+          l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_SHARE);
+      self.locationBarSteadyView.trailingButton.enabled =
+          self.shareButtonEnabled;
       break;
     };
     case kVoiceSearchButton: {
@@ -279,6 +380,9 @@ typedef NS_ENUM(int, TrailingButtonState) {
               [[UIImage imageNamed:@"location_bar_voice"]
                   imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]
           forState:UIControlStateNormal];
+      self.locationBarSteadyView.trailingButton.accessibilityLabel =
+          l10n_util::GetNSString(IDS_IOS_TOOLS_MENU_VOICE_SEARCH);
+      self.locationBarSteadyView.trailingButton.enabled = YES;
     }
   }
 }
@@ -296,6 +400,51 @@ typedef NS_ENUM(int, TrailingButtonState) {
   [NamedGuide guideWithName:kVoiceSearchButtonGuide view:self.view]
       .constrainedView = self.locationBarSteadyView.trailingButton;
   [self.dispatcher startVoiceSearch];
+}
+
+// Called when the share button is pressed.
+// The actual share dialog is opened by the dispatcher, only collect the metrics
+// here.
+- (void)shareButtonPressed {
+  base::RecordAction(base::UserMetricsAction("MobileToolbarShareMenu"));
+}
+
+#pragma mark - UIMenu
+
+- (void)showLongPressMenu:(UILongPressGestureRecognizer*)sender {
+  if (sender.state == UIGestureRecognizerStateBegan) {
+    [self.locationBarSteadyView becomeFirstResponder];
+
+    // TODO(crbug.com/862583): Investigate why it's necessary to delay showing
+    // the editing menu in the omnibox until the next runloop. If it's not
+    // delayed by a runloop, the menu appears and is hidden again right away
+    // when it's the first time setting the first responder.
+    dispatch_async(dispatch_get_main_queue(), ^{
+      UIMenuController* menu = [UIMenuController sharedMenuController];
+      UIMenuItem* pasteAndGo = [[UIMenuItem alloc]
+          initWithTitle:l10n_util::GetNSString(IDS_IOS_PASTE_AND_GO)
+                 action:@selector(pasteAndGo:)];
+      [menu setMenuItems:@[ pasteAndGo ]];
+
+      [menu setTargetRect:self.locationBarSteadyView.frame inView:self.view];
+      [menu setMenuVisible:YES animated:YES];
+    });
+  }
+}
+
+- (BOOL)canPerformAction:(SEL)action withSender:(id)sender {
+  return action == @selector(copy:) ||
+         (action == @selector(pasteAndGo:) &&
+          UIPasteboard.generalPasteboard.string.length > 0);
+}
+
+- (void)copy:(id)sender {
+  [self.delegate locationBarCopyTapped];
+}
+
+- (void)pasteAndGo:(id)sender {
+  [self.dispatcher loadQuery:UIPasteboard.generalPasteboard.string
+                 immediately:YES];
 }
 
 @end

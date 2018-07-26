@@ -22,18 +22,17 @@ import org.chromium.chrome.browser.ChromeSwitches;
 import org.chromium.chrome.browser.WebContentsFactory;
 import org.chromium.chrome.test.ChromeActivityTestRule;
 import org.chromium.chrome.test.ChromeJUnit4ClassRunner;
-import org.chromium.components.content_view.ContentView;
+import org.chromium.components.embedder_support.view.ContentView;
 import org.chromium.content.browser.test.util.Criteria;
 import org.chromium.content.browser.test.util.CriteriaHelper;
 import org.chromium.content.browser.test.util.DOMUtils;
-import org.chromium.content_public.browser.ContentViewCore;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.ui.base.ActivityWindowAndroid;
 import org.chromium.ui.base.ViewAndroidDelegate;
 import org.chromium.ui.base.WindowAndroid;
 
 /**
- * Test the select popup and how it interacts with another ContentViewCore.
+ * Test the select popup and how it interacts with another WebContents.
  */
 @RunWith(ChromeJUnit4ClassRunner.class)
 @CommandLineFlags.Add({ChromeSwitches.DISABLE_FIRST_RUN_EXPERIENCE})
@@ -97,9 +96,9 @@ public class SelectPopupOtherContentViewTest {
                 WindowAndroid windowAndroid = new ActivityWindowAndroid(activity);
 
                 ContentView cv = ContentView.createContentView(activity, webContents);
-                ContentViewCore contentViewCore = ContentViewCore.create(activity, "", webContents,
-                        ViewAndroidDelegate.createBasicDelegate(cv), cv, windowAndroid);
-                contentViewCore.destroy();
+                webContents.initialize(activity, "", ViewAndroidDelegate.createBasicDelegate(cv),
+                        cv, windowAndroid);
+                webContents.destroy();
             }
         });
 
@@ -107,10 +106,7 @@ public class SelectPopupOtherContentViewTest {
         InstrumentationRegistry.getInstrumentation().waitForIdleSync();
 
         // The popup should still be shown.
-        ContentViewCore viewCore =
-                mActivityTestRule.getActivity().getActivityTab().getContentViewCore();
-
-        Assert.assertTrue("The select popup got hidden by destroying of unrelated ContentViewCore.",
+        Assert.assertTrue("The select popup got hidden by destroying of unrelated WebContents.",
                 mActivityTestRule.getActivity()
                         .getActivityTab()
                         .getWebContents()

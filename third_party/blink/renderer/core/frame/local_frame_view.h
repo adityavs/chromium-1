@@ -140,6 +140,7 @@ class CORE_EXPORT LocalFrameView final
   void UpdateLayout();
   bool DidFirstLayout() const;
   bool LifecycleUpdatesActive() const;
+  void SetLifecycleUpdatesThrottledForTesting();
   void ScheduleRelayout();
   void ScheduleRelayoutOfSubtree(LayoutObject*);
   bool LayoutPending() const;
@@ -166,8 +167,22 @@ class CORE_EXPORT LocalFrameView final
 
   // Marks this frame, and ancestor frames, as needing one intersection
   // observervation. This overrides throttling for one frame, up to
-  // kLayoutClean.
-  void SetNeedsIntersectionObservation();
+  // kLayoutClean. The order of these enums is important - they must proceed
+  // from "least required to most required".
+  enum IntersectionObservationState {
+    // The next painting frame does not need an intersection observation.
+    kNotNeeded = 0,
+    // The next painting frame needs an intersection observation.
+    kDesired = 1,
+    // The next painting frame must be generated up to intersection observation
+    // (even if frame is throttled).
+    kRequired = 2
+  };
+
+  // Sets the internal IntersectionObservationState to the max of the
+  // current value and the provided one.
+  void SetNeedsIntersectionObservation(IntersectionObservationState);
+
   // Marks this frame, and ancestor frames, as needing a mandatory compositing
   // update. This overrides throttling for one frame, up to kCompositingClean.
   void SetNeedsForcedCompositingUpdate();
@@ -282,21 +297,18 @@ class CORE_EXPORT LocalFrameView final
   // PaintClean.
   void UpdateAllLifecyclePhases();
 
-  // Everything except paint (the last phase).
-  bool UpdateAllLifecyclePhasesExceptPaint();
-
-  // Printing needs everything up-to-date except paint (which will be done
-  // specially). We may also print a detached frame or a descendant of a
-  // detached frame and need special handling of the frame.
-  void UpdateLifecyclePhasesForPrinting();
-
   // Computes the style, layout, compositing and pre-paint lifecycle stages
   // if needed.
   // After calling this method, all frames will be in a lifecycle
   // state >= PrePaintClean, unless the frame was throttled or inactive.
   // Returns whether the lifecycle was successfully updated to the
   // desired state.
-  bool UpdateLifecycleToPrePaintClean();
+  bool UpdateAllLifecyclePhasesExceptPaint();
+
+  // Printing needs everything up-to-date except paint (which will be done
+  // specially). We may also print a detached frame or a descendant of a
+  // detached frame and need special handling of the frame.
+  void UpdateLifecyclePhasesForPrinting();
 
   // After calling this method, all frames will be in a lifecycle
   // state >= CompositingClean, and scrolling has been updated (unless
@@ -421,7 +433,7 @@ class CORE_EXPORT LocalFrameView final
     return self_visible_ && parent_visible_;
   }  // Whether or not we are actually visible.
   void SetParentVisible(bool) override;
-  void SetSelfVisible(bool v) { self_visible_ = v; }
+  void SetSelfVisible(bool);
   void AttachToLayout() override;
   void DetachFromLayout() override;
   bool IsAttached() const override { return is_attached_; }
@@ -606,7 +618,8 @@ class CORE_EXPORT LocalFrameView final
                                          const WebScrollIntoViewParams&);
 
   PaintArtifactCompositor* GetPaintArtifactCompositorForTesting() {
-    DCHECK(RuntimeEnabledFeatures::SlimmingPaintV2Enabled());
+    DCHECK(RuntimeEnabledFeatures::SlimmingPaintV2Enabled() ||
+           RuntimeEnabledFeatures::BlinkGenPropertyTreesEnabled());
     return paint_artifact_compositor_.get();
   }
 
@@ -711,17 +724,9 @@ class CORE_EXPORT LocalFrameView final
   bool ProcessUrlFragmentHelper(const String&, UrlFragmentBehavior);
   bool ParseCSSFragmentIdentifier(const String&, String*);
   Element* FindCSSFragmentAnchor(const AtomicString&, Document*);
-  void DidScrollTimerFired(TimerBase*);
 
   void UpdateCompositedSelectionIfNeeded();
   void SetNeedsCompositingUpdate(CompositingUpdateType);
-
-  // Returns true if the frame should use custom scrollbars. If true, sets
-  // customScrollbarElement to the element that supplies the scrollbar's style
-  // information.
-  bool ShouldUseCustomScrollbars(Element*& custom_scrollbar_element) const;
-
-  bool ShouldIgnoreOverflowHidden() const;
 
   AXObjectCache* ExistingAXObjectCache() const;
 
@@ -731,10 +736,6 @@ class CORE_EXPORT LocalFrameView final
 
   void PrepareLayoutAnalyzer();
   std::unique_ptr<TracedValue> AnalyzerCounters();
-
-  // LayoutObject for the viewport-defining element (see
-  // Document::viewportDefiningElement).
-  LayoutObject* ViewportLayoutObject() const;
 
   void CollectAnnotatedRegions(LayoutObject&,
                                Vector<AnnotatedRegionValue>&) const;
@@ -748,8 +749,8 @@ class CORE_EXPORT LocalFrameView final
   template <typename Function>
   void ForAllNonThrottledLocalFrameViews(const Function&);
 
-  void UpdateViewportIntersectionsForSubtree(
-      DocumentLifecycle::LifecycleState) override;
+  void UpdateViewportIntersectionsForSubtree() override;
+  void UpdateThrottlingStatusForSubtree();
 
   void NotifyResizeObservers();
 
@@ -822,8 +823,6 @@ class CORE_EXPORT LocalFrameView final
   IntSize initial_viewport_size_;
   bool layout_size_fixed_to_frame_size_;
 
-  TaskRunnerTimer<LocalFrameView> did_scroll_timer_;
-
   bool needs_update_geometries_;
 
 #if DCHECK_IS_ON()
@@ -869,7 +868,8 @@ class CORE_EXPORT LocalFrameView final
 
   bool suppress_adjust_view_size_;
   bool allows_layout_invalidation_after_layout_clean_;
-  bool needs_intersection_observation_;
+
+  IntersectionObservationState intersection_observation_state_;
   bool needs_forced_compositing_update_;
 
   bool needs_focus_on_fragment_;

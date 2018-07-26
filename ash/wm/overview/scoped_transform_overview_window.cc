@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "ash/public/cpp/ash_features.h"
+#include "ash/public/cpp/window_properties.h"
 #include "ash/shell.h"
 #include "ash/wm/overview/cleanup_animation_observer.h"
 #include "ash/wm/overview/overview_utils.h"
@@ -253,7 +254,7 @@ void ScopedTransformOverviewWindow::BeginScopedAnimation(
     // ScopedOverviewAnimationSettings in order to monitor the complete of its
     // exiting animation.
     if (window == GetOverviewWindow() &&
-        selector_item_->ShouldBeObservedWhenExiting()) {
+        selector_item_->should_be_observed_when_exiting()) {
       auto window_animation_observer_weak_ptr =
           selector_item_->window_grid()->window_animation_observer();
       if (window_animation_observer_weak_ptr)
@@ -340,7 +341,10 @@ SkColor ScopedTransformOverviewWindow::GetTopColor() const {
       return SK_ColorTRANSPARENT;
     }
   }
-  return window_->GetProperty(aura::client::kTopViewColor);
+
+  return window_->GetProperty(wm::GetWindowState(window_)->IsActive()
+                                  ? kFrameActiveColorKey
+                                  : kFrameInactiveColorKey);
 }
 
 int ScopedTransformOverviewWindow::GetTopInset() const {
@@ -401,7 +405,7 @@ void ScopedTransformOverviewWindow::SetTransform(
     // If current |window_| should not animate during exiting process, we defer
     // set transfrom on the window by adding the layer and transform information
     // to the |window_animation_observer|.
-    if (!selector_item_->ShouldAnimateWhenExiting() &&
+    if (!selector_item_->should_animate_when_exiting() &&
         window_animation_observer_weak_ptr) {
       window_animation_observer_weak_ptr->AddLayerTransformPair(window->layer(),
                                                                 new_transform);

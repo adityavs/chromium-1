@@ -151,17 +151,13 @@ void EventSource::Connect() {
 
   const SecurityOrigin* origin = execution_context.GetSecurityOrigin();
 
-  ThreadableLoaderOptions options;
-
   ResourceLoaderOptions resource_loader_options;
   resource_loader_options.data_buffering_policy = kDoNotBufferData;
   resource_loader_options.security_origin = origin;
 
   probe::willSendEventSourceRequest(&execution_context, this);
-  // probe::documentThreadableLoaderStartedLoadingForClient
-  // will be called synchronously.
-  loader_ = ThreadableLoader::Create(execution_context, this, options,
-                                     resource_loader_options);
+  loader_ = new ThreadableLoader(execution_context, this,
+                                 resource_loader_options, base::nullopt);
   loader_->Start(request);
 }
 
@@ -174,7 +170,8 @@ void EventSource::NetworkRequestEnded() {
 
 void EventSource::ScheduleReconnect() {
   state_ = kConnecting;
-  connect_timer_.StartOneShot(reconnect_delay_ / 1000.0, FROM_HERE);
+  connect_timer_.StartOneShot(TimeDelta::FromMilliseconds(reconnect_delay_),
+                              FROM_HERE);
   DispatchEvent(Event::Create(EventTypeNames::error));
 }
 

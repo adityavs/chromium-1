@@ -26,6 +26,7 @@ class WebContents;
 namespace chromeos {
 
 class AppLaunchController;
+class ExistingUserController;
 class LoginScreenContext;
 class OobeUI;
 class WebUILoginView;
@@ -56,8 +57,11 @@ class LoginDisplayHost {
   // Returns the default LoginDisplayHost instance if it has been created.
   static LoginDisplayHost* default_host() { return default_host_; }
 
-  // Returns an unowned pointer to the LoginDisplay* instance.
+  // Returns an unowned pointer to the LoginDisplay instance.
   virtual LoginDisplay* GetLoginDisplay() = 0;
+
+  // Returns an unowned pointer to the ExistingUserController instance.
+  virtual ExistingUserController* GetExistingUserController() = 0;
 
   // Returns corresponding native window.
   virtual gfx::NativeWindow GetNativeWindow() const = 0;
@@ -136,11 +140,11 @@ class LoginDisplayHost {
       bool can_close,
       const base::Optional<AccountId>& prefilled_account) = 0;
 
-  // Hide any visible gaia dialog.
-  virtual void HideGaiaDialog() = 0;
+  // Hide any visible oobe dialog.
+  virtual void HideOobeDialog() = 0;
 
-  // Update the size of the gaia dialog.
-  virtual void UpdateGaiaDialogSize(int width, int height) = 0;
+  // Update the size of the oobe dialog.
+  virtual void UpdateOobeDialogSize(int width, int height) = 0;
 
   // Get users that are visible in the login screen UI.
   // This is mainly used by views login screen. WebUI login screen will
@@ -189,6 +193,20 @@ class LoginDisplayHost {
 
   // Shows a feedback report dialog.
   virtual void ShowFeedback() = 0;
+
+  // Shows the powerwash dialog.
+  virtual void ShowResetScreen() = 0;
+
+  // In the views case, make the OobeUIDialogDelegate visible so that Captive
+  // Portal web modal can be seen. In webui login, this should be a no-op.
+  virtual void ShowDialogForCaptivePortal() = 0;
+
+  // Hide the captive portal signin dialog (e.g. when authentication is
+  // complete). In webui login, this should be a no-op.
+  virtual void HideDialogForCaptivePortal() = 0;
+
+  // Update status of add user button in the shelf.
+  virtual void UpdateAddUserButtonStatus() = 0;
 
  protected:
   LoginDisplayHost();

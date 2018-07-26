@@ -188,12 +188,16 @@ class FilePathWatcherTest : public testing::Test {
                   bool recursive_watch) WARN_UNUSED_RESULT;
 
   bool WaitForEvents() WARN_UNUSED_RESULT {
+    return WaitForEventsWithTimeout(TestTimeouts::action_timeout());
+  }
+
+  bool WaitForEventsWithTimeout(TimeDelta timeout) WARN_UNUSED_RESULT {
     RunLoop run_loop;
     collector_->Reset(run_loop.QuitClosure());
 
     // Make sure we timeout if we don't get notified.
     ThreadTaskRunnerHandle::Get()->PostDelayedTask(
-        FROM_HERE, run_loop.QuitClosure(), TestTimeouts::action_timeout());
+        FROM_HERE, run_loop.QuitClosure(), timeout);
     run_loop.Run();
     return collector_->Success();
   }
@@ -539,7 +543,7 @@ TEST_F(FilePathWatcherTest, RecursiveWatch) {
   ASSERT_TRUE(WaitForEvents());
 }
 
-#if defined(OS_POSIX) && !defined(OS_ANDROID) && !defined(OS_FUCHSIA)
+#if defined(OS_POSIX) && !defined(OS_ANDROID)
 // Apps cannot create symlinks on Android in /sdcard as /sdcard uses the
 // "fuse" file system, while /data uses "ext4".  Running these tests in /data
 // would be preferable and allow testing file attributes and symlinks.
@@ -584,7 +588,7 @@ TEST_F(FilePathWatcherTest, RecursiveWithSymLink) {
   ASSERT_TRUE(WriteFile(target2_file, "content"));
   ASSERT_TRUE(WaitForEvents());
 }
-#endif  // defined(OS_POSIX) && !defined(OS_ANDROID) && !defined(OS_FUCHSIA)
+#endif  // defined(OS_POSIX) && !defined(OS_ANDROID)
 
 TEST_F(FilePathWatcherTest, MoveChild) {
   FilePathWatcher file_watcher;
@@ -853,10 +857,7 @@ TEST_F(FilePathWatcherTest, DirAttributesChanged) {
   // We should not get notified in this case as it hasn't affected our ability
   // to access the file.
   ASSERT_TRUE(ChangeFilePermissions(test_dir1, Read, false));
-  loop_.task_runner()->PostDelayedTask(
-      FROM_HERE, RunLoop::QuitCurrentWhenIdleClosureDeprecated(),
-      TestTimeouts::tiny_timeout());
-  ASSERT_FALSE(WaitForEvents());
+  ASSERT_FALSE(WaitForEventsWithTimeout(TestTimeouts::tiny_timeout()));
   ASSERT_TRUE(ChangeFilePermissions(test_dir1, Read, true));
 
   // We should get notified in this case because filepathwatcher can no

@@ -53,7 +53,7 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/tabs/tab_utils.h"
 #include "chrome/browser/ui/window_sizer/window_sizer.h"
-#include "chrome/browser/web_applications/web_app.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/extensions/api/tabs.h"
 #include "chrome/common/extensions/api/windows.h"
@@ -265,6 +265,8 @@ bool ExtensionHasLockedFullscreenPermission(const Extension* extension) {
 
 #if defined(OS_CHROMEOS)
 void SetLockedFullscreenState(Browser* browser, bool locked) {
+  UMA_HISTOGRAM_BOOLEAN("Extensions.LockedFullscreenStateRequest", locked);
+
   aura::Window* window = browser->window()->GetNativeWindow();
   // TRUSTED_PINNED is used here because that one locks the window fullscreen
   // without allowing the user to exit (as opposed to regular PINNED).
@@ -645,19 +647,20 @@ ExtensionFunction::ResponseAction WindowsCreateFunction::Run() {
   }
   chrome::SelectNumberedTab(new_window, 0);
 
+  if (focused)
+    new_window->window()->Show();
+  else
+    new_window->window()->ShowInactive();
+
 #if defined(OS_CHROMEOS)
   // Lock the window fullscreen only after the new tab has been created
-  // (otherwise the tabstrip is empty).
+  // (otherwise the tabstrip is empty), and window()->show() has been called
+  // (otherwise that resets the locked mode for devices in tablet mode).
   if (create_data &&
       create_data->state == windows::WINDOW_STATE_LOCKED_FULLSCREEN) {
     SetLockedFullscreenState(new_window, true);
   }
 #endif
-
-  if (focused)
-    new_window->window()->Show();
-  else
-    new_window->window()->ShowInactive();
 
   std::unique_ptr<base::Value> result;
   if (new_window->profile()->IsOffTheRecord() &&

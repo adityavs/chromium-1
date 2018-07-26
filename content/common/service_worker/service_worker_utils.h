@@ -39,6 +39,13 @@ class ServiceWorkerUtils {
       const std::string* service_worker_allowed_header_value,
       std::string* error_message);
 
+  // Same as above IsPathRestrictionSatisfied, but without considering
+  // 'Service-Worker-Allowed' header.
+  CONTENT_EXPORT static bool IsPathRestrictionSatisfiedWithoutHeader(
+      const GURL& scope,
+      const GURL& script_url,
+      std::string* error_message);
+
   static bool ContainsDisallowedCharacter(const GURL& scope,
                                           const GURL& script_url,
                                           std::string* error_message);
@@ -49,11 +56,6 @@ class ServiceWorkerUtils {
   // not performed.
   CONTENT_EXPORT static bool AllOriginsMatchAndCanAccessServiceWorkers(
       const std::vector<GURL>& urls);
-
-  // Returns true if servicified service worker is enabled.
-  //
-  // TODO(falken): Remove this and have callsites use blink::ServiceWorkerUtils.
-  CONTENT_EXPORT static bool IsServicificationEnabled();
 
   // Returns true if the |provider_id| was assigned by the browser process.
   static bool IsBrowserAssignedProviderId(int provider_id) {
@@ -79,6 +81,14 @@ class ServiceWorkerUtils {
   static bool ShouldBypassCacheDueToUpdateViaCache(
       bool is_main_script,
       blink::mojom::ServiceWorkerUpdateViaCache cache_mode);
+
+ private:
+  static bool IsPathRestrictionSatisfiedInternal(
+      const GURL& scope,
+      const GURL& script_url,
+      bool service_worker_allowed_header_supported,
+      const std::string* service_worker_allowed_header_value,
+      std::string* error_message);
 };
 
 class CONTENT_EXPORT LongestScopeMatcher {

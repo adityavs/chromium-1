@@ -602,6 +602,16 @@ interface ImageData
 interface InstallEvent : ExtendableEvent
     attribute @@toStringTag
     method constructor
+interface Lock
+    attribute @@toStringTag
+    getter mode
+    getter name
+    method constructor
+interface LockManager
+    attribute @@toStringTag
+    method constructor
+    method query
+    method request
 interface MessageChannel
     attribute @@toStringTag
     getter port1
@@ -715,7 +725,6 @@ interface OffscreenCanvasRenderingContext2D
     method clearRect
     method clip
     method closePath
-    method commit
     method constructor
     method createImageData
     method createLinearGradient
@@ -1651,7 +1660,6 @@ interface WebGL2RenderingContext
     method clearStencil
     method clientWaitSync
     method colorMask
-    method commit
     method compileShader
     method compressedTexImage2D
     method compressedTexImage3D
@@ -1844,6 +1852,27 @@ interface WebGL2RenderingContext
     method vertexAttribPointer
     method viewport
     method waitSync
+interface WebGLActiveInfo
+    attribute @@toStringTag
+    getter name
+    getter size
+    getter type
+    method constructor
+interface WebGLBuffer
+    attribute @@toStringTag
+    method constructor
+interface WebGLFramebuffer
+    attribute @@toStringTag
+    method constructor
+interface WebGLProgram
+    attribute @@toStringTag
+    method constructor
+interface WebGLQuery
+    attribute @@toStringTag
+    method constructor
+interface WebGLRenderbuffer
+    attribute @@toStringTag
+    method constructor
 interface WebGLRenderingContext
     attribute @@toStringTag
     attribute ACTIVE_ATTRIBUTES
@@ -2165,7 +2194,6 @@ interface WebGLRenderingContext
     method clearDepth
     method clearStencil
     method colorMask
-    method commit
     method compileShader
     method compressedTexImage2D
     method compressedTexSubImage2D
@@ -2283,6 +2311,33 @@ interface WebGLRenderingContext
     method vertexAttrib4fv
     method vertexAttribPointer
     method viewport
+interface WebGLSampler
+    attribute @@toStringTag
+    method constructor
+interface WebGLShader
+    attribute @@toStringTag
+    method constructor
+interface WebGLShaderPrecisionFormat
+    attribute @@toStringTag
+    getter precision
+    getter rangeMax
+    getter rangeMin
+    method constructor
+interface WebGLSync
+    attribute @@toStringTag
+    method constructor
+interface WebGLTexture
+    attribute @@toStringTag
+    method constructor
+interface WebGLTransformFeedback
+    attribute @@toStringTag
+    method constructor
+interface WebGLUniformLocation
+    attribute @@toStringTag
+    method constructor
+interface WebGLVertexArrayObject
+    attribute @@toStringTag
+    method constructor
 interface WebSocket : EventTarget
     attribute @@toStringTag
     attribute CLOSED
@@ -2367,11 +2422,13 @@ interface WorkerNavigator
     getter connection
     getter deviceMemory
     getter hardwareConcurrency
+    getter locks
     getter onLine
     getter permissions
     getter platform
     getter product
     getter storage
+    getter usb
     getter userAgent
     method constructor
 interface WritableStream

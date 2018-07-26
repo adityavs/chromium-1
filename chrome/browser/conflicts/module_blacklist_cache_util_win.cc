@@ -12,6 +12,7 @@
 
 #include "base/containers/span.h"
 #include "base/files/file.h"
+#include "base/files/file_path.h"
 #include "base/files/file_util.h"
 #include "base/files/important_file_writer.h"
 #include "base/logging.h"
@@ -69,6 +70,14 @@ base::MD5Digest CalculateModuleBlacklistCacheMD5(
 }
 
 }  // namespace
+
+const base::FilePath::CharType kModuleListComponentRelativePath[] =
+    FILE_PATH_LITERAL("ThirdPartyModuleList")
+#ifdef _WIN64
+        FILE_PATH_LITERAL("64");
+#else
+        FILE_PATH_LITERAL("32");
+#endif
 
 uint32_t CalculateTimeDateStamp(base::Time time) {
   const auto delta = time.ToDeltaSinceWindowsEpoch();
@@ -257,8 +266,12 @@ void RemoveWhitelistedEntries(
       *blacklisted_modules,
       [&module_list_filter](const third_party_dlls::PackedListModule& module) {
         return module_list_filter.IsWhitelisted(
-            reinterpret_cast<const char*>(&module.basename_hash[0]),
-            reinterpret_cast<const char*>(&module.code_id_hash[0]));
+            base::StringPiece(
+                reinterpret_cast<const char*>(&module.basename_hash[0]),
+                base::size(module.basename_hash)),
+            base::StringPiece(
+                reinterpret_cast<const char*>(&module.code_id_hash[0]),
+                base::size(module.code_id_hash)));
       });
 }
 

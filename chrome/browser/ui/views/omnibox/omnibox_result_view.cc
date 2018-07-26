@@ -89,7 +89,7 @@ void OmniboxResultView::SetMatch(const AutocompleteMatch& match) {
   keyword_view_->OnMatchUpdate(this, match_);
 
   // Set up 'switch to tab' button.
-  if (match.has_tab_match && !match_.associated_keyword.get()) {
+  if (match.ShouldShowTabMatch()) {
     suggestion_tab_switch_button_ =
         std::make_unique<OmniboxTabSwitchButton>(model_, this);
     suggestion_tab_switch_button_->set_owned_by_client();
@@ -110,9 +110,11 @@ void OmniboxResultView::ShowKeyword(bool show_keyword) {
 }
 
 void OmniboxResultView::Invalidate() {
+  bool high_contrast =
+      GetNativeTheme() && GetNativeTheme()->UsesHighContrastColors();
   // TODO(tapted): Consider using background()->SetNativeControlColor() and
   // always have a background.
-  if (GetThemeState() == OmniboxPartState::NORMAL) {
+  if (GetThemeState() == OmniboxPartState::NORMAL && !high_contrast) {
     SetBackground(nullptr);
   } else {
     SkColor color = GetColor(OmniboxPart::RESULTS_BACKGROUND);
@@ -120,8 +122,9 @@ void OmniboxResultView::Invalidate() {
   }
 
   // Reapply the dim color to account for the highlight state.
-  suggestion_view_->separator()->Dim();
-  keyword_view_->separator()->Dim();
+  suggestion_view_->separator()->ApplyTextColor(
+      OmniboxPart::RESULTS_TEXT_DIMMED);
+  keyword_view_->separator()->ApplyTextColor(OmniboxPart::RESULTS_TEXT_DIMMED);
   if (suggestion_tab_switch_button_)
     suggestion_tab_switch_button_->UpdateBackground();
 
@@ -135,17 +138,54 @@ void OmniboxResultView::Invalidate() {
       omnibox::kKeywordSearchIcon, GetLayoutConstant(LOCATION_BAR_ICON_SIZE),
       GetColor(OmniboxPart::RESULTS_ICON)));
 
-  // The content text is set to the match text and calculated classifications.
   // Answers use their own styling for additional content text and the
   // description text, whereas non-answer suggestions use the match text and
   // calculated classifications for the description text.
-  suggestion_view_->content()->SetText(match_.contents, match_.contents_class);
   if (match_.answer) {
-    suggestion_view_->content()->AppendExtraText(match_.answer->first_line());
-    suggestion_view_->description()->SetText(match_.answer->second_line());
+    const bool reverse = OmniboxFieldTrial::IsReverseAnswersEnabled() &&
+                         !match_.IsExceptedFromLineReversal();
+    if (reverse) {
+      suggestion_view_->content()->SetText(match_.answer->second_line());
+      suggestion_view_->description()->SetText(match_.contents,
+                                               match_.contents_class, true);
+      suggestion_view_->description()->AppendExtraText(
+          match_.answer->first_line());
+    } else {
+      suggestion_view_->content()->SetText(match_.contents,
+                                           match_.contents_class);
+      suggestion_view_->content()->AppendExtraText(match_.answer->first_line());
+      suggestion_view_->description()->SetText(match_.answer->second_line(),
+                                               true);
+    }
+    // AppendExtraText has side effect on color, so explicitly set color.
+    // TODO(orinj): Consolidate text color specification in one place.
+    suggestion_view_->content()->ApplyTextColor(
+        OmniboxPart::RESULTS_TEXT_DEFAULT);
+    suggestion_view_->description()->ApplyTextColor(
+        OmniboxPart::RESULTS_TEXT_DIMMED);
+  } else if (match_.type == AutocompleteMatchType::SEARCH_SUGGEST_ENTITY) {
+    // Entities use match text and calculated classifications, but with style
+    // adjustments like answers above.
+    suggestion_view_->content()->SetText(match_.contents,
+                                         match_.contents_class);
+    suggestion_view_->description()->SetText(match_.description,
+                                             match_.description_class, -1);
+    suggestion_view_->description()->ApplyTextColor(
+        OmniboxPart::RESULTS_TEXT_DIMMED);
   } else {
+    // Content and description use match text and calculated classifications.
+    suggestion_view_->content()->SetText(match_.contents,
+                                         match_.contents_class);
     suggestion_view_->description()->SetText(match_.description,
                                              match_.description_class);
+
+    // Normally, OmniboxTextView caches its appearance, but in high contrast
+    // selected-ness changes the text colors, so the styling of the text part of
+    // the results needs to be recomputed.
+    if (high_contrast) {
+      suggestion_view_->content()->ReapplyStyling();
+      suggestion_view_->description()->ReapplyStyling();
+    }
   }
 
   AutocompleteMatch* keyword_match = match_.associated_keyword.get();
@@ -157,7 +197,8 @@ void OmniboxResultView::Invalidate() {
                                       keyword_match->contents_class);
     keyword_view_->description()->SetText(keyword_match->description,
                                           keyword_match->description_class);
-    keyword_view_->description()->Dim();
+    keyword_view_->description()->ApplyTextColor(
+        OmniboxPart::RESULTS_TEXT_DIMMED);
   }
 }
 
@@ -189,7 +230,7 @@ void OmniboxResultView::OnMatchIconUpdated() {
 }
 
 void OmniboxResultView::SetRichSuggestionImage(const gfx::ImageSkia& image) {
-  suggestion_view_->image()->SetImage(image);
+  suggestion_view_->answer_image()->SetImage(image);
   Layout();
   SchedulePaint();
 }
@@ -223,12 +264,15 @@ void OmniboxResultView::Layout() {
     if (ts_button_size.width() > 0) {
       suggestion_tab_switch_button_->SetSize(ts_button_size);
 
-      // It looks nice to have the same margin on top, bottom and right side.
-      const int margin =
+      // Give the tab switch button a right margin matching the text.
+      suggestion_width -=
+          ts_button_size.width() + OmniboxMatchCellView::kRefreshMarginRight;
+
+      // Center the button vertically.
+      const int vertical_margin =
           (suggestion_view_->height() - ts_button_size.height()) / 2;
-      suggestion_width -= ts_button_size.width() + margin;
       suggestion_tab_switch_button_->SetPosition(
-          gfx::Point(suggestion_width, margin));
+          gfx::Point(suggestion_width, vertical_margin));
       suggestion_tab_switch_button_->SetVisible(true);
     } else {
       suggestion_tab_switch_button_->SetVisible(false);

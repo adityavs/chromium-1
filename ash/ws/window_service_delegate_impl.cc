@@ -17,12 +17,15 @@
 #include "mojo/public/cpp/bindings/map.h"
 #include "services/ui/public/interfaces/window_manager.mojom.h"
 #include "services/ui/public/interfaces/window_tree_constants.mojom.h"
+#include "ui/aura/client/aura_constants.h"
 #include "ui/aura/client/drag_drop_client.h"
 #include "ui/aura/env.h"
 #include "ui/aura/mus/property_utils.h"
 #include "ui/aura/window.h"
 #include "ui/base/accelerators/accelerator.h"
 #include "ui/base/hit_test.h"
+#include "ui/events/system_input_injector.h"
+#include "ui/ozone/public/ozone_platform.h"
 #include "ui/views/widget/widget.h"
 #include "ui/wm/core/compound_event_filter.h"
 
@@ -80,9 +83,8 @@ std::unique_ptr<aura::Window> WindowServiceDelegateImpl::NewTopLevel(
   ui::mojom::WindowType window_type =
       aura::GetWindowTypeFromProperties(property_map);
 
-  auto* window =
-      CreateAndParentTopLevelWindow(nullptr /* window_manager */, window_type,
-                                    property_converter, &property_map);
+  auto* window = CreateAndParentTopLevelWindow(window_type, property_converter,
+                                               &property_map);
   return base::WrapUnique<aura::Window>(window);
 }
 
@@ -181,6 +183,27 @@ void WindowServiceDelegateImpl::UpdateImeVisibility(
 
   RootWindowController::ForWindow(window)->ash_host()->UpdateImeVisibility(
       visible, std::move(state));
+}
+
+void WindowServiceDelegateImpl::SetModalType(aura::Window* window,
+                                             ui::ModalType type) {
+  const ui::ModalType old_type = window->GetProperty(aura::client::kModalKey);
+  if (old_type == type)
+    return;
+
+  window->SetProperty(aura::client::kModalKey, type);
+
+  // Reparent the window if it will become, or will no longer be, system modal.
+  if (type == ui::MODAL_TYPE_SYSTEM || old_type == ui::MODAL_TYPE_SYSTEM)
+    wm::GetDefaultParent(window, window->GetBoundsInScreen())->AddChild(window);
+}
+
+ui::SystemInputInjector* WindowServiceDelegateImpl::GetSystemInputInjector() {
+  if (!system_input_injector_) {
+    system_input_injector_ =
+        ui::OzonePlatform::GetInstance()->CreateSystemInputInjector();
+  }
+  return system_input_injector_.get();
 }
 
 }  // namespace ash

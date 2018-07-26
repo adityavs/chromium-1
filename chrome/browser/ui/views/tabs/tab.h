@@ -54,6 +54,16 @@ class Tab : public gfx::AnimationDelegate,
   // The Tab's class name.
   static const char kViewClassName[];
 
+  // Under refresh, thickness in DIPs of the separator painted on the left and
+  // right edges of the tab.
+  static constexpr int kSeparatorThickness = 1;
+
+  // When the content's width of the tab shrinks to below this size we should
+  // hide the close button on inactive tabs. Any smaller and they're too easy
+  // to hit on accident.
+  static constexpr int kMinimumContentsWidthForCloseButtons = 68;
+  static constexpr int kTouchableMinimumContentsWidthForCloseButtons = 100;
+
   Tab(TabController* controller, gfx::AnimationContainer* container);
   ~Tab() override;
 
@@ -110,9 +120,6 @@ class Tab : public gfx::AnimationDelegate,
   void set_detached() { detached_ = true; }
   bool detached() const { return detached_; }
 
-  // Returns the radius of the outer corners of the tab shape.
-  int GetCornerRadius() const;
-
   // Returns the color used for the alert indicator icon.
   SkColor GetAlertIndicatorColor(TabAlertState state) const;
 
@@ -128,6 +135,9 @@ class Tab : public gfx::AnimationDelegate,
 
   // Called when the alert indicator has changed states.
   void AlertStateChanged();
+
+  // Called when the frame state color changes.
+  void FrameColorsChanged();
 
   // Returns true if the tab is selected.
   bool IsSelected() const;
@@ -148,11 +158,9 @@ class Tab : public gfx::AnimationDelegate,
   // to the user that it needs their attention.
   void SetTabNeedsAttention(bool attention);
 
-  // Set the background offset used to match the image in the inactive tab
+  // Set the background X offset used to match the image in the inactive tab
   // to the frame image.
-  void set_background_offset(const gfx::Point& offset) {
-    background_offset_ = offset;
-  }
+  void set_background_offset(int offset) { background_offset_ = offset; }
 
   // Returns true if this tab became the active tab selected in
   // response to the last ui::ET_TAP_DOWN gesture dispatched to
@@ -169,9 +177,6 @@ class Tab : public gfx::AnimationDelegate,
   // Returns the width of the largest part of the tab that is available for the
   // user to click to select/activate the tab.
   int GetWidthOfLargestSelectableRegion() const;
-
-  // Called when the frame state color changes.
-  void FrameColorsChanged();
 
   // Returns the minimum possible width of a single unselected Tab.
   static int GetMinimumInactiveWidth();
@@ -204,6 +209,17 @@ class Tab : public gfx::AnimationDelegate,
   // horizontal deltas from those.
   static float GetInverseDiagonalSlope();
 
+  // Returns the radius of the outer corners of the tab shape.
+  static int GetCornerRadius();
+
+  // Returns the insets to use for laying out tab contents.
+  static gfx::Insets GetContentsInsets();
+
+  // Returns an offset into the leading edge of the tab which delineates the
+  // "main body" of the tab from the user's perspective; dragging based on this
+  // point feels better than dragging based on the tab's actual leading edge.
+  static int GetDragInset();
+
   // Returns the overlap between adjacent tabs.
   static int GetOverlap();
 
@@ -214,6 +230,13 @@ class Tab : public gfx::AnimationDelegate,
   FRIEND_TEST_ALL_PREFIXES(TabStripTest, TabCloseButtonVisibilityWhenStacked);
   FRIEND_TEST_ALL_PREFIXES(TabStripTest,
                            TabCloseButtonVisibilityWhenNotStacked);
+
+  // Contains values 0..1 representing the opacity of the corresponding
+  // separators.  These are physical and not logical, so "left" is the left
+  // separator in both LTR and RTL.
+  struct SeparatorOpacities {
+    float left = 0, right = 0;
+  };
 
   // Invoked from Layout to adjust the position of the favicon or alert
   // indicator for pinned tabs. The visual_width parameter is how wide the
@@ -263,6 +286,11 @@ class Tab : public gfx::AnimationDelegate,
   // pinned tab.
   bool ShouldRenderAsNormalTab() const;
 
+  // Returns the opacities of the separators.  If |for_layout| is true, returns
+  // the "layout" opacities, which ignore the effects of surrounding tabs' hover
+  // effects and consider only the current tab's state.
+  SeparatorOpacities GetSeparatorOpacities(bool for_layout) const;
+
   // Gets the throb value for the tab. When a tab is not selected the active
   // background is drawn at GetThrobValue() * 100%. This is used for hover, mini
   // tab title change and pulsing.
@@ -272,6 +300,10 @@ class Tab : public gfx::AnimationDelegate,
   // indicator, and close button colors if necessary.  This should be called any
   // time the theme or active state may have changed.
   void OnButtonColorMaybeChanged();
+
+  // Updates the blocked attention state of the |icon_|. This only updates
+  // state; it is the responsibility of the caller to request a paint.
+  void UpdateTabIconNeedsAttentionBlocked();
 
   // The controller, never NULL.
   TabController* const controller_;
@@ -308,7 +340,7 @@ class Tab : public gfx::AnimationDelegate,
   GlowHoverController hover_controller_;
 
   // The offset used to paint the inactive background image.
-  gfx::Point background_offset_;
+  int background_offset_;
 
   // For narrow tabs, we show the favicon even if it won't completely fit.
   // In this case, we need to center the favicon within the tab; it will be
@@ -327,15 +359,16 @@ class Tab : public gfx::AnimationDelegate,
   // detect when it changes and layout appropriately.
   bool showing_close_button_ = false;
 
-  // When the close button will be visible on inactive tabs, we add additional
-  // padding to the left of the favicon to balance the whitespace inside the
-  // non-hovered close button image; otherwise, the tab contents look too close
-  // to the left edge.  If the tab close button isn't visible on inactive tabs,
-  // we let the tab contents take the full width of the tab, to maximize visible
-  // content on tiny tabs.  We base the determination on the inactive tab close
-  // button state so that when a tab is activated its contents don't suddenly
-  // shift.
+  // If there's room, we add additional padding to the left of the favicon to
+  // balance the whitespace inside the non-hovered close button image;
+  // otherwise, the tab contents look too close to the left edge. Once the tabs
+  // get too small, we let the tab contents take the full width, to maximize
+  // visible area.
   bool extra_padding_before_content_ = false;
+
+  // When both the close button and alert indicator are visible, we add extra
+  // padding between them to space them out visually.
+  bool extra_alert_indicator_padding_ = false;
 
   // The current color of the alert indicator and close button icons.
   SkColor button_color_ = SK_ColorTRANSPARENT;

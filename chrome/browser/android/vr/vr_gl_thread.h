@@ -65,11 +65,7 @@ class VrGLThread : public base::android::JavaHandlerThread,
   void ContentOverlaySurfaceCreated(jobject surface,
                                     gl::SurfaceTexture* texture) override;
   void GvrDelegateReady(gvr::ViewerType viewer_type) override;
-  void SendRequestPresentReply(
-      bool success,
-      device::mojom::VRSubmitFrameClientRequest,
-      device::mojom::VRPresentationProviderPtr,
-      device::mojom::VRDisplayFrameTransportOptionsPtr) override;
+  void SendRequestPresentReply(device::mojom::XRSessionPtr) override;
   void DialogSurfaceCreated(jobject surface,
                             gl::SurfaceTexture* texture) override;
   void UpdateGamepadData(device::GvrGamepadData) override;
@@ -77,9 +73,8 @@ class VrGLThread : public base::android::JavaHandlerThread,
   void ToggleCardboardGamepad(bool enabled) override;
 
   // PlatformInputHandler
-  void ForwardEventToPlatformUi(
-      std::unique_ptr<blink::WebInputEvent> event) override;
-  void ForwardEventToContent(std::unique_ptr<blink::WebInputEvent> event,
+  void ForwardEventToPlatformUi(std::unique_ptr<InputEvent> event) override;
+  void ForwardEventToContent(std::unique_ptr<InputEvent> event,
                              int content_id) override;
   void ClearFocusedElement() override;
   void OnWebInputEdited(const TextEdits& edits) override;
@@ -105,7 +100,6 @@ class VrGLThread : public base::android::JavaHandlerThread,
   void CloseAllTabs() override;
   void CloseAllIncognitoTabs() override;
   void OpenFeedback() override;
-  void ExitCct() override;
   void CloseHostedDialog() override;
   void OnUnsupportedMode(UiUnsupportedMode mode) override;
   void OnExitVrPromptResult(ExitVrPromptChoice choice,
@@ -172,7 +166,7 @@ class VrGLThread : public base::android::JavaHandlerThread,
   // Both VrInputConnection and VrGlThread are owned by VrShell. In VrShell, we
   // made sure that this input_connection_ is up to date and destroyed after
   // VrGlThread. So it is safe to use raw pointer here.
-  VrInputConnection* input_connection_;
+  VrInputConnection* input_connection_ = nullptr;
 
   // This state is used for initializing vr_shell_gl_.
   scoped_refptr<base::SingleThreadTaskRunner> main_thread_task_runner_;

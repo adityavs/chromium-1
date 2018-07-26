@@ -112,6 +112,9 @@ class ChromeAppListItem {
 
   std::string ToDebugString() const;
 
+  // Set the default position if it exists.
+  void SetDefaultPositionIfApplicable();
+
  protected:
   ChromeAppListItem(Profile* profile, const std::string& app_id);
 
@@ -130,12 +133,11 @@ class ChromeAppListItem {
   void UpdateFromSync(
       const app_list::AppListSyncableService::SyncItem* sync_item);
 
-  // Set the default position if it exists.
-  void SetDefaultPositionIfApplicable();
-
   // Get the context menu of a certain app. This could be different for
   // different kinds of items.
   virtual app_list::AppContextMenu* GetAppContextMenu();
+
+  void MaybeDismissAppList();
 
  private:
   ash::mojom::AppListItemMetadataPtr metadata_;

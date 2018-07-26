@@ -14,7 +14,7 @@
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/notification_database_data.h"
-#include "content/public/browser/permission_manager.h"
+#include "content/public/browser/permission_controller.h"
 #include "content/public/browser/permission_type.h"
 #include "content/public/browser/platform_notification_service.h"
 #include "content/public/common/content_client.h"
@@ -28,7 +28,7 @@ namespace content {
 namespace {
 
 // Returns the implementation of the PlatformNotificationService. May be NULL.
-PlatformNotificationService* Service() {
+PlatformNotificationService* GetNotificationService() {
   return GetContentClient()->browser()->GetPlatformNotificationService();
 }
 
@@ -63,7 +63,7 @@ BlinkNotificationServiceImpl::~BlinkNotificationServiceImpl() {
 void BlinkNotificationServiceImpl::GetPermissionStatus(
     GetPermissionStatusCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service()) {
+  if (!GetNotificationService()) {
     std::move(callback).Run(blink::mojom::PermissionStatus::DENIED);
     return;
   }
@@ -83,7 +83,7 @@ void BlinkNotificationServiceImpl::DisplayNonPersistentNotification(
     const NotificationResources& notification_resources,
     blink::mojom::NonPersistentNotificationListenerPtr event_listener_ptr) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service())
+  if (!GetNotificationService())
     return;
 
   if (CheckPermissionStatus() != blink::mojom::PermissionStatus::GRANTED)
@@ -98,15 +98,15 @@ void BlinkNotificationServiceImpl::DisplayNonPersistentNotification(
   event_dispatcher->RegisterNonPersistentNotificationListener(
       notification_id, std::move(event_listener_ptr));
 
-  Service()->DisplayNotification(browser_context_, notification_id,
-                                 origin_.GetURL(), platform_notification_data,
-                                 notification_resources);
+  GetNotificationService()->DisplayNotification(
+      browser_context_, notification_id, origin_.GetURL(),
+      platform_notification_data, notification_resources);
 }
 
 void BlinkNotificationServiceImpl::CloseNonPersistentNotification(
     const std::string& token) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service())
+  if (!GetNotificationService())
     return;
 
   if (CheckPermissionStatus() != blink::mojom::PermissionStatus::GRANTED)
@@ -116,7 +116,8 @@ void BlinkNotificationServiceImpl::CloseNonPersistentNotification(
       notification_context_->notification_id_generator()
           ->GenerateForNonPersistentNotification(origin_, token);
 
-  Service()->CloseNotification(browser_context_, notification_id);
+  GetNotificationService()->CloseNotification(browser_context_,
+                                              notification_id);
 
   // TODO(https://crbug.com/442141): Pass a callback here to focus the tab
   // which created the notification, unless the event is canceled.
@@ -127,11 +128,9 @@ void BlinkNotificationServiceImpl::CloseNonPersistentNotification(
 blink::mojom::PermissionStatus
 BlinkNotificationServiceImpl::CheckPermissionStatus() {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!browser_context_->GetPermissionManager())
-    return blink::mojom::PermissionStatus::DENIED;
-
-  return browser_context_->GetPermissionManager()->GetPermissionStatus(
-      PermissionType::NOTIFICATIONS, origin_.GetURL(), origin_.GetURL());
+  return BrowserContext::GetPermissionController(browser_context_)
+      ->GetPermissionStatus(PermissionType::NOTIFICATIONS, origin_.GetURL(),
+                            origin_.GetURL());
 }
 
 void BlinkNotificationServiceImpl::DisplayPersistentNotification(
@@ -140,7 +139,7 @@ void BlinkNotificationServiceImpl::DisplayPersistentNotification(
     const NotificationResources& notification_resources,
     DisplayPersistentNotificationCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service()) {
+  if (!GetNotificationService()) {
     std::move(callback).Run(PersistentNotificationError::INTERNAL_ERROR);
     return;
   }
@@ -150,17 +149,23 @@ void BlinkNotificationServiceImpl::DisplayPersistentNotification(
     return;
   }
 
+  int64_t next_persistent_id =
+      GetNotificationService()->ReadNextPersistentNotificationId(
+          browser_context_);
+
   BrowserThread::PostTask(
       BrowserThread::IO, FROM_HERE,
       base::BindOnce(&BlinkNotificationServiceImpl::
                          DisplayPersistentNotificationOnIOThread,
                      weak_factory_for_io_.GetWeakPtr(),
-                     service_worker_registration_id, platform_notification_data,
-                     notification_resources, std::move(callback)));
+                     service_worker_registration_id, next_persistent_id,
+                     platform_notification_data, notification_resources,
+                     std::move(callback)));
 }
 
 void BlinkNotificationServiceImpl::DisplayPersistentNotificationOnIOThread(
     int64_t service_worker_registration_id,
+    int64_t next_persistent_notification_id,
     const PlatformNotificationData& platform_notification_data,
     const NotificationResources& notification_resources,
     DisplayPersistentNotificationCallback callback) {
@@ -174,7 +179,7 @@ void BlinkNotificationServiceImpl::DisplayPersistentNotificationOnIOThread(
   database_data.notification_data = platform_notification_data;
 
   notification_context_->WriteNotificationData(
-      origin_.GetURL(), database_data,
+      next_persistent_notification_id, origin_.GetURL(), database_data,
       base::AdaptCallbackForRepeating(base::BindOnce(
           &BlinkNotificationServiceImpl::
               DisplayPersistentNotificationWithIdOnIOThread,
@@ -224,14 +229,14 @@ void BlinkNotificationServiceImpl::
 
   // Display the notification if the Service Worker's origin matches the origin
   // of the notification's sender.
-  if (service_worker_status == blink::SERVICE_WORKER_OK &&
+  if (service_worker_status == blink::ServiceWorkerStatusCode::kOk &&
       registration->pattern().GetOrigin() == origin_.GetURL()) {
     BrowserThread::PostTask(
         BrowserThread::UI, FROM_HERE,
         base::BindOnce(
             &PlatformNotificationService::DisplayPersistentNotification,
-            base::Unretained(Service()), browser_context_, notification_id,
-            registration->pattern(), origin_.GetURL(),
+            base::Unretained(GetNotificationService()), browser_context_,
+            notification_id, registration->pattern(), origin_.GetURL(),
             platform_notification_data, notification_resources));
 
     error = PersistentNotificationError::NONE;
@@ -244,13 +249,14 @@ void BlinkNotificationServiceImpl::
 void BlinkNotificationServiceImpl::ClosePersistentNotification(
     const std::string& notification_id) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service())
+  if (!GetNotificationService())
     return;
 
   if (CheckPermissionStatus() != blink::mojom::PermissionStatus::GRANTED)
     return;
 
-  Service()->ClosePersistentNotification(browser_context_, notification_id);
+  GetNotificationService()->ClosePersistentNotification(browser_context_,
+                                                        notification_id);
 
   // Deleting the data associated with |notification_id| from the notification
   // database has to be done on the IO thread, but there's no reason to postpone
@@ -267,7 +273,7 @@ void BlinkNotificationServiceImpl::GetNotifications(
     const std::string& filter_tag,
     GetNotificationsCallback callback) {
   DCHECK_CURRENTLY_ON(BrowserThread::UI);
-  if (!Service() ||
+  if (!GetNotificationService() ||
       CheckPermissionStatus() != blink::mojom::PermissionStatus::GRANTED) {
     // No permission has been granted for the given origin. It is harmless to
     // try to get notifications without permission, so return empty vectors

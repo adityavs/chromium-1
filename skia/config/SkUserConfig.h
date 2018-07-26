@@ -173,6 +173,11 @@ SK_API void SkDebugf_FileLine(const char* file, int line, bool fatal,
 #define SK_IGNORE_MATRIX_IMAGE_FILTER_FIX
 #endif
 
+// convert from text blob to glyph run
+#ifndef SK_SUPPORT_LEGACY_TEXT_BLOB
+#define SK_SUPPORT_LEGACY_TEXT_BLOB
+#endif
+
 // remove after rebaselining svg layout tests
 #ifndef SK_SUPPORT_LEGACY_SVG_ARC_TO
 #define SK_SUPPORT_LEGACY_SVG_ARC_TO
@@ -193,8 +198,6 @@ SK_API void SkDebugf_FileLine(const char* file, int line, bool fatal,
 #define SK_SUPPORT_LEGACY_VULKAN_INTERFACE
 #endif
 
-#define SK_SUPPORT_LEGACY_LAZY_IMAGE_DECODE_BEHAVIOR
-
 ///////////////////////// Imported from BUILD.gn and skia_common.gypi
 
 /* In some places Skia can use static initializers for global initialization,
@@ -210,6 +213,9 @@ SK_API void SkDebugf_FileLine(const char* file, int line, bool fatal,
 
 #define SK_ATTR_DEPRECATED          SK_NOTHING_ARG1
 #define GR_GL_CUSTOM_SETUP_HEADER   "GrGLConfig_chrome.h"
+
+// enable interfaces unique to Chrome
+#define SK_BUILD_FOR_CHROME
 
 // ===== End Chrome-specific definitions =====
 

@@ -83,11 +83,23 @@ class SmbProviderClientImpl : public SmbProviderClient {
 
   void Remount(const base::FilePath& share_path,
                int32_t mount_id,
+               const std::string& workgroup,
+               const std::string& username,
+               base::ScopedFD password_fd,
                StatusCallback callback) override {
     smbprovider::RemountOptionsProto options;
     options.set_path(share_path.value());
     options.set_mount_id(mount_id);
-    CallDefaultMethod(smbprovider::kRemountMethod, options, &callback);
+    options.set_workgroup(workgroup);
+    options.set_username(username);
+
+    dbus::MethodCall method_call(smbprovider::kSmbProviderInterface,
+                                 smbprovider::kRemountMethod);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendProtoAsArrayOfBytes(options);
+    writer.AppendFileDescriptor(password_fd.release());
+
+    CallDefaultMethod(&method_call, &callback);
   }
 
   void Unmount(int32_t mount_id, StatusCallback callback) override {
@@ -280,6 +292,30 @@ class SmbProviderClientImpl : public SmbProviderClient {
     CallMethod(&method_call,
                &SmbProviderClientImpl::HandleParseNetBiosPacketCallback,
                &callback);
+  }
+
+  void StartCopy(int32_t mount_id,
+                 const base::FilePath& source_path,
+                 const base::FilePath& target_path,
+                 StartCopyCallback callback) override {
+    smbprovider::CopyEntryOptionsProto options;
+    options.set_mount_id(mount_id);
+    options.set_source_path(source_path.value());
+    options.set_target_path(target_path.value());
+
+    CallMethod(smbprovider::kStartCopyMethod, options,
+               &SmbProviderClientImpl::HandleStartCopyCallback, &callback);
+  }
+
+  void ContinueCopy(int32_t mount_id,
+                    int32_t copy_token,
+                    StatusCallback callback) override {
+    dbus::MethodCall method_call(smbprovider::kSmbProviderInterface,
+                                 smbprovider::kContinueCopyMethod);
+    dbus::MessageWriter writer(&method_call);
+    writer.AppendInt32(mount_id);
+    writer.AppendInt32(copy_token);
+    CallDefaultMethod(&method_call, &callback);
   }
 
  protected:
@@ -491,6 +527,34 @@ class SmbProviderClientImpl : public SmbProviderClient {
     std::vector<std::string> hostnames(proto.hostnames().begin(),
                                        proto.hostnames().end());
     std::move(callback).Run(hostnames);
+  }
+
+  void HandleStartCopyCallback(StartCopyCallback callback,
+                               dbus::Response* response) {
+    if (!response) {
+      LOG(ERROR) << "StartCopy: failed to call smbprovider";
+      std::move(callback).Run(smbprovider::ERROR_DBUS_PARSE_FAILED,
+                              -1 /* copy_token */);
+      return;
+    }
+
+    dbus::MessageReader reader(response);
+
+    smbprovider::ErrorType error = GetErrorFromReader(&reader);
+
+    int32_t copy_token;
+    if (!reader.PopInt32(&copy_token)) {
+      LOG(ERROR) << "StartCopy: parse failure.";
+      std::move(callback).Run(smbprovider::ERROR_DBUS_PARSE_FAILED,
+                              -1 /* copy_token*/);
+    }
+
+    if (error != smbprovider::ERROR_COPY_PENDING) {
+      std::move(callback).Run(error, -1 /* copy_token */);
+      return;
+    }
+
+    std::move(callback).Run(smbprovider::ERROR_COPY_PENDING, copy_token);
   }
 
   // Default callback handler for D-Bus calls.

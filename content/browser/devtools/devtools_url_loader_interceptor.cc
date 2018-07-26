@@ -10,7 +10,7 @@
 #include "base/unguessable_token.h"
 #include "content/browser/devtools/protocol/network_handler.h"
 #include "content/browser/frame_host/frame_tree_node.h"
-#include "content/browser/loader/navigation_loader_util.h"
+#include "content/browser/loader/download_utils_impl.h"
 #include "content/public/browser/browser_thread.h"
 #include "mojo/public/cpp/bindings/binding_set.h"
 #include "mojo/public/cpp/system/data_pipe_drainer.h"
@@ -252,8 +252,9 @@ class InterceptionJob : public network::mojom::URLLoaderClient,
   void OnComplete(const network::URLLoaderCompletionStatus& status) override;
 
   bool CanGetResponseBody(std::string* error_reason);
+  void UpdateIdAndRegister();
 
-  const std::string id_;
+  const std::string id_prefix_;
   const GlobalRequestId global_req_id_;
   const base::UnguessableToken frame_token_;
   const base::TimeTicks start_ticks_;
@@ -277,6 +278,7 @@ class InterceptionJob : public network::mojom::URLLoaderClient,
     kNotStarted,
     kRequestSent,
     kRedirectReceived,
+    kFollowRedirect,
     kAuthRequired,
     kResponseReceived,
     kResponseTaken,
@@ -284,6 +286,8 @@ class InterceptionJob : public network::mojom::URLLoaderClient,
 
   State state_;
   bool waiting_for_resolution_;
+  int redirect_count_;
+  std::string current_id_;
 
   std::unique_ptr<BodyReader> body_reader_;
   std::unique_ptr<ResponseMetadata> response_metadata_;
@@ -320,11 +324,11 @@ class DevToolsURLLoaderInterceptor::Impl
     static int last_id = 0;
 
     std::string id = base::StringPrintf("interception-job-%d", ++last_id);
-    InterceptionJob* job = new InterceptionJob(
-        this, id, frame_token, process_id, std::move(create_params),
-        is_download, std::move(loader_request), std::move(client),
-        std::move(target_factory));
-    jobs_.emplace(std::move(id), job);
+    // This class will manage its own life time to match the loader client.
+    new InterceptionJob(this, std::move(id), frame_token, process_id,
+                        std::move(create_params), is_download,
+                        std::move(loader_request), std::move(client),
+                        std::move(target_factory));
   }
 
   void SetPatterns(std::vector<DevToolsNetworkInterceptor::Pattern> patterns) {
@@ -392,6 +396,9 @@ class DevToolsURLLoaderInterceptor::Impl
   }
 
   void RemoveJob(const std::string& id) { jobs_.erase(id); }
+  void AddJob(const std::string& id, InterceptionJob* job) {
+    jobs_.emplace(id, job);
+  }
 
   std::map<std::string, InterceptionJob*> jobs_;
   RequestInterceptedCallback request_intercepted_callback_;
@@ -627,7 +634,7 @@ InterceptionJob::InterceptionJob(
     network::mojom::URLLoaderRequest loader_request,
     network::mojom::URLLoaderClientPtr client,
     network::mojom::URLLoaderFactoryPtr target_factory)
-    : id_(std::move(id)),
+    : id_prefix_(id),
       global_req_id_(
           std::make_tuple(process_id,
                           create_loader_params->request.render_frame_id,
@@ -644,7 +651,9 @@ InterceptionJob::InterceptionJob(
       client_(std::move(client)),
       target_factory_(std::move(target_factory)),
       state_(kNotStarted),
-      waiting_for_resolution_(false) {
+      waiting_for_resolution_(false),
+      redirect_count_(0) {
+  UpdateIdAndRegister();
   const network::ResourceRequest& request = create_loader_params_->request;
   stage_ = interceptor_->GetInterceptionStage(
       request.url, static_cast<ResourceType>(request.resource_type));
@@ -663,6 +672,11 @@ InterceptionJob::InterceptionJob(
   }
 
   StartRequest();
+}
+
+void InterceptionJob::UpdateIdAndRegister() {
+  current_id_ = id_prefix_ + base::StringPrintf(".%d", redirect_count_);
+  interceptor_->AddJob(current_id_, this);
 }
 
 bool InterceptionJob::CanGetResponseBody(std::string* error_reason) {
@@ -786,6 +800,18 @@ Response InterceptionJob::InnerContinueRequest(
   if (modifications->raw_response)
     return ProcessResponseOverride(*modifications->raw_response);
 
+  if (state_ == State::kFollowRedirect) {
+    if (modifications->modified_url.isJust()) {
+      CancelRequest();
+      // Fall through to the generic logic of re-starting the request
+      // at the bottom of the method.
+    } else {
+      // TODO(caseq): report error if other modifications are present.
+      state_ = State::kRequestSent;
+      loader_->FollowRedirect(base::nullopt, base::nullopt);
+      return Response::OK();
+    }
+  }
   if (state_ == State::kRedirectReceived) {
     // TODO(caseq): report error if other modifications are present.
     if (modifications->modified_url.isJust()) {
@@ -1037,7 +1063,7 @@ void InterceptionJob::CancelRequest() {
 std::unique_ptr<InterceptedRequestInfo> InterceptionJob::BuildRequestInfo(
     const network::ResourceResponseHead* head) {
   auto result = std::make_unique<InterceptedRequestInfo>();
-  result->interception_id = id_;
+  result->interception_id = current_id_;
   result->network_request =
       protocol::NetworkHandler::CreateRequestFromResourceRequest(
           create_loader_params_->request);
@@ -1078,7 +1104,7 @@ void InterceptionJob::NotifyClient(
 
 void InterceptionJob::Shutdown() {
   if (interceptor_)
-    interceptor_->RemoveJob(id_);
+    interceptor_->RemoveJob(current_id_);
   delete this;
 }
 
@@ -1100,9 +1126,24 @@ void InterceptionJob::FollowRedirect(
   request->referrer_policy = info.new_referrer_policy;
   request->referrer = GURL(info.new_referrer);
   response_metadata_.reset();
+
   if (interceptor_) {
+    // Pretend that each redirect hop is a new request -- this is for
+    // compatibilty with URLRequestJob-based interception implementation.
+    interceptor_->RemoveJob(current_id_);
+    redirect_count_++;
+    UpdateIdAndRegister();
+
     stage_ = interceptor_->GetInterceptionStage(
         request->url, static_cast<ResourceType>(request->resource_type));
+    if (stage_ & InterceptionStage::REQUEST) {
+      if (state_ == State::kRedirectReceived)
+        state_ = State::kFollowRedirect;
+      else
+        DCHECK_EQ(State::kNotStarted, state_);
+      NotifyClient(BuildRequestInfo(nullptr));
+      return;
+    }
   }
   if (state_ == State::kRedirectReceived) {
     state_ = State::kRequestSent;
@@ -1154,7 +1195,7 @@ void InterceptionJob::OnReceiveResponse(
   const network::ResourceRequest& request = create_loader_params_->request;
   request_info->is_download =
       request_info->is_navigation && request.allow_download &&
-      (is_download_ || navigation_loader_util::IsDownload(
+      (is_download_ || download_utils::IsDownload(
                            request.url, head.headers.get(), head.mime_type));
   NotifyClient(std::move(request_info));
 }
@@ -1168,7 +1209,7 @@ void InterceptionJob::OnReceiveRedirect(
   response_metadata_->redirect_info =
       std::make_unique<net::RedirectInfo>(redirect_info);
 
-  if (!(stage_ & InterceptionStage::REQUEST)) {
+  if (!(stage_ & InterceptionStage::RESPONSE)) {
     client_->OnReceiveRedirect(redirect_info, head);
     return;
   }

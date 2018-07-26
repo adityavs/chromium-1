@@ -6,6 +6,7 @@
 
 #include "base/bind.h"
 #include "base/callback.h"
+#include "base/command_line.h"
 #include "base/time/time.h"
 #include "build/build_config.h"
 #include "chrome/browser/ui/exclusive_access/exclusive_access_context.h"
@@ -15,6 +16,7 @@
 #include "chrome/browser/ui/views/fullscreen_control/fullscreen_control_view.h"
 #include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_features.h"
+#include "chrome/common/chrome_switches.h"
 #include "components/version_info/channel.h"
 #include "content/public/common/content_features.h"
 #include "ui/events/event.h"
@@ -55,7 +57,8 @@ constexpr float kExitHeightScaleFactor = 1.5f;
 constexpr float kShowFullscreenExitControlHeight = 3.f;
 
 // Time to wait to hide the popup after it is triggered.
-constexpr base::TimeDelta kPopupTimeout = base::TimeDelta::FromSeconds(3);
+constexpr base::TimeDelta kMousePopupTimeout = base::TimeDelta::FromSeconds(3);
+constexpr base::TimeDelta kTouchPopupTimeout = base::TimeDelta::FromSeconds(10);
 
 // Time to wait before showing the popup when the escape key is held.
 constexpr base::TimeDelta kKeyPressPopupDelay = base::TimeDelta::FromSeconds(1);
@@ -66,7 +69,10 @@ bool IsExitUiEnabled() {
   // menu and controls reveal when the cursor is moved to the top.
   return false;
 #else
-  return base::FeatureList::IsEnabled(features::kFullscreenExitUI);
+  // Fullscreen exit UI should not be enabled when kiosk mode is on.
+  return !base::CommandLine::ForCurrentProcess()->HasSwitch(
+             switches::kKioskMode) &&
+         base::FeatureList::IsEnabled(features::kFullscreenExitUI);
 #endif
 }
 
@@ -241,7 +247,9 @@ void FullscreenControlHost::OnVisibilityChanged() {
     input_entry_method_ = InputEntryMethod::NOT_ACTIVE;
     key_press_delay_timer_.Stop();
   } else if (input_entry_method_ == InputEntryMethod::MOUSE) {
-    StartPopupTimeout(InputEntryMethod::MOUSE);
+    StartPopupTimeout(InputEntryMethod::MOUSE, kMousePopupTimeout);
+  } else if (input_entry_method_ == InputEntryMethod::TOUCH) {
+    StartPopupTimeout(InputEntryMethod::TOUCH, kTouchPopupTimeout);
   }
 
   if (on_popup_visibility_changed_)
@@ -249,9 +257,10 @@ void FullscreenControlHost::OnVisibilityChanged() {
 }
 
 void FullscreenControlHost::StartPopupTimeout(
-    InputEntryMethod expected_input_method) {
+    InputEntryMethod expected_input_method,
+    base::TimeDelta timeout) {
   popup_timeout_timer_.Start(
-      FROM_HERE, kPopupTimeout,
+      FROM_HERE, timeout,
       base::BindRepeating(&FullscreenControlHost::OnPopupTimeout,
                           base::Unretained(this), expected_input_method));
 }

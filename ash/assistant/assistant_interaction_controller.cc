@@ -9,7 +9,9 @@
 #include "ash/assistant/model/assistant_interaction_model_observer.h"
 #include "ash/assistant/model/assistant_query.h"
 #include "ash/assistant/model/assistant_ui_element.h"
+#include "ash/assistant/util/deep_link_util.h"
 #include "ash/shell.h"
+#include "base/optional.h"
 #include "base/strings/utf_string_conversions.h"
 
 namespace ash {
@@ -17,13 +19,15 @@ namespace ash {
 AssistantInteractionController::AssistantInteractionController(
     AssistantController* assistant_controller)
     : assistant_controller_(assistant_controller),
-      assistant_event_subscriber_binding_(this) {
+      assistant_interaction_subscriber_binding_(this) {
   AddModelObserver(this);
+  assistant_controller_->AddObserver(this);
   Shell::Get()->highlighter_controller()->AddObserver(this);
 }
 
 AssistantInteractionController::~AssistantInteractionController() {
   Shell::Get()->highlighter_controller()->RemoveObserver(this);
+  assistant_controller_->RemoveObserver(this);
   RemoveModelObserver(this);
 }
 
@@ -31,21 +35,10 @@ void AssistantInteractionController::SetAssistant(
     chromeos::assistant::mojom::Assistant* assistant) {
   assistant_ = assistant;
 
-  // Subscribe to Assistant events.
-  chromeos::assistant::mojom::AssistantEventSubscriberPtr ptr;
-  assistant_event_subscriber_binding_.Bind(mojo::MakeRequest(&ptr));
-  assistant_->AddAssistantEventSubscriber(std::move(ptr));
-}
-
-void AssistantInteractionController::SetAssistantUiController(
-    AssistantUiController* assistant_ui_controller) {
-  if (assistant_ui_controller_)
-    assistant_ui_controller_->RemoveModelObserver(this);
-
-  assistant_ui_controller_ = assistant_ui_controller;
-
-  if (assistant_ui_controller_)
-    assistant_ui_controller_->AddModelObserver(this);
+  // Subscribe to Assistant interaction events.
+  chromeos::assistant::mojom::AssistantInteractionSubscriberPtr ptr;
+  assistant_interaction_subscriber_binding_.Bind(mojo::MakeRequest(&ptr));
+  assistant_->AddAssistantInteractionSubscriber(std::move(ptr));
 }
 
 void AssistantInteractionController::AddModelObserver(
@@ -58,12 +51,37 @@ void AssistantInteractionController::RemoveModelObserver(
   assistant_interaction_model_.RemoveObserver(observer);
 }
 
-void AssistantInteractionController::OnCommittedQueryChanged(
-    const AssistantQuery& committed_query) {
-  // We clear the interaction when a query is committed, but need to retain
-  // the committed query as it is query that is currently being fulfilled.
-  assistant_interaction_model_.ClearInteraction(
-      /*retain_committed_query=*/true);
+void AssistantInteractionController::OnAssistantControllerConstructed() {
+  assistant_controller_->ui_controller()->AddModelObserver(this);
+}
+
+void AssistantInteractionController::OnAssistantControllerDestroying() {
+  assistant_controller_->ui_controller()->RemoveModelObserver(this);
+}
+
+void AssistantInteractionController::OnDeepLinkReceived(
+    assistant::util::DeepLinkType type,
+    const std::map<std::string, std::string>& params) {
+  using namespace assistant::util;
+
+  if (type != DeepLinkType::kQuery)
+    return;
+
+  const base::Optional<std::string>& query =
+      GetDeepLinkParam(params, DeepLinkParam::kQuery);
+
+  if (!query.has_value())
+    return;
+
+  // If we receive an empty query, that's a bug that needs to be fixed by the
+  // deep link sender. Rather than getting ourselves into a bad state, we'll
+  // ignore the deep link.
+  if (query.value().empty()) {
+    LOG(ERROR) << "Ignoring deep link containing empty query.";
+    return;
+  }
+
+  StartTextInteraction(query.value());
 }
 
 void AssistantInteractionController::OnUiVisibilityChanged(
@@ -92,10 +110,25 @@ void AssistantInteractionController::OnHighlighterEnabledChanged(
       break;
     case HighlighterEnabledState::kDisabledByUser:
       FALLTHROUGH;
-    case HighlighterEnabledState::kDisabledBySessionEnd:
+    case HighlighterEnabledState::kDisabledBySessionComplete:
       assistant_interaction_model_.SetInputModality(InputModality::kKeyboard);
       break;
+    case HighlighterEnabledState::kDisabledBySessionAbort:
+      // When metalayer mode has been aborted, no action necessary. Abort occurs
+      // as a result of an interaction starting, most likely due to hotword
+      // detection. Setting the input modality in these cases would have the
+      // unintended consequence of stopping the active interaction.
+      break;
   }
+}
+
+void AssistantInteractionController::OnInteractionStateChanged(
+    InteractionState interaction_state) {
+  if (interaction_state != InteractionState::kActive)
+    return;
+
+  // Metalayer mode should not be sticky. Disable it on interaction start.
+  Shell::Get()->highlighter_controller()->AbortSession();
 }
 
 void AssistantInteractionController::OnInputModalityChanged(
@@ -112,8 +145,24 @@ void AssistantInteractionController::OnInputModalityChanged(
   StopActiveInteraction();
 }
 
-void AssistantInteractionController::OnInteractionStarted() {
+void AssistantInteractionController::OnInteractionStarted(
+    bool is_voice_interaction) {
   assistant_interaction_model_.SetInteractionState(InteractionState::kActive);
+
+  // In the case of a voice interaction, we assume that the mic is open and
+  // transition to voice input modality.
+  if (is_voice_interaction) {
+    assistant_interaction_model_.SetInputModality(InputModality::kVoice);
+    assistant_interaction_model_.SetMicState(MicState::kOpen);
+  } else {
+    // In the case of a non-voice interaction, we commit the pending query.
+    assistant_interaction_model_.CommitPendingQuery();
+    assistant_interaction_model_.SetMicState(MicState::kClosed);
+
+    // Clear the interaction to wipe the stage.
+    assistant_interaction_model_.ClearInteraction(
+        /*retain_committed_query=*/true);
+  }
 }
 
 void AssistantInteractionController::OnInteractionFinished(
@@ -198,6 +247,10 @@ void AssistantInteractionController::OnSpeechRecognitionFinalResult(
   assistant_interaction_model_.SetPendingQuery(
       std::make_unique<AssistantVoiceQuery>(final_result));
   assistant_interaction_model_.CommitPendingQuery();
+
+  // Clear the interaction to wipe the stage.
+  assistant_interaction_model_.ClearInteraction(
+      /*retain_committed_query=*/true);
 }
 
 void AssistantInteractionController::OnSpeechLevelUpdated(float speech_level) {
@@ -244,7 +297,6 @@ void AssistantInteractionController::StartTextInteraction(
 
   assistant_interaction_model_.SetPendingQuery(
       std::make_unique<AssistantTextQuery>(text));
-  assistant_interaction_model_.CommitPendingQuery();
 
   assistant_->SendTextQuery(text);
 }

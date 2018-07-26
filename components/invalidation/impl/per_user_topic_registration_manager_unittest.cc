@@ -30,6 +30,8 @@ const char kProjectId[] = "8181035976";
 const char kTypeRegisteredForInvalidation[] =
     "invalidation.registered_for_invalidation";
 
+const char kFakeInstanceIdToken[] = "fake_instance_id_token";
+
 invalidation::InvalidationObjectId GetIdForIndex(size_t index) {
   char name[2] = "a";
   name[0] += static_cast<char>(index);
@@ -58,7 +60,7 @@ network::ResourceResponseHead CreateHeadersForTest(int responce_code) {
 GURL FullUrl() {
   return GURL(base::StringPrintf(
       "%s/v1/perusertopics/%s/rel/topics/?subscriber_token=%s",
-      kInvalidationRegistrationScope, kProjectId, "instance_id_token"));
+      kInvalidationRegistrationScope, kProjectId, kFakeInstanceIdToken));
 }
 
 network::URLLoaderCompletionStatus CreateStatusForTest(
@@ -84,8 +86,7 @@ class PerUserTopicRegistrationManagerTest : public testing::Test {
 
   std::unique_ptr<PerUserTopicRegistrationManager> BuildRegistrationManager() {
     return std::make_unique<PerUserTopicRegistrationManager>(
-        "instance_id_token", "access_token", &pref_service_,
-        url_loader_factory(),
+        "access_token", &pref_service_, url_loader_factory(),
         base::BindRepeating(&syncer::JsonUnsafeParser::Parse));
   }
 
@@ -118,7 +119,8 @@ TEST_F(PerUserTopicRegistrationManagerTest,
       FullUrl(), CreateHeadersForTest(net::HTTP_OK), response_body,
       CreateStatusForTest(net::OK, response_body));
 
-  per_user_topic_registration_manager->UpdateRegisteredIds(ids);
+  per_user_topic_registration_manager->UpdateRegisteredIds(
+      ids, kFakeInstanceIdToken);
   base::RunLoop().RunUntilIdle();
 
   // The response didn't contain non-empty topic name. So nothing was
@@ -135,7 +137,7 @@ TEST_F(PerUserTopicRegistrationManagerTest, ShouldUpdateRegisteredIds) {
 
   std::string response_body = R"(
     {
-      "private_topic_name": "test-pr"
+      "privateTopicName": "test-pr"
     }
   )";
 
@@ -143,7 +145,8 @@ TEST_F(PerUserTopicRegistrationManagerTest, ShouldUpdateRegisteredIds) {
       FullUrl(), CreateHeadersForTest(net::HTTP_OK), response_body,
       CreateStatusForTest(net::OK, response_body));
 
-  per_user_topic_registration_manager->UpdateRegisteredIds(ids);
+  per_user_topic_registration_manager->UpdateRegisteredIds(
+      ids, kFakeInstanceIdToken);
   base::RunLoop().RunUntilIdle();
 
   EXPECT_EQ(ids, per_user_topic_registration_manager->GetRegisteredIds());

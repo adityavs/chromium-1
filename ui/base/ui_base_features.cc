@@ -39,6 +39,9 @@ const base::Feature kEnableStylusVirtualKeyboard = {
 const base::Feature kEnableVirtualKeyboardMdUi = {
     "EnableVirtualKeyboardMdUi", base::FEATURE_DISABLED_BY_DEFAULT};
 
+const base::Feature kEnableVirtualKeyboardUkm = {
+    "EnableVirtualKeyboardUkm", base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Enables all upcoming UI features.
 const base::Feature kExperimentalUi{"ExperimentalUi",
                                     base::FEATURE_DISABLED_BY_DEFAULT};
@@ -129,15 +132,10 @@ const base::Feature kDirectManipulationStylus = {
 };
 #endif  // defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
 
-// Used to have ash (Chrome OS system UI) run in its own process.
-// TODO(jamescook): Make flag only available in Chrome OS.
 const base::Feature kMash = {"Mash", base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kOopAsh = {"OopAsh", base::FEATURE_DISABLED_BY_DEFAULT};
-
 bool IsAshInBrowserProcess() {
-  return !base::FeatureList::IsEnabled(features::kMash) &&
-         !base::FeatureList::IsEnabled(features::kOopAsh);
+  return !base::FeatureList::IsEnabled(features::kMash);
 }
 
 #if defined(OS_MACOSX)
@@ -159,9 +157,18 @@ const base::Feature kViewsBrowserWindows{"ViewsBrowserWindows",
 // Returns whether a Views-capable browser build should use the Cocoa browser
 // UI.
 bool IsViewsBrowserCocoa() {
-  return !base::FeatureList::IsEnabled(kViewsBrowserWindows);
+  return !base::FeatureList::IsEnabled(kViewsBrowserWindows) &&
+      !base::FeatureList::IsEnabled(kExperimentalUi);
 }
 #endif  //  BUILDFLAG(MAC_VIEWS_BROWSER)
 #endif  //  defined(OS_MACOSX)
+
+const base::Feature kEnableOzoneDrmMojo = {"OzoneDrmMojo",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
+bool IsOzoneDrmMojo() {
+  return base::FeatureList::IsEnabled(kEnableOzoneDrmMojo) ||
+         IsAshInBrowserProcess();
+}
 
 }  // namespace features

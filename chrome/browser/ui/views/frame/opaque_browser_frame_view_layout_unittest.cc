@@ -11,6 +11,7 @@
 #include "chrome/browser/ui/views/profiles/profile_indicator_icon.h"
 #include "chrome/browser/ui/views/tab_icon_view.h"
 #include "chrome/common/chrome_switches.h"
+#include "chrome/test/views/chrome_views_test_base.h"
 #include "components/signin/core/browser/profile_management_switches.h"
 #include "ui/base/material_design/material_design_controller.h"
 #include "ui/gfx/image/image_skia.h"
@@ -19,14 +20,12 @@
 #include "ui/views/controls/button/image_button.h"
 #include "ui/views/controls/button/menu_button.h"
 #include "ui/views/controls/label.h"
-#include "ui/views/test/views_test_base.h"
+
+using MD = ui::MaterialDesignController;
 
 namespace {
 
 const int kWindowWidth = 500;
-const int kNonClientBorderThickness =
-    OpaqueBrowserFrameViewLayout::kFrameBorderThickness +
-    views::NonClientFrameView::kClientEdgeThickness;
 const int kMinimizeButtonWidth = 26;
 const int kMaximizeButtonWidth = 25;
 const int kCloseButtonWidth = 43;
@@ -36,6 +35,12 @@ const int kMaximizedExtraCloseWidth =
 const int kCaptionButtonsWidth =
     kMinimizeButtonWidth + kMaximizeButtonWidth + kCloseButtonWidth;
 const int kCaptionButtonHeight = 18;
+
+int NonClientBorderThickness() {
+  return OpaqueBrowserFrameViewLayout::kFrameBorderThickness +
+         (MD::IsRefreshUi() ? 0
+                            : views::NonClientFrameView::kClientEdgeThickness);
+}
 
 class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
  public:
@@ -49,7 +54,6 @@ class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
   void set_maximized(bool maximized) { maximized_ = maximized; }
 
   // OpaqueBrowserFrameViewLayoutDelegate:
-  bool IsIncognito() const override { return false; }
   bool ShouldShowWindowIcon() const override { return !window_title_.empty(); }
   bool ShouldShowWindowTitle() const override { return !window_title_.empty(); }
   base::string16 GetWindowTitle() const override { return window_title_; }
@@ -75,6 +79,9 @@ class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
   gfx::Size GetTabstripPreferredSize() const override {
     return IsTabStripVisible() ? gfx::Size(78, 29) : gfx::Size();
   }
+  gfx::Size GetNewTabButtonPreferredSize() const override {
+    return gfx::Size(28, 28);
+  }
   int GetTopAreaHeight() const override { return 0; }
   bool UseCustomFrame() const override { return true; }
 
@@ -88,13 +95,13 @@ class TestLayoutDelegate : public OpaqueBrowserFrameViewLayoutDelegate {
 
 }  // namespace
 
-class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
+class OpaqueBrowserFrameViewLayoutTest : public ChromeViewsTestBase {
  public:
   OpaqueBrowserFrameViewLayoutTest() {}
   ~OpaqueBrowserFrameViewLayoutTest() override {}
 
   void SetUp() override {
-    views::ViewsTestBase::SetUp();
+    ChromeViewsTestBase::SetUp();
 
     delegate_.reset(new TestLayoutDelegate);
     auto layout = std::make_unique<OpaqueBrowserFrameViewLayout>();
@@ -131,7 +138,7 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
   void TearDown() override {
     widget_->CloseNow();
 
-    views::ViewsTestBase::TearDown();
+    ChromeViewsTestBase::TearDown();
   }
 
  protected:
@@ -237,7 +244,6 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
   }
 
   void ExpectTabStripAndMinimumSize(bool caption_buttons_on_left) {
-    using MD = ui::MaterialDesignController;
     int caption_buttons_width = kCaptionButtonsWidth;
     bool show_caption_buttons = delegate_->ShouldShowCaptionButtons();
     bool maximized = delegate_->IsMaximized() || !show_caption_buttons;
@@ -245,17 +251,16 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
       caption_buttons_width +=
           avatar_button_->GetPreferredSize().width() +
           (maximized ? OpaqueBrowserFrameViewLayout::kCaptionSpacing
-                     : -GetLayoutSize(NEW_TAB_BUTTON, delegate_->IsIncognito())
-                            .width());
+                     : -delegate_->GetNewTabButtonPreferredSize().width());
     }
-    int tabstrip_x = OpaqueBrowserFrameView::GetAvatarIconPadding();
+    int tabstrip_x = OpaqueBrowserFrameView::GetTabstripPadding();
     if (show_caption_buttons && caption_buttons_on_left) {
       int right_of_close =
           maximized ? kMaximizedExtraCloseWidth
                     : OpaqueBrowserFrameViewLayout::kFrameBorderThickness;
       tabstrip_x += caption_buttons_width + right_of_close;
     } else if (!maximized) {
-      tabstrip_x += kNonClientBorderThickness;
+      tabstrip_x += NonClientBorderThickness();
     }
     gfx::Size tabstrip_min_size(delegate_->GetTabstripPreferredSize());
     gfx::Rect tabstrip_bounds(
@@ -281,7 +286,7 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
         showing_caption_buttons_on_right ? kMaximizedExtraCloseWidth : 0;
     int restored_spacing =
         (caption_buttons_on_left
-             ? kNonClientBorderThickness
+             ? NonClientBorderThickness()
              : OpaqueBrowserFrameViewLayout::kFrameBorderThickness);
     if (!MD::IsRefreshUi()) {
       maximized_spacing +=
@@ -296,7 +301,7 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
     EXPECT_EQ(tabstrip_width, tabstrip_bounds.width());
     EXPECT_EQ(tabstrip_min_size.height(), tabstrip_bounds.height());
     maximized_spacing = 0;
-    restored_spacing = 2 * kNonClientBorderThickness;
+    restored_spacing = 2 * NonClientBorderThickness();
     if (!MD::IsRefreshUi()) {
       maximized_spacing +=
           showing_caption_buttons_on_right
@@ -312,7 +317,7 @@ class OpaqueBrowserFrameViewLayoutTest : public views::ViewsTestBase {
     EXPECT_EQ(min_width, min_size.width());
     int restored_border_height =
         OpaqueBrowserFrameViewLayout::kFrameBorderThickness +
-        kNonClientBorderThickness;
+        NonClientBorderThickness();
     if (MD::IsRefreshUi()) {
       restored_border_height +=
           OpaqueBrowserFrameViewLayout::kRefreshNonClientExtraTopThickness;

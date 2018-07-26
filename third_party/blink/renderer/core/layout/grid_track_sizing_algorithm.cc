@@ -251,7 +251,7 @@ bool GridTrackSizingAlgorithm::IsIntrinsicSizedGridArea(const LayoutBox& child,
     // TODO(jfernandez): https://github.com/w3c/csswg-drafts/issues/2611
     if (track_size.IsContentSized() || track_size.IsFitContent() ||
         track_size.MinTrackBreadth().IsFlex() ||
-        (track_size.MaxTrackBreadth().IsFlex() && !FreeSpace(direction)))
+        (track_size.MaxTrackBreadth().IsFlex() && !AvailableSpace(direction)))
       return true;
   }
   return false;
@@ -826,8 +826,10 @@ GridTrackSize GridTrackSizingAlgorithm::GetGridTrackSize(
   // If the logical width/height of the grid container is indefinite, percentage
   // values are treated as <auto>.
   if (IsRelativeSizedTrackAsAuto(track_size, direction)) {
-    UseCounter::Count(layout_grid_->GetDocument(),
-                      WebFeature::kGridRowTrackPercentIndefiniteHeight);
+    if (direction == kForRows) {
+      UseCounter::Count(layout_grid_->GetDocument(),
+                        WebFeature::kGridRowTrackPercentIndefiniteHeight);
+    }
     if (min_track_breadth.HasPercentage())
       min_track_breadth = Length(kAuto);
     if (max_track_breadth.HasPercentage())

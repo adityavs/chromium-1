@@ -16,8 +16,8 @@
 #include "base/macros.h"
 #include "base/memory/ref_counted.h"
 #include "base/memory/ref_counted_memory.h"
-#include "base/memory/weak_ptr.h"
 #include "base/single_thread_task_runner.h"
+#include "base/stl_util.h"
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/string_util.h"
 #include "base/strings/stringprintf.h"
@@ -63,7 +63,7 @@ const char kNetworkErrorKey[] = "netError";
 
 bool SchemeIsInSchemes(const std::string& scheme,
                        const std::vector<std::string>& schemes) {
-  return std::find(schemes.begin(), schemes.end(), scheme) != schemes.end();
+  return base::ContainsValue(schemes, scheme);
 }
 
 // Returns a value of 'Origin:' header for the |request| if the header is set.
@@ -404,18 +404,14 @@ class ChromeProtocolHandler
 }  // namespace
 
 URLDataManagerBackend::URLDataManagerBackend()
-    : next_request_id_(0) {
+    : next_request_id_(0), weak_factory_(this) {
   URLDataSource* shared_source = new SharedResourcesDataSource();
   URLDataSourceImpl* source_impl =
       new URLDataSourceImpl(shared_source->GetSource(), shared_source);
   AddDataSource(source_impl);
 }
 
-URLDataManagerBackend::~URLDataManagerBackend() {
-  for (const auto& i : data_sources_)
-    i.second->backend_ = nullptr;
-  data_sources_.clear();
-}
+URLDataManagerBackend::~URLDataManagerBackend() = default;
 
 // static
 std::unique_ptr<net::URLRequestJobFactory::ProtocolHandler>
@@ -430,14 +426,13 @@ URLDataManagerBackend::CreateProtocolHandler(
 void URLDataManagerBackend::AddDataSource(
     URLDataSourceImpl* source) {
   DCHECK_CURRENTLY_ON(BrowserThread::IO);
-  DataSourceMap::iterator i = data_sources_.find(source->source_name());
-  if (i != data_sources_.end()) {
-    if (!source->source()->ShouldReplaceExistingSource())
+  if (!source->source()->ShouldReplaceExistingSource()) {
+    DataSourceMap::iterator i = data_sources_.find(source->source_name());
+    if (i != data_sources_.end())
       return;
-    i->second->backend_ = nullptr;
   }
   data_sources_[source->source_name()] = source;
-  source->backend_ = this;
+  source->backend_ = weak_factory_.GetWeakPtr();
 }
 
 void URLDataManagerBackend::UpdateWebUIDataSource(

@@ -97,11 +97,23 @@ UnifiedSliderView::UnifiedSliderView(UnifiedSliderListener* listener,
   AddChildView(button_);
   AddChildView(slider_);
 
+  // Prevent an accessibility event while initiallizing this view. Typically
+  // the first update of the slider value is conducted by the caller function
+  // to reflect the current value.
   slider_->set_enable_accessibility_events(false);
+
   slider_->GetViewAccessibility().OverrideName(
       l10n_util::GetStringUTF16(accessible_name_id));
   slider_->SetBorder(views::CreateEmptyBorder(kUnifiedSliderPadding));
   layout->SetFlexForView(slider_, 1);
+  layout->set_cross_axis_alignment(
+      views::BoxLayout::CROSS_AXIS_ALIGNMENT_CENTER);
+}
+
+void UnifiedSliderView::SetSliderValue(float value, bool by_user) {
+  slider_->SetValue(value);
+  if (by_user)
+    slider_->set_enable_accessibility_events(true);
 }
 
 UnifiedSliderView::~UnifiedSliderView() = default;

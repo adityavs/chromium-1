@@ -64,7 +64,7 @@ public class SiteSettingsCategory {
         int USE_STORAGE = 15;
         int USB = 16;
         /**
-         * Number of handled exceptions used for calculating array sizes.
+         * Number of handled categories used for calculating array sizes.
          */
         int NUM_ENTRIES = 17;
     }
@@ -145,6 +145,7 @@ public class SiteSettingsCategory {
      */
     public static SiteSettingsCategory createFromType(@Type int type) {
         if (type == Type.DEVICE_LOCATION) return new LocationCategory();
+        if (type == Type.NOTIFICATIONS) return new NotificationCategory();
 
         final String permission;
         if (type == Type.CAMERA) {

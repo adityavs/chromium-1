@@ -42,11 +42,6 @@ class BlinkAXTreeSource
   BlinkAXTreeSource(RenderFrameImpl* render_frame, ui::AXMode mode);
   ~BlinkAXTreeSource() override;
 
-  // If the frame is hidden, expose only the root node and skip the
-  // rest of the tree.
-  void WasHidden();
-  void WasShown();
-
   // Freeze caches the document, accessibility root, and current focused
   // object for fast retrieval during a batch of operations. Use
   // ScopedFreezeBlinkAXTreeSource on the stack rather than calling
@@ -115,6 +110,11 @@ class BlinkAXTreeSource
 
   blink::WebAXObject ComputeRoot() const;
 
+  uint32_t kMaxStringAttributeLength = 10000;
+  void TruncateAndAddStringAttribute(AXContentNodeData* dst,
+                                     ax::mojom::StringAttribute attribute,
+                                     const std::string& value) const;
+
   RenderFrameImpl* render_frame_;
 
   ui::AXMode accessibility_mode_;
@@ -135,10 +135,6 @@ class BlinkAXTreeSource
   blink::WebDocument document_;
   blink::WebAXObject root_;
   blink::WebAXObject focus_;
-
-  // If the page is hidden, we eliminate everything other than the
-  // root node.
-  bool hidden_;
 };
 
 }  // namespace content

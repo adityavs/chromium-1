@@ -17,8 +17,6 @@
 #include "chrome/browser/policy/chrome_browser_policy_connector.h"
 #include "chrome/browser/printing/print_job_manager.h"
 #include "chrome/browser/profiles/profile_manager.h"
-#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_source.h"
-#include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "chrome/browser/safe_browsing/safe_browsing_service.h"
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_paths.h"
@@ -54,6 +52,8 @@
 #endif
 
 #if !defined(OS_ANDROID)
+#include "chrome/browser/resource_coordinator/tab_lifecycle_unit_source.h"
+#include "chrome/browser/resource_coordinator/tab_manager.h"
 #include "components/keep_alive_registry/keep_alive_registry.h"
 #endif
 
@@ -124,6 +124,13 @@ TestingBrowserProcess::~TestingBrowserProcess() {
   extensions::AppWindowClient::Set(nullptr);
 #endif
 
+#if !defined(OS_ANDROID)
+  // TabLifecycleUnitSource must be deleted before TabManager because it has a
+  // raw pointer to a UsageClock owned by TabManager.
+  tab_lifecycle_unit_source_.reset();
+  tab_manager_.reset();
+#endif
+
   // Destructors for some objects owned by TestingBrowserProcess will use
   // g_browser_process if it is not null, so it must be null before proceeding.
   DCHECK_EQ(static_cast<BrowserProcess*>(nullptr), g_browser_process);
@@ -162,6 +169,11 @@ IOThread* TestingBrowserProcess::io_thread() {
 SystemNetworkContextManager*
 TestingBrowserProcess::system_network_context_manager() {
   return nullptr;
+}
+
+scoped_refptr<network::SharedURLLoaderFactory>
+TestingBrowserProcess::shared_url_loader_factory() {
+  return shared_url_loader_factory_;
 }
 
 content::NetworkConnectionTracker*
@@ -423,16 +435,18 @@ gcm::GCMDriver* TestingBrowserProcess::gcm_driver() {
 }
 
 resource_coordinator::TabManager* TestingBrowserProcess::GetTabManager() {
-#if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
+#if defined(OS_ANDROID)
+  return nullptr;
+#else
   if (!tab_manager_) {
     tab_manager_ = std::make_unique<resource_coordinator::TabManager>();
     tab_lifecycle_unit_source_ =
-        std::make_unique<resource_coordinator::TabLifecycleUnitSource>();
+        std::make_unique<resource_coordinator::TabLifecycleUnitSource>(
+            tab_manager_->intervention_policy_database(),
+            tab_manager_->usage_clock());
     tab_lifecycle_unit_source_->AddObserver(tab_manager_.get());
   }
   return tab_manager_.get();
-#else
-  return nullptr;
 #endif
 }
 
@@ -449,6 +463,11 @@ TestingBrowserProcess::pref_service_factory() const {
 void TestingBrowserProcess::SetSystemRequestContext(
     net::URLRequestContextGetter* context_getter) {
   system_request_context_ = context_getter;
+}
+
+void TestingBrowserProcess::SetSharedURLLoaderFactory(
+    scoped_refptr<network::SharedURLLoaderFactory> shared_url_loader_factory) {
+  shared_url_loader_factory_ = shared_url_loader_factory;
 }
 
 void TestingBrowserProcess::SetNetworkConnectionTracker(

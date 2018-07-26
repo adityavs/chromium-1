@@ -41,6 +41,7 @@
 #include "gpu/command_buffer/client/transfer_buffer.h"
 #include "gpu/command_buffer/client/vertex_array_object_manager.h"
 #include "gpu/command_buffer/common/context_creation_attribs.h"
+#include "gpu/command_buffer/common/gles2_cmd_utils.h"
 #include "gpu/command_buffer/common/id_allocator.h"
 #include "gpu/command_buffer/common/swap_buffers_complete_params.h"
 #include "gpu/command_buffer/common/sync_token.h"
@@ -122,11 +123,6 @@ void CopyRectToBuffer(const void* pixels,
     uint32_t size = (height - 1) * pixels_padded_row_size + unpadded_row_size;
     memcpy(dest, source, size);
   }
-}
-
-// A 32-bit and 64-bit compatible way of converting a pointer to a GLuint.
-GLuint ToGLuint(const void* ptr) {
-  return static_cast<GLuint>(reinterpret_cast<size_t>(ptr));
 }
 
 static base::AtomicSequenceNumber g_flush_id;
@@ -390,6 +386,9 @@ void GLES2Implementation::SendErrorMessage(std::string message, int32_t id) {
 }
 
 void GLES2Implementation::CallDeferredErrorCallbacks() {
+  if (deferred_error_callbacks_.empty())
+    return;
+
   if (error_message_callback_.is_null()) {
     // User probably cleared this out.
     deferred_error_callbacks_.clear();
@@ -1546,12 +1545,12 @@ void GLES2Implementation::DeleteSyncStub(GLsizei n, const GLuint* syncs) {
 GLint GLES2Implementation::GetAttribLocationHelper(
     GLuint program, const char* name) {
   typedef cmds::GetAttribLocation::Result Result;
+  SetBucketAsCString(kResultBucketId, name);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return -1;
   }
   *result = -1;
-  SetBucketAsCString(kResultBucketId, name);
   helper_->GetAttribLocation(
       program, kResultBucketId, GetResultShmId(), GetResultShmOffset());
   WaitForCmd();
@@ -1575,12 +1574,12 @@ GLint GLES2Implementation::GetAttribLocation(
 GLint GLES2Implementation::GetUniformLocationHelper(
     GLuint program, const char* name) {
   typedef cmds::GetUniformLocation::Result Result;
+  SetBucketAsCString(kResultBucketId, name);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return -1;
   }
   *result = -1;
-  SetBucketAsCString(kResultBucketId, name);
   helper_->GetUniformLocation(program, kResultBucketId,
                                     GetResultShmId(), GetResultShmOffset());
   WaitForCmd();
@@ -1662,12 +1661,12 @@ bool GLES2Implementation::GetProgramivHelper(
 GLint GLES2Implementation::GetFragDataIndexEXTHelper(GLuint program,
                                                      const char* name) {
   typedef cmds::GetFragDataIndexEXT::Result Result;
+  SetBucketAsCString(kResultBucketId, name);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return -1;
   }
   *result = -1;
-  SetBucketAsCString(kResultBucketId, name);
   helper_->GetFragDataIndexEXT(program, kResultBucketId, GetResultShmId(),
                                GetResultShmOffset());
   WaitForCmd();
@@ -1691,12 +1690,12 @@ GLint GLES2Implementation::GetFragDataIndexEXT(GLuint program,
 GLint GLES2Implementation::GetFragDataLocationHelper(
     GLuint program, const char* name) {
   typedef cmds::GetFragDataLocation::Result Result;
+  SetBucketAsCString(kResultBucketId, name);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return -1;
   }
   *result = -1;
-  SetBucketAsCString(kResultBucketId, name);
   helper_->GetFragDataLocation(
       program, kResultBucketId, GetResultShmId(), GetResultShmOffset());
   WaitForCmd();
@@ -1720,12 +1719,12 @@ GLint GLES2Implementation::GetFragDataLocation(
 GLuint GLES2Implementation::GetUniformBlockIndexHelper(
     GLuint program, const char* name) {
   typedef cmds::GetUniformBlockIndex::Result Result;
+  SetBucketAsCString(kResultBucketId, name);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return GL_INVALID_INDEX;
   }
   *result = GL_INVALID_INDEX;
-  SetBucketAsCString(kResultBucketId, name);
   helper_->GetUniformBlockIndex(
       program, kResultBucketId, GetResultShmId(), GetResultShmOffset());
   WaitForCmd();
@@ -4956,12 +4955,12 @@ GLboolean GLES2Implementation::EnableFeatureCHROMIUM(
                  << feature << ")");
   TRACE_EVENT0("gpu", "GLES2::EnableFeatureCHROMIUM");
   typedef cmds::EnableFeatureCHROMIUM::Result Result;
+  SetBucketAsCString(kResultBucketId, feature);
   Result* result = GetResultAs<Result*>();
   if (!result) {
     return false;
   }
   *result = 0;
-  SetBucketAsCString(kResultBucketId, feature);
   helper_->EnableFeatureCHROMIUM(
       kResultBucketId, GetResultShmId(), GetResultShmOffset());
   WaitForCmd();
@@ -5966,6 +5965,9 @@ void GLES2Implementation::TraceBeginCHROMIUM(
   GPU_CLIENT_SINGLE_THREAD_CHECK();
   GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glTraceBeginCHROMIUM("
                  << category_name << ", " << trace_name << ")");
+  static constexpr size_t kMaxStrLen = 256;
+  DCHECK_LE(strlen(category_name), kMaxStrLen);
+  DCHECK_LE(strlen(trace_name), kMaxStrLen);
   SetBucketAsCString(kResultBucketId, category_name);
   SetBucketAsCString(kResultBucketId + 1, trace_name);
   helper_->TraceBeginCHROMIUM(kResultBucketId, kResultBucketId + 1);

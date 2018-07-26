@@ -43,6 +43,7 @@
 #include "device/bluetooth/bluetooth_local_gatt_characteristic.h"
 #include "device/bluetooth/bluetooth_local_gatt_descriptor.h"
 #include "device/bluetooth/bluez/bluetooth_device_bluez.h"
+#include "device/bluetooth/bluez/bluetooth_local_gatt_characteristic_bluez.h"
 #include "device/bluetooth/bluez/bluetooth_remote_gatt_characteristic_bluez.h"
 #include "mojo/public/cpp/platform/platform_handle.h"
 #include "mojo/public/cpp/system/platform_handle.h"
@@ -381,6 +382,24 @@ void OnRemoveServiceRecordError(
   std::move(callback).Run(status);
 }
 
+const device::BluetoothLocalGattDescriptor* FindCCCD(
+    const device::BluetoothLocalGattCharacteristic* characteristic) {
+  for (const auto& descriptor :
+       static_cast<const bluez::BluetoothLocalGattCharacteristicBlueZ*>(
+           characteristic)
+           ->GetDescriptors()) {
+    if (descriptor->GetUUID() ==
+        BluetoothGattDescriptor::ClientCharacteristicConfigurationUuid()) {
+      return descriptor.get();
+    }
+  }
+  return nullptr;
+}
+
+std::vector<uint8_t> MakeCCCDValue(uint8_t value) {
+  return {value, 0};
+}
+
 }  // namespace
 
 namespace arc {
@@ -459,7 +478,6 @@ ArcBluetoothBridge::ConnectionObserverImpl<
 ArcBluetoothBridge::ArcBluetoothBridge(content::BrowserContext* context,
                                        ArcBridgeService* bridge_service)
     : arc_bridge_service_(bridge_service), weak_factory_(this) {
-  arc_bridge_service_->bluetooth()->SetHost(this);
   arc_bridge_service_->bluetooth()->AddObserver(this);
 
   app_observer_ = std::make_unique<
@@ -501,6 +519,12 @@ void ArcBluetoothBridge::OnAdapterInitialized(
 
   if (!bluetooth_adapter_->HasObserver(this))
     bluetooth_adapter_->AddObserver(this);
+
+  // Once the bluetooth adapter is ready, we can now signal the container that
+  // the interface is ready to be interacted with. This avoids races in most
+  // methods, since it's undesirable to implement a retry mechanism for the
+  // cases when an inbound method is called and the adapter is not ready yet.
+  arc_bridge_service_->bluetooth()->SetHost(this);
 }
 
 void ArcBluetoothBridge::OnConnectionReady() {
@@ -819,6 +843,31 @@ void ArcBluetoothBridge::OnGattAttributeReadRequest(
       base::BindOnce(&OnGattServerRead, success_callback, error_callback));
 }
 
+void ArcBluetoothBridge::OnGattServerPrepareWrite(
+    mojom::BluetoothAddressPtr addr,
+    bool has_subsequent_write,
+    const base::Closure& success_callback,
+    const ErrorCallback& error_callback,
+    mojom::BluetoothGattStatus status) {
+  bool success = (status == mojom::BluetoothGattStatus::GATT_SUCCESS);
+  const base::Closure& callback = (success ? success_callback : error_callback);
+  if (success && has_subsequent_write) {
+    callback.Run();
+    return;
+  }
+
+  auto* bluetooth_instance = ARC_GET_INSTANCE_FOR_METHOD(
+      arc_bridge_service_->bluetooth(), RequestGattExecuteWrite);
+  if (bluetooth_instance == nullptr) {
+    error_callback.Run();
+    return;
+  }
+
+  bluetooth_instance->RequestGattExecuteWrite(
+      std::move(addr), success,
+      base::BindOnce(&OnGattServerWrite, callback, error_callback));
+}
+
 template <class LocalGattAttribute>
 void ArcBluetoothBridge::OnGattAttributeWriteRequest(
     const BluetoothDevice* device,
@@ -826,6 +875,8 @@ void ArcBluetoothBridge::OnGattAttributeWriteRequest(
     const std::vector<uint8_t>& value,
     int offset,
     mojom::BluetoothGattDBAttributeType attribute_type,
+    bool is_prepare,
+    bool has_subsequent_write,
     const base::Closure& success_callback,
     const ErrorCallback& error_callback) {
   DCHECK_CALLED_ON_VALID_THREAD(thread_checker_);
@@ -836,12 +887,19 @@ void ArcBluetoothBridge::OnGattAttributeWriteRequest(
     return;
   }
 
+  GattStatusCallback callback =
+      is_prepare ? base::BindOnce(
+                       &ArcBluetoothBridge::OnGattServerPrepareWrite,
+                       weak_factory_.GetWeakPtr(),
+                       mojom::BluetoothAddress::From(device->GetAddress()),
+                       has_subsequent_write, success_callback, error_callback)
+                 : base::BindOnce(&OnGattServerWrite, success_callback,
+                                  error_callback);
   DCHECK(gatt_handle_.find(attribute->GetIdentifier()) != gatt_handle_.end());
-
   bluetooth_instance->RequestGattWrite(
       mojom::BluetoothAddress::From(device->GetAddress()),
       gatt_handle_[attribute->GetIdentifier()], offset, value, attribute_type,
-      base::BindOnce(&OnGattServerWrite, success_callback, error_callback));
+      is_prepare, std::move(callback));
 }
 
 void ArcBluetoothBridge::OnCharacteristicReadRequest(
@@ -865,8 +923,23 @@ void ArcBluetoothBridge::OnCharacteristicWriteRequest(
     const ErrorCallback& error_callback) {
   OnGattAttributeWriteRequest(
       device, characteristic, value, offset,
-      mojom::BluetoothGattDBAttributeType::BTGATT_DB_CHARACTERISTIC, callback,
+      mojom::BluetoothGattDBAttributeType::BTGATT_DB_CHARACTERISTIC,
+      /* is_prepare = */ false, /* has_subsequent_write, = */ false, callback,
       error_callback);
+}
+
+void ArcBluetoothBridge::OnCharacteristicPrepareWriteRequest(
+    const BluetoothDevice* device,
+    const BluetoothLocalGattCharacteristic* characteristic,
+    const std::vector<uint8_t>& value,
+    int offset,
+    bool has_subsequent_write,
+    const base::Closure& callback,
+    const ErrorCallback& error_callback) {
+  OnGattAttributeWriteRequest(
+      device, characteristic, value, offset,
+      mojom::BluetoothGattDBAttributeType::BTGATT_DB_CHARACTERISTIC,
+      /* is_prepare = */ true, has_subsequent_write, callback, error_callback);
 }
 
 void ArcBluetoothBridge::OnDescriptorReadRequest(
@@ -890,18 +963,38 @@ void ArcBluetoothBridge::OnDescriptorWriteRequest(
     const ErrorCallback& error_callback) {
   OnGattAttributeWriteRequest(
       device, descriptor, value, offset,
-      mojom::BluetoothGattDBAttributeType::BTGATT_DB_DESCRIPTOR, callback,
+      mojom::BluetoothGattDBAttributeType::BTGATT_DB_DESCRIPTOR,
+      /* is_prepare = */ false, /* has_subsequent_write = */ false, callback,
       error_callback);
 }
 
 void ArcBluetoothBridge::OnNotificationsStart(
     const BluetoothDevice* device,
     device::BluetoothGattCharacteristic::NotificationType notification_type,
-    const BluetoothLocalGattCharacteristic* characteristic) {}
+    const BluetoothLocalGattCharacteristic* characteristic) {
+  const BluetoothLocalGattDescriptor* cccd = FindCCCD(characteristic);
+  if (cccd == nullptr)
+    return;
+  OnDescriptorWriteRequest(
+      device, cccd,
+      MakeCCCDValue(notification_type ==
+                            device::BluetoothRemoteGattCharacteristic::
+                                NotificationType::kNotification
+                        ? ENABLE_NOTIFICATION_VALUE
+                        : ENABLE_INDICATION_VALUE),
+      0, base::DoNothing(), base::DoNothing());
+}
 
 void ArcBluetoothBridge::OnNotificationsStop(
     const BluetoothDevice* device,
-    const BluetoothLocalGattCharacteristic* characteristic) {}
+    const BluetoothLocalGattCharacteristic* characteristic) {
+  const BluetoothLocalGattDescriptor* cccd = FindCCCD(characteristic);
+  if (cccd == nullptr)
+    return;
+  OnDescriptorWriteRequest(device, cccd,
+                           MakeCCCDValue(DISABLE_NOTIFICATION_VALUE), 0,
+                           base::DoNothing(), base::DoNothing());
+}
 
 void ArcBluetoothBridge::EnableAdapter(EnableAdapterCallback callback) {
   DCHECK(bluetooth_adapter_);
@@ -1142,7 +1235,6 @@ void ArcBluetoothBridge::OnPoweredOn(
     SetPrimaryUserBluetoothPowerSetting(true);
 
   std::move(callback).Run(mojom::BluetoothAdapterState::ON);
-  SendCachedPairedDevices();
 }
 
 void ArcBluetoothBridge::OnPoweredOff(
@@ -1928,14 +2020,6 @@ void ArcBluetoothBridge::AddDescriptor(int32_t service_handle,
     std::move(callback).Run(kInvalidGattAttributeHandle);
     return;
   }
-  // Chrome automatically adds a CCC Descriptor to a characteristic when needed.
-  // We will generate a bogus handle for Android.
-  if (uuid ==
-      BluetoothGattDescriptor::ClientCharacteristicConfigurationUuid()) {
-    int32_t handle = GetNextGattServerAttributeHandle();
-    std::move(callback).Run(handle);
-    return;
-  }
 
   DCHECK(gatt_identifier_.find(service_handle) != gatt_identifier_.end());
   BluetoothLocalGattService* service =
@@ -2009,7 +2093,34 @@ void ArcBluetoothBridge::SendIndication(int32_t attribute_handle,
                                         mojom::BluetoothAddressPtr address,
                                         bool confirm,
                                         const std::vector<uint8_t>& value,
-                                        SendIndicationCallback callback) {}
+                                        SendIndicationCallback callback) {
+  BluetoothDevice* device =
+      bluetooth_adapter_->GetDevice(address->To<std::string>());
+  auto identifier = gatt_identifier_.find(attribute_handle);
+  if (device == nullptr || identifier == gatt_identifier_.end()) {
+    std::move(callback).Run(mojom::BluetoothGattStatus::GATT_FAILURE);
+    return;
+  }
+
+  for (const auto& service_handle : last_characteristic_) {
+    auto it = gatt_identifier_.find(service_handle.first);
+    if (it == gatt_identifier_.end())
+      continue;
+    BluetoothLocalGattService* service =
+        bluetooth_adapter_->GetGattService(it->second);
+    if (service == nullptr)
+      continue;
+    BluetoothLocalGattCharacteristic* characteristic =
+        service->GetCharacteristic(identifier->second);
+    if (characteristic == nullptr)
+      continue;
+    characteristic->NotifyValueChanged(device, value, confirm);
+    std::move(callback).Run(mojom::BluetoothGattStatus::GATT_SUCCESS);
+    return;
+  }
+
+  std::move(callback).Run(mojom::BluetoothGattStatus::GATT_FAILURE);
+}
 
 void ArcBluetoothBridge::GetSdpRecords(mojom::BluetoothAddressPtr remote_addr,
                                        const BluetoothUUID& target_uuid) {
@@ -2742,27 +2853,6 @@ void ArcBluetoothBridge::SendCachedDevicesFound() const {
   DCHECK(bluetooth_adapter_);
   for (auto* device : bluetooth_adapter_->GetDevices())
     SendDevice(device, /* include_cached_device = */ true);
-}
-
-void ArcBluetoothBridge::SendCachedPairedDevices() const {
-  DCHECK(bluetooth_adapter_);
-
-  BluetoothAdapter::DeviceList devices = bluetooth_adapter_->GetDevices();
-  for (auto* device : devices) {
-    if (!device->IsPaired())
-      continue;
-
-    SendDevice(device, /* include_cached_device = */ true);
-
-    // OnBondStateChanged must be called with mojom::BluetoothBondState::BONDING
-    // to make sure the bond state machine on Android is ready to take the
-    // pair-done event. Otherwise the pair-done event will be dropped as an
-    // invalid change of paired status.
-    mojom::BluetoothAddressPtr addr =
-        mojom::BluetoothAddress::From(device->GetAddress());
-    OnPairing(addr->Clone());
-    OnPairedDone(std::move(addr));
-  }
 }
 
 void ArcBluetoothBridge::OnGetServiceRecordsDone(

@@ -23,6 +23,7 @@
 #include "ui/keyboard/keyboard_event_filter.h"
 #include "ui/keyboard/keyboard_export.h"
 #include "ui/keyboard/keyboard_layout_delegate.h"
+#include "ui/keyboard/keyboard_ukm_recorder.h"
 #include "ui/keyboard/keyboard_util.h"
 #include "ui/keyboard/notification_manager.h"
 #include "ui/keyboard/queued_container_type.h"
@@ -63,8 +64,8 @@ enum class KeyboardControllerState {
   COUNT,
 };
 
-// Provides control of the virtual keyboard, including providing a container
-// and controlling visibility.
+// Provides control of the virtual keyboard, including enabling/disabling the
+// keyboard and controlling its visibility.
 class KEYBOARD_EXPORT KeyboardController
     : public ui::InputMethodObserver,
       public aura::WindowObserver,
@@ -80,23 +81,23 @@ class KEYBOARD_EXPORT KeyboardController
                       KeyboardLayoutDelegate* delegate);
 
   // Disables the virtual keyboard. Resets the keyboard to its initial disabled
-  // state and destroys the keyboard container window.
+  // state and destroys the keyboard window.
   // Does nothing if the keyboard is already disabled.
   void DisableKeyboard();
 
-  // Attach the KeyboardUI contents window as a child of the given window.
+  // Attach the keyboard window as a child of the given parent window.
   // Can only be called when the keyboard is not activated. |parent| must not
   // have any children.
   void ActivateKeyboardInContainer(aura::Window* parent);
 
-  // Detach the KeyboardUI contents window from its parent container window.
+  // Detach the keyboard window from its parent container window.
   // Can only be called when the keyboard is activated. Explicitly hides the
   // keyboard if it is currently visible.
   void DeactivateKeyboard();
 
-  // Returns the KeyboardUI contents window, or null if the keyboard contents
-  // window has not been created yet.
-  aura::Window* GetContentsWindow();
+  // Returns the keyboard window, or null if the keyboard window has not been
+  // created yet.
+  aura::Window* GetKeyboardWindow();
 
   // Returns the root window that this keyboard controller is attached to, or
   // null if the keyboard has not been attached to any root window.
@@ -106,8 +107,9 @@ class KEYBOARD_EXPORT KeyboardController
   // loaded yet.
   void Reload();
 
-  // Notifies the observer for contents bounds changed.
-  void NotifyContentsBoundsChanging(const gfx::Rect& new_bounds);
+  // Notifies observers that the visual or occluded bounds of the keyboard
+  // window are changing.
+  void NotifyKeyboardBoundsChanging(const gfx::Rect& new_bounds);
 
   // Management of the observer list.
   void AddObserver(KeyboardControllerObserver* observer);
@@ -115,6 +117,9 @@ class KEYBOARD_EXPORT KeyboardController
   void RemoveObserver(KeyboardControllerObserver* observer);
 
   KeyboardUI* ui() { return ui_.get(); }
+
+  // Gets the currently focused text input client.
+  ui::TextInputClient* GetTextInputClient();
 
   void set_keyboard_locked(bool lock) { keyboard_locked_ = lock; }
 
@@ -143,9 +148,9 @@ class KEYBOARD_EXPORT KeyboardController
   // |lock| is true.
   void ShowKeyboard(bool lock);
 
-  // Loads the keyboard UI contents in the background, but does not display
+  // Loads the keyboard window in the background, but does not display
   // the keyboard.
-  void LoadKeyboardUiInBackground();
+  void LoadKeyboardWindowInBackground();
 
   // Force the keyboard to show up in the specific display if not showing and
   // lock the keyboard
@@ -158,12 +163,6 @@ class KEYBOARD_EXPORT KeyboardController
   // Returns true if there is a valid KeyboardController instance (e.g. while
   // there is an ash::Shell).
   static bool HasInstance();
-
-  // Returns true if keyboard is in SHOWN or SHOWING state.
-  bool keyboard_visible() const;
-
-  // Returns true if keyboard window has been created.
-  bool IsKeyboardWindowCreated();
 
   // Returns the bounds in screen for the visible portion of the keyboard. An
   // empty rectangle will get returned when the keyboard is hidden.
@@ -182,6 +181,10 @@ class KEYBOARD_EXPORT KeyboardController
 
   // Set the area on the screen that are occluded by the keyboard.
   void SetOccludedBounds(const gfx::Rect& bounds);
+
+  // Set the areas on the keyboard window where events should be handled.
+  // Does not do anything if there is no keyboard window.
+  void SetHitTestBounds(const std::vector<gfx::Rect>& bounds);
 
   KeyboardControllerState GetStateForTest() const { return state_; }
 
@@ -219,9 +222,9 @@ class KEYBOARD_EXPORT KeyboardController
   void MoveToDisplayWithTransition(display::Display display,
                                    gfx::Rect new_bounds_in_local);
 
-  // Called by KeyboardUI when the keyboard contents have loaded. Shows
-  // the keyboard if show_on_content_update_ is true.
-  void NotifyContentsLoaded();
+  // Called by KeyboardUI when the keyboard window has loaded. Shows
+  // the keyboard if show_on_keyboard_window_load_ is true.
+  void NotifyKeyboardWindowLoaded();
 
   // InputMethodKeyboardController overrides.
   bool DisplayVirtualKeyboard() override;
@@ -235,9 +238,6 @@ class KEYBOARD_EXPORT KeyboardController
  private:
   // For access to Observer methods for simulation.
   friend class KeyboardControllerTest;
-
-  // For access to SetContainerBounds.
-  friend class KeyboardLayoutManager;
 
   // For access to NotifyKeyboardConfigChanged
   friend bool keyboard::UpdateKeyboardConfig(
@@ -269,7 +269,6 @@ class KEYBOARD_EXPORT KeyboardController
   };
 
   // aura::WindowObserver overrides
-  void OnWindowHierarchyChanged(const HierarchyChangeParams& params) override;
   void OnWindowAddedToRootWindow(aura::Window* window) override;
   void OnWindowBoundsChanged(aura::Window* window,
                              const gfx::Rect& old_bounds,
@@ -282,10 +281,10 @@ class KEYBOARD_EXPORT KeyboardController
   void OnFocus() override {}
   void OnInputMethodDestroyed(const ui::InputMethod* input_method) override {}
   void OnTextInputStateChanged(const ui::TextInputClient* client) override;
-  void OnShowImeIfNeeded() override;
+  void OnShowVirtualKeyboardIfEnabled() override;
 
-  // Sets the bounds of the container window.
-  void SetContainerBounds(const gfx::Rect& new_bounds);
+  // Sets the bounds of the keyboard window.
+  void SetKeyboardWindowBounds(const gfx::Rect& new_bounds);
 
   // Show virtual keyboard immediately with animation.
   void ShowKeyboardInternal(const display::Display& display);
@@ -304,8 +303,6 @@ class KEYBOARD_EXPORT KeyboardController
   void HideAnimationFinished();
   // Called when the show animation finished.
   void ShowAnimationFinished();
-
-  void NotifyKeyboardBoundsChangingAndEnsureCaretInWorkArea();
 
   // Notifies keyboard config change to the observers.
   // Only called from |UpdateKeyboardConfig| in keyboard_util.
@@ -327,14 +324,17 @@ class KEYBOARD_EXPORT KeyboardController
 
   void SetContainerBehaviorInternal(ContainerType type);
 
+  // Records that keyboard was shown on the currently focused UKM source.
+  void RecordUkmKeyboardShown();
+
   std::unique_ptr<KeyboardUI> ui_;
   KeyboardLayoutDelegate* layout_delegate_;
 
-  // Container window that the keyboard UI contents window is a child of.
+  // Container window that the keyboard window is a child of.
   aura::Window* parent_container_ = nullptr;
 
-  // CallbackAnimationObserver should destructed before container_ because it
-  // uses container_'s animator.
+  // CallbackAnimationObserver should be destroyed before |ui_| because it uses
+  // |ui_|'s animator.
   std::unique_ptr<CallbackAnimationObserver> animation_observer_;
 
   // Current active visual behavior for the keyboard container.
@@ -343,8 +343,8 @@ class KEYBOARD_EXPORT KeyboardController
   std::unique_ptr<QueuedContainerType> queued_container_type_;
   std::unique_ptr<QueuedDisplayChange> queued_display_change_;
 
-  // If true, show the keyboard window when keyboard UI content updates.
-  bool show_on_content_update_;
+  // If true, show the keyboard window when it loads.
+  bool show_on_keyboard_window_load_;
 
   // If true, the keyboard is always visible even if no window has input focus.
   bool keyboard_locked_;
@@ -353,8 +353,8 @@ class KEYBOARD_EXPORT KeyboardController
   base::ObserverList<KeyboardControllerObserver> observer_list_;
 
   // The bounds in screen for the visible portion of the keyboard.
-  // If the contents window is visible, this should be the same size as the
-  // contents window. If not, this should be empty.
+  // If the keyboard window is visible, this should be the same size as the
+  // keyboard window. If not, this should be empty.
   gfx::Rect visual_bounds_in_screen_;
 
   KeyboardControllerState state_;
