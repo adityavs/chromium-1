@@ -595,6 +595,28 @@ uploading your change for review.
   </summary>
 </histogram>
 
+<histogram name="AnchorElementMetrics.Clicked.ClickIntervals" units="ms">
+  <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
+  <summary>
+    The interval between consecutive clicks of anchor elements. This histogram
+    is recorded when an anchor element is clicked except the first click in the
+    current document.
+  </summary>
+</histogram>
+
+<histogram name="AnchorElementMetrics.Clicked.DurationLoadToFirstClick"
+    units="ms">
+  <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
+  <summary>
+    The duration between page load and the first click of an anchor element. If
+    the first click happens before page load, then the sample is recorded in
+    bucket 0. This histogram is recorded when an anchor element is clicked for
+    the first time in the current document.
+  </summary>
+</histogram>
+
 <histogram name="AnchorElementMetrics.Clicked.HrefEngagementScore"
     units="score">
   <obsolete>
@@ -602,20 +624,22 @@ uploading your change for review.
     AnchorElementMetrics.Clicked.HrefEngagementScore2.
   </obsolete>
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The target link (href) engagement score of an anchor element. The score is
-    retrived from the site engagement service. Currently all scores reported are
-    set to 0. This will soon change. This histogram is recorded when the anchor
-    element is clicked.
+    retrieved from the site engagement service. Currently all scores reported
+    are set to 0. This will soon change. This histogram is recorded when the
+    anchor element is clicked.
   </summary>
 </histogram>
 
 <histogram name="AnchorElementMetrics.Clicked.HrefEngagementScore2"
     units="score">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The site engagement score of the target link (href) of an anchor element.
-    The score is retrived from the site engagement service. This histogram is
+    The score is retrieved from the site engagement service. This histogram is
     recorded when the anchor element is clicked.
   </summary>
 </histogram>
@@ -623,15 +647,17 @@ uploading your change for review.
 <histogram name="AnchorElementMetrics.Clicked.HrefEngagementScorePositive"
     units="score">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The site engagement score of the target link (href) of an anchor element.
-    The score is retrived from the site engagement service. This histogram is
+    The score is retrieved from the site engagement service. This histogram is
     recorded when the anchor element is clicked, and the score is larger than 0.
   </summary>
 </histogram>
 
 <histogram name="AnchorElementMetrics.ContainsImage" enum="Boolean">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     True if the anchor element contains an image element, false if it is not.
   </summary>
@@ -639,6 +665,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.IsInIFrame" enum="Boolean">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     True if the anchor element is within an iframe, false if it is not.
   </summary>
@@ -646,6 +673,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.IsSameHost" enum="Boolean">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     True if the target link of the anchor element has the same host as the root
     document.
@@ -654,6 +682,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.IsUrlIncrementedByOne" enum="Boolean">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     True if the target URL of the anchor element and the URL of the root
     document only differ by one number, and the number in the target URL equals
@@ -663,6 +692,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.RatioArea" units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the clickable region area of an anchor element,
     and the viewport area.
@@ -672,6 +702,7 @@ uploading your change for review.
 <histogram name="AnchorElementMetrics.RatioDistanceCenterToVisibleTop"
     units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the distance from the center of the clickable
     region of an anchor element to the top edge of the visible region, and the
@@ -681,6 +712,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.RatioDistanceRootBottom" units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the distance from the bottom of the clickable
     region of an anchor element to the bottom edge of the root frame, and the
@@ -690,6 +722,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.RatioDistanceRootTop" units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the distance from the top of the clickable
     region of an anchor element to the top edge of the root frame, and the
@@ -699,6 +732,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.RatioDistanceTopToVisibleTop" units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the distance from the top of the clickable
     region of an anchor element to the top edge of the visible region, and the
@@ -708,6 +742,7 @@ uploading your change for review.
 
 <histogram name="AnchorElementMetrics.RatioVisibleArea" units="%">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The ratio times 100 between the visible clickable region area of an anchor
     element, and the viewport area.
@@ -717,6 +752,7 @@ uploading your change for review.
 <histogram name="AnchorElementMetrics.Visible.HighestNavigationScore"
     units="score">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The highest navigation score of the anchor elements sent to the browser
     process on a page load. This histogram is recorded when the webpage is
@@ -727,6 +763,7 @@ uploading your change for review.
 <histogram name="AnchorElementMetrics.Visible.NumberOfAnchorElements"
     units="count">
   <owner>chelu@chromium.org</owner>
+  <owner>tbansal@chromium.org</owner>
   <summary>
     The number of anchor element metrics sent to the browser process on a page
     load. This histogram is recorded when the webpage is loaded.
@@ -2665,6 +2702,15 @@ uploading your change for review.
   </summary>
 </histogram>
 
+<histogram name="Apps.AppListInternalApp.Activate"
+    enum="AppListInternalAppName">
+  <owner>wutao@chromium.org</owner>
+  <summary>
+    The internal app in apps grid was opened by the user. This is gathered per
+    click of an internal app.
+  </summary>
+</histogram>
+
 <histogram name="Apps.AppListPageOpened" enum="AppListPage">
   <owner>calamity@chromium.org</owner>
   <summary>
@@ -2726,6 +2772,25 @@ uploading your change for review.
   <summary>
     The minimum number of arrow keys a user would need to press to navigate to
     the opened search result. This is gathered per click of a search result.
+  </summary>
+</histogram>
+
+<histogram name="Apps.AppListSearchResultInternalApp.Open"
+    enum="AppListInternalAppName">
+  <owner>wutao@chromium.org</owner>
+  <summary>
+    The app list search result of an internal app that was opened by the user.
+    This is gathered per click of a search result.
+  </summary>
+</histogram>
+
+<histogram name="Apps.AppListSearchResultInternalApp.Show"
+    enum="AppListInternalAppName">
+  <owner>wutao@chromium.org</owner>
+  <summary>
+    The app list search result of an internal app that was shown to the user.
+    This is gathered per creation of a search result. Note: Typing a word with
+    multiple letters could trigger multiple creations of the search result.
   </summary>
 </histogram>
 
@@ -15151,7 +15216,8 @@ uploading your change for review.
   </summary>
 </histogram>
 
-<histogram name="CustomTabs.DetachedResourceRequest.Duration" units="ms">
+<histogram base="true" name="CustomTabs.DetachedResourceRequest.Duration"
+    units="ms">
   <owner>lizeb@chromium.org</owner>
   <summary>
     Time between the start of a detached resource request and its completion
@@ -15168,7 +15234,7 @@ uploading your change for review.
   </summary>
 </histogram>
 
-<histogram name="CustomTabs.DetachedResourceRequest.RedirectsCount"
+<histogram base="true" name="CustomTabs.DetachedResourceRequest.RedirectsCount"
     units="redirects">
   <owner>lizeb@chromium.org</owner>
   <summary>
@@ -15326,6 +15392,25 @@ uploading your change for review.
   <summary>
     Android: When prerendering a URL for Custom Tabs, whether the client session
     uses the default parameters.
+  </summary>
+</histogram>
+
+<histogram base="true" name="CustomTabs.ResourcePrefetch.Duration" units="ms"
+    expires_after="M72">
+  <owner>alexilin@chromium.org</owner>
+  <summary>
+    Time between the start of a detached resource request for resource prefetch
+    and its completion (failure or success). Android only.
+  </summary>
+</histogram>
+
+<histogram name="CustomTabs.ResourcePrefetch.FinalStatus" enum="NetErrorCodes"
+    expires_after="M72">
+  <owner>alexilin@chromium.org</owner>
+  <summary>
+    Reports the final status of the detached request for resource prefetch,
+    including success. Recorded once per resource prefetch request. Android
+    only.
   </summary>
 </histogram>
 
@@ -37048,6 +37133,15 @@ uploading your change for review.
   </summary>
 </histogram>
 
+<histogram name="IOS.ShowTabSwitcherSnapshotResult"
+    enum="ShowTabSwitcherSnapshotResult" expires_after="2019-08-01">
+  <owner>edchin@chromium.org</owner>
+  <summary>
+    Tracks the result of snapshotting when the user enters the tab switcher.
+    Recorded whenever the user enters the tab switcher.
+  </summary>
+</histogram>
+
 <histogram name="IOS.Spotlight.Action" enum="IOSSpotlightAction">
   <owner>olivierrobin@chromium.org</owner>
   <summary>The Spotlight Action pressed by the user.</summary>
@@ -43145,6 +43239,15 @@ uploading your change for review.
   <summary>
     The number of times a Media Router create route response succeeds or fails.
     This breaks down the different failure types in to separate buckets.
+  </summary>
+</histogram>
+
+<histogram name="MediaRouter.Sink.SearchOutcome" enum="BooleanSuccess">
+  <owner>takumif@chromium.org</owner>
+  <summary>
+    The outcome of querying Media Route Providers for a sink by ID.
+    &quot;Success&quot; indicates that a sink was found. This is recorded when
+    the user attempts to cast to a sink with a manually entered ID.
   </summary>
 </histogram>
 
@@ -70257,6 +70360,9 @@ uploading your change for review.
 
 <histogram base="true"
     name="PasswordProtection.NumberOfCachedVerdictBeforeShutdown" units="count">
+  <obsolete>
+    Deprecated since 07/2018 due to lack of usage.
+  </obsolete>
   <owner>jialiul@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -70379,6 +70485,9 @@ uploading your change for review.
 
 <histogram name="PasswordProtection.UserClickedThroughSafeBrowsingInterstitial"
     enum="BooleanClickedThroughSBInterstitial">
+  <obsolete>
+    Deprecated since 07/2018 due to lack of usage.
+  </obsolete>
   <owner>jialiul@chromium.org</owner>
   <owner>nparker@chromium.org</owner>
   <summary>
@@ -86556,6 +86665,18 @@ uploading your change for review.
   </summary>
 </histogram>
 
+<histogram name="Scheduler.Experimental.CPUTimePerThread"
+    enum="SchedulerThreadType">
+  <owner>altimin@chromium.org</owner>
+  <summary>
+    Total wall time of all tasks in scheduler-managed threads split per thread.
+
+    The bucket value is the sum of thread durations of all tasks in this thread
+    across all browsing instances. This metric is reported each time we execute
+    a task which has cpu time measurement.
+  </summary>
+</histogram>
+
 <histogram base="true" name="Scheduler.Experimental.Renderer.CPUTimePerThread"
     enum="RendererSchedulerThreadType">
   <owner>altimin@chromium.org</owner>
@@ -86584,6 +86705,30 @@ uploading your change for review.
     blink::scheduler::TotalDurationMetricReporter for details.
 
     These metrics are updated each time a new task is executed.
+  </summary>
+</histogram>
+
+<histogram name="Scheduler.Experimental.Renderer.UkmRecordingStatus"
+    enum="SchedulerUkmRecordingStatus">
+  <owner>altimin@chromium.org</owner>
+  <summary>
+    The results of the attempts to sample scheduling tasks into the UKM. Used to
+    ensure that we're not silently dropping tasks, which can lead to biases in
+    our analyses.
+
+    Recorded each time a scheduling task UKM is recorded.
+  </summary>
+</histogram>
+
+<histogram name="Scheduler.Experimental.WallTimePerThread"
+    enum="SchedulerThreadType">
+  <owner>altimin@chromium.org</owner>
+  <summary>
+    Total wall time of all tasks in scheduler-managed threads split per thread.
+
+    The bucket value is the sum of thread durations of all tasks in this thread
+    across all browsing instances. This metric is reported each time we execute
+    a task which has wall time measurement.
   </summary>
 </histogram>
 
@@ -91315,7 +91460,8 @@ uploading your change for review.
   <owner>chrisha@chromium.org</owner>
   <summary>
     The length of a session (launch/foregrounding to backgrounding) in
-    milliseconds.
+    milliseconds.  See Session.TotalDurationMax1Day for the same histogram with
+    a higher maximum value.  (The one's maximum is 1 hour.)
 
     Desktop: This also takes into account user interaction and audio events.
     Starting from M55 the session length is recorded by discounting for default
@@ -98229,6 +98375,14 @@ uploading your change for review.
   </summary>
 </histogram>
 
+<histogram name="Style.InvalidationTime" units="microseconds">
+  <owner>futhark@chromium.org</owner>
+  <summary>
+    Microseconds spent in StyleEngine::InvalidateStyle. Only samples from high
+    resolution timers are recorded.
+  </summary>
+</histogram>
+
 <histogram name="Style.LazyUsage.Percent" enum="LazyCSSParseUsage">
   <obsolete>
     Deprecated 07/2018, no longer used.
@@ -99786,6 +99940,10 @@ uploading your change for review.
 </histogram>
 
 <histogram name="Sync.ExtraSyncDataCount" units="entries">
+  <obsolete>
+    Deprecated as of 07/2018. No longer tracked (because it is
+    directory-specific and related to now obsolete metrics Sync.ModelTypeCount).
+  </obsolete>
   <owner>gangwu@chromium.org</owner>
   <summary>
     Counts the total number of extra copies of sync data in memory. This count
@@ -100203,9 +100361,24 @@ uploading your change for review.
 </histogram>
 
 <histogram name="Sync.ModelTypeCount" units="entries">
+  <obsolete>
+    Deprecated as of 7/2018. Replaced by Sync.ModelTypeCount2 which does record
+    data consistently for both directory data types and USS data types.
+  </obsolete>
   <owner>gangwu@chromium.org</owner>
   <summary>
     Counts the number of entries for each model type in sync DB at startup.
+  </summary>
+</histogram>
+
+<histogram base="true" name="Sync.ModelTypeCount2" units="entries"
+    expires_after="2020-02-01">
+  <owner>gangwu@chromium.org</owner>
+  <summary>
+    Counts the number of entries for each model type. For directory types, the
+    count is based on the directory contents, for USS types, the count is based
+    on metadata entries for the type. Recorded after sync configuration. This
+    metric is used for monitoring general health of sync client-side code.
   </summary>
 </histogram>
 
@@ -100220,11 +100393,13 @@ uploading your change for review.
   </summary>
 </histogram>
 
-<histogram name="Sync.ModelTypeMemoryKB" units="KB">
+<histogram base="true" name="Sync.ModelTypeMemoryKB" units="KB"
+    expires_after="2020-02-01">
   <owner>pavely@chromium.org</owner>
   <summary>
     Estimated memory usage by sync datatype in kilobytes. Recorded after sync
-    configuration.
+    configuration. This metric is used for monitoring general health of sync
+    client-side code.
   </summary>
 </histogram>
 
@@ -116941,6 +117116,7 @@ uploading your change for review.
   <suffix name="Success" label="Successful detached request"/>
   <affected-histogram name="CustomTabs.DetachedResourceRequest.Duration"/>
   <affected-histogram name="CustomTabs.DetachedResourceRequest.RedirectsCount"/>
+  <affected-histogram name="CustomTabs.ResourcePrefetch.Duration"/>
 </histogram_suffixes>
 
 <histogram_suffixes name="DataReductionProxy" separator="_">
@@ -123656,13 +123832,9 @@ uploading your change for review.
   <affected-histogram name="PasswordProtection.ChromeSettingsAction"/>
   <affected-histogram name="PasswordProtection.InterstitialAction"/>
   <affected-histogram name="PasswordProtection.ModalWarningDialogAction"/>
-  <affected-histogram
-      name="PasswordProtection.NumberOfCachedVerdictBeforeShutdown"/>
   <affected-histogram name="PasswordProtection.PageInfoAction"/>
   <affected-histogram name="PasswordProtection.PasswordAlertModeOutcome"/>
   <affected-histogram name="PasswordProtection.RequestOutcome"/>
-  <affected-histogram
-      name="PasswordProtection.UserClickedThroughSafeBrowsingInterstitial"/>
   <affected-histogram name="PasswordProtection.Verdict"/>
 </histogram_suffixes>
 
@@ -124990,8 +125162,11 @@ uploading your change for review.
     separator=".">
   <suffix name="Background"/>
   <suffix name="Foreground"/>
+  <affected-histogram name="RendererScheduler.TaskCPUDurationPerThreadType"/>
   <affected-histogram name="RendererScheduler.TaskCPUDurationPerThreadType2"/>
+  <affected-histogram name="RendererScheduler.TaskDurationPerTaskType"/>
   <affected-histogram name="RendererScheduler.TaskDurationPerTaskType2"/>
+  <affected-histogram name="RendererScheduler.TaskDurationPerThreadType"/>
   <affected-histogram name="RendererScheduler.TaskDurationPerThreadType2"/>
 </histogram_suffixes>
 
@@ -125075,6 +125250,7 @@ uploading your change for review.
   <suffix name="Visible"
       label="Time spent in tasks of a particular queue type when the renderer
              is visible."/>
+  <affected-histogram name="RendererScheduler.TaskDurationPerQueueType2"/>
   <affected-histogram name="RendererScheduler.TaskDurationPerQueueType3"/>
 </histogram_suffixes>
 
@@ -125588,11 +125764,15 @@ uploading your change for review.
 
 <histogram_suffixes name="SchedulerDarkMatterMetrics" separator=".">
   <suffix name="Tracked"
-      label="Total duration of all tasks managed by the scheduler."/>
+      label="Total duration of all tasks managed by the scheduler. This
+             histogram is similar to the plain .CPUTimePerThread, but it
+             ensures that the number of samples matches the .Untracked
+             version of the same histogram."/>
   <suffix name="Untracked"
       label="Total execution time unaccounted for by the scheduler.
              Calculated as the difference between total thread time and the
              sum of all tasks managed by the scheduler."/>
+  <affected-histogram name="Scheduler.Experimental.CPUTimePerThread"/>
   <affected-histogram name="Scheduler.Experimental.Renderer.CPUTimePerThread"/>
 </histogram_suffixes>
 
@@ -126647,7 +126827,12 @@ uploading your change for review.
   <suffix name="USER_CONSENT" label="USER_CONSENT"/>
   <suffix name="USER_EVENT" label="USER_EVENT"/>
   <suffix name="WIFI_CREDENTIAL" label="WIFI_CREDENTIAL"/>
-  <affected-histogram name="Sync.ModelTypeCount"/>
+  <affected-histogram name="Sync.ModelTypeCount">
+    <obsolete>
+      Deprecated 7/2018. Replaced by Sync.ModelTypeCount2.
+    </obsolete>
+  </affected-histogram>
+  <affected-histogram name="Sync.ModelTypeCount2"/>
   <affected-histogram name="Sync.ModelTypeEntityChange"/>
   <affected-histogram name="Sync.ModelTypeMemoryKB"/>
 </histogram_suffixes>

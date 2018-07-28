@@ -349,7 +349,7 @@ void OnModuleEvent(const ModuleWatcher::ModuleEvent& event) {
         // task.
         base::PostTaskWithTraits(
             FROM_HERE,
-            {base::MayBlock(), base::TaskPriority::BACKGROUND,
+            {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
              base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
             base::Bind(&HandleModuleLoadEventWithoutTimeDateStamp,
                        event.module_path, event.module_size, load_address));
@@ -374,6 +374,7 @@ void SetupModuleDatabase(std::unique_ptr<ModuleWatcher>* module_watcher) {
   ModuleDatabase::SetInstance(
       std::make_unique<ModuleDatabase>(base::SequencedTaskRunnerHandle::Get()));
   auto* module_database = ModuleDatabase::GetInstance();
+  module_database->StartDrainingModuleLoadAttemptsLog();
 
   *module_watcher = ModuleWatcher::Create(base::BindRepeating(&OnModuleEvent));
 
@@ -531,7 +532,7 @@ void ChromeBrowserMainPartsWin::PostProfileInit() {
       !base::FeatureList::IsEnabled(features::kThirdPartyModulesBlocking))
     ThirdPartyConflictsManager::DisableThirdPartyModuleBlocking(
         base::CreateTaskRunnerWithTraits(
-            {base::TaskPriority::BACKGROUND,
+            {base::TaskPriority::BEST_EFFORT,
              base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN,
              base::MayBlock()})
             .get());
@@ -557,7 +558,7 @@ void ChromeBrowserMainPartsWin::PostBrowserStart() {
   content::BrowserThread::PostAfterStartupTask(
       FROM_HERE,
       base::CreateTaskRunnerWithTraits(
-          {base::TaskPriority::BACKGROUND,
+          {base::TaskPriority::BEST_EFFORT,
            base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN}),
       base::Bind(&VerifyInstallation));
 

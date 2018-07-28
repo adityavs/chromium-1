@@ -15,6 +15,7 @@
 #include "base/trace_event/trace_event.h"
 #include "components/download/public/common/download_stats.h"
 #include "content/browser/appcache/appcache_navigation_handle.h"
+#include "content/browser/appcache/appcache_navigation_handle_core.h"
 #include "content/browser/appcache/appcache_request_handler.h"
 #include "content/browser/blob_storage/chrome_blob_storage_context.h"
 #include "content/browser/devtools/render_frame_devtools_agent_host.h"
@@ -615,8 +616,8 @@ class NavigationURLLoaderImpl::URLLoaderRequestController
 
     if (appcache_handle_core) {
       std::unique_ptr<NavigationLoaderInterceptor> appcache_interceptor =
-          AppCacheRequestHandler::InitializeForNavigationNetworkService(
-              *resource_request_, appcache_handle_core,
+          AppCacheRequestHandler::InitializeForMainResourceNetworkService(
+              *resource_request_, appcache_handle_core->host()->GetWeakPtr(),
               network_loader_factory_);
       if (appcache_interceptor)
         interceptors_.push_back(std::move(appcache_interceptor));
@@ -1386,7 +1387,7 @@ NavigationURLLoaderImpl::NavigationURLLoaderImpl(
       std::make_unique<FileURLLoaderFactory>(
           partition->browser_context()->GetPath(),
           base::CreateSequencedTaskRunnerWithTraits(
-              {base::MayBlock(), base::TaskPriority::BACKGROUND,
+              {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
                base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN}));
   std::set<std::string> known_schemes;
   for (auto& iter : non_network_url_loader_factories_)

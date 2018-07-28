@@ -750,7 +750,6 @@ Nekatera spletna mesta se lahko na primer na zahtevo odzovejo tako, da prikažej
 <translation id="7128222689758636196">Dovoli trenutni iskalnik</translation>
 <translation id="7138678301420049075">Drugo</translation>
 <translation id="7141896414559753902">Preprečevanje, da spletna mesta prikazujejo pojavna okna in preusmeritve (priporočeno)</translation>
-<translation id="7144878232160441200">Poskusi znova</translation>
 <translation id="7149893636342594995">Zadnjih 24 ur</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> KB</translation>
 <translation id="7177466738963138057">To lahko pozneje spremenite v nastavitvah</translation>
@@ -982,6 +981,7 @@ Nove licence dobite tako, da se povežete v internet in predvajate preneseno vse
 <translation id="9100939710791843300">Dotaknite se gumba za začetni zaslon, če želite naložiti nov zavihek s povezavami in si ogledati predlagane članke</translation>
 <translation id="9133515669113036225">Ponastavitev poverilnic naprave</translation>
 <translation id="9133703968756164531"><ph name="ITEM_NAME" /> (<ph name="ITEM_ID" />)</translation>
+<translation id="9137013805542155359">Pokaži izvirno besedilo</translation>
 <translation id="9139068048179869749">Poziv, preden se spletnim mestom dovoli pošiljanje obvestil (priporočeno)</translation>
 <translation id="9155898266292537608">Prav tako lahko iščete, tako da se hitro dotaknete besede</translation>
 <translation id="9188680907066685419">Odjava iz upravljanega računa</translation>
@@ -992,7 +992,6 @@ Nove licence dobite tako, da se povežete v internet in predvajate preneseno vse
 <translation id="932327136139879170">Domov</translation>
 <translation id="932599481871055447">Shranjevanje podatkov in hitrejše brskanje</translation>
 <translation id="938850635132480979">Napaka: <ph name="ERROR_CODE" /></translation>
-<translation id="945360730947989880">Na kartici SD ni dovolj prostora</translation>
 <translation id="945522503751344254">Pošlji povratne informacije</translation>
 <translation id="945632385593298557">Dostop do mikrofona</translation>
 <translation id="951339005376969845">Izbris obstoječih podatkov. Pridobite jih lahko tako, da preklopite nazaj na račun <ph name="FROM_ACCOUNT" />.</translation>

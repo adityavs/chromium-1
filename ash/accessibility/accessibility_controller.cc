@@ -22,7 +22,6 @@
 #include "ash/session/session_controller.h"
 #include "ash/session/session_observer.h"
 #include "ash/shell.h"
-#include "ash/shell_port.h"
 #include "ash/sticky_keys/sticky_keys_controller.h"
 #include "ash/strings/grit/ash_strings.h"
 #include "ash/system/power/backlights_forced_off_setter.h"
@@ -46,6 +45,7 @@
 #include "ui/keyboard/keyboard_util.h"
 #include "ui/message_center/message_center.h"
 #include "ui/message_center/public/cpp/notifier_id.h"
+#include "ui/wm/core/cursor_manager.h"
 
 using session_manager::SessionState;
 
@@ -434,19 +434,20 @@ void AccessibilityController::SetDictationEnabled(bool enabled) {
   if (enabled && !dialog_ever_accepted) {
     Shell::Get()->accelerator_controller()->MaybeShowConfirmationDialog(
         IDS_ASH_DICTATION_CONFIRMATION_TITLE,
-        IDS_ASH_DICTATION_CONFIRMATION_BODY, base::BindOnce([]() {
+        IDS_ASH_DICTATION_CONFIRMATION_BODY,
+        // Callback for if the user accepts the dialog
+        base::BindOnce([]() {
           AccessibilityController* controller =
               Shell::Get()->accessibility_controller();
           controller->SetDictationAcceleratorDialogAccepted();
-          controller->active_user_prefs_->SetBoolean(
-              prefs::kAccessibilityDictationEnabled, true);
-          controller->active_user_prefs_->CommitPendingWrite();
+          // If they accept, try again to set dictation_enabled to true
+          controller->SetDictationEnabled(true);
         }));
-  } else {
-    active_user_prefs_->SetBoolean(prefs::kAccessibilityDictationEnabled,
-                                   enabled);
-    active_user_prefs_->CommitPendingWrite();
+    return;
   }
+  active_user_prefs_->SetBoolean(prefs::kAccessibilityDictationEnabled,
+                                 enabled);
+  active_user_prefs_->CommitPendingWrite();
 }
 
 bool AccessibilityController::IsDictationEnabled() const {
@@ -695,6 +696,13 @@ void AccessibilityController::SetFocusHighlightRect(
   accessibility_highlight_controller_->SetFocusHighlightRect(bounds_in_screen);
 }
 
+void AccessibilityController::SetCaretBounds(
+    const gfx::Rect& bounds_in_screen) {
+  if (!accessibility_highlight_controller_)
+    return;
+  accessibility_highlight_controller_->SetCaretBounds(bounds_in_screen);
+}
+
 void AccessibilityController::SetAccessibilityPanelFullscreen(bool fullscreen) {
   // The accessibility panel is only shown on the primary display.
   aura::Window* root = Shell::GetPrimaryRootWindow();
@@ -820,6 +828,7 @@ void AccessibilityController::ObservePrefs(PrefService* prefs) {
   UpdateAutoclickDelayFromPref();
   UpdateCaretHighlightFromPref();
   UpdateCursorHighlightFromPref();
+  UpdateDictationFromPref();
   UpdateFocusHighlightFromPref();
   UpdateHighContrastFromPref();
   UpdateLargeCursorFromPref();
@@ -980,7 +989,7 @@ void AccessibilityController::UpdateLargeCursorFromPref() {
 
   NotifyAccessibilityStatusChanged();
 
-  ShellPort::Get()->SetCursorSize(
+  Shell::Get()->cursor_manager()->SetCursorSize(
       large_cursor_enabled_ ? ui::CursorSize::kLarge : ui::CursorSize::kNormal);
   Shell::Get()->SetLargeCursorSizeInDip(large_cursor_size_in_dip_);
   Shell::Get()->UpdateCursorCompositingEnabled();

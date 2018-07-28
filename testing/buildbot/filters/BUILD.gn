@@ -30,6 +30,7 @@ source_set("chromeos_filters") {
   data = [
     "//testing/buildbot/filters/chromeos.chromeos_unittests.filter",
     "//testing/buildbot/filters/chromeos.media_unittests.filter",
+    "//testing/buildbot/filters/chromeos.services_unittests.filter",
   ]
 }
 
@@ -40,9 +41,6 @@ source_set("content_browsertests_filters") {
     "//testing/buildbot/filters/cast-linux.content_browsertests.filter",
     "//testing/buildbot/filters/mojo.fyi.network_content_browsertests.filter",
     "//testing/buildbot/filters/site-per-process.content_browsertests.filter",
-    "//testing/buildbot/filters/surface_sync.content_browsertests.filter",
-    "//testing/buildbot/filters/viz.android.content_browsertests.filter",
-    "//testing/buildbot/filters/viz.content_browsertests.filter",
   ]
 }
 

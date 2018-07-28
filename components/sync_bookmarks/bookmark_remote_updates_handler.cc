@@ -13,6 +13,8 @@
 #include "base/strings/utf_string_conversions.h"
 #include "components/bookmarks/browser/bookmark_model.h"
 #include "components/bookmarks/browser/bookmark_node.h"
+#include "components/sync/base/unique_position.h"
+#include "components/sync/protocol/unique_position.pb.h"
 
 namespace sync_bookmarks {
 
@@ -135,6 +137,26 @@ void TraverseAndAppendChildren(
   }
 }
 
+int ComputeChildNodeIndex(const bookmarks::BookmarkNode* parent,
+                          const sync_pb::UniquePosition& unique_position,
+                          const SyncedBookmarkTracker* bookmark_tracker) {
+  const syncer::UniquePosition position =
+      syncer::UniquePosition::FromProto(unique_position);
+  for (int i = 0; i < parent->child_count(); ++i) {
+    const bookmarks::BookmarkNode* child = parent->GetChild(i);
+    const SyncedBookmarkTracker::Entity* child_entity =
+        bookmark_tracker->GetEntityForBookmarkNode(child);
+    DCHECK(child_entity);
+    const syncer::UniquePosition child_position =
+        syncer::UniquePosition::FromProto(
+            child_entity->metadata()->unique_position());
+    if (position.LessThan(child_position)) {
+      return i;
+    }
+  }
+  return parent->child_count();
+}
+
 }  // namespace
 
 BookmarkRemoteUpdatesHandler::BookmarkRemoteUpdatesHandler(
@@ -152,6 +174,7 @@ void BookmarkRemoteUpdatesHandler::Process(
     // TODO(crbug.com/516866): Check |update_entity| for sanity.
     // 1. Has bookmark specifics or no specifics in case of delete.
     // 2. All meta info entries in the specifics have unique keys.
+    // 3. Unique position is valid.
     const SyncedBookmarkTracker::Entity* tracked_entity =
         bookmark_tracker_->GetEntityForSyncId(update_entity.id);
     if (update_entity.is_deleted()) {
@@ -288,12 +311,10 @@ void BookmarkRemoteUpdatesHandler::ProcessRemoteCreate(
                 << ", parent id = " << update_entity.parent_id;
     return;
   }
-  // TODO(crbug.com/516866): This code appends the code to the very end of the
-  // list of the children by assigning the index to the
-  // parent_node->child_count(). It should instead compute the exact using the
-  // unique position information of the new node as well as the siblings.
   const bookmarks::BookmarkNode* bookmark_node = CreateBookmarkNode(
-      update_entity, parent_node, bookmark_model_, parent_node->child_count());
+      update_entity, parent_node, bookmark_model_,
+      ComputeChildNodeIndex(parent_node, update_entity.unique_position,
+                            bookmark_tracker_));
   if (!bookmark_node) {
     // We ignore bookmarks we can't add.
     DLOG(ERROR) << "Failed to create bookmark node with title "
@@ -327,14 +348,36 @@ void BookmarkRemoteUpdatesHandler::ProcessRemoteUpdate(
     // TODO(crbug.com/516866): Handle conflict resolution.
     return;
   }
-  if (tracked_entity->MatchesData(update_entity)) {
+
+  const bookmarks::BookmarkNode* node = tracked_entity->bookmark_node();
+  const bookmarks::BookmarkNode* old_parent = node->parent();
+
+  const SyncedBookmarkTracker::Entity* new_parent_entity =
+      bookmark_tracker_->GetEntityForSyncId(update_entity.parent_id);
+  if (!new_parent_entity) {
+    DLOG(ERROR) << "Could not update node. Parent node doesn't exist: "
+                << update_entity.parent_id;
+    return;
+  }
+  const bookmarks::BookmarkNode* new_parent =
+      new_parent_entity->bookmark_node();
+  if (!new_parent) {
+    DLOG(ERROR)
+        << "Could not update node. Parent node has been deleted already.";
+    return;
+  }
+  // Node update could be either in the node data (e.g. title or
+  // unique_position), or it could be that the node has moved under another
+  // parent without any data change. Should check both the data and the parent
+  // to confirm that no updates to the model are needed.
+  if (tracked_entity->MatchesDataIgnoringParent(update_entity) &&
+      new_parent == old_parent) {
     bookmark_tracker_->Update(update_entity.id, update.response_version,
                               update_entity.modification_time,
                               update_entity.unique_position,
                               update_entity.specifics);
     return;
   }
-  const bookmarks::BookmarkNode* node = tracked_entity->bookmark_node();
   if (update_entity.is_folder != node->is_folder()) {
     DLOG(ERROR) << "Could not update node. Remote node is a "
                 << (update_entity.is_folder ? "folder" : "bookmark")
@@ -351,13 +394,24 @@ void BookmarkRemoteUpdatesHandler::ProcessRemoteUpdate(
   bookmark_model_->SetTitle(node, base::UTF8ToUTF16(specifics.title()));
   // TODO(crbug.com/516866): Add the favicon related code.
   bookmark_model_->SetNodeMetaInfoMap(node, GetBookmarkMetaInfo(update_entity));
+  // Compute index information before updating the |bookmark_tracker_|.
+  const int old_index = old_parent->GetIndexOf(node);
+  const int new_index = ComputeChildNodeIndex(
+      new_parent, update_entity.unique_position, bookmark_tracker_);
   bookmark_tracker_->Update(update_entity.id, update.response_version,
                             update_entity.modification_time,
                             update_entity.unique_position,
                             update_entity.specifics);
-  // TODO(crbug.com/516866): Handle reparenting.
-  // TODO(crbug.com/516866): Handle the case of moving the bookmark to a new
-  // position under the same parent (i.e. change in the unique position)
+
+  if (new_parent == old_parent &&
+      (new_index == old_index || new_index == old_index + 1)) {
+    // Node hasn't moved. No more work to do.
+    return;
+  }
+  // Node has moved to another position under the same parent. Update the model.
+  // BookmarkModel takes care of placing the node in the correct position if the
+  // node is move to the left. (i.e. no need to subtract one from |new_index|).
+  bookmark_model_->Move(node, new_parent, new_index);
 }
 
 void BookmarkRemoteUpdatesHandler::ProcessRemoteDelete(

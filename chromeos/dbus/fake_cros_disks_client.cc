@@ -155,7 +155,7 @@ void FakeCrosDisksClient::Unmount(const std::string& device_path,
   if (mounted_paths_.erase(base::FilePath::FromUTF8Unsafe(device_path))) {
     base::PostTaskWithTraitsAndReply(
         FROM_HERE,
-        {base::MayBlock(), base::TaskPriority::BACKGROUND,
+        {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
          base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
         base::BindOnce(base::IgnoreResult(&base::DeleteFile),
                        base::FilePath::FromUTF8Unsafe(device_path),
@@ -168,10 +168,6 @@ void FakeCrosDisksClient::Unmount(const std::string& device_path,
   if (!unmount_listener_.is_null())
     unmount_listener_.Run();
 }
-
-void FakeCrosDisksClient::EnumerateAutoMountableDevices(
-    const EnumerateDevicesCallback& callback,
-    const base::Closure& error_callback) {}
 
 void FakeCrosDisksClient::EnumerateDevices(
     const EnumerateDevicesCallback& callback,

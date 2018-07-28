@@ -63,6 +63,10 @@ class PasswordAccessoryController
   // Methods called by the client:
   // -----------------------------
 
+  // Returns true, if the accessory controller may exist for |web_contents|.
+  // Otherwise (e.g. if VR is enabled), it returns false.
+  static bool AllowedForWebContents(content::WebContents* web_contents);
+
   // Saves credentials for an origin so that they can be used in the sheet.
   void SavePasswordsForOrigin(
       const std::map<base::string16, const autofill::PasswordForm*>&
@@ -116,10 +120,6 @@ class PasswordAccessoryController
 
   // Called from the modal dialog if the user rejected the generated password.
   void GeneratedPasswordRejected();
-
-  // Called from the modal dialog when the user taps on the link contained
-  // in the explanation text that leads to the saved passwords.
-  void OnSavedPasswordsLinkClicked();
 
   // -----------------
   // Member accessors:

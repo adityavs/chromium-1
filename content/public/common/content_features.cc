@@ -178,6 +178,11 @@ const base::Feature kHeapCompaction{"HeapCompaction",
 const base::Feature kImageCaptureAPI{"ImageCaptureAPI",
                                      base::FEATURE_ENABLED_BY_DEFAULT};
 
+// Use the requester origin as a second key to enfore site isolation policy for
+// code caches.
+const base::Feature kIsolatedCodeCache{"IsolatedCodeCache",
+                                       base::FEATURE_DISABLED_BY_DEFAULT};
+
 // Alternative to switches::kIsolateOrigins, for turning on origin isolation.
 // List of origins to isolate has to be specified via
 // kIsolateOriginsFieldTrialParamName.
@@ -407,6 +412,13 @@ const base::Feature kTimerThrottlingForHiddenFrames{
 // https://crbug.com/595987.
 const base::Feature kTopDocumentIsolation{"top-document-isolation",
                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
+// Enables async touchpad pinch zoom events. We check the ACK of the first
+// synthetic wheel event in a pinch sequence, then send the rest of the
+// synthetic wheel events of the pinch sequence as non-blocking if the first
+// event’s ACK is not canceled.
+const base::Feature kTouchpadAsyncPinchEvents{
+    "TouchpadAsyncPinchEvents", base::FEATURE_DISABLED_BY_DEFAULT};
 
 // Use Feature Policy to gate the use of permission features like midi,
 // geolocation, camera, microphone, etc.

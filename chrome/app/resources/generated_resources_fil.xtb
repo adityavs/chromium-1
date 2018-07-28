@@ -138,7 +138,6 @@
 <translation id="1195447618553298278">Hindi kilalang error.</translation>
 <translation id="119738088725604856">Screenshot window</translation>
 <translation id="1197979282329025000">May nangyaring error habang binabawi ang mga kakayahan ng printer para sa printer na <ph name="PRINTER_NAME" />. Hindi mairehistro ang printer na ito sa <ph name="CLOUD_PRINT_NAME" />.</translation>
-<translation id="1198271701881992799">Tayo nang magsimula</translation>
 <translation id="119944043368869598">I-clear lahat</translation>
 <translation id="1201402288615127009">Susunod</translation>
 <translation id="1202596434010270079">Na-update na ang Kiosk app. Mangyaring alisin ang USB stick.</translation>
@@ -263,7 +262,6 @@
 <translation id="1386387014181100145">Kamusta.</translation>
 <translation id="138784436342154190">I-restore ang default na page sa pagsisimula?</translation>
 <translation id="1390548061267426325">Buksan bilang Regular na Tab</translation>
-<translation id="1391150459909312706">Awtomatikong ibahagi ang pinakamahusay na kakayahan ng Android sa iyong Chromebook.</translation>
 <translation id="1393283411312835250">Araw at mga ulap</translation>
 <translation id="1395262318152388157">Slider ng seek bar</translation>
 <translation id="1395730723686586365">Sinimulan ang updater</translation>
@@ -2554,7 +2552,6 @@
 <translation id="4955814292505481804">Taunan</translation>
 <translation id="4957949153200969297">Ang mga feature lang na nauugnay sa <ph name="IDS_SHORT_PRODUCT_NAME" /> Sync ang ie-enable</translation>
 <translation id="4960294539892203357"><ph name="WINDOW_TITLE" /> - <ph name="PROFILE_NAME" /></translation>
-<translation id="4961000125720751066">Makita ang iyong mga card sa iisang lugar</translation>
 <translation id="496226124210045887">Naglalaman ng mga sensitibong file ang folder na iyong pinili. Sigurado ka bang gusto mong magbigay ng "PhP50" na permanenteng read access sa folder na ito?</translation>
 <translation id="4964455510556214366">Kaayusan</translation>
 <translation id="4964673849688379040">Sinusuri...</translation>
@@ -4155,7 +4152,6 @@
 <translation id="7410344089573941623">Itanong kung gusto ng <ph name="HOST" /> na i-access ang iyong camera at mikropono</translation>
 <translation id="741204030948306876">Oo, sali ako</translation>
 <translation id="7412226954991670867">GPU Memory</translation>
-<translation id="7413455776853560343">I-customize ang background</translation>
 <translation id="7414464185801331860">18x</translation>
 <translation id="7416362041876611053">Hindi alam na error sa network.</translation>
 <translation id="7417705661718309329">Google map</translation>
@@ -4356,7 +4352,6 @@
 <translation id="7758143121000533418">Family Link</translation>
 <translation id="7758450972308449809">Isaayos ang mga hangganan ng iyong display</translation>
 <translation id="7760004034676677601">Ito ba ang inaasahan mong pahina sa pagsisimula?</translation>
-<translation id="7760756088376329221">Pumili ng Album ng Larawan sa Google</translation>
 <translation id="7764225426217299476">Magdagdag ng address</translation>
 <translation id="7764256770584298012"><ph name="DOWNLOAD_RECEIVED" /> mula sa <ph name="DOWNLOAD_DOMAIN" /></translation>
 <translation id="7765158879357617694">Ilipat</translation>
@@ -4506,7 +4501,6 @@
 <translation id="7930294771522048157">Lalabas dito ang mga naka-save na paraan ng pagbabayad</translation>
 <translation id="79312157130859720">Ibinabahagi ng <ph name="APP_NAME" /> ang iyong screen at audio.</translation>
 <translation id="7931318309563332511">Hindi Alam</translation>
-<translation id="7932099209000254951">Ikonekta ang iyong telepono nang sa gayon ay makapag-text ka mula sa computer mo, maibahagi ang koneksyon sa internet ng iyong telepono, at ma-unlock ang screen ng Chromebook mo.<ph name="FOOTNOTE_POINTER" /> <ph name="LINK_BEGIN" />Matuto pa<ph name="LINK_END" /></translation>
 <translation id="7934414805353235750">Gusto ng <ph name="URL" /> na mag-play ng pinoprotektahang content. Ive-veify ng Google ang pagkakakilanlan ng iyong device.</translation>
 <translation id="793531125873261495">Nagkaroon ng error sa pag-download ng virtual machine. Pakisubukang muli.</translation>
 <translation id="7938594894617528435">Kasalukuyang offline</translation>

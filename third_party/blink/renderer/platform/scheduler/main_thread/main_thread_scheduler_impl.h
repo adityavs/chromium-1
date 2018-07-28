@@ -17,6 +17,7 @@
 #include "base/memory/weak_ptr.h"
 #include "base/message_loop/message_loop.h"
 #include "base/metrics/single_sample_metrics.h"
+#include "base/optional.h"
 #include "base/single_thread_task_runner.h"
 #include "base/synchronization/lock.h"
 #include "base/task/sequence_manager/task_queue.h"
@@ -26,7 +27,6 @@
 #include "third_party/blink/public/platform/scheduler/web_thread_scheduler.h"
 #include "third_party/blink/renderer/platform/platform_export.h"
 #include "third_party/blink/renderer/platform/scheduler/child/pollable_thread_safe_flag.h"
-#include "third_party/blink/renderer/platform/scheduler/child/task_queue_with_task_type.h"
 #include "third_party/blink/renderer/platform/scheduler/common/idle_canceled_delayed_task_sweeper.h"
 #include "third_party/blink/renderer/platform/scheduler/common/idle_helper.h"
 #include "third_party/blink/renderer/platform/scheduler/common/thread_scheduler_impl.h"
@@ -119,6 +119,14 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
 
     // Turn on relevant experiments during the loading phase.
     bool experiment_only_when_loading;
+
+    using FrameTaskTypeToQueueTraitsArray =
+        std::array<base::Optional<MainThreadTaskQueue::QueueTraits>,
+                   static_cast<size_t>(TaskType::kCount)>;
+    // Array of QueueTraits indexed by TaskType, containing TaskType::kCount
+    // entries. This is initialized early with all valid entries. Entries that
+    // aren't valid task types, i.e. non-frame level, are base::nullopt.
+    FrameTaskTypeToQueueTraitsArray frame_task_types_to_queue_traits;
   };
 
   static const char* UseCaseToString(UseCase use_case);
@@ -717,12 +725,12 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
       const base::sequence_manager::TaskQueue::Task& task,
       const base::sequence_manager::TaskQueue::TaskTiming& task_timing);
 
-  void RecordTaskUkmImpl(
+  UkmRecordingStatus RecordTaskUkmImpl(
       MainThreadTaskQueue* queue,
       const base::sequence_manager::TaskQueue::Task& task,
       const base::sequence_manager::TaskQueue::TaskTiming& task_timing,
-      PageSchedulerImpl* page_scheduler,
-      size_t page_schedulers_to_attribute);
+      FrameSchedulerImpl* frame_scheduler,
+      bool precise_attribution);
 
   void InitWakeUpBudgetPoolIfNeeded();
 
@@ -770,11 +778,11 @@ class PLATFORM_EXPORT MainThreadSchedulerImpl
   scoped_refptr<MainThreadTaskQueue> v8_task_queue_;
   scoped_refptr<MainThreadTaskQueue> ipc_task_queue_;
 
-  scoped_refptr<TaskQueueWithTaskType> v8_task_runner_;
-  scoped_refptr<TaskQueueWithTaskType> compositor_task_runner_;
-  scoped_refptr<TaskQueueWithTaskType> control_task_runner_;
-  scoped_refptr<TaskQueueWithTaskType> input_task_runner_;
-  scoped_refptr<TaskQueueWithTaskType> ipc_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> v8_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> compositor_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> control_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> input_task_runner_;
+  scoped_refptr<base::SingleThreadTaskRunner> ipc_task_runner_;
 
   // Note |virtual_time_domain_| is lazily created.
   std::unique_ptr<AutoAdvancingVirtualTimeDomain> virtual_time_domain_;

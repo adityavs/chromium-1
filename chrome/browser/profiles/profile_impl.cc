@@ -267,7 +267,7 @@ void CreateProfileDirectory(base::SequencedTaskRunner* io_task_runner,
   DVLOG(1) << "Creating directory " << path.value();
   if (base::CreateDirectory(path) && create_readme) {
     base::PostTaskWithTraits(FROM_HERE,
-                             {base::MayBlock(), base::TaskPriority::BACKGROUND,
+                             {base::MayBlock(), base::TaskPriority::BEST_EFFORT,
                               base::TaskShutdownBehavior::BLOCK_SHUTDOWN},
                              base::Bind(&CreateProfileReadme, path));
   }
@@ -807,6 +807,10 @@ base::FilePath ProfileImpl::GetPath() const {
   return path_;
 }
 
+base::FilePath ProfileImpl::GetCachePath() const {
+  return base_cache_path_;
+}
+
 scoped_refptr<base::SequencedTaskRunner> ProfileImpl::GetIOTaskRunner() {
   return io_task_runner_;
 }
@@ -1180,14 +1184,13 @@ void ProfileImpl::RegisterInProcessServices(StaticServiceMap* services) {
   if (base::FeatureList::IsEnabled(
           chromeos::features::kEnableUnifiedMultiDeviceSetup) &&
       base::FeatureList::IsEnabled(chromeos::features::kMultiDeviceApi)) {
-    chromeos::multidevice_setup::MultiDeviceSetupService::RegisterProfilePrefs(
-        pref_registry_.get());
     service_manager::EmbeddedServiceInfo info;
     info.task_runner = base::ThreadTaskRunnerHandle::Get();
     info.factory = base::BindRepeating(
         &ProfileImpl::CreateMultiDeviceSetupService, base::Unretained(this));
     services->emplace(chromeos::multidevice_setup::mojom::kServiceName, info);
   }
+
 #endif
 
 #if !defined(OS_ANDROID)

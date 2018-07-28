@@ -5,9 +5,10 @@
 'use strict';
 
 /**
- * Returns the ENTRIES.zipArchive content (2 files) as row entries.
+ * Returns the expected file list row entries after opening (unzipping) the
+ * ENTRIES.zipArchive file list entry.
  */
-function getUnzippedFileRowEntries() {
+function getUnzippedFileListRowEntries() {
   return [
     ['image.png', '272 bytes', 'PNG image', 'Sep 2, 2013, 10:01 PM'],
     ['text.txt', '51 bytes', 'Plain text', 'Sep 2, 2013, 10:01 PM']
@@ -41,7 +42,7 @@ testcase.zipFileOpenDownloads = function() {
     // Check: the zip file content should be shown (unzip).
     function(result) {
       chrome.test.assertTrue(!!result, 'fakeKeyDown failed');
-      const files = getUnzippedFileRowEntries();
+      const files = getUnzippedFileListRowEntries();
       remoteCall.waitForFiles(appId, files).then(this.next);
     },
   ]);
@@ -74,7 +75,7 @@ testcase.zipFileOpenDrive = function() {
     // Check: the zip file content should be shown (unzip).
     function(result) {
       chrome.test.assertTrue(!!result, 'fakeKeyDown failed');
-      const files = getUnzippedFileRowEntries();
+      const files = getUnzippedFileListRowEntries();
       remoteCall.waitForFiles(appId, files).then(this.next);
     },
   ]);
@@ -132,8 +133,185 @@ testcase.zipFileOpenUsb = function() {
     // Check: the zip file content should be shown (unzip).
     function(result) {
       chrome.test.assertTrue(!!result, 'fakeKeyDown failed');
-      const files = getUnzippedFileRowEntries();
+      const files = getUnzippedFileListRowEntries();
       remoteCall.waitForFiles(appId, files).then(this.next);
+    },
+  ]);
+};
+
+/**
+ * Returns the expected file list rows after invoking the 'Zip selection' menu
+ * command on the ENTRIES.photos file list item.
+ */
+function getZipSelectionFileListRowEntries() {
+  return [
+    ['photos', '--', 'Folder', 'Jan 1, 1980, 11:59 PM'],
+    ['photos.zip', '130 bytes', 'Zip archive', 'Oct 21, 1983, 11:55 AM']
+  ];
+}
+
+/**
+ * Tests creating a zip file on Downloads.
+ */
+testcase.zipCreateFileDownloads = function() {
+  let appId;
+
+  StepsRunner.run([
+    // Open Files app on Downloads containing ENTRIES.photos.
+    function() {
+      setupAndWaitUntilReady(
+          null, RootPath.DOWNLOADS, this.next, [ENTRIES.photos], []);
+    },
+    // Select the file.
+    function(result) {
+      appId = result.windowId;
+      remoteCall.callRemoteTestUtil('selectFile', appId, ['photos'])
+          .then(this.next);
+    },
+    // Right-click the selected file.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'selectFile failed');
+      remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]'], this.next);
+    },
+    // Check: the context menu should appear.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'fakeMouseRightClick failed');
+      remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])')
+          .then(this.next);
+    },
+    // Click the 'Zip selection' menu command.
+    function() {
+      const zip = '[command="#zip-selection"]';
+      remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [zip], this.next);
+    },
+    // Check: a zip file should be created.
+    function() {
+      const files = getZipSelectionFileListRowEntries();
+      remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true})
+          .then(this.next);
+    },
+    function() {
+      checkIfNoErrorsOccured(this.next);
+    },
+  ]);
+};
+
+/**
+ * Tests creating a zip file on Drive.
+ */
+testcase.zipCreateFileDrive = function() {
+  let appId;
+
+  StepsRunner.run([
+    // Open Files app on Drive containing ENTRIES.photos.
+    function() {
+      setupAndWaitUntilReady(
+          null, RootPath.DRIVE, this.next, [], [ENTRIES.photos]);
+    },
+    // Select the file.
+    function(result) {
+      appId = result.windowId;
+      remoteCall.callRemoteTestUtil('selectFile', appId, ['photos'])
+          .then(this.next);
+    },
+    // Right-click the selected file.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'selectFile failed');
+      remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]'], this.next);
+    },
+    // Check: the context menu should appear.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'fakeMouseRightClick failed');
+      remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])')
+          .then(this.next);
+    },
+    // Click the 'Zip selection' menu command.
+    function() {
+      const zip = '[command="#zip-selection"]';
+      remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [zip], this.next);
+    },
+    // Check: a zip file should be created.
+    function() {
+      const files = getZipSelectionFileListRowEntries();
+      remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true})
+          .then(this.next);
+    },
+    function() {
+      checkIfNoErrorsOccured(this.next);
+    },
+  ]);
+};
+
+/**
+ * Tests creating a zip file on a removable USB volume.
+ */
+testcase.zipCreateFileUsb = function() {
+  let appId;
+
+  const USB_VOLUME_QUERY = '#directory-tree [volume-type-icon="removable"]';
+
+  StepsRunner.run([
+    // Open Files app on Drive.
+    function() {
+      setupAndWaitUntilReady(
+          null, RootPath.DRIVE, this.next, [], [ENTRIES.beautiful]);
+    },
+    // Mount empty USB volume in the Drive window.
+    function(results) {
+      appId = results.windowId;
+      chrome.test.sendMessage(
+          JSON.stringify({name: 'mountFakeUsbEmpty'}), this.next);
+    },
+    // Wait for the USB mount.
+    function() {
+      remoteCall.waitForElement(appId, USB_VOLUME_QUERY).then(this.next);
+    },
+    // Click to open the USB volume.
+    function() {
+      remoteCall.callRemoteTestUtil(
+          'fakeMouseClick', appId, [USB_VOLUME_QUERY], this.next);
+    },
+    // Add ENTRIES.photos to the USB volume.
+    function() {
+      addEntries(['usb'], [ENTRIES.photos], this.next);
+    },
+    // Verify the USB file list.
+    function() {
+      const photos = [ENTRIES.photos.getExpectedRow()];
+      remoteCall.waitForFiles(appId, photos).then(this.next);
+    },
+    // Select the photos file list entry.
+    function() {
+      remoteCall.callRemoteTestUtil('selectFile', appId, ['photos'])
+          .then(this.next);
+    },
+    // Right-click the selected file.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'selectFile failed');
+      remoteCall.callRemoteTestUtil(
+          'fakeMouseRightClick', appId, ['.table-row[selected]'], this.next);
+    },
+    // Check: the context menu should appear.
+    function(result) {
+      chrome.test.assertTrue(!!result, 'fakeMouseRightClick failed');
+      remoteCall.waitForElement(appId, '#file-context-menu:not([hidden])')
+          .then(this.next);
+    },
+    // Click the 'Zip selection' menu command.
+    function() {
+      const zip = '[command="#zip-selection"]';
+      remoteCall.callRemoteTestUtil('fakeMouseClick', appId, [zip], this.next);
+    },
+    // Check: a zip file should be created.
+    function() {
+      const files = getZipSelectionFileListRowEntries();
+      remoteCall.waitForFiles(appId, files, {ignoreLastModifiedTime: true})
+          .then(this.next);
+    },
+    function() {
+      checkIfNoErrorsOccured(this.next);
     },
   ]);
 };

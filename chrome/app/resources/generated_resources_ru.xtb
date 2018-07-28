@@ -138,7 +138,6 @@
 <translation id="1195447618553298278">Неизвестная ошибка.</translation>
 <translation id="119738088725604856">Скриншот окна</translation>
 <translation id="1197979282329025000">При получении данных о свойствах принтера <ph name="PRINTER_NAME" /> произошла ошибка. Не удалось зарегистрировать принтер при помощи <ph name="CLOUD_PRINT_NAME" />.</translation>
-<translation id="1198271701881992799">Приступим!</translation>
 <translation id="119944043368869598">Удалить все</translation>
 <translation id="1201402288615127009">Далее</translation>
 <translation id="1202596434010270079">Киоск-приложение обновлено. Извлеките USB-накопитель.</translation>
@@ -263,7 +262,6 @@
 <translation id="1386387014181100145">Привет!</translation>
 <translation id="138784436342154190">Восстановить настройки стартовой страницы по умолчанию?</translation>
 <translation id="1390548061267426325">Открыть в обычной вкладке</translation>
-<translation id="1391150459909312706">Получите доступ к функциям телефона Android на устройстве Chromebook.</translation>
 <translation id="1393283411312835250">Солнце и облака</translation>
 <translation id="1395262318152388157">Ползунок воспроизведения</translation>
 <translation id="1395730723686586365">Программа обновлений запущена</translation>
@@ -2555,7 +2553,6 @@
 <translation id="4955814292505481804">Годовая</translation>
 <translation id="4957949153200969297">Включите функции <ph name="IDS_SHORT_PRODUCT_NAME" />, связанные только с синхронизацией.</translation>
 <translation id="4960294539892203357"><ph name="WINDOW_TITLE" /> (<ph name="PROFILE_NAME" />)</translation>
-<translation id="4961000125720751066">Карты всегда под рукой</translation>
 <translation id="496226124210045887">Выбранный каталог содержит конфиденциальные файлы. Предоставить пользователю "$1" постоянный доступ на чтение данных в этом каталоге?</translation>
 <translation id="4964455510556214366">Расположение</translation>
 <translation id="4964673849688379040">Проверка...</translation>
@@ -4156,7 +4153,6 @@
 <translation id="7410344089573941623">Запрашивать разрешение на доступ к камере и микрофону для сайта <ph name="HOST" /></translation>
 <translation id="741204030948306876">ОК</translation>
 <translation id="7412226954991670867">Память графического процессора</translation>
-<translation id="7413455776853560343">Настройка фона</translation>
 <translation id="7414464185801331860">18x</translation>
 <translation id="7416362041876611053">Неизвестная сетевая ошибка.</translation>
 <translation id="7417705661718309329">Карта Google</translation>
@@ -4357,7 +4353,6 @@
 <translation id="7758143121000533418">Family Link</translation>
 <translation id="7758450972308449809">Настройте границы экрана</translation>
 <translation id="7760004034676677601">Другая стартовая страница?</translation>
-<translation id="7760756088376329221">Выберите альбом в Google Фото</translation>
 <translation id="7764225426217299476">Добавить адрес</translation>
 <translation id="7764256770584298012"><ph name="DOWNLOAD_RECEIVED" /> с сайта <ph name="DOWNLOAD_DOMAIN" /></translation>
 <translation id="7765158879357617694">Переместить</translation>
@@ -4507,7 +4502,6 @@
 <translation id="7930294771522048157">Здесь появятся сохраненные способы оплаты.</translation>
 <translation id="79312157130859720">Приложение "<ph name="APP_NAME" />" предоставило доступ к экрану и аудио.</translation>
 <translation id="7931318309563332511">Неизвестно</translation>
-<translation id="7932099209000254951">Подключив телефон, вы сможете отправлять с устройства Chromebook SMS и пользоваться на нем настроенным на телефоне Интернет-соединением. Также можно будет разблокировать Chromebook с помощью телефона. <ph name="FOOTNOTE_POINTER" /> <ph name="LINK_BEGIN" />Подробнее…<ph name="LINK_END" /></translation>
 <translation id="7934414805353235750">С сайта <ph name="URL" /> поступил запрос на воспроизведение защищенного контента. Для вашего устройства будет проведена проверка Google.</translation>
 <translation id="793531125873261495">Не удалось скачать виртуальную машину. Повторите попытку.</translation>
 <translation id="7938594894617528435">Сейчас не в Сети</translation>

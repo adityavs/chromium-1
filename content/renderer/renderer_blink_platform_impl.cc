@@ -253,6 +253,7 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
 
   // RenderThread may not exist in some tests.
   if (RenderThreadImpl::current()) {
+    io_runner_ = RenderThreadImpl::current()->GetIOTaskRunner();
     connector_ = RenderThreadImpl::current()
                      ->GetServiceManagerConnection()
                      ->GetConnector()
@@ -288,16 +289,6 @@ RendererBlinkPlatformImpl::RendererBlinkPlatformImpl(
 
   GetInterfaceProvider()->GetInterface(
       mojo::MakeRequest(&web_database_host_info_));
-
-  // RenderThread may not exist in some tests.
-  if (RenderThreadImpl::current()) {
-    indexed_db::mojom::FactoryPtrInfo web_idb_factory_host_info;
-    GetInterfaceProvider()->GetInterface(
-        mojo::MakeRequest(&web_idb_factory_host_info));
-    web_idb_factory_.reset(new WebIDBFactoryImpl(
-        std::move(web_idb_factory_host_info),
-        RenderThreadImpl::current()->GetIOTaskRunner()));
-  }
 }
 
 RendererBlinkPlatformImpl::~RendererBlinkPlatformImpl() {
@@ -467,6 +458,13 @@ void RendererBlinkPlatformImpl::CacheMetadata(const blink::WebURL& url,
       ->DidGenerateCacheableMetadata(url, response_time, copy);
 }
 
+void RendererBlinkPlatformImpl::FetchCachedCode(
+    const blink::WebURL& url,
+    base::OnceCallback<void(const std::vector<uint8_t>&)> callback) {
+  RenderThreadImpl::current()->render_message_filter()->FetchCachedCode(
+      url, std::move(callback));
+}
+
 void RendererBlinkPlatformImpl::CacheMetadataInCacheStorage(
     const blink::WebURL& url,
     base::Time response_time,
@@ -565,8 +563,18 @@ void RendererBlinkPlatformImpl::CloneSessionStorageNamespace(
 
 //------------------------------------------------------------------------------
 
-WebIDBFactory* RendererBlinkPlatformImpl::IdbFactory() {
-  return web_idb_factory_.get();
+std::unique_ptr<blink::WebIDBFactory>
+RendererBlinkPlatformImpl::CreateIdbFactory() {
+  // If running in a test context, RenderThread may not exist on init, which
+  // would lead to |io_runner_| being null.
+  if (!io_runner_)
+    return nullptr;
+  indexed_db::mojom::FactoryPtrInfo web_idb_factory_host_info;
+  GetInterfaceProvider()->GetInterface(
+      mojo::MakeRequest(&web_idb_factory_host_info));
+  return std::make_unique<WebIDBFactoryImpl>(
+      std::move(web_idb_factory_host_info),
+      io_runner_);
 }
 
 //------------------------------------------------------------------------------

@@ -138,7 +138,6 @@
 <translation id="1195447618553298278">Nepoznata pogreška.</translation>
 <translation id="119738088725604856">Prozor snimke zaslona</translation>
 <translation id="1197979282329025000">Došlo je do pogreške tijekom dohvata mogućosti pisača za pisač <ph name="PRINTER_NAME" />. Ovaj se pisač ne može registrirati s nazivom <ph name="CLOUD_PRINT_NAME" />.</translation>
-<translation id="1198271701881992799">Počnimo</translation>
 <translation id="119944043368869598">Očisti sve</translation>
 <translation id="1201402288615127009">Sljedeće</translation>
 <translation id="1202596434010270079">Aplikacija kioska ažurirana je. Uklonite USB privjesak.</translation>
@@ -263,7 +262,6 @@
 <translation id="1386387014181100145">Pozdrav.</translation>
 <translation id="138784436342154190">Želite li vratiti zadanu polaznu stranicu?</translation>
 <translation id="1390548061267426325">Otvori kao uobičajenu karticu</translation>
-<translation id="1391150459909312706">Automatski dijelite najbolje Androidove značajke s Chromebookom.</translation>
 <translation id="1393283411312835250">Sunce i oblaci</translation>
 <translation id="1395262318152388157">Klizač za traženje</translation>
 <translation id="1395730723686586365">Alat za ažuriranje pokrenut je</translation>
@@ -1414,7 +1412,7 @@
 <translation id="313205617302240621">Zaboravili ste zaporku?</translation>
 <translation id="3132996321662585180">Osvježi svaki dan</translation>
 <translation id="3135204511829026971">Rotiranje zaslona</translation>
-<translation id="313638818480447860">S vašim je računom povezano više aplikacija (<ph name="NUMBER_OF_APPS" />) koje su optimizirane za ovaj uređaj.</translation>
+<translation id="313638818480447860">S vašim je računom povezano više aplikacija (njih <ph name="NUMBER_OF_APPS" />) koje su optimizirane za ovaj uređaj.</translation>
 <translation id="313963229645891001">Preuzimanje, <ph name="STATUS" /></translation>
 <translation id="3139925690611372679">Zadani žuti avatar</translation>
 <translation id="3140353188828248647">Fokusiraj adresnu traku</translation>
@@ -2554,7 +2552,6 @@
 <translation id="4955814292505481804">Godišnji</translation>
 <translation id="4957949153200969297">Omogući samo značajke vezane uz <ph name="IDS_SHORT_PRODUCT_NAME" /> sinkronizaciju</translation>
 <translation id="4960294539892203357"><ph name="WINDOW_TITLE" /> – <ph name="PROFILE_NAME" /></translation>
-<translation id="4961000125720751066">Spremite sve svoje kartice na jedno mjesto</translation>
 <translation id="496226124210045887">Mapa koju ste odabrali sadrži osjetljive datoteke. Jeste li sigurni da želite dodijeliti aplikaciji "$1" trajni pristup za čitanje za tu mapu?</translation>
 <translation id="4964455510556214366">Poredak</translation>
 <translation id="4964673849688379040">Provjera u tijeku...</translation>
@@ -4155,7 +4152,6 @@
 <translation id="7410344089573941623">Pitaj ako <ph name="HOST" /> želi pristupiti kameri i mikrofonu</translation>
 <translation id="741204030948306876">Da, u redu</translation>
 <translation id="7412226954991670867">Memorija grafičkog procesora</translation>
-<translation id="7413455776853560343">Prilagodite pozadinu</translation>
 <translation id="7414464185801331860">18x</translation>
 <translation id="7416362041876611053">Nepoznata mrežna pogreška.</translation>
 <translation id="7417705661718309329">Google karta</translation>
@@ -4183,7 +4179,7 @@
 <translation id="7465778193084373987">URL za opoziv Netscape certifikata</translation>
 <translation id="7469894403370665791">Automatski se povežite s tom mrežom</translation>
 <translation id="747114903913869239">Pogreška: Nije moguće dekodirati proširenje</translation>
-<translation id="7473753388963818366">Hajdemo pripremiti uređaj <ph name="DEVICE_TYPE" /> za vas</translation>
+<translation id="7473753388963818366">Idemo pripremiti uređaj <ph name="DEVICE_TYPE" /> za vas</translation>
 <translation id="7473891865547856676">Ne, hvala</translation>
 <translation id="747459581954555080">Obnovi sve</translation>
 <translation id="7475671414023905704">URL Netscape izgubljene zaporke</translation>
@@ -4356,7 +4352,6 @@
 <translation id="7758143121000533418">Family Link</translation>
 <translation id="7758450972308449809">Prilagodite granice zaslona</translation>
 <translation id="7760004034676677601">Je li to početna stranica koju ste očekivali?</translation>
-<translation id="7760756088376329221">Odaberite album Google fotografija</translation>
 <translation id="7764225426217299476">Dodaj adresu</translation>
 <translation id="7764256770584298012"><ph name="DOWNLOAD_RECEIVED" /> s <ph name="DOWNLOAD_DOMAIN" /></translation>
 <translation id="7765158879357617694">Pomakni</translation>
@@ -4506,7 +4501,6 @@
 <translation id="7930294771522048157">Ovdje će se prikazivati spremljeni načini plaćanja</translation>
 <translation id="79312157130859720"><ph name="APP_NAME" /> dijeli zaslon i zvuk.</translation>
 <translation id="7931318309563332511">Nepoznato</translation>
-<translation id="7932099209000254951">Povežite svoj telefon da biste mogli slati tekstne poruke s računala, dijeliti internetsku vezu telefona i otključati Chromebookov zaslon.<ph name="FOOTNOTE_POINTER" /> <ph name="LINK_BEGIN" />Saznajte više<ph name="LINK_END" /></translation>
 <translation id="7934414805353235750"><ph name="URL" /> želi reproducirati zaštićeni sadržaj. Identitet vašeg uređaja potvrdit će Google.</translation>
 <translation id="793531125873261495">Došlo je do pogreške prilikom preuzimanja virtualnog računala. Pokušajte ponovo.</translation>
 <translation id="7938594894617528435">Trenutačno izvan mreže</translation>

@@ -21,6 +21,8 @@
 
 namespace {
 
+using MD = ui::MaterialDesignController;
+
 // ----------------------------------------------------------------------------
 // Defaults for properties which are stored in the browser theme pack. If you
 // change these defaults, you must increment the version number in
@@ -34,6 +36,10 @@ const SkColor kDefaultColorFrameIncognito =
     SkColorSetARGB(0xE6, 0x14, 0x16, 0x18);
 const SkColor kDefaultColorFrameIncognitoInactive =
     SkColorSetRGB(0x1E, 0x1E, 0x1E);
+const SkColor kDefaultColorTabBackgroundInactive =
+    SkColorSetRGB(0xEC, 0xEC, 0xEC);
+const SkColor kDefaultColorTabBackgroundInactiveIncognito =
+    SkColorSetRGB(0x28, 0x28, 0x28);
 #else
 const SkColor kDefaultColorFrameIncognito = SkColorSetRGB(0x28, 0x2B, 0x2D);
 const SkColor kDefaultColorFrameIncognitoInactive =
@@ -86,7 +92,8 @@ constexpr color_utils::HSL kDefaultTintFrame = {-1, -1, -1};
 constexpr color_utils::HSL kDefaultTintFrameInactive = {-1, -1, 0.75};
 constexpr color_utils::HSL kDefaultTintFrameIncognito = {-1, 0.2, 0.35};
 constexpr color_utils::HSL kDefaultTintFrameIncognitoInactive = {-1, 0.3, 0.6};
-constexpr color_utils::HSL kDefaultTintBackgroundTab = {-1, -1, 0.75};
+constexpr color_utils::HSL kDefaultTintBackgroundTab = {-1, -1, -1};
+constexpr color_utils::HSL kPreRefreshDefaultTintBackgroundTab = {-1, -1, 0.75};
 
 constexpr SkColor kDefaultColorTabAlertRecordingIcon =
     SkColorSetRGB(0xC5, 0x39, 0x29);
@@ -110,10 +117,6 @@ const SkColor kDefaultColorFrameVibrancyOverlayIncognito =
 const SkColor kDefaultColorToolbarInactive = SkColorSetRGB(0xF6, 0xF6, 0xF6);
 const SkColor kDefaultColorToolbarInactiveIncognito =
     SkColorSetRGB(0x2D, 0x2D, 0x2D);
-const SkColor kDefaultColorTabBackgroundInactive =
-    SkColorSetRGB(0xEC, 0xEC, 0xEC);
-const SkColor kDefaultColorTabBackgroundInactiveIncognito =
-    SkColorSetRGB(0x28, 0x28, 0x28);
 const SkColor kDefaultColorToolbarButtonStroke =
     SkColorSetARGB(0x4B, 0x51, 0x51, 0x51);
 const SkColor kDefaultColorToolbarButtonStrokeInactive =
@@ -147,7 +150,7 @@ constexpr char kTilingRepeat[] = "repeat";
 // touch-optimized UI).
 base::Optional<SkColor> MaybeGetDefaultColorForNewerMaterialUi(int id,
                                                                bool incognito) {
-  if (!ui::MaterialDesignController::IsNewerMaterialUi())
+  if (!MD::IsNewerMaterialUi())
     return base::nullopt;
 
   switch (id) {
@@ -155,6 +158,7 @@ base::Optional<SkColor> MaybeGetDefaultColorForNewerMaterialUi(int id,
     case ThemeProperties::COLOR_BACKGROUND_TAB:
       return incognito ? gfx::kGoogleGrey900 : SkColorSetRGB(0xDE, 0xE1, 0xE6);
     case ThemeProperties::COLOR_FRAME_INACTIVE:
+    case ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE:
       return incognito ? gfx::kGoogleGrey800 : SkColorSetRGB(0xE7, 0xEA, 0xED);
     case ThemeProperties::COLOR_TOOLBAR:
       return incognito ? SkColorSetRGB(0x32, 0x36, 0x39) : SK_ColorWHITE;
@@ -170,6 +174,7 @@ base::Optional<SkColor> MaybeGetDefaultColorForNewerMaterialUi(int id,
       return incognito ? gfx::kGoogleGrey100 : gfx::kChromeIconGrey;
 
     case ThemeProperties::COLOR_BACKGROUND_TAB_TEXT:
+    case ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INACTIVE:
     case ThemeProperties::COLOR_TAB_CLOSE_BUTTON_INACTIVE:
     case ThemeProperties::COLOR_TAB_ALERT_AUDIO:
       return incognito ? gfx::kGoogleGrey400 : gfx::kChromeIconGrey;
@@ -262,11 +267,13 @@ color_utils::HSL ThemeProperties::GetDefaultTint(int id, bool incognito) {
       return incognito ? kDefaultTintFrameIncognitoInactive
                        : kDefaultTintFrameInactive;
     case TINT_BUTTONS:
-      if (incognito && !ui::MaterialDesignController::IsRefreshUi())
-        return kPreRefreshDefaultTintButtonsIncognito;
-      return incognito ? kDefaultTintButtonsIncognito : kDefaultTintButtons;
+      if (!incognito)
+        return kDefaultTintButtons;
+      return MD::IsRefreshUi() ? kDefaultTintButtonsIncognito
+                               : kPreRefreshDefaultTintButtonsIncognito;
     case TINT_BACKGROUND_TAB:
-      return kDefaultTintBackgroundTab;
+      return MD::IsRefreshUi() ? kDefaultTintBackgroundTab
+                               : kPreRefreshDefaultTintBackgroundTab;
     case TINT_FRAME_INCOGNITO:
     case TINT_FRAME_INCOGNITO_INACTIVE:
       NOTREACHED() << "These values should be queried via their respective "
@@ -299,6 +306,7 @@ SkColor ThemeProperties::GetDefaultColor(int id, bool incognito) {
       return incognito ? kDefaultColorToolbarTextIncognito
                        : kDefaultColorToolbarText;
     case COLOR_BACKGROUND_TAB_TEXT:
+    case COLOR_BACKGROUND_TAB_TEXT_INACTIVE:
       return incognito ? kDefaultColorBackgroundTabTextIncognito
                        : kDefaultColorBackgroundTabText;
     case COLOR_NTP_BACKGROUND:
@@ -376,6 +384,10 @@ SkColor ThemeProperties::GetDefaultColor(int id, bool incognito) {
 
     case COLOR_FRAME_INCOGNITO:
     case COLOR_FRAME_INCOGNITO_INACTIVE:
+    case COLOR_BACKGROUND_TAB_INCOGNITO:
+    case COLOR_BACKGROUND_TAB_INCOGNITO_INACTIVE:
+    case COLOR_BACKGROUND_TAB_TEXT_INCOGNITO:
+    case COLOR_BACKGROUND_TAB_TEXT_INCOGNITO_INACTIVE:
       NOTREACHED() << "These values should be queried via their respective "
                       "non-incognito equivalents and an appropriate "
                       "|incognito| value.";

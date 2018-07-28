@@ -150,6 +150,7 @@
 #include "chrome/browser/ui/window_sizer/window_sizer.h"
 #include "chrome/browser/upgrade_detector.h"
 #include "chrome/browser/vr/vr_tab_helper.h"
+#include "chrome/browser/web_applications/extensions/web_app_extension_helpers.h"
 #include "chrome/common/chrome_constants.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/custom_handlers/protocol_handler.h"
@@ -291,6 +292,21 @@ const extensions::Extension* GetExtensionForOrigin(
 #endif
 }
 
+std::unique_ptr<extensions::HostedAppBrowserController>
+MaybeCreateHostedAppController(Browser* browser) {
+#if BUILDFLAG(ENABLE_EXTENSIONS)
+  const std::string extension_id =
+      web_app::GetExtensionIdFromApplicationName(browser->app_name());
+  const Extension* extension =
+      extensions::ExtensionRegistry::Get(browser->profile())
+          ->GetExtensionById(extension_id,
+                             extensions::ExtensionRegistry::EVERYTHING);
+  if (extension && extension->is_hosted_app())
+    return std::make_unique<extensions::HostedAppBrowserController>(browser);
+#endif
+  return nullptr;
+}
+
 }  // namespace
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -381,6 +397,7 @@ Browser::Browser(const CreateParams& params)
       toolbar_model_delegate_(new BrowserToolbarModelDelegate(this)),
       live_tab_context_(new BrowserLiveTabContext(this)),
       synced_window_delegate_(new BrowserSyncedWindowDelegate(this)),
+      hosted_app_controller_(MaybeCreateHostedAppController(this)),
       bookmark_bar_state_(BookmarkBar::HIDDEN),
       command_controller_(new chrome::BrowserCommandController(this)),
       window_has_shown_(false),
@@ -434,11 +451,6 @@ Browser::Browser(const CreateParams& params)
 
   if (search::IsInstantExtendedAPIEnabled() && is_type_tabbed())
     instant_controller_.reset(new BrowserInstantController(this));
-
-  if (extensions::HostedAppBrowserController::IsForHostedApp(this)) {
-    hosted_app_controller_.reset(
-        new extensions::HostedAppBrowserController(this));
-  }
 
   UpdateBookmarkBarState(BOOKMARK_BAR_STATE_CHANGE_INIT);
 
@@ -1520,6 +1532,17 @@ void Browser::AddNewContents(WebContents* source,
                              const gfx::Rect& initial_rect,
                              bool user_gesture,
                              bool* was_blocked) {
+#if defined(OS_MACOSX)
+  // On the Mac, the convention is to turn popups into new tabs when in
+  // fullscreen mode. Only worry about user-initiated fullscreen as showing a
+  // popup in HTML5 fullscreen would have kicked the page out of fullscreen.
+  if (disposition == WindowOpenDisposition::NEW_POPUP &&
+      exclusive_access_manager_->fullscreen_controller()
+          ->IsFullscreenForBrowser()) {
+    disposition = WindowOpenDisposition::NEW_FOREGROUND_TAB;
+  }
+#endif
+
   // At this point the |new_contents| is beyond the popup blocker, but we use
   // the same logic for determining if the popup tracker needs to be attached.
   if (source && PopupBlockerTabHelper::ConsiderForPopupBlocking(disposition))

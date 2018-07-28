@@ -82,7 +82,7 @@ SuggestionsServiceFactory::BuildServiceInstanceFor(
 
   scoped_refptr<base::SequencedTaskRunner> db_task_runner =
       base::CreateSequencedTaskRunnerWithTraits(
-          {base::MayBlock(), base::TaskPriority::BACKGROUND});
+          {base::MayBlock(), base::TaskPriority::BEST_EFFORT});
   std::unique_ptr<leveldb_proto::ProtoDatabaseImpl<ImageData>> db(
       new leveldb_proto::ProtoDatabaseImpl<ImageData>(db_task_runner));
 
@@ -95,9 +95,10 @@ SuggestionsServiceFactory::BuildServiceInstanceFor(
       new ImageManager(std::move(image_fetcher), std::move(db), database_dir));
 
   return std::make_unique<SuggestionsServiceImpl>(
-      identity_manager, sync_service, browser_state->GetRequestContext(),
-      std::move(suggestions_store), std::move(thumbnail_manager),
-      std::move(blacklist_store), base::DefaultTickClock::GetInstance());
+      identity_manager, sync_service,
+      browser_state->GetSharedURLLoaderFactory(), std::move(suggestions_store),
+      std::move(thumbnail_manager), std::move(blacklist_store),
+      base::DefaultTickClock::GetInstance());
 }
 
 void SuggestionsServiceFactory::RegisterBrowserStatePrefs(

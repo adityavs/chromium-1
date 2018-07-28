@@ -9,6 +9,7 @@
 #include "base/feature_list.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/unguessable_token.h"
+#include "content/browser/appcache/appcache_navigation_handle.h"
 #include "content/browser/devtools/shared_worker_devtools_manager.h"
 #include "content/browser/interface_provider_filtering.h"
 #include "content/browser/renderer_interface_binders.h"
@@ -189,8 +190,11 @@ void SharedWorkerHost::Start(
   factory_->CreateSharedWorker(
       std::move(info), pause_on_start, devtools_worker_token,
       renderer_preferences, std::move(content_settings),
-      std::move(service_worker_provider_info), std::move(script_loader_factory),
-      std::move(factory_bundle), std::move(host), std::move(worker_request_),
+      std::move(service_worker_provider_info),
+      appcache_handle_ ? appcache_handle_->appcache_host_id()
+                       : kAppCacheNoHostId,
+      std::move(script_loader_factory), std::move(factory_bundle),
+      std::move(host), std::move(worker_request_),
       std::move(interface_provider));
 
   // Monitor the lifetime of the worker.
@@ -414,6 +418,12 @@ void SharedWorkerHost::AddClient(mojom::SharedWorkerClientPtr client,
 void SharedWorkerHost::BindDevToolsAgent(
     blink::mojom::DevToolsAgentAssociatedRequest request) {
   worker_->BindDevToolsAgent(std::move(request));
+}
+
+void SharedWorkerHost::SetAppCacheHandle(
+    std::unique_ptr<AppCacheNavigationHandle> appcache_handle) {
+  DCHECK_CURRENTLY_ON(BrowserThread::UI);
+  appcache_handle_ = std::move(appcache_handle);
 }
 
 void SharedWorkerHost::OnClientConnectionLost() {

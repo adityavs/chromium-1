@@ -2246,6 +2246,13 @@
             ],
             "experiments": [
                 {
+                    "name": "NewTabPageM68AllBirthday_Enabled",
+                    "enable_features": [
+                        "NewTabPageBackgrounds",
+                        "NewTabPageIcons"
+                    ]
+                },
+                {
                     "name": "NewTabPageAllBirthday_Enabled",
                     "enable_features": [
                         "NewTabPageBackgrounds",
@@ -3903,7 +3910,7 @@
             ]
         }
     ],
-    "SimplifyHttpsIndicator": [
+    "SimplifyHttpsIndicatorPhase2": [
         {
             "platforms": [
                 "chromeos",
@@ -3913,9 +3920,9 @@
             ],
             "experiments": [
                 {
-                    "name": "EvToSecure",
+                    "name": "BothToLock",
                     "params": {
-                        "treatment": "ev-to-secure"
+                        "treatment": "both-to-lock"
                     },
                     "enable_features": [
                         "SimplifyHttpsIndicator"

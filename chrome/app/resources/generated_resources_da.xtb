@@ -138,7 +138,6 @@
 <translation id="1195447618553298278">Ukendt fejl.</translation>
 <translation id="119738088725604856">Tag screenshot af vindue</translation>
 <translation id="1197979282329025000">Der opstod en fejl under hentningen af udskriftsegenskaber for printeren <ph name="PRINTER_NAME" />. Denne printer kunne ikke registreres med <ph name="CLOUD_PRINT_NAME" />.</translation>
-<translation id="1198271701881992799">Lad os komme i gang</translation>
 <translation id="119944043368869598">Ryd alle</translation>
 <translation id="1201402288615127009">Næste</translation>
 <translation id="1202596434010270079">Terminalappen er blevet opdateret. Fjern USB-stikket.</translation>
@@ -263,7 +262,6 @@
 <translation id="1386387014181100145">Davs!</translation>
 <translation id="138784436342154190">Vil du gendanne standardopstartssiden?</translation>
 <translation id="1390548061267426325">Åbn som almindelig fane</translation>
-<translation id="1391150459909312706">Del automatisk det bedste fra Android til din Chromebook.</translation>
 <translation id="1393283411312835250">Sol og skyer</translation>
 <translation id="1395262318152388157">Søgeskyder</translation>
 <translation id="1395730723686586365">Opdateringsprogrammet er startet</translation>
@@ -2552,7 +2550,6 @@ Vil du starte <ph name="CONTROL_PANEL_APPLET_NAME" />?</translation>
 <translation id="4955814292505481804">Årligt</translation>
 <translation id="4957949153200969297">Aktivér kun funktioner, der er relateret til <ph name="IDS_SHORT_PRODUCT_NAME" />-synkronisering</translation>
 <translation id="4960294539892203357"><ph name="WINDOW_TITLE" /> – <ph name="PROFILE_NAME" /></translation>
-<translation id="4961000125720751066">Hav dine kort samlet ét sted</translation>
 <translation id="496226124210045887">Den mappe, du har valgt, indeholder følsomme filer. Vil du give "$1" permanent læseadgang til denne mappe?</translation>
 <translation id="4964455510556214366">Opstilling</translation>
 <translation id="4964673849688379040">Kontrollerer...</translation>
@@ -4154,7 +4151,6 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="7410344089573941623">Spørg, hvis <ph name="HOST" /> vil have adgang til dit kamera og din mikrofon</translation>
 <translation id="741204030948306876">Ja tak</translation>
 <translation id="7412226954991670867">GPU-hukommelse</translation>
-<translation id="7413455776853560343">Tilpas baggrund</translation>
 <translation id="7414464185801331860">18x</translation>
 <translation id="7416362041876611053">Ukendt netværksfejl.</translation>
 <translation id="7417705661718309329">Google-kort</translation>
@@ -4355,7 +4351,6 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="7758143121000533418">Family Link</translation>
 <translation id="7758450972308449809">Tilpas grænserne for din skærm</translation>
 <translation id="7760004034676677601">Var det den opstartsside, du havde forventet?</translation>
-<translation id="7760756088376329221">Vælg et Google Fotos-album</translation>
 <translation id="7764225426217299476">Tilføj adresse</translation>
 <translation id="7764256770584298012"><ph name="DOWNLOAD_RECEIVED" /> fra <ph name="DOWNLOAD_DOMAIN" /></translation>
 <translation id="7765158879357617694">Flyt</translation>
@@ -4504,7 +4499,6 @@ slettes permanent, når den administrerede bruger fjernes. Besøgte websites og 
 <translation id="7930294771522048157">Her kan du se dine gemte betalingsmetoder</translation>
 <translation id="79312157130859720"><ph name="APP_NAME" /> deler din skærm og lyd.</translation>
 <translation id="7931318309563332511">ukendt</translation>
-<translation id="7932099209000254951">Tilknyt din telefon, så du kan sende sms-beskeder fra din computer, dele din telefons internetforbindelse og låse skærmen op på din Chromebook.<ph name="FOOTNOTE_POINTER" /> <ph name="LINK_BEGIN" />Få flere oplysninger<ph name="LINK_END" /></translation>
 <translation id="7934414805353235750"><ph name="URL" /> vil afspille beskyttet indhold. Din enheds identitet bekræftes af Google.</translation>
 <translation id="793531125873261495">Der opstod en fejl under forsøget på at downloade den virtuelle maskine. Prøv igen.</translation>
 <translation id="7938594894617528435">I øjeblikket offline</translation>

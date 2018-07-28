@@ -321,8 +321,8 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
       delayed_update_policy_runner_(
           base::BindRepeating(&MainThreadSchedulerImpl::UpdatePolicy,
                               base::Unretained(this)),
-          TaskQueueWithTaskType::Create(helper_.ControlMainThreadTaskQueue(),
-                                        TaskType::kMainThreadTaskQueueControl)),
+          helper_.ControlMainThreadTaskQueue()->CreateTaskRunner(
+              TaskType::kMainThreadTaskQueueControl)),
       queueing_time_estimator_(this, kQueueingTimeWindowDuration, 20),
       main_thread_only_(this,
                         compositor_task_queue_,
@@ -346,17 +346,16 @@ MainThreadSchedulerImpl::MainThreadSchedulerImpl(
   ipc_task_queue_ = NewTaskQueue(MainThreadTaskQueue::QueueCreationParams(
       MainThreadTaskQueue::QueueType::kIPC));
 
-  v8_task_runner_ = TaskQueueWithTaskType::Create(
-      v8_task_queue_, TaskType::kMainThreadTaskQueueV8);
-  compositor_task_runner_ = TaskQueueWithTaskType::Create(
-      compositor_task_queue_, TaskType::kMainThreadTaskQueueCompositor);
-  control_task_runner_ =
-      TaskQueueWithTaskType::Create(helper_.ControlMainThreadTaskQueue(),
-                                    TaskType::kMainThreadTaskQueueControl);
-  input_task_runner_ = TaskQueueWithTaskType::Create(
-      input_task_queue_, TaskType::kMainThreadTaskQueueInput);
-  ipc_task_runner_ = TaskQueueWithTaskType::Create(
-      ipc_task_queue_, TaskType::kMainThreadTaskQueueIPC);
+  v8_task_runner_ =
+      v8_task_queue_->CreateTaskRunner(TaskType::kMainThreadTaskQueueV8);
+  compositor_task_runner_ = compositor_task_queue_->CreateTaskRunner(
+      TaskType::kMainThreadTaskQueueCompositor);
+  control_task_runner_ = helper_.ControlMainThreadTaskQueue()->CreateTaskRunner(
+      TaskType::kMainThreadTaskQueueControl);
+  input_task_runner_ =
+      input_task_queue_->CreateTaskRunner(TaskType::kMainThreadTaskQueueInput);
+  ipc_task_runner_ =
+      ipc_task_queue_->CreateTaskRunner(TaskType::kMainThreadTaskQueueIPC);
 
   // TaskQueueThrottler requires some task runners, then initialize
   // TaskQueueThrottler after task queues/runners are initialized.
@@ -712,6 +711,9 @@ MainThreadSchedulerImpl::SchedulingSettings::SchedulingSettings() {
 
   experiment_only_when_loading =
       base::FeatureList::IsEnabled(kExperimentOnlyWhenLoading);
+
+  FrameSchedulerImpl::InitializeTaskTypeQueueTraitsMap(
+      frame_task_types_to_queue_traits);
 }
 
 MainThreadSchedulerImpl::AnyThread::~AnyThread() = default;
@@ -2612,38 +2614,46 @@ void MainThreadSchedulerImpl::RecordTaskUkm(
     return;
 
   if (queue && queue->GetFrameScheduler()) {
-    RecordTaskUkmImpl(queue, task, task_timing,
-                      static_cast<PageSchedulerImpl*>(
-                          queue->GetFrameScheduler()->GetPageScheduler()),
-                      1);
+    auto status = RecordTaskUkmImpl(queue, task, task_timing,
+                                    queue->GetFrameScheduler(), true);
+    UMA_HISTOGRAM_ENUMERATION(
+        "Scheduler.Experimental.Renderer.UkmRecordingStatus", status,
+        UkmRecordingStatus::kCount);
     return;
   }
 
   for (PageSchedulerImpl* page_scheduler : main_thread_only().page_schedulers) {
-    RecordTaskUkmImpl(queue, task, task_timing, page_scheduler,
-                      main_thread_only().page_schedulers.size());
+    auto status = RecordTaskUkmImpl(
+        queue, task, task_timing,
+        page_scheduler->SelectFrameForUkmAttribution(), false);
+    UMA_HISTOGRAM_ENUMERATION(
+        "Scheduler.Experimental.Renderer.UkmRecordingStatus", status,
+        UkmRecordingStatus::kCount);
   }
 }
 
-void MainThreadSchedulerImpl::RecordTaskUkmImpl(
+UkmRecordingStatus MainThreadSchedulerImpl::RecordTaskUkmImpl(
     MainThreadTaskQueue* queue,
     const TaskQueue::Task& task,
     const TaskQueue::TaskTiming& task_timing,
-    PageSchedulerImpl* page_scheduler,
-    size_t page_schedulers_to_attribute) {
-  // Skip tasks which have deleted the page scheduler.
-  if (!page_scheduler)
-    return;
+    FrameSchedulerImpl* frame_scheduler,
+    bool precise_attribution) {
+  // Skip tasks which have deleted the frame or the page scheduler.
+  if (!frame_scheduler)
+    return UkmRecordingStatus::kErrorMissingFrame;
+  if (!frame_scheduler->GetPageScheduler())
+    return UkmRecordingStatus::kErrorDetachedFrame;
 
-  ukm::UkmRecorder* ukm_recorder = page_scheduler->GetUkmRecorder();
+  ukm::UkmRecorder* ukm_recorder = frame_scheduler->GetUkmRecorder();
   // OOPIFs are not supported.
   if (!ukm_recorder)
-    return;
+    return UkmRecordingStatus::kErrorMissingUkmRecorder;
 
   ukm::builders::RendererSchedulerTask builder(
-      page_scheduler->GetUkmSourceId());
+      frame_scheduler->GetUkmSourceId());
 
-  builder.SetPageSchedulers(page_schedulers_to_attribute);
+  builder.SetPageSchedulers(main_thread_only().page_schedulers.size());
+
   builder.SetRendererBackgrounded(main_thread_only().renderer_backgrounded);
   builder.SetRendererHidden(main_thread_only().renderer_hidden);
   builder.SetRendererAudible(main_thread_only().is_audio_playing);
@@ -2655,6 +2665,7 @@ void MainThreadSchedulerImpl::RecordTaskUkmImpl(
   builder.SetFrameStatus(static_cast<int>(
       GetFrameStatus(queue ? queue->GetFrameScheduler() : nullptr)));
   builder.SetTaskDuration(task_timing.wall_duration().InMicroseconds());
+  builder.SetIsOOPIF(!frame_scheduler->GetPageScheduler()->IsMainFrameLocal());
 
   if (main_thread_only().renderer_backgrounded) {
     base::TimeDelta time_since_backgrounded =
@@ -2679,6 +2690,8 @@ void MainThreadSchedulerImpl::RecordTaskUkmImpl(
   }
 
   builder.Record(ukm_recorder);
+
+  return UkmRecordingStatus::kSuccess;
 }
 
 TaskQueue::QueuePriority MainThreadSchedulerImpl::ComputePriority(

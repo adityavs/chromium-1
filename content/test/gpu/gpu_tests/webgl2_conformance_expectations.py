@@ -30,6 +30,12 @@ class WebGL2ConformanceExpectations(WebGLConformanceExpectations):
     self.Skip('WebglExtension_WEBGL_compressed_texture_s3tc_srgb',
         ['win', 'mac', 'linux'])
     self.Skip('WebglExtension_EXT_disjoint_timer_query_webgl2', bug=808744)
+    self.Skip('WebglExtension_WEBGL_multiview',
+        ['mac', 'linux', 'android'], bug=864524)
+
+    # The multiview extension is only expected to be supported through ANGLE.
+    self.Skip('WebglExtension_WEBGL_multiview',
+        ['win', 'no_passthrough'], bug=864524)
 
     # ========================
     # Conformance expectations
@@ -637,7 +643,7 @@ class WebGL2ConformanceExpectations(WebGLConformanceExpectations):
     # self.Fail('conformance2/rendering/texture-switch-performance.html',
     #     ['mac', 'amd'], bug=735483)
     self.Fail('deqp/functional/gles3/shaderoperator/common_functions.html',
-        ['sierra', 'amd'], bug=820225)
+        ['mac', 'amd'], bug=820225)
     self.Fail('deqp/functional/gles3/transformfeedback/' +
         'array_interleaved_lines.html',
         ['sierra', 'amd'], bug=483282)

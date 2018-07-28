@@ -121,7 +121,7 @@ ServiceWorkerControlleeRequestHandler::
 }
 
 void ServiceWorkerControlleeRequestHandler::MaybeScheduleUpdate() {
-  if (!provider_host_ || !provider_host_->active_version())
+  if (!provider_host_ || !provider_host_->controller())
     return;
 
   if (blink::ServiceWorkerUtils::IsServicificationEnabled()) {
@@ -145,9 +145,9 @@ void ServiceWorkerControlleeRequestHandler::MaybeScheduleUpdate() {
     return;
 
   if (is_main_resource_load_)
-    provider_host_->active_version()->ScheduleUpdate();
+    provider_host_->controller()->ScheduleUpdate();
   else
-    provider_host_->active_version()->DeferScheduledUpdate();
+    provider_host_->controller()->DeferScheduledUpdate();
 }
 
 net::URLRequestJob* ServiceWorkerControlleeRequestHandler::MaybeCreateJob(
@@ -277,7 +277,7 @@ ServiceWorkerControlleeRequestHandler::MaybeCreateSubresourceLoaderParams() {
 
   // DidLookupRegistrationForMainResource() for the request didn't find
   // a matching service worker for this request, and
-  // ServiceWorkerProviderHost::AssociateRegistration() was not called.
+  // ServiceWorkerProviderHost::SetControllerRegistration() was not called.
   if (!provider_host_ || !provider_host_->controller())
     return base::nullopt;
 
@@ -315,9 +315,10 @@ void ServiceWorkerControlleeRequestHandler::PrepareForMainResource(
       "ServiceWorker",
       "ServiceWorkerControlleeRequestHandler::PrepareForMainResource",
       url_job_.get(), "URL", url.spec());
-  // The corresponding provider_host may already have associated a registration
-  // in redirect case, unassociate it now.
-  provider_host_->DisassociateRegistration(false /* notify_controllerchange */);
+  // The provider host may already have set a controller in redirect case,
+  // unset it now.
+  provider_host_->SetControllerRegistration(
+      nullptr, false /* notify_controllerchange */);
 
   // Also prevent a registration from claiming this host while it's not
   // yet execution ready.
@@ -506,8 +507,8 @@ void ServiceWorkerControlleeRequestHandler::
     return;
   }
 
-  provider_host_->AssociateRegistration(registration.get(),
-                                        false /* notify_controllerchange */);
+  provider_host_->SetControllerRegistration(
+      registration, false /* notify_controllerchange */);
 
   // TODO(falken): Change these to DCHECK if it holds, or else figure out
   // how this happens.
@@ -606,14 +607,13 @@ void ServiceWorkerControlleeRequestHandler::PrepareForSubResource() {
   // because a permanent failure occurred when trying to start it.
   //
   // As this is an exceptional case, just error out.
-  // TODO(falken): Figure out if |active_version| can change to |controller| and
-  // do it or document the findings.
-  if (!provider_host_->active_version()) {
+  ServiceWorkerVersion* controller = provider_host_->controller();
+  if (!controller) {
     url_job_->FailDueToLostController();
     return;
   }
 
-  MaybeForwardToServiceWorker(url_job_.get(), provider_host_->active_version());
+  MaybeForwardToServiceWorker(url_job_.get(), controller);
 }
 
 void ServiceWorkerControlleeRequestHandler::OnPrepareToRestart() {
@@ -628,11 +628,11 @@ ServiceWorkerControlleeRequestHandler::GetServiceWorkerVersion(
     *result = ServiceWorkerMetrics::REQUEST_JOB_ERROR_NO_PROVIDER_HOST;
     return nullptr;
   }
-  if (!provider_host_->active_version()) {
+  if (!provider_host_->controller()) {
     *result = ServiceWorkerMetrics::REQUEST_JOB_ERROR_NO_ACTIVE_VERSION;
     return nullptr;
   }
-  return provider_host_->active_version();
+  return provider_host_->controller();
 }
 
 bool ServiceWorkerControlleeRequestHandler::RequestStillValid(

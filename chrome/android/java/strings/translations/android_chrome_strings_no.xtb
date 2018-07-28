@@ -743,7 +743,6 @@ Noen nettsteder kan for eksempel svare på denne forespørselen ved å vise deg 
 <translation id="7128222689758636196">Tillat for den aktive søkemotoren</translation>
 <translation id="7138678301420049075">Annet</translation>
 <translation id="7141896414559753902">Blokkér nettsteder fra å vise forgrunnsvinduer og viderekoblinger (anbefales)</translation>
-<translation id="7144878232160441200">Prøv på nytt</translation>
 <translation id="7149893636342594995">Siste døgn</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> kB</translation>
 <translation id="7177466738963138057">Du kan endre dette senere i Innstillinger</translation>
@@ -973,6 +972,7 @@ For å få nye lisenser må du koble deg til Internett og spille av innholdet du
 <translation id="9100939710791843300">Trykk på startsideknappen for å laste inn den nye fanesiden og se foreslåtte artikler</translation>
 <translation id="9133515669113036225">Tilbakestill enhetens legitimasjon</translation>
 <translation id="9133703968756164531"><ph name="ITEM_NAME" /> (<ph name="ITEM_ID" />)</translation>
+<translation id="9137013805542155359">Vis original</translation>
 <translation id="9139068048179869749">Spør før nettsteder får sende varsler (anbefales)</translation>
 <translation id="9155898266292537608">Du kan også søke med et kjapt trykk på et ord</translation>
 <translation id="9188680907066685419">Logg av administrert konto</translation>
@@ -983,7 +983,6 @@ For å få nye lisenser må du koble deg til Internett og spille av innholdet du
 <translation id="932327136139879170">Gå til startsiden</translation>
 <translation id="932599481871055447">Spar data og surf raskere</translation>
 <translation id="938850635132480979">Feil: <ph name="ERROR_CODE" /></translation>
-<translation id="945360730947989880">Ikke nok plass på SD-kortet</translation>
 <translation id="945522503751344254">Gi tilbakemelding</translation>
 <translation id="945632385593298557">Tilgang til mikrofonen din</translation>
 <translation id="951339005376969845">Slett de eksisterende dataene. Du kan hente dem ut ved å bytte tilbake til <ph name="FROM_ACCOUNT" />.</translation>

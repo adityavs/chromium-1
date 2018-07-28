@@ -262,7 +262,7 @@ class TabStrip : public views::View,
   SkColor GetTabBackgroundColor(TabState state) const override;
   SkColor GetTabForegroundColor(TabState state) const override;
   base::string16 GetAccessibleTabName(const Tab* tab) const override;
-  int GetBackgroundResourceId(bool* custom_image) const override;
+  int GetBackgroundResourceId(bool* has_custom_image) const override;
   gfx::Rect GetTabAnimationTargetBounds(const Tab* tab) override;
 
   // MouseWatcherListener:
@@ -450,9 +450,6 @@ class TabStrip : public views::View,
   // Finds |tab| in the |tab_closing_map_| and returns a pair of iterators
   // indicating precisely where it is.
   FindClosingTabResult FindClosingTab(const Tab* tab);
-
-  // Paints all the tabs in |tabs_closing_map_[index]|.
-  void PaintClosingTabs(int index, const views::PaintInfo& paint_info);
 
   // Invoked when a mouse event occurs over |source|. Potentially switches the
   // |stacked_layout_|.

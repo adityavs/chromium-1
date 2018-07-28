@@ -115,6 +115,14 @@ int GetIncognitoId(int id) {
       return ThemeProperties::COLOR_FRAME_INCOGNITO;
     case ThemeProperties::COLOR_FRAME_INACTIVE:
       return ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE;
+    case ThemeProperties::COLOR_BACKGROUND_TAB:
+      return ThemeProperties::COLOR_BACKGROUND_TAB_INCOGNITO;
+    case ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE:
+      return ThemeProperties::COLOR_BACKGROUND_TAB_INCOGNITO_INACTIVE;
+    case ThemeProperties::COLOR_BACKGROUND_TAB_TEXT:
+      return ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO;
+    case ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INACTIVE:
+      return ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO_INACTIVE;
     default:
       return id;
   }
@@ -482,7 +490,8 @@ SkColor ThemeService::GetDefaultColor(int id, bool incognito) const {
           GetColor(ThemeProperties::COLOR_TOOLBAR_BUTTON_ICON, incognito),
           0x4D);
     }
-    case ThemeProperties::COLOR_BACKGROUND_TAB: {
+    case ThemeProperties::COLOR_BACKGROUND_TAB:
+    case ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE: {
       // Touchable hardcodes the background tab color. This can break custom
       // themes, but touchable is replaced by touchable refresh, which doesn't
       // use the default background tab color at all, so this issue won't be
@@ -673,16 +682,16 @@ SkColor ThemeService::GetSeparatorColor(SkColor tab_color,
   // However, if the frame is already very dark or very light, respectively,
   // this won't contrast sufficiently with the frame color, so we'll need to
   // reverse when we're lightening and darkening.
-  const double tab_luminance = color_utils::GetRelativeLuminance(tab_color);
-  const double frame_luminance = color_utils::GetRelativeLuminance(frame_color);
+  const float tab_luminance = color_utils::GetRelativeLuminance(tab_color);
+  const float frame_luminance = color_utils::GetRelativeLuminance(frame_color);
   const bool lighten = tab_luminance < frame_luminance;
   SkColor separator_color = lighten ? SK_ColorWHITE : SK_ColorBLACK;
-  double separator_luminance = color_utils::GetRelativeLuminance(
+  float separator_luminance = color_utils::GetRelativeLuminance(
       color_utils::AlphaBlend(separator_color, frame_color, kAlpha));
   // The minimum contrast ratio here is just under the ~1.1469 in the default MD
   // incognito theme.  We want the separator to still darken the frame in that
   // theme, but that's about as low of contrast as we're willing to accept.
-  const double kMinContrastRatio = 1.1465;
+  const float kMinContrastRatio = 1.1465f;
   if (color_utils::GetContrastRatio(separator_luminance, frame_luminance) >=
       kMinContrastRatio)
     return SkColorSetA(separator_color, kAlpha);
@@ -700,7 +709,7 @@ SkColor ThemeService::GetSeparatorColor(SkColor tab_color,
   // The reversed separator doesn't contrast enough with the tab.  Compute the
   // resulting luminance from adjusting the tab color, instead of the frame
   // color, by the separator color.
-  const double target_luminance = color_utils::GetRelativeLuminance(
+  const float target_luminance = color_utils::GetRelativeLuminance(
       color_utils::AlphaBlend(separator_color, tab_color, kAlpha));
 
   // Now try to compute an alpha for the separator such that, when blended with
@@ -709,7 +718,7 @@ SkColor ThemeService::GetSeparatorColor(SkColor tab_color,
   // possible range of alpha values.
   SkAlpha alpha = 128;
   for (int delta = lighten ? 64 : -64; delta != 0; delta /= 2) {
-    const double luminance = color_utils::GetRelativeLuminance(
+    const float luminance = color_utils::GetRelativeLuminance(
         color_utils::AlphaBlend(separator_color, frame_color, alpha));
     if (luminance == target_luminance)
       break;

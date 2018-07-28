@@ -11,6 +11,7 @@
 #include "base/sha1.h"
 #include "components/bookmarks/browser/bookmark_node.h"
 #include "components/sync/base/time.h"
+#include "components/sync/base/unique_position.h"
 #include "components/sync/model/entity_data.h"
 
 namespace sync_bookmarks {
@@ -42,14 +43,17 @@ bool SyncedBookmarkTracker::Entity::IsUnsynced() const {
   return metadata_->sequence_number() > metadata_->acked_sequence_number();
 }
 
-bool SyncedBookmarkTracker::Entity::MatchesData(
+bool SyncedBookmarkTracker::Entity::MatchesDataIgnoringParent(
     const syncer::EntityData& data) const {
-  // TODO(crbug.com/516866): Check parent id and unique position.
   // TODO(crbug.com/516866): Compare the actual specifics instead of the
   // specifics hash.
   if (metadata_->is_deleted() || data.is_deleted()) {
     // In case of deletion, no need to check the specifics.
     return metadata_->is_deleted() == data.is_deleted();
+  }
+  if (!syncer::UniquePosition::FromProto(metadata_->unique_position())
+           .Equals(syncer::UniquePosition::FromProto(data.unique_position))) {
+    return false;
   }
   return MatchesSpecificsHash(data.specifics);
 }
@@ -214,7 +218,6 @@ bool SyncedBookmarkTracker::HasLocalChanges() const {
 
 std::vector<const SyncedBookmarkTracker::Entity*>
 SyncedBookmarkTracker::GetEntitiesWithLocalChanges(size_t max_entries) const {
-  // TODO(crbug.com/516866): Return no more than |max_entries| after sorting.
   std::vector<const SyncedBookmarkTracker::Entity*> entities_with_local_changes;
   // Entities with local non deletions should be sorted such that parent
   // creation/update comes before child creation/update.
@@ -234,6 +237,13 @@ SyncedBookmarkTracker::GetEntitiesWithLocalChanges(size_t max_entries) const {
       ReorderUnsyncedEntitiesExceptDeletions(entities_with_local_changes);
   for (const Entity* tombstone_entity : ordered_local_tombstones_) {
     ordered_local_changes.push_back(tombstone_entity);
+  }
+  if (ordered_local_changes.size() > max_entries) {
+    // TODO(crbug.com/516866): Should be smart and stop building the vector
+    // when |max_entries| is reached.
+    return std::vector<const SyncedBookmarkTracker::Entity*>(
+        ordered_local_changes.begin(),
+        ordered_local_changes.begin() + max_entries);
   }
   return ordered_local_changes;
 }

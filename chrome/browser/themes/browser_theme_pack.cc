@@ -30,6 +30,7 @@
 #include "ui/base/resource/data_pack.h"
 #include "ui/gfx/canvas.h"
 #include "ui/gfx/codec/png_codec.h"
+#include "ui/gfx/color_analysis.h"
 #include "ui/gfx/geometry/safe_integer_conversions.h"
 #include "ui/gfx/geometry/size_conversions.h"
 #include "ui/gfx/image/canvas_image_source.h"
@@ -82,6 +83,8 @@ const int PRS_THEME_FRAME_OVERLAY_INACTIVE = 11;
 const int PRS_THEME_BUTTON_BACKGROUND = 12;
 const int PRS_THEME_NTP_ATTRIBUTION = 13;
 const int PRS_THEME_WINDOW_CONTROL_BACKGROUND = 14;
+const int PRS_THEME_TAB_BACKGROUND_INACTIVE = 15;
+const int PRS_THEME_TAB_BACKGROUND_INCOGNITO_INACTIVE = 16;
 
 struct PersistingImagesTable {
   // A non-changing integer ID meant to be saved in theme packs. This ID must
@@ -110,10 +113,13 @@ const PersistingImagesTable kPersistingImages[] = {
     {PRS_THEME_TOOLBAR, IDR_THEME_TOOLBAR, "theme_toolbar"},
     {PRS_THEME_TAB_BACKGROUND, IDR_THEME_TAB_BACKGROUND,
      "theme_tab_background"},
-#if !defined(OS_MACOSX)
+    {PRS_THEME_TAB_BACKGROUND_INACTIVE, IDR_THEME_TAB_BACKGROUND_INACTIVE,
+     "theme_tab_background_inactive"},
     {PRS_THEME_TAB_BACKGROUND_INCOGNITO, IDR_THEME_TAB_BACKGROUND_INCOGNITO,
      "theme_tab_background_incognito"},
-#endif
+    {PRS_THEME_TAB_BACKGROUND_INCOGNITO_INACTIVE,
+     IDR_THEME_TAB_BACKGROUND_INCOGNITO_INACTIVE,
+     "theme_tab_background_incognito_inactive"},
     {PRS_THEME_TAB_BACKGROUND_V, IDR_THEME_TAB_BACKGROUND_V,
      "theme_tab_background_v"},
     {PRS_THEME_NTP_BACKGROUND, IDR_THEME_NTP_BACKGROUND,
@@ -225,9 +231,20 @@ const StringToIntTable kColorTable[] = {
   { "frame_incognito", ThemeProperties::COLOR_FRAME_INCOGNITO },
   { "frame_incognito_inactive",
     ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE },
+  { "background_tab", ThemeProperties::COLOR_BACKGROUND_TAB },
+  { "background_tab_inactive", ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE },
+  { "background_tab_incognito", ThemeProperties::COLOR_BACKGROUND_TAB },
+  { "background_tab_incognito_inactive",
+    ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE },
   { "toolbar", ThemeProperties::COLOR_TOOLBAR },
   { "tab_text", ThemeProperties::COLOR_TAB_TEXT },
   { "tab_background_text", ThemeProperties::COLOR_BACKGROUND_TAB_TEXT },
+  { "tab_background_text_inactive",
+    ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INACTIVE },
+  { "tab_background_text_incognito",
+    ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO },
+  { "tab_background_text_incognito_inactive",
+    ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO_INACTIVE },
   { "bookmark_text", ThemeProperties::COLOR_BOOKMARK_TEXT },
   { "ntp_background", ThemeProperties::COLOR_NTP_BACKGROUND },
   { "ntp_text", ThemeProperties::COLOR_NTP_TEXT },
@@ -257,24 +274,6 @@ int GetIntForString(const std::string& key,
 
   return -1;
 }
-
-struct IntToIntTable {
-  int key;
-  int value;
-};
-
-// Mapping used in CreateFrameImages() to associate frame images with the
-// tint ID that should maybe be applied to it.
-const IntToIntTable kFrameTintMap[] = {
-  { PRS_THEME_FRAME, ThemeProperties::TINT_FRAME },
-  { PRS_THEME_FRAME_INACTIVE, ThemeProperties::TINT_FRAME_INACTIVE },
-  { PRS_THEME_FRAME_OVERLAY, ThemeProperties::TINT_FRAME },
-  { PRS_THEME_FRAME_OVERLAY_INACTIVE,
-    ThemeProperties::TINT_FRAME_INACTIVE },
-  { PRS_THEME_FRAME_INCOGNITO, ThemeProperties::TINT_FRAME_INCOGNITO },
-  { PRS_THEME_FRAME_INCOGNITO_INACTIVE,
-    ThemeProperties::TINT_FRAME_INCOGNITO_INACTIVE },
-};
 
 struct CropEntry {
   int prs_id;
@@ -308,7 +307,7 @@ const struct CropEntry kImagesToCrop[] = {
 
 // A list of images that don't need tinting or any other modification and can
 // be byte-copied directly into the finished DataPack. This should contain the
-// persistent IDs for all themeable image IDs that aren't in kFrameTintMap,
+// persistent IDs for all themeable image IDs that aren't in kFrameValues,
 // kTabBackgroundMap or kImagesToCrop.
 const int kPreloadIDs[] = {
   PRS_THEME_NTP_BACKGROUND,
@@ -343,15 +342,6 @@ scoped_refptr<base::RefCountedMemory> ReadFileData(const base::FilePath& path) {
   }
 
   return nullptr;
-}
-
-// Shifts an image's HSL values. The caller is responsible for deleting
-// the returned image.
-gfx::Image CreateHSLShiftedImage(const gfx::Image& image,
-                                 const color_utils::HSL& hsl_shift) {
-  const gfx::ImageSkia* src_image = image.ToImageSkia();
-  return gfx::Image(gfx::ImageSkiaOperations::CreateHSLShiftedImage(
-      *src_image, hsl_shift));
 }
 
 // Computes a bitmap at one scale from a bitmap at a different scale.
@@ -545,6 +535,37 @@ BrowserThemePack::~BrowserThemePack() {
   }
 }
 
+void BrowserThemePack::SetColor(int id, SkColor color) {
+  DCHECK(colors_);
+
+  int first_available_color = -1;
+  for (size_t i = 0; i < kColorTableLength; ++i) {
+    if (colors_[i].id == id) {
+      colors_[i].color = color;
+      return;
+    }
+    if (colors_[i].id == -1 && first_available_color == -1)
+      first_available_color = i;
+  }
+
+  DCHECK_NE(-1, first_available_color);
+  colors_[first_available_color].id = id;
+  colors_[first_available_color].color = color;
+}
+
+void BrowserThemePack::ComputeColorFromImage(int color_id,
+                                             int height,
+                                             const gfx::Image& image) {
+  SkColor temp_color;
+  if (!GetColor(color_id, &temp_color)) {
+    // Include all colors in the analysis.
+    constexpr color_utils::HSL kNoBounds = {-1, -1, -1};
+    const SkColor color = color_utils::CalculateKMeanColorOfBitmap(
+        *image.ToSkBitmap(), height, kNoBounds, kNoBounds, false);
+    SetColor(color_id, color);
+  }
+}
+
 // static
 void BrowserThemePack::BuildFromExtension(
     const extensions::Extension* extension,
@@ -570,7 +591,22 @@ void BrowserThemePack::BuildFromExtension(
   if (!pack->LoadRawBitmapsTo(file_paths, &pack->images_))
     return;
 
-  pack->CreateImages(&pack->images_);
+  pack->CropImages(&pack->images_);
+
+  // Create frame images, and generate frame colors from images where relevant.
+  // This must be done after reading colors from JSON (so they aren't
+  // overwritten).
+  pack->CreateFrameImagesAndColors(&pack->images_);
+
+  // Generate any missing frame colors.  This must be done after generating
+  // colors from the frame images, so only colors with no matching images are
+  // generated.
+  pack->GenerateFrameColors();
+
+  // Create the tab background images, and generate colors where relevant.  This
+  // must be done after all frame colors are set, since they are used when
+  // creating these.
+  pack->CreateTabBackgroundImagesAndColors(&pack->images_);
 
   // Make sure the |images_on_file_thread_| has bitmaps for supported
   // scale factors before passing to FILE thread.
@@ -915,7 +951,21 @@ void BrowserThemePack::BuildColorsFromJSON(
   std::map<int, SkColor> temp_colors;
   if (colors_value)
     ReadColorsFromJSON(colors_value, &temp_colors);
-  GenerateMissingColors(&temp_colors);
+
+  // Generate inactive background tab text colors if active colors were
+  // specified.
+  static constexpr int kColorsToCopy[][2] = {
+    {ThemeProperties::COLOR_BACKGROUND_TAB_TEXT,
+     ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INACTIVE},
+    {ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO,
+     ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INCOGNITO_INACTIVE},
+  };
+  for (const int* text_colors : kColorsToCopy) {
+    const auto src_it = temp_colors.find(text_colors[0]);
+    if (src_it != temp_colors.end() &&
+        !base::ContainsKey(temp_colors, text_colors[1]))
+      temp_colors[text_colors[1]] = src_it->second;
+  }
 
   // Copy data from the intermediary data structure to the array.
   size_t count = 0;
@@ -969,40 +1019,6 @@ void BrowserThemePack::ReadColorsFromJSON(
         }
       }
     }
-  }
-}
-
-void BrowserThemePack::GenerateMissingColors(
-    std::map<int, SkColor>* colors) {
-  // Generate frame colors, if missing. (See GenerateFrameColors()).
-  SkColor frame;
-  std::map<int, SkColor>::const_iterator it =
-      colors->find(ThemeProperties::COLOR_FRAME);
-  if (it != colors->end()) {
-    frame = it->second;
-  } else {
-    frame =
-        ThemeProperties::GetDefaultColor(ThemeProperties::COLOR_FRAME, false);
-  }
-
-  if (!colors->count(ThemeProperties::COLOR_FRAME)) {
-    (*colors)[ThemeProperties::COLOR_FRAME] =
-        HSLShift(frame, GetTintInternal(ThemeProperties::TINT_FRAME));
-  }
-  if (!colors->count(ThemeProperties::COLOR_FRAME_INACTIVE)) {
-    (*colors)[ThemeProperties::COLOR_FRAME_INACTIVE] =
-        HSLShift(frame, GetTintInternal(
-            ThemeProperties::TINT_FRAME_INACTIVE));
-  }
-  if (!colors->count(ThemeProperties::COLOR_FRAME_INCOGNITO)) {
-    (*colors)[ThemeProperties::COLOR_FRAME_INCOGNITO] =
-        HSLShift(frame, GetTintInternal(
-            ThemeProperties::TINT_FRAME_INCOGNITO));
-  }
-  if (!colors->count(ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE)) {
-    (*colors)[ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE] =
-        HSLShift(frame, GetTintInternal(
-            ThemeProperties::TINT_FRAME_INCOGNITO_INACTIVE));
   }
 }
 
@@ -1185,12 +1201,6 @@ bool BrowserThemePack::LoadRawBitmapsTo(
   return true;
 }
 
-void BrowserThemePack::CreateImages(ImageCache* images) const {
-  CropImages(images);
-  CreateFrameImages(images);
-  CreateTabBackgroundImages(images);
-}
-
 void BrowserThemePack::CropImages(ImageCache* images) const {
   bool has_frame_border = HasFrameBorder();
   for (size_t i = 0; i < arraysize(kImagesToCrop); ++i) {
@@ -1209,61 +1219,156 @@ void BrowserThemePack::CropImages(ImageCache* images) const {
   }
 }
 
-void BrowserThemePack::CreateFrameImages(ImageCache* images) const {
+void BrowserThemePack::CreateFrameImagesAndColors(ImageCache* images) {
+  static constexpr struct FrameValues {
+    int prs_id;
+    int tint_id;
+    base::Optional<int> color_id;
+  } kFrameValues[] = {
+      {PRS_THEME_FRAME, ThemeProperties::TINT_FRAME,
+       ThemeProperties::COLOR_FRAME},
+      {PRS_THEME_FRAME_INACTIVE, ThemeProperties::TINT_FRAME_INACTIVE,
+       ThemeProperties::COLOR_FRAME_INACTIVE},
+      {PRS_THEME_FRAME_OVERLAY, ThemeProperties::TINT_FRAME, base::nullopt},
+      {PRS_THEME_FRAME_OVERLAY_INACTIVE, ThemeProperties::TINT_FRAME_INACTIVE,
+       base::nullopt},
+      {PRS_THEME_FRAME_INCOGNITO, ThemeProperties::TINT_FRAME_INCOGNITO,
+       ThemeProperties::COLOR_FRAME_INCOGNITO},
+      {PRS_THEME_FRAME_INCOGNITO_INACTIVE,
+       ThemeProperties::TINT_FRAME_INCOGNITO_INACTIVE,
+       ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE},
+  };
+
   // Create all the output images in a separate cache and move them back into
   // the input images because there can be name collisions.
   ImageCache temp_output;
 
-  for (size_t i = 0; i < arraysize(kFrameTintMap); ++i) {
-    int prs_id = kFrameTintMap[i].key;
+  for (const auto frame_values : kFrameValues) {
+    int src_id = frame_values.prs_id;
     // If the theme doesn't provide an image, attempt to fall back to one it
     // does.
-    if (!images->count(prs_id)) {
+    if (!images->count(src_id)) {
       // Fall back from inactive overlay to active overlay.
-      if (prs_id == PRS_THEME_FRAME_OVERLAY_INACTIVE)
-        prs_id = PRS_THEME_FRAME_OVERLAY;
+      if (src_id == PRS_THEME_FRAME_OVERLAY_INACTIVE)
+        src_id = PRS_THEME_FRAME_OVERLAY;
 
       // Fall back from inactive incognito to active incognito.
-      if (prs_id == PRS_THEME_FRAME_INCOGNITO_INACTIVE)
-        prs_id = PRS_THEME_FRAME_INCOGNITO;
+      if (src_id == PRS_THEME_FRAME_INCOGNITO_INACTIVE)
+        src_id = PRS_THEME_FRAME_INCOGNITO;
 
       // For all non-overlay images, fall back to PRS_THEME_FRAME as a last
       // resort.
-      if (!images->count(prs_id) && prs_id != PRS_THEME_FRAME_OVERLAY)
-        prs_id = PRS_THEME_FRAME;
+      if (!images->count(src_id) && src_id != PRS_THEME_FRAME_OVERLAY)
+        src_id = PRS_THEME_FRAME;
     }
 
     // Note that if the original ID and all the fallbacks are absent, the caller
     // will rely on the frame colors instead.
-    if (images->count(prs_id)) {
-      temp_output[kFrameTintMap[i].key] = CreateHSLShiftedImage(
-          (*images)[prs_id], GetTintInternal(kFrameTintMap[i].value));
+    const auto image = images->find(src_id);
+    if (image != images->end()) {
+      const gfx::Image dest_image(
+          gfx::ImageSkiaOperations::CreateHSLShiftedImage(
+              *image->second.ToImageSkia(),
+              GetTintInternal(frame_values.tint_id)));
+
+      temp_output[frame_values.prs_id] = dest_image;
+
+      if (frame_values.color_id) {
+        // The tallest frame height above the top of tabs in any mode.
+        constexpr int kTallestFrameHeight = 19;
+        ComputeColorFromImage(frame_values.color_id.value(),
+                              kTallestTabHeight + kTallestFrameHeight,
+                              dest_image);
+      }
     }
   }
   MergeImageCaches(temp_output, images);
 }
 
-void BrowserThemePack::CreateTabBackgroundImages(ImageCache* images) const {
-  static constexpr int kTabBackgroundMap[][3] = {
-      {PRS_THEME_TAB_BACKGROUND, PRS_THEME_FRAME, ThemeProperties::COLOR_FRAME},
-      {PRS_THEME_TAB_BACKGROUND_INCOGNITO, PRS_THEME_FRAME_INCOGNITO,
-       ThemeProperties::COLOR_FRAME_INCOGNITO},
+void BrowserThemePack::GenerateFrameColors() {
+  using TP = ThemeProperties;
+
+  SkColor frame;
+  if (!GetColor(TP::COLOR_FRAME, &frame)) {
+    frame = ThemeProperties::GetDefaultColor(TP::COLOR_FRAME, false);
+    SetColor(TP::COLOR_FRAME,
+             HSLShift(frame, GetTintInternal(ThemeProperties::TINT_FRAME)));
+  }
+
+  SkColor temp;
+  if (!GetColor(TP::COLOR_FRAME_INACTIVE, &temp)) {
+    SetColor(
+        TP::COLOR_FRAME_INACTIVE,
+        HSLShift(frame, GetTintInternal(ThemeProperties::TINT_FRAME_INACTIVE)));
+  }
+
+  if (!GetColor(TP::COLOR_FRAME_INCOGNITO, &temp)) {
+    SetColor(TP::COLOR_FRAME_INCOGNITO,
+             HSLShift(frame,
+                      GetTintInternal(ThemeProperties::TINT_FRAME_INCOGNITO)));
+  }
+
+  if (!GetColor(TP::COLOR_FRAME_INCOGNITO_INACTIVE, &temp)) {
+    SetColor(
+        TP::COLOR_FRAME_INCOGNITO_INACTIVE,
+        HSLShift(frame, GetTintInternal(
+                            ThemeProperties::TINT_FRAME_INCOGNITO_INACTIVE)));
+  }
+}
+
+void BrowserThemePack::CreateTabBackgroundImagesAndColors(ImageCache* images) {
+  static constexpr struct TabValues {
+    // The background image to create/update.
+    int tab_id;
+
+    // For inactive images, the corresponding active image.  If the active
+    // images are customized and the inactive ones are not, the inactive ones
+    // will be based on the active ones.
+    base::Optional<int> fallback_tab_id;
+
+    // The frame image to use as the base of this tab background image.
+    int frame_id;
+
+    // The frame color to use as the base of this tab background image.
+    int frame_color_id;
+
+    // The color to compute and store for this image, if not present.
+    int color_id;
+  } kTabBackgroundMap[] = {
+      {PRS_THEME_TAB_BACKGROUND, base::nullopt, PRS_THEME_FRAME,
+       ThemeProperties::COLOR_FRAME, ThemeProperties::COLOR_BACKGROUND_TAB},
+      {PRS_THEME_TAB_BACKGROUND_INACTIVE, PRS_THEME_TAB_BACKGROUND,
+       PRS_THEME_FRAME_INACTIVE, ThemeProperties::COLOR_FRAME_INACTIVE,
+       ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE},
+      {PRS_THEME_TAB_BACKGROUND_INCOGNITO, base::nullopt,
+       PRS_THEME_FRAME_INCOGNITO, ThemeProperties::COLOR_FRAME_INCOGNITO,
+       ThemeProperties::COLOR_BACKGROUND_TAB_INCOGNITO},
+      {PRS_THEME_TAB_BACKGROUND_INCOGNITO_INACTIVE,
+       PRS_THEME_TAB_BACKGROUND_INCOGNITO, PRS_THEME_FRAME_INCOGNITO_INACTIVE,
+       ThemeProperties::COLOR_FRAME_INCOGNITO_INACTIVE,
+       ThemeProperties::COLOR_BACKGROUND_TAB_INCOGNITO_INACTIVE},
   };
 
   ImageCache temp_output;
   for (size_t i = 0; i < arraysize(kTabBackgroundMap); ++i) {
-    int prs_id = kTabBackgroundMap[i][0];
+    const int tab_id = kTabBackgroundMap[i].tab_id;
+    ImageCache::const_iterator tab_it = images->find(tab_id);
+
+    // Inactive images should be based on the active ones if the active ones
+    // were customized.
+    if (tab_it == images->end() && kTabBackgroundMap[i].fallback_tab_id)
+      tab_it = images->find(*kTabBackgroundMap[i].fallback_tab_id);
 
     // Generate background tab images when provided with custom frame or
     // background tab images; in the former case the theme author may want the
     // background tabs to appear to tint the frame, and in the latter case the
     // provided background tab image may have transparent regions, which must be
     // made opaque by overlaying atop the original frame.
-    ImageCache::const_iterator frame_it = images->find(kTabBackgroundMap[i][1]);
-    ImageCache::const_iterator tab_it = images->find(prs_id);
+    const ImageCache::const_iterator frame_it =
+        images->find(kTabBackgroundMap[i].frame_id);
     if (frame_it != images->end() || tab_it != images->end()) {
-      SkColor background_color;
-      GetColor(kTabBackgroundMap[i][2], &background_color);
+      SkColor frame_color;
+      GetColor(kTabBackgroundMap[i].frame_color_id, &frame_color);
 
       gfx::ImageSkia image_to_tint;
       if (frame_it != images->end())
@@ -1285,13 +1390,16 @@ void BrowserThemePack::CreateTabBackgroundImages(ImageCache* images) const {
       constexpr int kRestoredTabVerticalOffset = 8;
 
       auto source = std::make_unique<TabBackgroundImageSource>(
-          background_color, image_to_tint, overlay,
+          frame_color, image_to_tint, overlay,
           GetTintInternal(ThemeProperties::TINT_BACKGROUND_TAB),
           kRestoredTabVerticalOffset);
       gfx::Size dest_size = image_to_tint.size();
       dest_size.SetToMax(gfx::Size(0, kTallestTabHeight));
-      temp_output[prs_id] =
-          gfx::Image(gfx::ImageSkia(std::move(source), dest_size));
+      const gfx::Image dest_image(gfx::ImageSkia(std::move(source), dest_size));
+      temp_output[tab_id] = dest_image;
+
+      ComputeColorFromImage(kTabBackgroundMap[i].color_id, kTallestTabHeight,
+                            dest_image);
     }
   }
   MergeImageCaches(temp_output, images);

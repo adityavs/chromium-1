@@ -3433,6 +3433,7 @@ interface HTMLScriptElement : HTMLElement
     getter htmlFor
     getter integrity
     getter noModule
+    getter referrerPolicy
     getter src
     getter text
     getter type
@@ -3445,6 +3446,7 @@ interface HTMLScriptElement : HTMLElement
     setter htmlFor
     setter integrity
     setter noModule
+    setter referrerPolicy
     setter src
     setter text
     setter type
@@ -7262,6 +7264,14 @@ interface TrustedScriptURL
     attribute @@toStringTag
     method constructor
     method toString
+interface TrustedTypePolicy
+    attribute @@toStringTag
+    getter name
+    method constructor
+interface TrustedTypePolicyFactory
+    attribute @@toStringTag
+    method constructor
+    method createPolicy
 interface TrustedURL
     static method create
     static method unsafelyCreate
@@ -10441,6 +10451,7 @@ interface webkitURL
     getter statusbar
     getter styleMedia
     getter toolbar
+    getter trustedTypes
     getter visualViewport
     getter webgpu
     getter webkitStorageInfo

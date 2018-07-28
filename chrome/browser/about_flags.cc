@@ -3240,6 +3240,11 @@ const FeatureEntry kFeatureEntries[] = {
      FEATURE_VALUE_TYPE(
          omnibox::kUIExperimentHideSteadyStateUrlSchemeAndSubdomains)},
 
+    {"omnibox-ui-jog-textfield-on-popup",
+     flag_descriptions::kOmniboxUIJogTextfieldOnPopupName,
+     flag_descriptions::kOmniboxUIJogTextfieldOnPopupDescription, kOsDesktop,
+     FEATURE_VALUE_TYPE(omnibox::kUIExperimentJogTextfieldOnPopup)},
+
     {"omnibox-ui-show-suggestion-favicons",
      flag_descriptions::kOmniboxUIShowSuggestionFaviconsName,
      flag_descriptions::kOmniboxUIShowSuggestionFaviconsDescription, kOsDesktop,
@@ -4154,6 +4159,12 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kIdnNavigationSuggestionsDescription, kOsDesktop,
      FEATURE_VALUE_TYPE(features::kIdnNavigationSuggestions)},
 
+#if defined(OS_ANDROID)
+    {"long-press-back-for-history",
+     flag_descriptions::kLongPressBackForHistoryName,
+     flag_descriptions::kLongPressBackForHistoryDescription, kOsAndroid,
+     FEATURE_VALUE_TYPE(chrome::android::kLongPressBackForHistory)},
+#endif
     // NOTE: Adding a new flag requires adding a corresponding entry to enum
     // "LoginCustomFlags" in tools/metrics/histograms/enums.xml. See "Flag
     // Histograms" in tools/metrics/histograms/README.md (run the

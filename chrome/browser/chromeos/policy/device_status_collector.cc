@@ -44,6 +44,7 @@
 #include "chrome/browser/policy/profile_policy_connector.h"
 #include "chrome/browser/policy/profile_policy_connector_factory.h"
 #include "chrome/browser/profiles/profile_manager.h"
+#include "chrome/common/channel_info.h"
 #include "chrome/common/chrome_features.h"
 #include "chrome/common/pref_names.h"
 #include "chromeos/audio/cras_audio_handler.h"
@@ -63,6 +64,7 @@
 #include "components/arc/arc_service_manager.h"
 #include "components/arc/common/enterprise_reporting.mojom.h"
 #include "components/policy/core/common/cloud/cloud_policy_constants.h"
+#include "components/policy/core/common/cloud/cloud_policy_util.h"
 #include "components/policy/proto/device_management_backend.pb.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_registry_simple.h"
@@ -362,7 +364,7 @@ class GetStatusState : public base::RefCountedThreadSafe<GetStatusState> {
 
     // Call out to the blocking pool to sample disk volume info.
     base::PostTaskWithTraitsAndReplyWithResult(
-        FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
         base::Bind(volume_info_fetcher, mount_points),
         base::Bind(&GetStatusState::OnVolumeInfoReceived, this));
   }
@@ -372,7 +374,7 @@ class GetStatusState : public base::RefCountedThreadSafe<GetStatusState> {
       const policy::DeviceStatusCollector::CPUTempFetcher& cpu_temp_fetcher) {
     // Call out to the blocking pool to sample CPU temp.
     base::PostTaskWithTraitsAndReplyWithResult(
-        FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+        FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
         cpu_temp_fetcher,
         base::Bind(&GetStatusState::OnCPUTempInfoReceived, this));
   }
@@ -719,17 +721,16 @@ DeviceStatusCollector::DeviceStatusCollector(
     android_status_fetcher_ = base::Bind(&ReadAndroidStatus);
 
   idle_poll_timer_.Start(FROM_HERE,
-                         TimeDelta::FromSeconds(kIdlePollIntervalSeconds),
-                         this, &DeviceStatusCollector::CheckIdleState);
+                         TimeDelta::FromSeconds(kIdlePollIntervalSeconds), this,
+                         &DeviceStatusCollector::CheckIdleState);
   resource_usage_sampling_timer_.Start(
       FROM_HERE, TimeDelta::FromSeconds(kResourceUsageSampleIntervalSeconds),
       this, &DeviceStatusCollector::SampleResourceUsage);
 
   // Watch for changes to the individual policies that control what the status
   // reports contain.
-  base::Closure callback =
-      base::Bind(&DeviceStatusCollector::UpdateReportingSettings,
-                 base::Unretained(this));
+  base::Closure callback = base::Bind(
+      &DeviceStatusCollector::UpdateReportingSettings, base::Unretained(this));
   version_info_subscription_ = cros_settings_->AddSettingsObserver(
       chromeos::kReportDeviceVersionInfo, callback);
   activity_times_subscription_ = cros_settings_->AddSettingsObserver(
@@ -754,19 +755,18 @@ DeviceStatusCollector::DeviceStatusCollector(
 
   // Get the OS, firmware, and TPM version info.
   base::PostTaskWithTraitsAndReplyWithResult(
-      FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::Bind(&chromeos::version_loader::GetVersion,
                  chromeos::version_loader::VERSION_FULL),
       base::Bind(&DeviceStatusCollector::OnOSVersion,
                  weak_factory_.GetWeakPtr()));
   base::PostTaskWithTraitsAndReplyWithResult(
-      FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       base::Bind(&chromeos::version_loader::GetFirmware),
       base::Bind(&DeviceStatusCollector::OnOSFirmware,
                  weak_factory_.GetWeakPtr()));
-  chromeos::version_loader::GetTpmVersion(
-      base::BindOnce(&DeviceStatusCollector::OnTpmVersion,
-                     weak_factory_.GetWeakPtr()));
+  chromeos::version_loader::GetTpmVersion(base::BindOnce(
+      &DeviceStatusCollector::OnTpmVersion, weak_factory_.GetWeakPtr()));
 
   // If doing enterprise device-level reporting, observe the list of users to be
   // reported. Consumer reporting is enforced for the signed-in registered user
@@ -787,8 +787,7 @@ DeviceStatusCollector::DeviceStatusCollector(
                                                : prefs::kUserActivityTimes));
 }
 
-DeviceStatusCollector::~DeviceStatusCollector() {
-}
+DeviceStatusCollector::~DeviceStatusCollector() {}
 
 // static
 void DeviceStatusCollector::RegisterPrefs(PrefRegistrySimple* registry) {
@@ -805,8 +804,8 @@ void DeviceStatusCollector::RegisterProfilePrefs(PrefRegistrySimple* registry) {
 
 void DeviceStatusCollector::CheckIdleState() {
   CalculateIdleState(kIdleStateThresholdSeconds,
-      base::Bind(&DeviceStatusCollector::IdleStateCallback,
-                 base::Unretained(this)));
+                     base::Bind(&DeviceStatusCollector::IdleStateCallback,
+                                base::Unretained(this)));
 }
 
 void DeviceStatusCollector::UpdateReportingSettings() {
@@ -815,13 +814,13 @@ void DeviceStatusCollector::UpdateReportingSettings() {
   // back when they are available.
   if (chromeos::CrosSettingsProvider::TRUSTED !=
       cros_settings_->PrepareTrustedValues(
-      base::Bind(&DeviceStatusCollector::UpdateReportingSettings,
-                 weak_factory_.GetWeakPtr()))) {
+          base::Bind(&DeviceStatusCollector::UpdateReportingSettings,
+                     weak_factory_.GetWeakPtr()))) {
     return;
   }
 
-  if (!cros_settings_->GetBoolean(
-          chromeos::kReportDeviceVersionInfo, &report_version_info_)) {
+  if (!cros_settings_->GetBoolean(chromeos::kReportDeviceVersionInfo,
+                                  &report_version_info_)) {
     report_version_info_ = true;
   }
   if (!is_enterprise_reporting_) {
@@ -832,8 +831,8 @@ void DeviceStatusCollector::UpdateReportingSettings() {
                                          &report_activity_times_)) {
     report_activity_times_ = true;
   }
-  if (!cros_settings_->GetBoolean(
-          chromeos::kReportDeviceBootMode, &report_boot_mode_)) {
+  if (!cros_settings_->GetBoolean(chromeos::kReportDeviceBootMode,
+                                  &report_boot_mode_)) {
     report_boot_mode_ = true;
   }
   if (!cros_settings_->GetBoolean(chromeos::kReportDeviceSessionStatus,
@@ -852,8 +851,8 @@ void DeviceStatusCollector::UpdateReportingSettings() {
   }
   // Hardware status is reported for enterprise devices only by default.
   const bool already_reporting_hardware_status = report_hardware_status_;
-  if (!cros_settings_->GetBoolean(
-          chromeos::kReportDeviceHardwareStatus, &report_hardware_status_)) {
+  if (!cros_settings_->GetBoolean(chromeos::kReportDeviceHardwareStatus,
+                                  &report_hardware_status_)) {
     report_hardware_status_ = is_enterprise_reporting_;
   }
 
@@ -953,7 +952,7 @@ void DeviceStatusCollector::SampleResourceUsage() {
 
   // Call out to the blocking pool to sample CPU stats.
   base::PostTaskWithTraitsAndReplyWithResult(
-      FROM_HERE, {base::MayBlock(), base::TaskPriority::BACKGROUND},
+      FROM_HERE, {base::MayBlock(), base::TaskPriority::BEST_EFFORT},
       cpu_statistics_fetcher_,
       base::Bind(&DeviceStatusCollector::ReceiveCPUStatistics,
                  weak_factory_.GetWeakPtr()));
@@ -1088,6 +1087,7 @@ bool DeviceStatusCollector::GetVersionInfo(
 
   // Enterprise-only version reporting below.
   status->set_browser_version(version_info::GetVersionNumber());
+  status->set_channel(ConvertToProtoChannel(chrome::GetChannel()));
   status->set_firmware_version(firmware_version_);
 
   em::TpmVersionInfo* const tpm_version_info =
@@ -1135,18 +1135,17 @@ bool DeviceStatusCollector::GetNetworkInterfaces(
     const char* state_string;
     em::NetworkState::ConnectionState state_constant;
   } kConnectionStateMap[] = {
-    { shill::kStateIdle,              em::NetworkState::IDLE },
-    { shill::kStateCarrier,           em::NetworkState::CARRIER },
-    { shill::kStateAssociation,       em::NetworkState::ASSOCIATION },
-    { shill::kStateConfiguration,     em::NetworkState::CONFIGURATION },
-    { shill::kStateReady,             em::NetworkState::READY },
-    { shill::kStatePortal,            em::NetworkState::PORTAL },
-    { shill::kStateOffline,           em::NetworkState::OFFLINE },
-    { shill::kStateOnline,            em::NetworkState::ONLINE },
-    { shill::kStateDisconnect,        em::NetworkState::DISCONNECT },
-    { shill::kStateFailure,           em::NetworkState::FAILURE },
-    { shill::kStateActivationFailure,
-        em::NetworkState::ACTIVATION_FAILURE },
+      {shill::kStateIdle, em::NetworkState::IDLE},
+      {shill::kStateCarrier, em::NetworkState::CARRIER},
+      {shill::kStateAssociation, em::NetworkState::ASSOCIATION},
+      {shill::kStateConfiguration, em::NetworkState::CONFIGURATION},
+      {shill::kStateReady, em::NetworkState::READY},
+      {shill::kStatePortal, em::NetworkState::PORTAL},
+      {shill::kStateOffline, em::NetworkState::OFFLINE},
+      {shill::kStateOnline, em::NetworkState::ONLINE},
+      {shill::kStateDisconnect, em::NetworkState::DISCONNECT},
+      {shill::kStateFailure, em::NetworkState::FAILURE},
+      {shill::kStateActivationFailure, em::NetworkState::ACTIVATION_FAILURE},
   };
 
   chromeos::NetworkStateHandler::DeviceStateList device_list;
@@ -1549,9 +1548,8 @@ bool DeviceStatusCollector::GetAndroidStatus(
 
 std::string DeviceStatusCollector::GetAppVersion(
     const std::string& kiosk_app_id) {
-  Profile* const profile =
-      chromeos::ProfileHelper::Get()->GetProfileByUser(
-          user_manager::UserManager::Get()->GetActiveUser());
+  Profile* const profile = chromeos::ProfileHelper::Get()->GetProfileByUser(
+      user_manager::UserManager::Get()->GetActiveUser());
   const extensions::ExtensionRegistry* const registry =
       extensions::ExtensionRegistry::Get(profile);
   const extensions::Extension* const extension = registry->GetExtensionById(

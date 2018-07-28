@@ -574,6 +574,7 @@ jumbo_component("base") {
     "message_loop/message_pump_mac.mm",
     "message_loop/message_pump_win.cc",
     "message_loop/message_pump_win.h",
+    "message_loop/sequenced_task_source.h",
     "message_loop/timer_slack.h",
     "metrics/bucket_ranges.cc",
     "metrics/bucket_ranges.h",
@@ -821,6 +822,7 @@ jumbo_component("base") {
     "system_monitor/system_monitor.h",
     "task/cancelable_task_tracker.cc",
     "task/cancelable_task_tracker.h",
+    "task/sequence_manager/associated_thread_id.h",
     "task/sequence_manager/enqueue_order.cc",
     "task/sequence_manager/enqueue_order.h",
     "task/sequence_manager/graceful_queue_shutdown_helper.cc",
@@ -843,6 +845,8 @@ jumbo_component("base") {
     "task/sequence_manager/task_queue_selector.cc",
     "task/sequence_manager/task_queue_selector.h",
     "task/sequence_manager/task_queue_selector_logic.h",
+    "task/sequence_manager/task_queue_task_runner.cc",
+    "task/sequence_manager/task_queue_task_runner.h",
     "task/sequence_manager/task_time_observer.h",
     "task/sequence_manager/thread_controller.h",
     "task/sequence_manager/thread_controller_impl.cc",
@@ -2163,7 +2167,7 @@ if (is_ios || is_mac) {
 }
 
 if (is_fuchsia) {
-  fidl_library("test_fidl") {
+  fidl_library("testfidl") {
     namespace = "base.fuchsia"
     namespace_path = "base/fuchsia"
 
@@ -2677,7 +2681,7 @@ test("base_unittests") {
     sources -= [ "files/file_path_watcher_unittest.cc" ]
 
     deps += [
-      ":test_fidl",
+      ":testfidl",
       "//third_party/fuchsia-sdk:async",
       "//third_party/fuchsia-sdk:async_default",
       "//third_party/fuchsia-sdk:fdio",

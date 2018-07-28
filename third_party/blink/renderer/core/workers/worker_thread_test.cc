@@ -16,6 +16,7 @@
 #include "third_party/blink/renderer/core/workers/global_scope_creation_params.h"
 #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
 #include "third_party/blink/renderer/core/workers/worker_thread_test_helper.h"
+#include "third_party/blink/renderer/platform/scheduler/test/fake_task_runner.h"
 #include "third_party/blink/renderer/platform/testing/unit_test_helpers.h"
 #include "third_party/blink/renderer/platform/waitable_event.h"
 
@@ -67,6 +68,98 @@ void WaitForSignalTask(WorkerThread* worker_thread,
   waitable_event->Wait();
 }
 
+void TerminateParentOfNestedWorker(WorkerThread* parent_thread,
+                                   WaitableEvent* waitable_event) {
+  EXPECT_TRUE(IsMainThread());
+  parent_thread->Terminate();
+  waitable_event->Signal();
+}
+
+// This helper managers a child worker thread and a reporting proxy
+// and ensures they stay alive for the duration of the test. The struct
+// is created on the main thread, but its members are created and
+// destroyed on the parent worker thread.
+struct NestedWorkerHelper {
+ public:
+  NestedWorkerHelper() = default;
+  ~NestedWorkerHelper() = default;
+
+  std::unique_ptr<MockWorkerReportingProxy> reporting_proxy;
+  std::unique_ptr<WorkerThreadForTest> worker_thread;
+};
+
+void CreateNestedWorkerThenTerminateParent(
+    WorkerThread* parent_thread,
+    NestedWorkerHelper* nested_worker_helper) {
+  EXPECT_TRUE(parent_thread->IsCurrentThread());
+
+  nested_worker_helper->reporting_proxy =
+      std::make_unique<MockWorkerReportingProxy>();
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              DidCreateWorkerGlobalScope(_))
+      .Times(1);
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              DidInitializeWorkerContext())
+      .Times(1);
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              WillEvaluateClassicScriptMock(_, _))
+      .Times(1);
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              DidEvaluateClassicScript(true))
+      .Times(1);
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              WillDestroyWorkerGlobalScope())
+      .Times(1);
+  EXPECT_CALL(*nested_worker_helper->reporting_proxy,
+              DidTerminateWorkerThread())
+      .Times(1);
+
+  nested_worker_helper->worker_thread = std::make_unique<WorkerThreadForTest>(
+      *nested_worker_helper->reporting_proxy);
+  nested_worker_helper->worker_thread->StartWithSourceCode(
+      SecurityOrigin::Create(KURL("http://fake.url/")).get(),
+      "//fake source code", ParentExecutionContextTaskRunners::Create());
+  nested_worker_helper->worker_thread->WaitForInit();
+
+  // Ask the main threat to terminate this parent thread.
+  WaitableEvent child_waitable;
+  PostCrossThreadTask(
+      *parent_thread->GetParentExecutionContextTaskRunners()->Get(
+          TaskType::kInternalTest),
+      FROM_HERE,
+      CrossThreadBind(&TerminateParentOfNestedWorker,
+                      CrossThreadUnretained(parent_thread),
+                      CrossThreadUnretained(&child_waitable)));
+  child_waitable.Wait();
+  EXPECT_EQ(ExitCode::kNotTerminated, parent_thread->GetExitCodeForTesting());
+
+  parent_thread->ChildThreadStartedOnWorkerThread(
+      nested_worker_helper->worker_thread.get());
+  PostCrossThreadTask(
+      *parent_thread->GetParentExecutionContextTaskRunners()->Get(
+          TaskType::kInternalTest),
+      FROM_HERE, CrossThreadBind(&test::ExitRunLoop));
+}
+
+void VerifyParentAndChildAreTerminated(WorkerThread* parent_thread,
+                                       NestedWorkerHelper* nested_worker_helper,
+                                       WaitableEvent* waitable_event) {
+  EXPECT_TRUE(parent_thread->IsCurrentThread());
+  EXPECT_EQ(ExitCode::kGracefullyTerminated,
+            parent_thread->GetExitCodeForTesting());
+  EXPECT_EQ(ExitCode::kGracefullyTerminated,
+            nested_worker_helper->worker_thread->GetExitCodeForTesting());
+  EXPECT_NE(nullptr, parent_thread->GlobalScope());
+
+  parent_thread->ChildThreadTerminatedOnWorkerThread(
+      nested_worker_helper->worker_thread.get());
+  EXPECT_EQ(nullptr, parent_thread->GlobalScope());
+
+  nested_worker_helper->worker_thread = nullptr;
+  nested_worker_helper->reporting_proxy = nullptr;
+  waitable_event->Signal();
+}
+
 }  // namespace
 
 class WorkerThreadTest : public testing::Test {
@@ -76,10 +169,7 @@ class WorkerThreadTest : public testing::Test {
   void SetUp() override {
     reporting_proxy_ = std::make_unique<MockWorkerReportingProxy>();
     security_origin_ = SecurityOrigin::Create(KURL("http://fake.url/"));
-    worker_thread_ =
-        std::make_unique<WorkerThreadForTest>(nullptr, *reporting_proxy_);
-    lifecycle_observer_ = new MockWorkerThreadLifecycleObserver(
-        worker_thread_->GetWorkerThreadLifecycleContext());
+    worker_thread_ = std::make_unique<WorkerThreadForTest>(*reporting_proxy_);
   }
 
   void TearDown() override {}
@@ -115,7 +205,6 @@ class WorkerThreadTest : public testing::Test {
     EXPECT_CALL(*reporting_proxy_, DidEvaluateClassicScript(true)).Times(1);
     EXPECT_CALL(*reporting_proxy_, WillDestroyWorkerGlobalScope()).Times(1);
     EXPECT_CALL(*reporting_proxy_, DidTerminateWorkerThread()).Times(1);
-    EXPECT_CALL(*lifecycle_observer_, ContextDestroyed(_)).Times(1);
   }
 
   void ExpectReportingCallsForWorkerPossiblyTerminatedBeforeInitialization() {
@@ -129,7 +218,6 @@ class WorkerThreadTest : public testing::Test {
     EXPECT_CALL(*reporting_proxy_, WillDestroyWorkerGlobalScope())
         .Times(AtMost(1));
     EXPECT_CALL(*reporting_proxy_, DidTerminateWorkerThread()).Times(1);
-    EXPECT_CALL(*lifecycle_observer_, ContextDestroyed(_)).Times(1);
   }
 
   void ExpectReportingCallsForWorkerForciblyTerminated() {
@@ -140,7 +228,6 @@ class WorkerThreadTest : public testing::Test {
     EXPECT_CALL(*reporting_proxy_, DidEvaluateClassicScript(false)).Times(1);
     EXPECT_CALL(*reporting_proxy_, WillDestroyWorkerGlobalScope()).Times(1);
     EXPECT_CALL(*reporting_proxy_, DidTerminateWorkerThread()).Times(1);
-    EXPECT_CALL(*lifecycle_observer_, ContextDestroyed(_)).Times(1);
   }
 
   ExitCode GetExitCode() { return worker_thread_->GetExitCodeForTesting(); }
@@ -148,7 +235,6 @@ class WorkerThreadTest : public testing::Test {
   scoped_refptr<const SecurityOrigin> security_origin_;
   std::unique_ptr<MockWorkerReportingProxy> reporting_proxy_;
   std::unique_ptr<WorkerThreadForTest> worker_thread_;
-  Persistent<MockWorkerThreadLifecycleObserver> lifecycle_observer_;
 };
 
 TEST_F(WorkerThreadTest, ShouldTerminateScriptExecution) {
@@ -296,7 +382,6 @@ TEST_F(WorkerThreadTest, Terminate_WhileDebuggerTaskIsRunningOnInitialization) {
   EXPECT_CALL(*reporting_proxy_, DidInitializeWorkerContext()).Times(1);
   EXPECT_CALL(*reporting_proxy_, WillDestroyWorkerGlobalScope()).Times(1);
   EXPECT_CALL(*reporting_proxy_, DidTerminateWorkerThread()).Times(1);
-  EXPECT_CALL(*lifecycle_observer_, ContextDestroyed(_)).Times(1);
 
   Vector<CSPHeaderAndType> headers{
       {"contentSecurityPolicy", kContentSecurityPolicyHeaderTypeReport}};
@@ -392,6 +477,31 @@ TEST_F(WorkerThreadTest, Terminate_WhileDebuggerTaskIsRunning) {
   waitable_event.Signal();
   worker_thread_->WaitForShutdownForTesting();
   EXPECT_EQ(ExitCode::kGracefullyTerminated, GetExitCode());
+}
+
+// TODO(https://crbug.com/868253): Disabled due to flaking on multiple bots.
+// Fix and re-enable.
+TEST_F(WorkerThreadTest, DISABLED_TerminateWorkerWhileChildIsLoading) {
+  ExpectReportingCalls();
+  Start();
+  worker_thread_->WaitForInit();
+
+  NestedWorkerHelper nested_worker_helper;
+  // Create a nested worker from the worker thread.
+  PostCrossThreadTask(
+      *worker_thread_->GetTaskRunner(TaskType::kInternalTest), FROM_HERE,
+      CrossThreadBind(&CreateNestedWorkerThenTerminateParent,
+                      CrossThreadUnretained(worker_thread_.get()),
+                      CrossThreadUnretained(&nested_worker_helper)));
+  test::EnterRunLoop();
+
+  WaitableEvent waitable_event;
+  worker_thread_->GetWorkerBackingThread().BackingThread().PostTask(
+      FROM_HERE, CrossThreadBind(&VerifyParentAndChildAreTerminated,
+                                 CrossThreadUnretained(worker_thread_.get()),
+                                 CrossThreadUnretained(&nested_worker_helper),
+                                 CrossThreadUnretained(&waitable_event)));
+  waitable_event.Wait();
 }
 
 }  // namespace blink

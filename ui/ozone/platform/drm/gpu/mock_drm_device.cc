@@ -404,10 +404,12 @@ bool MockDrmDevice::CommitProperties(
                                       request->items[i].value));
   }
 
-  if (!page_flip_request)
+  if (page_flip_request)
+    callbacks_.push(page_flip_request->AddPageFlip());
+
+  if (flags & DRM_MODE_ATOMIC_TEST_ONLY)
     return true;
 
-  callbacks_.push(page_flip_request->AddPageFlip());
   // Only update values if not testing.
   for (uint32_t i = 0; i < request->cursor; ++i) {
     EXPECT_TRUE(UpdateProperty(request->items[i].object_id,
@@ -421,6 +423,7 @@ bool MockDrmDevice::CommitProperties(
 bool MockDrmDevice::SetGammaRamp(
     uint32_t crtc_id,
     const std::vector<display::GammaRampRGBEntry>& lut) {
+  set_gamma_ramp_count_++;
   return legacy_gamma_ramp_expectation_;
 }
 

@@ -871,6 +871,10 @@ const char kScreenTimeLastState[] = "screen_time.last_state";
 // Controlled by policy.
 const char kEnableSyncConsent[] = "sync_consent.enabled";
 
+// Boolean pref indicating whether a user is allowed to use the Network File
+// Shares for Chrome OS feature.
+const char kNetworkFileSharesAllowed[] = "network_file_shares.allowed";
+
 #endif  // defined(OS_CHROMEOS)
 
 // A boolean pref set to true if a Home button to open the Home pages should be
@@ -2512,6 +2516,7 @@ const char kClipboardLastModifiedTime[] = "ui.clipboard.last_modified_time";
 #endif
 
 #if BUILDFLAG(ENABLE_OFFLINE_PAGES)
+const char kOfflinePrefetchEnabled[] = "offline_prefetch.enabled";
 const char kOfflinePrefetchBackoff[] = "offline_prefetch.backoff";
 
 // The following set of Prefs is used by OfflineMetricsCollectorImpl to

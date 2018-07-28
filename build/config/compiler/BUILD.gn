@@ -594,7 +594,8 @@ config("compiler") {
   # flags for specific features.
   if (!is_debug && use_thin_lto &&
       (current_toolchain == default_toolchain ||
-       (is_android && current_toolchain == android_secondary_abi_toolchain))) {
+       (is_android && defined(android_secondary_abi_toolchain) &&
+        current_toolchain == android_secondary_abi_toolchain))) {
     assert(use_lld || target_os == "chromeos",
            "gold plugin only supported with ChromeOS")
 

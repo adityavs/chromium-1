@@ -1173,6 +1173,8 @@ jumbo_split_static_library("ui") {
       "android/infobars/previews_infobar.h",
       "android/infobars/reader_mode_infobar.cc",
       "android/infobars/reader_mode_infobar.h",
+      "android/infobars/save_password_infobar.cc",
+      "android/infobars/save_password_infobar.h",
       "android/infobars/search_geolocation_disclosure_infobar.cc",
       "android/infobars/search_geolocation_disclosure_infobar.h",
       "android/infobars/simple_confirm_infobar_builder.cc",
@@ -1765,8 +1767,6 @@ jumbo_split_static_library("ui") {
 
     if (enable_extensions) {
       deps += [
-        # TODO(loyso): Remove the first dependency. http://crbug.com/862049
-        "//chrome/browser/web_applications",
         "//chrome/browser/web_applications/components",
         "//chrome/browser/web_applications/extensions",
       ]
@@ -2193,8 +2193,10 @@ jumbo_split_static_library("ui") {
       "//chromeos/components/proximity_auth/logging",
       "//chromeos/components/proximity_auth/webui",
       "//chromeos/components/tether",
+      "//chromeos/resources:resources_grit",
       "//chromeos/services/assistant/public/mojom",
       "//chromeos/services/assistant/public/proto:proto",
+      "//chromeos/services/multidevice_setup/public/mojom",
       "//components/arc",
       "//components/captive_portal",
       "//components/consent_auditor:consent_auditor",

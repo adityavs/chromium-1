@@ -750,7 +750,6 @@
 <translation id="7128222689758636196">वर्तमान खोज इंजन के लिए अनुमति दें</translation>
 <translation id="7138678301420049075">अन्य</translation>
 <translation id="7141896414559753902">साइटों को पॉप-अप और रीडायरेक्ट दिखाने से ब्लॉक करें (सुझाया गया)</translation>
-<translation id="7144878232160441200">पुन: प्रयास करें</translation>
 <translation id="7149893636342594995">पिछले 24 घंटे</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> केबी</translation>
 <translation id="7177466738963138057">आप इसे बाद में सेटिंग में जाकर बदल सकते हैं</translation>
@@ -982,6 +981,7 @@
 <translation id="9100939710791843300">'नया टैब' पेज लोड करने और सुझाए गए लेख देखने के लिए 'होम' बटन पर टैप करें</translation>
 <translation id="9133515669113036225">डिवाइस प्रमाणिकता रीसेट करें</translation>
 <translation id="9133703968756164531"><ph name="ITEM_NAME" /> (<ph name="ITEM_ID" />)</translation>
+<translation id="9137013805542155359">मूल दिखाएं</translation>
 <translation id="9139068048179869749">साइट को नोटिफ़िकेशन भेजने देने से पहले अनुमति लेना आवश्यक बनाएं (अनुशंसित)</translation>
 <translation id="9155898266292537608">आप किसी शब्द पर बस एक टैप करके भी खोज सकते हैं</translation>
 <translation id="9188680907066685419">प्रबंधित खाते से प्रस्थान करें</translation>
@@ -992,7 +992,6 @@
 <translation id="932327136139879170">होम</translation>
 <translation id="932599481871055447">डेटा बचाएं और तेज़ी से ब्राउज़ करें</translation>
 <translation id="938850635132480979">गड़बड़ी: <ph name="ERROR_CODE" /></translation>
-<translation id="945360730947989880">SD कार्ड पर जगह काफ़ी नहीं है</translation>
 <translation id="945522503751344254">सुझाव भेजें</translation>
 <translation id="945632385593298557">अपना माइक्रोफ़ोन एक्सेस करें</translation>
 <translation id="951339005376969845">मौजूदा डेटा हटाएं. आप <ph name="FROM_ACCOUNT" /> पर वापस जाकर उसे पुनर्प्राप्त कर सकते हैं.</translation>

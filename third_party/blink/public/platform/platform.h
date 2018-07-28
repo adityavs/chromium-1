@@ -47,6 +47,7 @@
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "third_party/blink/public/common/feature_policy/feature_policy.h"
 #include "third_party/blink/public/platform/blame_context.h"
+#include "third_party/blink/public/platform/modules/indexeddb/web_idb_factory.h"
 #include "third_party/blink/public/platform/user_metrics_action.h"
 #include "third_party/blink/public/platform/web_audio_device.h"
 #include "third_party/blink/public/platform/web_common.h"
@@ -97,7 +98,6 @@ class WebCrypto;
 class WebDatabaseObserver;
 class WebFileSystem;
 class WebGraphicsContext3DProvider;
-class WebIDBFactory;
 class WebImageCaptureFrameGrabber;
 class WebMIDIAccessor;
 class WebMIDIAccessorClient;
@@ -259,7 +259,7 @@ class BLINK_PLATFORM_EXPORT Platform {
   // IndexedDB ----------------------------------------------------------
 
   // Must return non-null.
-  virtual WebIDBFactory* IdbFactory() { return nullptr; }
+  virtual std::unique_ptr<WebIDBFactory> CreateIdbFactory() { return nullptr; }
 
   // History -------------------------------------------------------------
 
@@ -345,6 +345,11 @@ class BLINK_PLATFORM_EXPORT Platform {
                              base::Time response_time,
                              const char* data,
                              size_t data_size) {}
+
+  // A request to fetch contents associated with this URL from metadata cache.
+  virtual void FetchCachedCode(
+      const WebURL&,
+      base::OnceCallback<void(const std::vector<uint8_t>&)>) {}
 
   // A suggestion to cache this metadata in association with this URL which
   // resource is in CacheStorage.

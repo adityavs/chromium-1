@@ -17,7 +17,9 @@
 #include "testing/gtest/include/gtest/gtest.h"
 #include "third_party/blink/renderer/platform/runtime_enabled_features.h"
 #include "third_party/blink/renderer/platform/scheduler/child/features.h"
+#include "third_party/blink/renderer/platform/scheduler/main_thread/frame_task_queue_controller.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_scheduler_impl.h"
+#include "third_party/blink/renderer/platform/scheduler/main_thread/main_thread_task_queue.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/page_scheduler_impl.h"
 #include "third_party/blink/renderer/platform/scheduler/main_thread/resource_loading_task_runner_handle_impl.h"
 #include "third_party/blink/renderer/platform/testing/runtime_enabled_features_test_helpers.h"
@@ -56,8 +58,9 @@ class FrameSchedulerImplTest : public testing::Test {
             task_environment_.GetMockTickClock()),
         base::nullopt));
     page_scheduler_.reset(new PageSchedulerImpl(nullptr, scheduler_.get()));
-    frame_scheduler_ = FrameSchedulerImpl::Create(
-        page_scheduler_.get(), nullptr, FrameScheduler::FrameType::kSubframe);
+    frame_scheduler_ =
+        FrameSchedulerImpl::Create(page_scheduler_.get(), nullptr, nullptr,
+                                   FrameScheduler::FrameType::kSubframe);
   }
 
   void TearDown() override {
@@ -69,37 +72,50 @@ class FrameSchedulerImplTest : public testing::Test {
 
  protected:
   scoped_refptr<TaskQueue> throttleable_task_queue() {
-    return frame_scheduler_->throttleable_task_queue_;
+    return throttleable_task_queue_;
   }
 
   void LazyInitThrottleableTaskQueue() {
     EXPECT_FALSE(throttleable_task_queue());
-    frame_scheduler_->ThrottleableTaskQueue();
+    throttleable_task_queue_ = ThrottleableTaskQueue();
     EXPECT_TRUE(throttleable_task_queue());
   }
 
+  scoped_refptr<MainThreadTaskQueue> NonLoadingTaskQueue(
+      MainThreadTaskQueue::QueueTraits queue_traits) {
+    return frame_scheduler_->FrameTaskQueueControllerForTest()
+        ->NonLoadingTaskQueue(queue_traits);
+  }
+
   scoped_refptr<TaskQueue> ThrottleableTaskQueue() {
-    return frame_scheduler_->ThrottleableTaskQueue();
+    return NonLoadingTaskQueue(
+        FrameSchedulerImpl::ThrottleableTaskQueueTraits());
   }
 
   scoped_refptr<TaskQueue> LoadingTaskQueue() {
-    return frame_scheduler_->LoadingTaskQueue();
+    return frame_scheduler_->FrameTaskQueueControllerForTest()
+        ->LoadingTaskQueue();
   }
 
   scoped_refptr<TaskQueue> LoadingControlTaskQueue() {
-    return frame_scheduler_->LoadingControlTaskQueue();
+    return frame_scheduler_->FrameTaskQueueControllerForTest()
+        ->LoadingControlTaskQueue();
   }
 
   scoped_refptr<TaskQueue> DeferrableTaskQueue() {
-    return frame_scheduler_->DeferrableTaskQueue();
+    return NonLoadingTaskQueue(FrameSchedulerImpl::DeferrableTaskQueueTraits());
   }
 
   scoped_refptr<TaskQueue> PausableTaskQueue() {
-    return frame_scheduler_->PausableTaskQueue();
+    return NonLoadingTaskQueue(FrameSchedulerImpl::PausableTaskQueueTraits());
   }
 
   scoped_refptr<TaskQueue> UnpausableTaskQueue() {
-    return frame_scheduler_->UnpausableTaskQueue();
+    return NonLoadingTaskQueue(FrameSchedulerImpl::UnpausableTaskQueueTraits());
+  }
+
+  scoped_refptr<TaskQueue> GetTaskQueue(TaskType type) {
+    return frame_scheduler_->GetTaskQueue(type);
   }
 
   std::unique_ptr<ResourceLoadingTaskRunnerHandleImpl>
@@ -130,6 +146,7 @@ class FrameSchedulerImplTest : public testing::Test {
   std::unique_ptr<MainThreadSchedulerImpl> scheduler_;
   std::unique_ptr<PageSchedulerImpl> page_scheduler_;
   std::unique_ptr<FrameSchedulerImpl> frame_scheduler_;
+  scoped_refptr<TaskQueue> throttleable_task_queue_;
 };
 
 namespace {
@@ -864,8 +881,9 @@ TEST_F(LowPrioritySubFrameExperimentTest, FrameQueuesPriorities) {
   EXPECT_EQ(UnpausableTaskQueue()->GetQueuePriority(),
             TaskQueue::QueuePriority::kLowPriority);
 
-  frame_scheduler_ = FrameSchedulerImpl::Create(
-      page_scheduler_.get(), nullptr, FrameScheduler::FrameType::kMainFrame);
+  frame_scheduler_ =
+      FrameSchedulerImpl::Create(page_scheduler_.get(), nullptr, nullptr,
+                                 FrameScheduler::FrameType::kMainFrame);
 
   // Main Frame Task Queues.
   EXPECT_EQ(LoadingTaskQueue()->GetQueuePriority(),
@@ -953,8 +971,9 @@ TEST_F(LowPrioritySubFrameThrottleableTaskExperimentTest,
   EXPECT_EQ(UnpausableTaskQueue()->GetQueuePriority(),
             TaskQueue::QueuePriority::kNormalPriority);
 
-  frame_scheduler_ = FrameSchedulerImpl::Create(
-      page_scheduler_.get(), nullptr, FrameScheduler::FrameType::kMainFrame);
+  frame_scheduler_ =
+      FrameSchedulerImpl::Create(page_scheduler_.get(), nullptr, nullptr,
+                                 FrameScheduler::FrameType::kMainFrame);
 
   // Main Frame Task Queues.
   EXPECT_EQ(LoadingTaskQueue()->GetQueuePriority(),
@@ -1042,8 +1061,9 @@ TEST_F(LowPriorityThrottleableTaskExperimentTest, FrameQueuesPriorities) {
   EXPECT_EQ(UnpausableTaskQueue()->GetQueuePriority(),
             TaskQueue::QueuePriority::kNormalPriority);
 
-  frame_scheduler_ = FrameSchedulerImpl::Create(
-      page_scheduler_.get(), nullptr, FrameScheduler::FrameType::kMainFrame);
+  frame_scheduler_ =
+      FrameSchedulerImpl::Create(page_scheduler_.get(), nullptr, nullptr,
+                                 FrameScheduler::FrameType::kMainFrame);
 
   // Main Frame Task Queues.
   EXPECT_EQ(LoadingTaskQueue()->GetQueuePriority(),
@@ -1108,8 +1128,9 @@ TEST_F(LowPriorityThrottleableTaskDuringLoadingExperimentTest,
 
 TEST_F(LowPriorityThrottleableTaskDuringLoadingExperimentTest,
        MainFrameQueuesPriorities) {
-  frame_scheduler_ = FrameSchedulerImpl::Create(
-      page_scheduler_.get(), nullptr, FrameScheduler::FrameType::kMainFrame);
+  frame_scheduler_ =
+      FrameSchedulerImpl::Create(page_scheduler_.get(), nullptr, nullptr,
+                                 FrameScheduler::FrameType::kMainFrame);
 
   // Main thread is in the loading use case.
   scheduler_->DidStartProvisionalLoad(true);
@@ -1483,6 +1504,19 @@ TEST_F(LowPriorityCrossOriginTaskDuringLoadingExperimentTest,
             TaskQueue::QueuePriority::kNormalPriority);
   EXPECT_EQ(UnpausableTaskQueue()->GetQueuePriority(),
             TaskQueue::QueuePriority::kNormalPriority);
+}
+
+TEST_F(FrameSchedulerImplTest, TaskTypeToTaskQueueMapping) {
+  // Make sure the queue lookup and task type to queue traits map works as
+  // expected. This test will fail if these task types are moved to different
+  // default queues.
+  EXPECT_EQ(GetTaskQueue(TaskType::kJavascriptTimer), ThrottleableTaskQueue());
+  EXPECT_EQ(GetTaskQueue(TaskType::kDatabaseAccess), DeferrableTaskQueue());
+  EXPECT_EQ(GetTaskQueue(TaskType::kPostedMessage), PausableTaskQueue());
+  EXPECT_EQ(GetTaskQueue(TaskType::kInternalIPC), UnpausableTaskQueue());
+  EXPECT_EQ(GetTaskQueue(TaskType::kNetworking), LoadingTaskQueue());
+  EXPECT_EQ(GetTaskQueue(TaskType::kNetworkingControl),
+            LoadingControlTaskQueue());
 }
 
 }  // namespace frame_scheduler_impl_unittest

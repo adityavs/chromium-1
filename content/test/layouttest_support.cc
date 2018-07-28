@@ -50,8 +50,6 @@
 #include "content/shell/test_runner/web_view_test_proxy.h"
 #include "content/shell/test_runner/web_widget_test_proxy.h"
 #include "gpu/ipc/service/image_transport_surface.h"
-#include "services/device/public/cpp/generic_sensor/motion_data.h"
-#include "services/device/public/cpp/generic_sensor/orientation_data.h"
 #include "services/ui/public/cpp/gpu/context_provider_command_buffer.h"
 #include "third_party/blink/public/platform/scheduler/test/renderer_scheduler_test_support.h"
 #include "third_party/blink/public/platform/web_float_rect.h"
@@ -75,8 +73,6 @@
 #include "ui/gfx/win/direct_write.h"
 #endif
 
-using device::MotionData;
-using device::OrientationData;
 using blink::WebRect;
 using blink::WebSize;
 
@@ -111,12 +107,13 @@ RenderWidget* CreateWebWidgetTestProxy(int32_t routing_id,
                                        CompositorDependencies* compositor_deps,
                                        blink::WebPopupType popup_type,
                                        const ScreenInfo& screen_info,
+                                       blink::WebDisplayMode display_mode,
                                        bool swapped_out,
                                        bool hidden,
                                        bool never_visible) {
   auto* render_widget_proxy = new test_runner::WebWidgetTestProxy(
-      routing_id, compositor_deps, popup_type, screen_info, swapped_out, hidden,
-      never_visible, base::ThreadTaskRunnerHandle::Get());
+      routing_id, compositor_deps, popup_type, screen_info, display_mode,
+      swapped_out, hidden, never_visible, base::ThreadTaskRunnerHandle::Get());
   return render_widget_proxy;
 }
 

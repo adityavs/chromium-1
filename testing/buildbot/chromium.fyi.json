@@ -447,8 +447,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -1016,8 +1015,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -1065,10 +1063,7 @@
       {
         "args": [
           "--xvfb",
-          "--extra-browser-args=--enable-features=VizDisplayCompositor",
-          "--skip=contrib.cluster_telemetry.screenshot_unittest.ScreenshotUnitTest.testScreenshot",
-          "--skip=core.perf_benchmark_unittest.PerfBenchmarkTest.testVariationArgs",
-          "--skip=core.perf_benchmark_unittest.PerfBenchmarkTest.testVariationArgsReference"
+          "--extra-browser-args=--enable-features=VizDisplayCompositor"
         ],
         "isolate_name": "telemetry_perf_unittests",
         "name": "telemetry_perf_unittests_viz",
@@ -1090,9 +1085,7 @@
       },
       {
         "args": [
-          "--extra-browser-args=--enable-features=VizDisplayCompositor",
-          "--skip=telemetry.internal.backends.chrome_inspector.inspector_page_unittest.InspectorPageTest.testCaptureScreenshot",
-          "--skip=telemetry.internal.browser.tab_unittest.GpuTabTest.testScreenshot"
+          "--extra-browser-args=--enable-features=VizDisplayCompositor"
         ],
         "isolate_name": "telemetry_unittests",
         "name": "telemetry_unittests_viz",
@@ -1341,7 +1334,6 @@
       {
         "args": [
           "--enable-surface-synchronization",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/surface_sync.content_browsertests.filter",
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
@@ -1389,7 +1381,6 @@
       {
         "args": [
           "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.android.content_browsertests.filter",
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
@@ -1467,8 +1458,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -1651,8 +1641,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -2145,8 +2134,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -2655,8 +2643,6 @@
   },
   "Win cl.exe Goma Canary LocalOutputCache": {
     "additional_compile_targets": [
-      "v8:gn_all",
-      "pdfium_all",
       "libANGLE"
     ]
   },
@@ -2701,8 +2687,6 @@
   },
   "WinMSVC64 Goma Canary": {
     "additional_compile_targets": [
-      "v8:gn_all",
-      "pdfium_all",
       "libANGLE"
     ]
   },
@@ -2758,7 +2742,6 @@
       {
         "args": [
           "--enable-surface-synchronization",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/surface_sync.content_browsertests.filter",
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
@@ -2805,7 +2788,6 @@
       {
         "args": [
           "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.android.content_browsertests.filter",
           "--gs-results-bucket=chromium-result-details",
           "--recover-devices"
         ],
@@ -2971,6 +2953,33 @@
           "io_timeout": 3600
         },
         "test": "ozone_gl_unittests"
+      },
+      {
+        "args": [
+          "--vpython-dir=../../vpython_dir_linux_amd64",
+          "--ozone-platform=headless",
+          "--test-launcher-filter-file=../../testing/buildbot/filters/chromeos.services_unittests.filter"
+        ],
+        "swarming": {
+          "can_use_on_swarming_builders": true,
+          "cipd_packages": [
+            {
+              "cipd_package": "infra/tools/luci/vpython/linux-amd64",
+              "location": "vpython_dir_linux_amd64",
+              "revision": "git_revision:e1abc57be62d198b5c2f487bfb2fa2d2eb0e867c"
+            }
+          ],
+          "dimension_sets": [
+            {
+              "kvm": "1",
+              "os": "Ubuntu-14.04",
+              "pool": "Chrome-CrOS-VM"
+            }
+          ],
+          "hard_timeout": 3600,
+          "io_timeout": 3600
+        },
+        "test": "services_unittests"
       }
     ],
     "isolated_scripts": [
@@ -4261,8 +4270,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor"
         ],
         "name": "viz_content_browsertests",
         "swarming": {
@@ -5046,8 +5054,7 @@
       },
       {
         "args": [
-          "--enable-features=VizDisplayCompositor,ViewsBrowserWindows",
-          "--test-launcher-filter-file=../../testing/buildbot/filters/viz.content_browsertests.filter"
+          "--enable-features=VizDisplayCompositor,ViewsBrowserWindows"
         ],
         "name": "viz_content_browsertests",
         "swarming": {

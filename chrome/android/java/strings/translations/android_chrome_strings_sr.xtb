@@ -750,7 +750,6 @@ Google налог можда има друге облике историје п�
 <translation id="7128222689758636196">Дозволи за актуелни претраживач</translation>
 <translation id="7138678301420049075">Друго</translation>
 <translation id="7141896414559753902">Блокирај приказивање искачућих прозора и преусмеравања на сајтовима (препоручено)</translation>
-<translation id="7144878232160441200">Пробај поново</translation>
 <translation id="7149893636342594995">Последња 24 сата</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> kB</translation>
 <translation id="7177466738963138057">То можете да промените касније у подешавањима</translation>
@@ -982,6 +981,7 @@ Google налог можда има друге облике историје п�
 <translation id="9100939710791843300">Додирните дугме Почетак да бисте учитали страницу нове картице и прегледали предложене чланке</translation>
 <translation id="9133515669113036225">Ресетуј акредитиве уређаја</translation>
 <translation id="9133703968756164531"><ph name="ITEM_NAME" /> (<ph name="ITEM_ID" />)</translation>
+<translation id="9137013805542155359">Прикажи оригинал</translation>
 <translation id="9139068048179869749">Питај пре него што дозволиш сајтовима да шаљу обавештења (препоручено)</translation>
 <translation id="9155898266292537608">Можете и кратко да додирнете реч да бисте је претражили</translation>
 <translation id="9188680907066685419">Одјавите се са налога којим се управља</translation>
@@ -992,7 +992,6 @@ Google налог можда има друге облике историје п�
 <translation id="932327136139879170">Почетна</translation>
 <translation id="932599481871055447">Уштедите на подацима и прегледајте брже</translation>
 <translation id="938850635132480979">Грешка: <ph name="ERROR_CODE" /></translation>
-<translation id="945360730947989880">Нема довољно простора на SD картици</translation>
 <translation id="945522503751344254">Пошаљи повратне информације</translation>
 <translation id="945632385593298557">Приступ микрофону</translation>
 <translation id="951339005376969845">Избришите постојеће податке. Можете да их вратите ако се вратите на <ph name="FROM_ACCOUNT" />.</translation>

@@ -47,8 +47,6 @@ void ComputeThumbnailScore(const SkBitmap& thumbnail,
 
 }  // namespace
 
-DEFINE_WEB_CONTENTS_USER_DATA_KEY(ThumbnailTabHelper);
-
 // Overview
 // --------
 // This class provides a service for updating thumbnails to be used in the
@@ -303,7 +301,7 @@ void ThumbnailTabHelper::ProcessCapturedBitmap(TriggerReason trigger,
     LogThumbnailingOutcome(trigger, Outcome::SUCCESS);
     base::PostTaskWithTraitsAndReply(
         FROM_HERE,
-        {base::TaskPriority::BACKGROUND,
+        {base::TaskPriority::BEST_EFFORT,
          base::TaskShutdownBehavior::SKIP_ON_SHUTDOWN},
         base::Bind(&ComputeThumbnailScore, bitmap, thumbnailing_context_),
         base::Bind(&ThumbnailTabHelper::StoreThumbnail,

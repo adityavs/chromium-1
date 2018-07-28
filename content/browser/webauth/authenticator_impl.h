@@ -48,6 +48,7 @@ class Origin;
 namespace content {
 
 class AuthenticatorRequestClientDelegate;
+class BrowserContext;
 class RenderFrameHost;
 
 namespace client_data {
@@ -79,6 +80,12 @@ class CONTENT_EXPORT AuthenticatorImpl : public blink::mojom::Authenticator,
   // to a new active document.
   void Bind(blink::mojom::AuthenticatorRequest request);
 
+ protected:
+  virtual void UpdateRequestDelegate();
+  void AddTransportProtocolForTesting(device::FidoTransportProtocol protocol);
+
+  std::unique_ptr<AuthenticatorRequestClientDelegate> request_delegate_;
+
  private:
   friend class AuthenticatorImplTest;
 
@@ -107,6 +114,9 @@ class CONTENT_EXPORT AuthenticatorImpl : public blink::mojom::Authenticator,
                     GetAssertionCallback callback) override;
   void IsUserVerifyingPlatformAuthenticatorAvailable(
       IsUserVerifyingPlatformAuthenticatorAvailableCallback callback) override;
+
+  // Synchronous implementation of IsUserVerfyingPlatformAuthenticatorAvailable.
+  bool IsUserVerifyingPlatformAuthenticatorAvailableImpl();
 
   // WebContentsObserver:
   void DidFinishNavigation(NavigationHandle* navigation_handle) override;
@@ -142,14 +152,16 @@ class CONTENT_EXPORT AuthenticatorImpl : public blink::mojom::Authenticator,
       blink::mojom::GetAssertionAuthenticatorResponsePtr response);
   void Cleanup();
 
-  std::unique_ptr<device::FidoAuthenticator> MaybeCreatePlatformAuthenticator();
+  std::unique_ptr<device::FidoAuthenticator>
+  CreatePlatformAuthenticatorIfAvailable();
+
+  BrowserContext* browser_context() const;
 
   RenderFrameHost* const render_frame_host_;
   service_manager::Connector* connector_ = nullptr;
   base::flat_set<device::FidoTransportProtocol> protocols_;
 
   std::unique_ptr<device::FidoRequestHandlerBase> request_;
-  std::unique_ptr<AuthenticatorRequestClientDelegate> request_delegate_;
   MakeCredentialCallback make_credential_response_callback_;
   GetAssertionCallback get_assertion_response_callback_;
   std::string client_data_json_;

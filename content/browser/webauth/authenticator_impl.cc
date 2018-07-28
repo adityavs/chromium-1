@@ -18,6 +18,7 @@
 #include "content/browser/bad_message.h"
 #include "content/browser/webauth/authenticator_type_converters.h"
 #include "content/public/browser/authenticator_request_client_delegate.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/content_browser_client.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
@@ -354,6 +355,18 @@ void AuthenticatorImpl::Bind(blink::mojom::AuthenticatorRequest request) {
   binding_.Bind(std::move(request));
 }
 
+void AuthenticatorImpl::UpdateRequestDelegate() {
+  DCHECK(!request_delegate_);
+  request_delegate_ =
+      GetContentClient()->browser()->GetWebAuthenticationRequestDelegate(
+          render_frame_host_);
+}
+
+void AuthenticatorImpl::AddTransportProtocolForTesting(
+    device::FidoTransportProtocol protocol) {
+  protocols_.insert(protocol);
+}
+
 bool AuthenticatorImpl::IsFocused() const {
   return render_frame_host_->IsCurrent() && request_delegate_->IsFocused();
 }
@@ -419,10 +432,7 @@ void AuthenticatorImpl::MakeCredential(
     return;
   }
 
-  DCHECK(!request_delegate_);
-  request_delegate_ =
-      GetContentClient()->browser()->GetWebAuthenticationRequestDelegate(
-          render_frame_host_);
+  UpdateRequestDelegate();
   if (!request_delegate_) {
     InvokeCallbackAndCleanup(std::move(callback),
                              blink::mojom::AuthenticatorStatus::PENDING_REQUEST,
@@ -501,8 +511,9 @@ void AuthenticatorImpl::MakeCredential(
       std::move(authenticator_selection_criteria),
       base::BindOnce(&AuthenticatorImpl::OnRegisterResponse,
                      weak_factory_.GetWeakPtr()),
-      base::BindOnce(&AuthenticatorImpl::MaybeCreatePlatformAuthenticator,
+      base::BindOnce(&AuthenticatorImpl::CreatePlatformAuthenticatorIfAvailable,
                      base::Unretained(this)));
+  request_->set_observer(request_delegate_.get());
 }
 
 // mojom:Authenticator
@@ -515,10 +526,7 @@ void AuthenticatorImpl::GetAssertion(
     return;
   }
 
-  DCHECK(!request_delegate_);
-  request_delegate_ =
-      GetContentClient()->browser()->GetWebAuthenticationRequestDelegate(
-          render_frame_host_);
+  UpdateRequestDelegate();
   if (!request_delegate_) {
     InvokeCallbackAndCleanup(std::move(callback),
                              blink::mojom::AuthenticatorStatus::PENDING_REQUEST,
@@ -586,17 +594,32 @@ void AuthenticatorImpl::GetAssertion(
           std::move(alternative_application_parameter)),
       base::BindOnce(&AuthenticatorImpl::OnSignResponse,
                      weak_factory_.GetWeakPtr()),
-      base::BindOnce(&AuthenticatorImpl::MaybeCreatePlatformAuthenticator,
+      base::BindOnce(&AuthenticatorImpl::CreatePlatformAuthenticatorIfAvailable,
                      base::Unretained(this)));
+  request_->set_observer(request_delegate_.get());
 }
 
 void AuthenticatorImpl::IsUserVerifyingPlatformAuthenticatorAvailable(
     IsUserVerifyingPlatformAuthenticatorAvailableCallback callback) {
-  bool result = false;
+  const bool result = IsUserVerifyingPlatformAuthenticatorAvailableImpl();
+  base::SequencedTaskRunnerHandle::Get()->PostTask(
+      FROM_HERE, base::BindOnce(std::move(callback), result));
+}
+
+bool AuthenticatorImpl::IsUserVerifyingPlatformAuthenticatorAvailableImpl() {
 #if defined(OS_MACOSX)
-  result = device::fido::mac::TouchIdAuthenticator::IsAvailable();
+  if (browser_context()->IsOffTheRecord()) {
+    return false;
+  }
+
+  // Check whether Touch ID is supported by the hardware and enrolled in the
+  // OS. Also check whether the (embedder-specific) request delegate provides a
+  // Touch ID authenticator config.
+  return device::fido::mac::TouchIdAuthenticator::IsAvailable() &&
+         request_delegate_->GetTouchIdAuthenticatorConfig();
+#else
+  return false;
 #endif
-  std::move(callback).Run(result);
 }
 
 void AuthenticatorImpl::DidFinishNavigation(
@@ -810,18 +833,32 @@ void AuthenticatorImpl::Cleanup() {
   echo_appid_extension_ = false;
 }
 
+BrowserContext* AuthenticatorImpl::browser_context() const {
+  return content::WebContents::FromRenderFrameHost(render_frame_host_)
+      ->GetBrowserContext();
+}
+
 std::unique_ptr<device::FidoAuthenticator>
-AuthenticatorImpl::MaybeCreatePlatformAuthenticator() {
+AuthenticatorImpl::CreatePlatformAuthenticatorIfAvailable() {
 #if defined(OS_MACOSX)
+  // Incognito mode disables platform authenticators, so check for availability
+  // first.
+  if (!IsUserVerifyingPlatformAuthenticatorAvailableImpl()) {
+    return nullptr;
+  }
+
+  // Not all embedders may provide an authenticator config.
   auto opt_authenticator_config =
       request_delegate_->GetTouchIdAuthenticatorConfig();
-  if (opt_authenticator_config) {
-    return device::fido::mac::TouchIdAuthenticator::CreateIfAvailable(
-        std::move(opt_authenticator_config->keychain_access_group),
-        std::move(opt_authenticator_config->metadata_secret));
+  if (!opt_authenticator_config) {
+    return nullptr;
   }
-#endif  // defined(OS_MACOSX)
+  return device::fido::mac::TouchIdAuthenticator::CreateIfAvailable(
+      std::move(opt_authenticator_config->keychain_access_group),
+      std::move(opt_authenticator_config->metadata_secret));
+#else
   return nullptr;
+#endif
 }
 
 }  // namespace content

@@ -19,7 +19,6 @@
 #include "third_party/blink/public/platform/web_worker_fetch_context.h"
 #include "third_party/blink/renderer/core/loader/threadable_loader.h"
 #include "third_party/blink/renderer/core/loader/threadable_loader_client.h"
-#include "third_party/blink/renderer/core/loader/threadable_loading_context.h"
 #include "third_party/blink/renderer/core/loader/worker_fetch_context.h"
 #include "third_party/blink/renderer/core/testing/dummy_page_holder.h"
 #include "third_party/blink/renderer/core/workers/worker_reporting_proxy.h"
@@ -197,7 +196,7 @@ class DocumentThreadableLoaderTestHelper : public ThreadableLoaderTestHelper {
   void CreateLoader(ThreadableLoaderClient* client) override {
     ResourceLoaderOptions resource_loader_options;
     loader_ = new ThreadableLoader(GetDocument(), client,
-                                   resource_loader_options, base::nullopt);
+                                   resource_loader_options);
   }
 
   void StartLoader(const ResourceRequest& request) override {
@@ -335,8 +334,7 @@ class WorkerThreadableLoaderTestHelper : public ThreadableLoaderTestHelper {
     security_origin_ = GetDocument().GetSecurityOrigin();
     parent_execution_context_task_runners_ =
         ParentExecutionContextTaskRunners::Create(&GetDocument());
-    worker_thread_ = std::make_unique<WorkerThreadForTest>(
-        ThreadableLoadingContext::Create(GetDocument()), *reporting_proxy_);
+    worker_thread_ = std::make_unique<WorkerThreadForTest>(*reporting_proxy_);
     WorkerClients* worker_clients = WorkerClients::Create();
 
     ProvideWorkerFetchContextToWorker(
@@ -394,7 +392,7 @@ class WorkerThreadableLoaderTestHelper : public ThreadableLoaderTestHelper {
     DCHECK(worker_thread_->GlobalScope()->IsWorkerGlobalScope());
 
     loader_ = new ThreadableLoader(*worker_thread_->GlobalScope(), client,
-                                   resource_loader_options, base::nullopt);
+                                   resource_loader_options);
     DCHECK(loader_);
     event->Signal();
   }
@@ -714,13 +712,11 @@ TEST_P(ThreadableLoaderTest, DidFailInStart) {
   CreateLoader();
   CallCheckpoint(1);
 
-  String error_message = String::Format(
-      "Failed to load '%s': Cross origin requests are not allowed by request "
-      "mode.",
-      ErrorURL().GetString().Utf8().data());
-  EXPECT_CALL(*Client(), DidFail(ResourceError::CancelledDueToAccessCheckError(
-                             ErrorURL(), ResourceRequestBlockedReason::kOther,
-                             error_message)));
+  EXPECT_CALL(
+      *Client(),
+      DidFail(ResourceError(
+          ErrorURL(), network::CORSErrorStatus(
+                          network::mojom::CORSError::kDisallowedByMode))));
   EXPECT_CALL(GetCheckpoint(), Call(2));
 
   StartLoader(ErrorURL(), network::mojom::FetchRequestMode::kSameOrigin);
@@ -765,13 +761,11 @@ TEST_P(ThreadableLoaderTest, DidFailAccessControlCheck) {
   CallCheckpoint(1);
 
   EXPECT_CALL(GetCheckpoint(), Call(2));
-  EXPECT_CALL(
-      *Client(),
-      DidFail(ResourceError::CancelledDueToAccessCheckError(
-          SuccessURL(), ResourceRequestBlockedReason::kOther,
-          "No 'Access-Control-Allow-Origin' header is present on the requested "
-          "resource. Origin 'http://fake.url' is therefore not allowed "
-          "access.")));
+  EXPECT_CALL(*Client(),
+              DidFail(ResourceError(
+                  SuccessURL(),
+                  network::CORSErrorStatus(
+                      network::mojom::CORSError::kMissingAllowOriginHeader))));
 
   StartLoader(SuccessURL(), network::mojom::FetchRequestMode::kCORS);
   CallCheckpoint(2);

@@ -254,8 +254,8 @@ class ServiceWorkerURLRequestJobTest
     provider_host_ = provider_host->AsWeakPtr();
     provider_host->SetDocumentUrl(GURL("https://example.com/"));
     registration_->SetActiveVersion(version_);
-    provider_host->AssociateRegistration(registration_.get(),
-                                         false /* notify_controllerchange */);
+    provider_host->SetControllerRegistration(
+        registration_, false /* notify_controllerchange */);
 
     // Set up scaffolding for handling URL requests.
     ChromeBlobStorageContext* chrome_blob_storage_context =
@@ -389,11 +389,11 @@ class ServiceWorkerURLRequestJobTest
       *result = ServiceWorkerMetrics::REQUEST_JOB_ERROR_NO_PROVIDER_HOST;
       return nullptr;
     }
-    if (!provider_host_->active_version()) {
+    if (!provider_host_->controller()) {
       *result = ServiceWorkerMetrics::REQUEST_JOB_ERROR_NO_ACTIVE_VERSION;
       return nullptr;
     }
-    return provider_host_->active_version();
+    return provider_host_->controller();
   }
 
   bool RequestStillValid(

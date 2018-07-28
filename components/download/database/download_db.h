@@ -5,7 +5,9 @@
 #ifndef COMPONENTS_DOWNLOAD_DATABASE_DOWNLOAD_DB_H_
 #define COMPONENTS_DOWNLOAD_DATABASE_DOWNLOAD_DB_H_
 
+#include <memory>
 #include <string>
+#include <vector>
 
 #include "base/callback_forward.h"
 #include "base/optional.h"

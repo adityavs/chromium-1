@@ -5,7 +5,6 @@
 package org.chromium.chrome.browser.toolbar;
 
 import android.content.res.Resources;
-import android.view.View.OnClickListener;
 
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
@@ -20,6 +19,7 @@ import org.chromium.chrome.browser.contextualsearch.ContextualSearchObserver;
 import org.chromium.chrome.browser.fullscreen.ChromeFullscreenManager;
 import org.chromium.chrome.browser.fullscreen.ChromeFullscreenManager.FullscreenListener;
 import org.chromium.chrome.browser.gsa.GSAContextDisplaySelection;
+import org.chromium.chrome.browser.toolbar.ToolbarButtonSlotData.ToolbarButtonData;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.base.WindowAndroid.KeyboardVisibilityListener;
 import org.chromium.ui.resources.ResourceManager;
@@ -55,6 +55,12 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
     /** Whether the swipe layout is currently active. */
     private boolean mIsInSwipeLayout;
 
+    /** The data required to fill in the first (lefmtost) bottom toolbar button slot.*/
+    private final ToolbarButtonSlotData mFirstSlotData;
+
+    /** The data required to fill in the second bottom toolbar button slot.*/
+    private final ToolbarButtonSlotData mSecondSlotData;
+
     /**
      * Build a new mediator that handles events from outside the bottom toolbar.
      * @param model The {@link BottomToolbarModel} that holds all the state for the bottom toolbar.
@@ -63,7 +69,8 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
      * @param resources Android {@link Resources} to pull dimensions from.
      */
     BottomToolbarMediator(BottomToolbarModel model, ChromeFullscreenManager fullscreenManager,
-            Resources resources) {
+            Resources resources, ToolbarButtonSlotData firstSlotData,
+            ToolbarButtonSlotData secondSlotData) {
         mModel = model;
         mFullscreenManager = fullscreenManager;
         mFullscreenManager.addListener(this);
@@ -72,6 +79,14 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
         fullscreenManager.setBottomControlsHeight(
                 resources.getDimensionPixelOffset(R.dimen.bottom_toolbar_height));
         fullscreenManager.updateViewportSize();
+
+        mFirstSlotData = firstSlotData;
+        mSecondSlotData = secondSlotData;
+
+        mModel.setValue(
+                BottomToolbarModel.FIRST_BUTTON_DATA, mFirstSlotData.browsingModeButtonData);
+        mModel.setValue(
+                BottomToolbarModel.SECOND_BUTTON_DATA, mSecondSlotData.browsingModeButtonData);
     }
 
     /**
@@ -115,7 +130,10 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
 
     @Override
     public void onOverviewModeStartedShowing(boolean showToolbar) {
-        mModel.setValue(BottomToolbarModel.SEARCH_ACCELERATOR_VISIBLE, false);
+        mModel.setValue(
+                BottomToolbarModel.FIRST_BUTTON_DATA, mFirstSlotData.tabSwitcherModeButtonData);
+        mModel.setValue(
+                BottomToolbarModel.SECOND_BUTTON_DATA, mSecondSlotData.tabSwitcherModeButtonData);
     }
 
     @Override
@@ -123,7 +141,10 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
 
     @Override
     public void onOverviewModeStartedHiding(boolean showToolbar, boolean delayAnimation) {
-        mModel.setValue(BottomToolbarModel.SEARCH_ACCELERATOR_VISIBLE, true);
+        mModel.setValue(
+                BottomToolbarModel.FIRST_BUTTON_DATA, mFirstSlotData.browsingModeButtonData);
+        mModel.setValue(
+                BottomToolbarModel.SECOND_BUTTON_DATA, mSecondSlotData.browsingModeButtonData);
     }
 
     @Override
@@ -140,10 +161,6 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
         // contextual search is hidden.
         if (mModel.getValue(BottomToolbarModel.Y_OFFSET) != 0) return;
         mModel.setValue(BottomToolbarModel.ANDROID_VIEW_VISIBLE, true);
-    }
-
-    void setSearchAcceleratorListener(OnClickListener searchAcceleratorListener) {
-        mModel.setValue(BottomToolbarModel.SEARCH_ACCELERATOR_LISTENER, searchAcceleratorListener);
     }
 
     @Override
@@ -208,5 +225,18 @@ class BottomToolbarMediator implements ContextualSearchObserver, FullscreenListe
         // Watch for keyboard events so we can hide the bottom toolbar when the keyboard is showing.
         mWindowAndroid = windowAndroid;
         mWindowAndroid.addKeyboardVisibilityListener(this);
+    }
+
+    void setTabSwitcherButtonData(
+            ToolbarButtonData firstSlotButtonData, ToolbarButtonData secondSlotButtonData) {
+        mFirstSlotData.tabSwitcherModeButtonData = firstSlotButtonData;
+        mSecondSlotData.tabSwitcherModeButtonData = secondSlotButtonData;
+
+        if (mOverviewModeBehavior.overviewVisible()) {
+            mModel.setValue(
+                    BottomToolbarModel.FIRST_BUTTON_DATA, mFirstSlotData.tabSwitcherModeButtonData);
+            mModel.setValue(BottomToolbarModel.SECOND_BUTTON_DATA,
+                    mSecondSlotData.tabSwitcherModeButtonData);
+        }
     }
 }

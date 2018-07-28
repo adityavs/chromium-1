@@ -867,6 +867,10 @@
       "apks/MonochromePublic.apk",
     ],
   },
+  "monochrome_public_test_ar_apk": {
+    "label": "//chrome/android:monochrome_public_test_ar_apk",
+    "type": "console_test_launcher",
+  },
   "monochrome_static_initializers": {
     "label": "//chrome/android:monochrome_static_initializers",
     "type": "additional_compile_target",
@@ -940,10 +944,6 @@
   "pdf_unittests": {
     "label": "//pdf:pdf_unittests",
     "type": "console_test_launcher",
-  },
-  "pdfium_all": {
-    "label": "//third_party/pdfium:pdfium_all",
-    "type": "additional_compile_target",
   },
   "pdfium_test": {
     "label": "//third_party/pdfium/samples:pdfium_test",
@@ -1253,10 +1253,6 @@
   "url_unittests": {
     "label": "//url:url_unittests",
     "type": "console_test_launcher",
-  },
-  "v8:gn_all": {
-    "label": "//v8:gn_all",
-    "type": "additional_compile_target",
   },
   "video_decode_accelerator_unittest": {
     "label": "//media/gpu:video_decode_accelerator_unittest",

@@ -97,7 +97,7 @@
 #endif  // defined(OS_WIN)
 
 #if BUILDFLAG(ENABLE_RLZ)
-#include "components/google/core/browser/google_util.h"
+#include "components/google/core/common/google_util.h"
 #include "components/rlz/rlz_tracker.h"  // nogncheck
 #endif
 
@@ -258,7 +258,7 @@ void RecordLaunchModeHistogram(LaunchMode mode) {
     // The mode couldn't be determined with a fast path. Perform a more
     // expensive evaluation out of the critical startup path.
     base::PostTaskWithTraits(FROM_HERE,
-                             {base::TaskPriority::BACKGROUND,
+                             {base::TaskPriority::BEST_EFFORT,
                               base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
                              base::BindOnce([]() {
                                base::UmaHistogramSparse(kHistogramName,

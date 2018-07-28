@@ -219,6 +219,12 @@
           'shards': 20,
         },
       },
+      'Win10 Tests x64': {
+        # crbug.com/868082
+        'args': [
+          '--disable-features=WebRTC-H264WithOpenH264FFmpeg',
+        ],
+      },
     },
   },
   'cast_shell_browsertests': {
@@ -442,6 +448,16 @@
       # chromium.win
       'Win10 Tests x64 (dbg)': {
         'experiment_percentage': 100,
+        # crbug.com/868082
+        'args': [
+          '--disable-features=WebRTC-H264WithOpenH264FFmpeg',
+        ],
+      },
+      'Win10 Tests x64': {
+        # crbug.com/868082
+        'args': [
+          '--disable-features=WebRTC-H264WithOpenH264FFmpeg',
+        ],
       },
     },
   },
@@ -736,8 +752,10 @@
       },
       # chromium.memory
       'Linux Chromium OS ASan LSan Tests (1)': {
+        # These are very slow on the ASAN trybot for some reason.
+        # crbug.com/794372
         'swarming': {
-          'shards': 20,
+          'shards': 30,
         },
       },
       'Linux ChromiumOS MSan Tests': {
@@ -833,6 +851,15 @@
       'Win7 Tests (1)',  # For swarming capacity reasons.
       'Win10 Tests x64 (dbg)',  # Matches browser_tests.
     ],
+    'modifications': {
+      # chromium.win
+      'Win10 Tests x64': {
+        # crbug.com/868082
+        'args': [
+          '--disable-features=WebRTC-H264WithOpenH264FFmpeg',
+        ],
+      },
+    },
   },
   'network_service_components_browsertests': {
     'remove_from': [
@@ -1331,6 +1358,13 @@
           'shards': 7,
         },
       },
+      # chromium.win
+      'Win10 Tests x64': {
+        # crbug.com/868082
+        'args': [
+          '--disable-features=WebRTC-H264WithOpenH264FFmpeg',
+        ],
+      },
     },
   },
   'viz_browser_tests': {
@@ -1663,6 +1697,8 @@
           ],
           'shards': 12,
         },
+
+        'experiment_percentage': 100,  # crbug.com/868180
       },
       'Mac10.13 Tests (dbg)': {
         'args': [

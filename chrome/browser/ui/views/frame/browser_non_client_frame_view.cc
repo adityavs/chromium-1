@@ -109,7 +109,7 @@ gfx::ImageSkia BrowserNonClientFrameView::GetIncognitoAvatarIcon() const {
 }
 
 SkColor BrowserNonClientFrameView::GetToolbarTopSeparatorColor() const {
-  const auto color_id =
+  const int color_id =
       ShouldPaintAsActive()
           ? ThemeProperties::COLOR_TOOLBAR_TOP_SEPARATOR
           : ThemeProperties::COLOR_TOOLBAR_TOP_SEPARATOR_INACTIVE;
@@ -118,26 +118,44 @@ SkColor BrowserNonClientFrameView::GetToolbarTopSeparatorColor() const {
 
 SkColor BrowserNonClientFrameView::GetTabSeparatorColor() const {
   DCHECK(MD::IsRefreshUi());
+  // TODO(pkasting): https://crbug.com/866689  Replace this with "blend
+  // background tab text color toward background tab background color at 46% or
+  // 1.84 contrast ratio, whichever is larger" (and make sure the blend is large
+  // enough in the default theme to not need adjusting).
   constexpr SkAlpha kTabSeparatorAlpha = 0x4D;  // 30%
-  const SkColor frame_color = GetFrameColor();
+  const SkColor tab_color = GetTabBackgroundColor(TAB_INACTIVE);
   const SkColor base_color =
-      color_utils::BlendTowardOppositeLuma(frame_color, SK_AlphaOPAQUE);
-  return color_utils::AlphaBlend(base_color, frame_color, kTabSeparatorAlpha);
+      color_utils::BlendTowardOppositeLuma(tab_color, SK_AlphaOPAQUE);
+  return color_utils::AlphaBlend(base_color, tab_color, kTabSeparatorAlpha);
 }
 
 SkColor BrowserNonClientFrameView::GetTabBackgroundColor(TabState state) const {
-  if (state == TAB_INACTIVE && MD::IsRefreshUi())
-    return GetFrameColor();
-  const auto color_id = state == TAB_ACTIVE
-                            ? ThemeProperties::COLOR_TOOLBAR
-                            : ThemeProperties::COLOR_BACKGROUND_TAB;
-  return GetThemeOrDefaultColor(color_id);
+  if (state == TAB_ACTIVE)
+    return GetThemeOrDefaultColor(ThemeProperties::COLOR_TOOLBAR);
+
+  const int color_id = ShouldPaintAsActive()
+                           ? ThemeProperties::COLOR_BACKGROUND_TAB
+                           : ThemeProperties::COLOR_BACKGROUND_TAB_INACTIVE;
+  const ui::ThemeProvider* tp = GetThemeProvider();
+  // When the background tab color has not been customized, use the actual frame
+  // color instead of COLOR_BACKGROUND_TAB; these will differ for single-tab
+  // mode and custom window frame colors.
+  return (MD::IsRefreshUi() && !tp->HasCustomColor(color_id))
+             ? color_utils::HSLShift(
+                   GetFrameColor(),
+                   tp->GetTint(ThemeProperties::TINT_BACKGROUND_TAB))
+             : GetThemeOrDefaultColor(color_id);
 }
 
 SkColor BrowserNonClientFrameView::GetTabForegroundColor(TabState state) const {
-  if (MD::IsRefreshUi() && state == TAB_INACTIVE &&
-      !GetThemeProvider()->HasCustomColor(
-          ThemeProperties::COLOR_BACKGROUND_TAB_TEXT)) {
+  if (state == TAB_ACTIVE)
+    return GetThemeOrDefaultColor(ThemeProperties::COLOR_TAB_TEXT);
+
+  const int color_id =
+      ShouldPaintAsActive()
+          ? ThemeProperties::COLOR_BACKGROUND_TAB_TEXT
+          : ThemeProperties::COLOR_BACKGROUND_TAB_TEXT_INACTIVE;
+  if (MD::IsRefreshUi() && !GetThemeProvider()->HasCustomColor(color_id)) {
     const SkColor background_color = GetTabBackgroundColor(TAB_INACTIVE);
     const SkColor default_color = color_utils::IsDark(background_color)
                                       ? gfx::kGoogleGrey500
@@ -146,10 +164,32 @@ SkColor BrowserNonClientFrameView::GetTabForegroundColor(TabState state) const {
                                                     background_color);
   }
 
-  const auto color_id = state == TAB_ACTIVE
-                            ? ThemeProperties::COLOR_TAB_TEXT
-                            : ThemeProperties::COLOR_BACKGROUND_TAB_TEXT;
   return GetThemeOrDefaultColor(color_id);
+}
+
+int BrowserNonClientFrameView::GetTabBackgroundResourceId(
+    bool* has_custom_image) const {
+  const ui::ThemeProvider* tp = GetThemeProvider();
+  const bool incognito = browser_view_->IsIncognito();
+  const bool active = ShouldPaintAsActive();
+  const int active_id =
+      incognito ? IDR_THEME_TAB_BACKGROUND_INCOGNITO : IDR_THEME_TAB_BACKGROUND;
+  const int inactive_id =
+      incognito ? IDR_THEME_TAB_BACKGROUND_INCOGNITO_INACTIVE
+                : IDR_THEME_TAB_BACKGROUND_INACTIVE;
+  const int id = active ? active_id : inactive_id;
+
+  // tp->HasCustomImage() will only return true if the supplied ID has been
+  // customized directly.  We also account for the following fallback cases:
+  // * The inactive images are copied directly from the active ones if present
+  // * Tab backgrounds are generated from frame backgrounds if present, and
+  // * The incognito frame image is generated from the normal frame image, so
+  //   in incognito mode we look at both.
+  *has_custom_image =
+      tp->HasCustomImage(id) || (!active && tp->HasCustomImage(active_id)) ||
+      tp->HasCustomImage(IDR_THEME_FRAME) ||
+      (incognito && tp->HasCustomImage(IDR_THEME_FRAME_INCOGNITO));
+  return id;
 }
 
 views::Button* BrowserNonClientFrameView::GetProfileSwitcherButton() const {

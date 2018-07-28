@@ -643,6 +643,15 @@
       ],
     },
     {
+      'name': 'NetworkFileShares',
+      'type': 'group',
+      'caption': '''Network File Shares settings''',
+      'desc': '''Configure Network File Share related policies.''',
+      'policies': [
+        'NetworkFileSharesAllowed',
+      ],
+    },
+    {
       'name': 'HomepageLocation',
       'type': 'string',
       'schema': { 'type': 'string' },
@@ -1768,7 +1777,7 @@
       If you enable this setting or do not set a value, AutoFill will remain under the control of the user. This will allow them to configure AutoFill profiles and to switch AutoFill on or off at their own discretion.''',
     },
     {
-      'name': 'AutofillProfileEnabled',
+      'name': 'AutofillAddressEnabled',
       'type': 'main',
       'schema': { 'type': 'boolean' },
       'supported_on': [
@@ -1783,9 +1792,9 @@
       },
       'example_value': False,
       'id': 459,
-      'caption': '''Enable AutoFill for profiles''',
+      'caption': '''Enable AutoFill for addresses''',
       'tags': [],
-      'desc': '''Enables <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>'s AutoFill feature and allows users to auto complete profile and address information in web forms using previously stored information.
+      'desc': '''Enables <ph name="PRODUCT_NAME">$1<ex>Google Chrome</ex></ph>'s AutoFill feature and allows users to auto complete address information in web forms using previously stored information.
 
       If this setting is disabled, Autofill will never suggest, or fill address information, nor will it save additional address information that the user might submit while browsing the web.
 
@@ -6925,7 +6934,7 @@
       'caption': '''URLs that will be granted access to video capture devices without prompt''',
       'tags': ['website-sharing'],
       'desc': '''Patterns in this list will be matched against the security
-      origin of the requesting URL.  If a match is found, access to audio
+      origin of the requesting URL.  If a match is found, access to video
       capture devices will be granted without prompt.
 
       NOTE: Until version 45, this policy was only supported in Kiosk mode.''',
@@ -12540,6 +12549,25 @@
 
       If this policy is left not set, URL-keyed anonymized data collection will be enabled but the user will be able to change it.''',
     },
+    {
+      'id': 462,
+      'name': 'NetworkFileSharesAllowed',
+      'type': 'main',
+      'schema': {'type': 'boolean', },
+      'tags': [],
+      'features': {
+        'dynamic_refresh': False,
+        'per_profile': True,
+      },
+      'supported_on': ['chrome_os:70-'],
+      'caption': '''Contorls Network File Shares for ChromeOS availibility''',
+      'example_value': True,
+      'desc': '''This policy controls whether the Network File Shares feature for <ph name="PRODUCT_NAME">$2<ex>Google Chrome OS</ex></ph> is allowed for a user.
+
+      When this policy is not configured or set to True, users will be able to use Network File Shares.
+
+      When this policy is set to False, users will be unable to use Network File Shares.''',
+    },
   ],
 
   'messages': {
@@ -12681,5 +12709,5 @@ The recommended way to configure policy on Windows is via GPO, although provisio
   },
   'placeholders': [],
   'deleted_policy_ids': [412],
-  'highest_id_currently_used': 461
+  'highest_id_currently_used': 462
 }

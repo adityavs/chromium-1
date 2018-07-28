@@ -164,7 +164,8 @@ crbug.com/857490 virtual/paint-touchaction-rects/fast/events/touch/gesture/pad-g
 crbug.com/857490 virtual/paint-touchaction-rects/fast/events/touch/gesture/touch-gesture-fling-with-page-scale.html [ Skip ]
 
 # Sheriff 2018/05/25
-crbug.com/846749 [ Mac ] virtual/stable/http/tests/navigation/navigation-interrupted-by-fragment.html  [ Pass Failure ]
+crbug.com/846749 [ Linux Mac Debug ] http/tests/navigation/navigation-interrupted-by-fragment.html  [ Pass Timeout ]
+crbug.com/846749 [ Linux Mac Debug ] virtual/stable/http/tests/navigation/navigation-interrupted-by-fragment.html  [ Pass Timeout ]
 
 crbug.com/849459 fragmentation/repeating-thead-under-repeating-thead.html [ Failure ]
 
@@ -1212,7 +1213,6 @@ crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/cross-axis-scrollba
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/definite-main-size.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/display-flexbox-set-get.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flex-algorithm-min-max.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flex-algorithm-with-margins.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flex-algorithm.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flex-align-baseline.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flex-align-column.html [ Skip ]
@@ -1251,7 +1251,6 @@ crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexbox-width-with-
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexbox-with-multi-column-property.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexbox-wordwrap.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexitem-no-margin-collapsing.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexitem-percent-height-change.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexitem-stretch-image.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexitem-stretch-range.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/css3/flexbox/flexitem.html [ Skip ]
@@ -1379,7 +1378,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/fle
 crbug.com/467127 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-aspect-ratio-img-column-001.html [ Skip ]
 crbug.com/467127 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-aspect-ratio-img-column-002.html [ Skip ]
 crbug.com/467127 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-aspect-ratio-img-column-003.html [ Skip ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-basis-008.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-box-wrap.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-direction-with-element-insert.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-direction.html [ Skip ]
@@ -1393,7 +1391,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/fle
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-flow-010.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-flow-011.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-flow-012.html [ Skip ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-grow-001.xht [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-items-flexibility.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-margin-no-collapse.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-minimum-height-flex-items-001.xht [ Skip ]
@@ -1423,7 +1420,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/fle
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_absolute-atomic.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-center.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-flexend.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-flexstart.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-spacearound.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-spacebetween.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-content-stretch-2.html [ Failure ]
@@ -1433,8 +1429,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/fle
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-center.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-flexend-2.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-flexend.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-flexstart-2.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-flexstart.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-items-stretch.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-self-auto.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flexbox_align-self-baseline.html [ Failure ]
@@ -1610,7 +1604,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttw
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-align-content-end.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-align-content-space-around.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-align-content-space-between.html [ Failure ]
-crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-align-content-start.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-base.html [ Failure ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-direction-column-reverse.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-direction-column.html [ Skip ]
@@ -1618,7 +1611,6 @@ crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttw
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-inline.html [ Skip ]
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-order.html [ Failure ]
 crbug.com/467127 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-wrap-reverse.html [ Failure ]
-crbug.com/467127 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/ttwf-reftest-flex-wrap.html [ Failure ]
 
 ### virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-lines/
 crbug.com/591099 virtual/layout_ng_experimental/external/wpt/css/css-flexbox/flex-lines/multi-line-wrap-reverse-column-reverse.html [ Skip ]
@@ -1684,21 +1676,41 @@ crbug.com/538697 [ Win ] printing/webgl-oversized-printing.html [ Failure Crash 
 # Crashing tests in dictionary order.
 
 # Timeout tests in dictionary order.
-crbug.com/736308 virtual/outofblink-cors/external/wpt/service-workers/service-worker/sandboxed-iframe-fetch-event.https.html [ Timeout ]
-crbug.com/736308 virtual/outofblink-cors/external/wpt/service-workers/service-worker/worker-in-sandboxed-iframe-by-csp-fetch-event.https.html [ Timeout ]
+crbug.com/867834 virtual/outofblink-cors/external/wpt/service-workers/service-worker/sandboxed-iframe-fetch-event.https.html [ Timeout ]
+crbug.com/867834 virtual/outofblink-cors/external/wpt/service-workers/service-worker/worker-in-sandboxed-iframe-by-csp-fetch-event.https.html [ Timeout ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/send-authentication-existing-session-manual.htm [ Timeout ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/send-redirect-bogus-sync.htm [ Timeout ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/send-authentication-existing-session-manual.htm [ Timeout ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/send-redirect-bogus-sync.htm [ Timeout ]
 
 # Failing tests in dictionary order.
+crbug.com/867834 virtual/outofblink-cors/external/wpt/fetch/api/cors/sandboxed-iframe.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/external/wpt/service-workers/service-worker/navigation-timing.https.html [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/access-control-and-redirects-async.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/access-control-sandboxed-iframe-denied-without-wildcard.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/access-control-sandboxed-iframe-denied.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/data-uri.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/event-upload-progress-crossorigin.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/event-upload-progress.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/send-authentication-prompt-2-manual.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors/external/wpt/xhr/send-redirect-to-cors.htm [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/fetch/chromium/error-messages.html [ Failure ]
-crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/cross-origin-no-credential-prompt.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/origin-whitelisting-all.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/origin-whitelisting-exact-match.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/origin-whitelisting-removal.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/origin-whitelisting-subdomains.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors/http/tests/xmlhttprequest/origin-whitelisting-ip-addresses.html [ Failure ]
+crbug.com/867834 virtual/outofblink-cors-ns/external/wpt/fetch/api/cors/sandboxed-iframe.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/service-workers/service-worker/navigation-timing.https.html [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/access-control-and-redirects-async.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/access-control-sandboxed-iframe-denied-without-wildcard.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/access-control-sandboxed-iframe-denied.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/data-uri.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/event-upload-progress-crossorigin.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/event-upload-progress.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/send-authentication-prompt-2-manual.htm [ Failure ]
+crbug.com/736308 virtual/outofblink-cors-ns/external/wpt/xhr/send-redirect-to-cors.htm [ Failure ]
 crbug.com/736308 virtual/outofblink-cors-ns/http/tests/fetch/chromium/error-messages.html [ Failure ]
-crbug.com/736308 virtual/outofblink-cors-ns/http/tests/xmlhttprequest/cross-origin-no-credential-prompt.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors-ns/http/tests/xmlhttprequest/origin-whitelisting-all.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors-ns/http/tests/xmlhttprequest/origin-whitelisting-exact-match.html [ Failure ]
 crbug.com/736308 virtual/outofblink-cors-ns/http/tests/xmlhttprequest/origin-whitelisting-removal.html [ Failure ]
@@ -1820,8 +1832,6 @@ crbug.com/567837 virtual/scalefactor150/fast/hidpi/static/popup-menu-with-scroll
 crbug.com/567837 virtual/scalefactor200/fast/hidpi/static/popup-menu-with-scrollbar-appearance.html [ Skip ]
 crbug.com/567837 virtual/scalefactor200withzoom/fast/hidpi/static/popup-menu-with-scrollbar-appearance.html [ Skip ]
 
-crbug.com/853912 virtual/paint-touchaction-rects/fast/events/touch/compositor-touch-hit-rects-non-composited-scroll.html [ Failure ]
-crbug.com/853912 virtual/paint-touchaction-rects/fast/events/touch/compositor-touch-hit-rects-squashing.html [ Failure ]
 crbug.com/853912 virtual/paint-touchaction-rects/fast/events/touch/compositor-touch-hit-rects.html [ Failure ]
 
 # TODO(ojan): These tests aren't flaky. See crbug.com/517144.
@@ -1866,7 +1876,6 @@ crbug.com/749492 external/wpt/html/browsers/browsing-the-web/navigating-across-d
 crbug.com/749492 external/wpt/html/browsers/browsing-the-web/navigating-across-documents/009.html [ Skip ]
 crbug.com/749492 external/wpt/html/browsers/browsing-the-web/navigating-across-documents/010.html [ Skip ]
 crbug.com/490511 external/wpt/html/browsers/offline/application-cache-api/api_update.https.html [ Failure Pass ]
-crbug.com/490511 [ Linux Win ] external/wpt/html/rendering/bindings/the-input-element-as-a-text-entry-widget/unrecognized-type-should-fallback-as-text-type.html [ Failure ]
 crbug.com/108417 external/wpt/html/rendering/non-replaced-elements/tables/table-border-1.html [ Failure ]
 crbug.com/490511 external/wpt/html/rendering/non-replaced-elements/the-hr-element-0/color.html [ Failure ]
 crbug.com/490511 external/wpt/html/rendering/non-replaced-elements/the-hr-element-0/width.html [ Failure ]
@@ -2110,7 +2119,7 @@ crbug.com/377696 printing/setPrinting.html [ Skip ]
 crbug.com/377696 printing/width-overflow.html [ Skip ]
 
 crbug.com/658305 css3/filters/buffer-offset.html [ Failure Pass ]
-crbug.com/658305 css3/filters/effect-all-on-background-hw.html [ Failure Pass ]
+crbug.com/658305 css3/filters/effect-all-on-background-hw.html [ Failure Pass Timeout ]
 crbug.com/658305 css3/filters/effect-reference-after.html [ Failure Pass ]
 crbug.com/658305 css3/filters/effect-reference-colorspace.html [ Failure Pass ]
 crbug.com/658305 crbug.com/758133 css3/filters/effect-reference-colorspace-hw.html [ Failure Pass Timeout ]
@@ -2499,6 +2508,9 @@ crbug.com/v8/7753 inspector-protocol/debugger/message-channel-async-stack.js [ S
 crbug.com/v8/7753 inspector-protocol/worker/worker-on-message-async-stacks.js [ Skip ]
 crbug.com/v8/7753 inspector-protocol/worker/worker-post-message-async-stacks.js [ Skip ]
 
+# TODO(ftang,jshin) Remove once v8 is rolled to include a fix for v8/7958.
+crbug.com/v8/7958 fast/js/string-prototype-properties.html [ Skip ]
+
 # TODO(chrishtr) uncomment ones marked crbug.com/591500 after fixing crbug.com/665259.
 crbug.com/591500 [ Win10 ] printing/fixed-positioned-headers-and-footers-absolute-covering-some-pages.html [ Failure ]
 crbug.com/591500 [ Win10 ] virtual/threaded/printing/fixed-positioned-headers-and-footers-absolute-covering-some-pages.html [ Failure ]
@@ -2737,6 +2749,7 @@ crbug.com/849859 external/wpt/css/css-animations/Element-getAnimations-dynamic-c
 crbug.com/849859 external/wpt/web-animations/timing-model/animations/pausing-an-animation.html [ Failure ]
 
 # ====== New tests from wpt-importer added here ======
+crbug.com/626703 [ Mac10.12 Mac10.13 ] external/wpt/service-workers/service-worker/clients-matchall-order.https.html [ Timeout ]
 crbug.com/626703 external/wpt/svg/render/reftests/blending-002.svg [ Failure ]
 crbug.com/626703 external/wpt/svg/render/reftests/blending-001.svg [ Failure ]
 crbug.com/626703 [ Win7 ] external/wpt/css/css-lists/content-property/marker-text-matches-armenian.html [ Failure ]
@@ -3541,10 +3554,20 @@ crbug.com/626703 external/wpt/webvtt/rendering/cues-with-video/processing-model/
 crbug.com/626703 external/wpt/webvtt/rendering/cues-with-video/processing-model/too_many_cues_wrapped.html [ Failure ]
 crbug.com/815116 external/wpt/workers/name-property.html [ Timeout Failure Pass ]
 crbug.com/626703 external/wpt/xhr/event-readystatechange-loaded.htm [ Failure Timeout ]
+crbug.com/626703 virtual/outofblink-cors/external/wpt/xhr/event-readystatechange-loaded.htm [ Failure Timeout ]
+crbug.com/626703 virtual/outofblink-cors-ns/external/wpt/xhr/event-readystatechange-loaded.htm [ Failure Timeout ]
 crbug.com/626703 external/wpt/xhr/preserve-ua-header-on-redirect.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors/external/wpt/xhr/preserve-ua-header-on-redirect.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors-ns/external/wpt/xhr/preserve-ua-header-on-redirect.htm [ Failure ]
 crbug.com/626703 external/wpt/xhr/send-content-type-string.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors/external/wpt/xhr/send-content-type-string.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors-ns/external/wpt/xhr/send-content-type-string.htm [ Failure ]
 crbug.com/626703 external/wpt/xhr/send-entity-body-document.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors/external/wpt/xhr/send-entity-body-document.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors-ns/external/wpt/xhr/send-entity-body-document.htm [ Failure ]
 crbug.com/626703 external/wpt/xhr/setrequestheader-header-allowed.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors/external/wpt/xhr/setrequestheader-header-allowed.htm [ Failure ]
+crbug.com/626703 virtual/outofblink-cors-ns/external/wpt/xhr/setrequestheader-header-allowed.htm [ Failure ]
 crbug.com/626703 [ Linux Win ] external/wpt/css/selectors/selector-placeholder-shown-type-change-001.html [ Failure ]
 crbug.com/626703 [ Linux Win ] external/wpt/css/selectors/selector-read-write-type-change-002.html [ Failure ]
 crbug.com/626703 [ Linux Win ] external/wpt/css/selectors/selector-required-type-change-002.html [ Failure ]
@@ -3579,18 +3602,6 @@ crbug.com/762017 external/wpt/html/semantics/embedded-content/media-elements/vid
 # Worker/SharedWorker are not exposed in WorkerGlobalScope.
 crbug.com/850662 external/wpt/workers/baseurl/alpha/worker-in-worker.html [ Failure ]
 crbug.com/850662 external/wpt/workers/baseurl/alpha/sharedworker-in-worker.html [ Failure ]
-
-# crbug.com/861564 is ongoing for classic dedicated workers.
-crbug.com/861564 external/wpt/workers/baseurl/alpha/importScripts-in-worker.html [ Failure ]
-crbug.com/861564 external/wpt/workers/baseurl/alpha/xhr-in-worker.html [ Failure ]
-crbug.com/861564 external/wpt/workers/interfaces/WorkerGlobalScope/location/redirect.html [ Failure ]
-crbug.com/861564 external/wpt/xhr/open-url-redirected-worker-origin.htm [ Failure ]
-
-# crbug.com/861564 is ongoing for classic shared workers.
-crbug.com/861564 external/wpt/workers/baseurl/alpha/importScripts-in-sharedworker.html [ Failure ]
-crbug.com/861564 external/wpt/workers/baseurl/alpha/xhr-in-sharedworker.html [ Failure ]
-crbug.com/861564 external/wpt/workers/interfaces/WorkerGlobalScope/location/redirect-sharedworker.html [ Failure ]
-crbug.com/861564 external/wpt/xhr/open-url-redirected-sharedworker-origin.htm [ Failure ]
 
 # crbug.com/861564 is ongoing for module dedicated workers.
 crbug.com/861564 external/wpt/workers/baseurl/alpha/xhr-in-moduleworker.html [ Failure ]
@@ -3851,6 +3862,8 @@ crbug.com/820334 virtual/outofblink-cors/external/wpt/fetch/api/request/request-
 crbug.com/820334 virtual/outofblink-cors-ns/external/wpt/fetch/api/request/request-cache-default-conditional.html [ Timeout Pass ]
 
 crbug.com/765116 external/wpt/xhr/responsexml-document-properties.htm [ Failure ]
+crbug.com/765116 virtual/outofblink-cors/external/wpt/xhr/responsexml-document-properties.htm [ Failure ]
+crbug.com/765116 virtual/outofblink-cors-ns/external/wpt/xhr/responsexml-document-properties.htm [ Failure ]
 
 # Link highlights currently paint under ancestor affects but this is being
 # changed with BlinkGenPropertyTrees. Until that launches, this test will fail.
@@ -3920,6 +3933,8 @@ crbug.com/722943 virtual/video-surface-layer/media/audio-repaint.html [ Skip ]
 crbug.com/715718 external/wpt/media-source/mediasource-activesourcebuffers.html [ Failure Pass ]
 crbug.com/715718 external/wpt/media-source/mediasource-remove.html [ Failure Pass ]
 crbug.com/715718 [ Win ] external/wpt/xhr/FormData-append.html [ Failure Pass ]
+crbug.com/715718 [ Win ] virtual/outofblink-cors/external/wpt/xhr/FormData-append.html [ Failure Pass ]
+crbug.com/715718 [ Win ] virtual/outofblink-cors-ns/external/wpt/xhr/FormData-append.html [ Failure Pass ]
 crbug.com/715718 [ Win ] external/wpt/css/css-flexbox/align-items-004.htm [ Failure Pass ]
 crbug.com/715718 [ Win ] external/wpt/css/css-flexbox/flex-minimum-width-flex-items-001.xht [ Failure Pass ]
 crbug.com/715718 [ Win ] external/wpt/css/css-flexbox/flex-minimum-width-flex-items-003.xht [ Failure Pass ]
@@ -4351,9 +4366,6 @@ crbug.com/814889 idle-callback/test-runner-run-idle-tasks.html [ Crash Timeout P
 crbug.com/814953 fast/replaced/no-focus-ring-iframe.html [ Failure Pass ]
 crbug.com/814964 virtual/gpu-rasterization/images/color-profile-border-radius.html [ Failure Pass ]
 
-# MSAN
-crbug.com/813547 [ Linux ] webaudio/BiquadFilter/tail-time-lowpass.html [ Pass Failure ]
-
 # These pass on bots with proprietary codecs (most CQ bots) while failing on bots without.
 crbug.com/807110 external/wpt/html/semantics/embedded-content/media-elements/mime-types/canPlayType.html [ Failure Pass ]
 crbug.com/807110 external/wpt/media-source/mediasource-addsourcebuffer.html [ Failure Pass ]
@@ -4664,15 +4676,6 @@ crbug.com/854910 [ Mac ] virtual/scroll_customization/fast/scroll-behavior/smoot
 # Sheriff 2018-06-25
 crbug.com/855816 [ Win7 ] virtual/stable/http/tests/navigation/rename-subframe-goback.html [ Pass Timeout ]
 
-# Sheriff 2018-06-26
-crbug.com/856601 [ Linux ] external/wpt/FileAPI/idlharness.html [ Pass Timeout ]
-crbug.com/856601 [ Linux ] external/wpt/IndexedDB/interfaces.any.html [ Pass Timeout ]
-crbug.com/856601 [ Linux ] external/wpt/dom/nodes/Element-classlist.html [ Pass Timeout ]
-crbug.com/856601 [ Linux ] external/wpt/presentation-api/controlling-ua/idlharness.https.html [ Pass Timeout ]
-crbug.com/856601 [ Linux ] fast/css/visited-link-hang.html [ Pass Timeout ]
-crbug.com/856601 [ Linux ] http/tests/devtools/elements/styles-4/styles-inline-element-style-changes-should-not-force-style-recalc.js [ Pass Timeout ]
-crbug.com/856601 [ Linux ] virtual/feature-policy-permissions/external/wpt/mediacapture-streams/MediaDevices-IDL-enumerateDevices.html [ Pass Timeout ]
-
 # Sheriff 2018-06-29
 crbug.com/859064 http/tests/devtools/console-resource-errors.js [ Pass Failure ]
 crbug.com/859169 [ Win7 ] http/tests/devtools/layers/layer-scroll-rects-get.js [ Failure Pass ]
@@ -4690,24 +4693,6 @@ crbug.com/831796 virtual/user-activation-v2/fast/events/autoscroll-in-textfield.
 crbug.com/860731 fast/scroll-snap/animate-fling-to-snap-points.html [ Failure Pass ]
 
 crbug.com/861682 [ Win ] external/wpt/css/mediaqueries/device-aspect-ratio-003.html [ Failure Pass ]
-
-# Sheriff 2018-07-09
-# MSAN
-crbug.com/856601 [ Linux ] external/wpt/FileAPI/idlharness.worker.html [ Timeout Pass ]
-crbug.com/856601 [ Linux ] external/wpt/bluetooth/idl/idlharness.tentative.window.html [ Timeout Pass ]
-crbug.com/856601 [ Linux ] external/wpt/css/cssom-view/interfaces.html [ Timeout Pass ]
-crbug.com/856601 [ Linux ] external/wpt/touch-events/idlharness.window.html [ Timeout Pass ]
-crbug.com/856601 [ Linux ] http/tests/event-timing/event-timing-retrievability.html [ Timeout Pass ]
-
-# Sheriff 2018-07-11
-# Test timeouts following wpt-import@89ccb892...
-crbug.com/862588 [ Linux ] external/wpt/cookie-store/idlharness.tentative.https.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] external/wpt/push-api/idlharness.https.any.sharedworker.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] external/wpt/push-api/idlharness.https.any.worker.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] external/wpt/resource-timing/idlharness.any.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] external/wpt/resource-timing/idlharness.any.worker.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] external/wpt/service-workers/service-worker/interfaces-sw.https.html [ Timeout Pass ]
-crbug.com/862588 [ Linux ] virtual/feature-policy-permissions/external/wpt/mediacapture-streams/idlharness.https.window.html [ Timeout Pass ]
 
 # Other timeouts
 crbug.com/818324 [ Linux Mac Win7 ] external/wpt/content-security-policy/embedded-enforcement/required_csp-header.html [ Timeout Pass ]
@@ -4737,6 +4722,9 @@ crbug.com/866785 [ Mac ] svg/as-border-image/svg-as-border-image-2.html [ Failur
 crbug.com/866785 [ Mac ] svg/as-border-image/svg-as-border-image.html [ Failure Pass ]
 crbug.com/866785 [ Mac ] virtual/new-remote-playback-pipeline/media/controls/text-track-menu-pointer-selection.html [ Failure Pass Timeout ]
 
+skbug.com/8155 virtual/gpu-rasterization/images/jpeg-yuv-progressive-image.html [ Pass Failure ]
+skbug.com/8155 virtual/gpu-rasterization/images/rgb-png-with-cmyk-color-profile.html [ Pass Failure ]
+
 ### fast/canvas/color-space/ + virtual/gpu/..., color management and transparency.
 crbug.com/859102 fast/canvas/color-space/canvas-drawImage-linear-rgb.html [ Pass Failure ]
 crbug.com/859102 fast/canvas/color-space/canvas-drawImage-p3.html [ Pass Failure ]
@@ -4754,3 +4742,19 @@ crbug.com/867532 [ Linux ] external/wpt/workers/modules/dedicated-worker-import-
 crbug.com/867532 [ Linux ] external/wpt/workers/modules/dedicated-worker-import.any.worker.html [ Timeout Pass ]
 crbug.com/867628 [ Mac ] virtual/user-activation-v2/fast/events/middleClickAutoscroll-click-hyperlink.html [ Failure Pass ]
 crbug.com/867628 [ Mac ] virtual/user-activation-v2/fast/events/middleClickAutoscroll-nested-divs-forbidden.html [ Timeout Pass ]
+
+# Sheriff 2018-07-26
+crbug.com/867376 [ Mac Linux ] css3/filters/filter-repaint-composited-fallback-crash.html [ Timeout Pass ]
+crbug.com/867376 [ Mac ] external/wpt/encoding/textdecoder-fatal-single-byte.any.html [ Timeout Pass ]
+crbug.com/867376 [ Mac ] http/tests/devtools/elements/elements-inspect-iframe-from-different-domain.js [ Timeout Pass ]
+crbug.com/867376 [ Mac ] http/tests/devtools/elements/css-variables/resolve-inherited-css-variables.js [ Timeout Pass ]
+crbug.com/867376 [ Linux ] virtual/gpu/fast/canvas/canvas-blending-image-over-color.html [ Timeout Pass ]
+crbug.com/867376 [ Linux ] virtual/gpu/fast/canvas/canvas-blending-image-over-image.html [ Timeout Pass ]
+crbug.com/867376 [ Linux ] virtual/gpu-rasterization/images/color-profile-mask-image-svg.html [ Timeout Pass ]
+crbug.com/867982 [ Linux Mac Debug ] external/wpt/requestidlecallback/basic.html [ Timeout Pass ]
+
+crbug.com/698165 [ Mac ] external/wpt/editing/run/justifycenter.html [ Timeout Pass ]
+crbug.com/698165 [ Mac ] external/wpt/editing/run/multitest.html [ Timeout Pass ]
+
+# Sheriff 2018-07-27
+crbug.com/868317 [ Mac ] external/wpt/dom/ranges/Range-compareBoundaryPoints.html [ Timeout Pass ]

@@ -412,8 +412,12 @@ void HTMLCanvasElement::FinalizeFrame() {
   if (LowLatencyEnabled() && !dirty_rect_.IsEmpty()) {
     if (GetOrCreateCanvasResourceProvider(kPreferAcceleration)) {
       ResourceProvider()->TryEnableSingleBuffering();
+      if (canvas2d_bridge_)
+        canvas2d_bridge_->FlushRecording();
       // Push a frame
       base::TimeTicks start_time = WTF::CurrentTimeTicks();
+      if (Is3d())
+        context_->PaintRenderingResultsToCanvas(kBackBuffer);
       scoped_refptr<CanvasResource> canvas_resource =
           ResourceProvider()->ProduceFrame();
       FloatRect src_rect(0, 0, Size().Width(), Size().Height());
@@ -947,10 +951,6 @@ void HTMLCanvasElement::PushFrame(scoped_refptr<CanvasResource> image,
 
 bool HTMLCanvasElement::ShouldAccelerate(AccelerationCriteria criteria) const {
   if (context_ && !Is2d())
-    return false;
-
-  // TODO(crbug.com/789232): Make low latency mode work with GPU acceleration
-  if (LowLatencyEnabled())
     return false;
 
   // The following is necessary for handling the special case of canvases in the

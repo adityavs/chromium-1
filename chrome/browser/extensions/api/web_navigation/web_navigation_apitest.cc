@@ -306,14 +306,7 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, SimpleLoad) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/simpleLoad")) << message_;
 }
 
-// Flaky on Windows, Mac and Linux. See http://crbug.com/477480 (Windows) and
-// https://crbug.com/746407 (Mac, Linux).
-#if defined(OS_WIN) || defined(OS_MACOSX) || defined(OS_LINUX)
-#define MAYBE_Failures DISABLED_Failures
-#else
-#define MAYBE_Failures Failures
-#endif
-IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, MAYBE_Failures) {
+IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, Failures) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/failures")) << message_;
 }
 
@@ -321,13 +314,7 @@ IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, FilteredTest) {
   ASSERT_TRUE(RunExtensionTest("webnavigation/filtered")) << message_;
 }
 
-// Flaky on Windows. See http://crbug.com/662160.
-#if defined(OS_WIN)
-#define MAYBE_UserAction DISABLED_UserAction
-#else
-#define MAYBE_UserAction UserAction
-#endif
-IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, MAYBE_UserAction) {
+IN_PROC_BROWSER_TEST_F(WebNavigationApiTest, UserAction) {
   content::IsolateAllSitesForTesting(base::CommandLine::ForCurrentProcess());
   ASSERT_TRUE(StartEmbeddedTestServer());
 

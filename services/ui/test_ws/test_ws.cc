@@ -17,11 +17,9 @@
 #include "services/service_manager/public/cpp/service_runner.h"
 #include "services/service_manager/public/mojom/service_factory.mojom.h"
 #include "services/ui/public/interfaces/constants.mojom.h"
-#include "services/ui/public/interfaces/test_event_injector.mojom.h"
 #include "services/ui/public/interfaces/window_tree_host_factory.mojom.h"
+#include "services/ui/test_ws/test_drag_drop_client.h"
 #include "services/ui/test_ws/test_gpu_interface_provider.h"
-#include "services/ui/ws2/test_event_injector.h"
-#include "services/ui/ws2/test_event_injector_delegate.h"
 #include "services/ui/ws2/window_service.h"
 #include "services/ui/ws2/window_service_delegate.h"
 #include "services/ui/ws2/window_tree.h"
@@ -36,6 +34,7 @@
 #include "ui/compositor/test/context_factories_for_test.h"
 #include "ui/gfx/gfx_paths.h"
 #include "ui/gl/test/gl_surface_test_support.h"
+#include "ui/wm/core/default_screen_position_client.h"
 
 namespace ui {
 namespace test {
@@ -113,12 +112,13 @@ class WindowTreeHostFactory : public mojom::WindowTreeHostFactory {
 // Service.
 class TestWindowService : public service_manager::Service,
                           public service_manager::mojom::ServiceFactory,
-                          public ws2::WindowServiceDelegate,
-                          public ws2::TestEventInjectorDelegate {
+                          public ws2::WindowServiceDelegate {
  public:
   TestWindowService() = default;
 
   ~TestWindowService() override {
+    aura::client::SetScreenPositionClient(aura_test_helper_->root_window(),
+                                          nullptr);
     // WindowService depends upon Screen, which is owned by AuraTestHelper.
     service_context_.reset();
     // AuraTestHelper expects TearDown() to be called.
@@ -128,12 +128,6 @@ class TestWindowService : public service_manager::Service,
   }
 
  private:
-  // ws2::TestEventInjectorDelegate:
-  aura::WindowTreeHost* GetWindowTreeHostForDisplayId(
-      int64_t display_id) override {
-    return aura_test_helper_->host();
-  }
-
   // WindowServiceDelegate:
   std::unique_ptr<aura::Window> NewTopLevel(
       aura::PropertyConverter* property_converter,
@@ -148,6 +142,24 @@ class TestWindowService : public service_manager::Service,
           top_level.get(), property.first, &property.second);
     }
     return top_level;
+  }
+  void RunDragLoop(aura::Window* window,
+                   const ui::OSExchangeData& data,
+                   const gfx::Point& screen_location,
+                   uint32_t drag_operation,
+                   ui::DragDropTypes::DragEventSource source,
+                   DragDropCompletedCallback callback) override {
+    std::move(callback).Run(drag_drop_client_.StartDragAndDrop(
+        data, window->GetRootWindow(), window, screen_location, drag_operation,
+        source));
+  }
+  void CancelDragLoop(aura::Window* window) override {
+    drag_drop_client_.DragCancel();
+  }
+
+  aura::WindowTreeHost* GetWindowTreeHostForDisplayId(
+      int64_t display_id) override {
+    return aura_test_helper_->host();
   }
 
   // service_manager::Service:
@@ -166,6 +178,9 @@ class TestWindowService : public service_manager::Service,
                                          &context_factory_private);
     aura_test_helper_ = std::make_unique<aura::test::AuraTestHelper>();
     aura_test_helper_->SetUp(context_factory, context_factory_private);
+
+    aura::client::SetScreenPositionClient(aura_test_helper_->root_window(),
+                                          &screen_position_client_);
 
     registry_.AddInterface(base::BindRepeating(
         &TestWindowService::BindServiceFactory, base::Unretained(this)));
@@ -188,16 +203,11 @@ class TestWindowService : public service_manager::Service,
     auto window_service = std::make_unique<ws2::WindowService>(
         this, std::make_unique<TestGpuInterfaceProvider>(),
         aura_test_helper_->focus_client());
-    test_event_injector_ = std::make_unique<ui::ws2::TestEventInjector>(
-        window_service.get(), this);
     window_tree_host_factory_ = std::make_unique<WindowTreeHostFactory>(
         window_service.get(), aura_test_helper_->root_window());
     window_service->registry()->AddInterface(
         base::BindRepeating(&WindowTreeHostFactory::AddBinding,
                             base::Unretained(window_tree_host_factory_.get())));
-    window_service->registry()->AddInterface(
-        base::BindRepeating(&ws2::TestEventInjector::AddBinding,
-                            base::Unretained(test_event_injector_.get())));
     service_context_ = std::make_unique<service_manager::ServiceContext>(
         std::move(window_service), std::move(request));
     pid_receiver->SetPID(base::GetCurrentProcId());
@@ -219,10 +229,13 @@ class TestWindowService : public service_manager::Service,
   std::unique_ptr<aura::test::AuraTestHelper> aura_test_helper_;
   std::unique_ptr<WindowTreeHostFactory> window_tree_host_factory_;
 
+  // For drag and drop code to convert to/from screen coordinates.
+  wm::DefaultScreenPositionClient screen_position_client_;
+
+  TestDragDropClient drag_drop_client_;
+
   bool started_ = false;
   bool ui_service_created_ = false;
-
-  std::unique_ptr<ws2::TestEventInjector> test_event_injector_;
 
   DISALLOW_COPY_AND_ASSIGN(TestWindowService);
 };

@@ -4736,7 +4736,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
         Restore default shortcuts
       </message>
       <message name="IDS_NTP_CUSTOM_BG_CUSTOMIZE_BACKGROUND" desc="The title for the tooltip for background customization. (On the New Tab Page)">
-        Customize background
+        Customize this page
       </message>
       <message name="IDS_NTP_CUSTOM_BG_GOOGLE_PHOTOS" desc="The text label of the Google Photos option for background customization. (On the New Tab Page)">
         Google Photos
@@ -4751,7 +4751,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
         Select a collection
       </message>
       <message name="IDS_NTP_CUSTOM_BG_SELECT_GOOGLE_ALBUM" desc="The text label for the Google Photos submenu for background customization. (On the New Tab Page)">
-        Select a Google Photo Album
+        Select a Google Photos album
       </message>
       <message name="IDS_NTP_CUSTOM_BG_DAILY_REFRESH" desc="The text label for the daily background randomization option.  (On the New Tab Page)">
         Refresh daily
@@ -4849,8 +4849,8 @@ Keep your key file in a safe place. You will need it to create new versions of y
           Save Card
         </message>
        </if>
-      <message name="IDS_TOOLTIP_MIGRATE_LOCAL_CARD" desc="The tooltip for the icon that shows the local card migration bubble">
-        Have your cards in one place
+      <message name="IDS_TOOLTIP_MIGRATE_LOCAL_CARD" desc="Tooltip for the credit card icon that appears in the address bar. Icon is shown when a user has a credit card stored locally in Chrome but not in Google Pay.">
+        Save payment method
       </message>
       <message name="IDS_TOOLTIP_TRANSLATE" desc="The tooltip for translate">
         Translate this page

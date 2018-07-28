@@ -20,6 +20,7 @@ import org.chromium.chrome.browser.modelutil.PropertyKey;
 import org.chromium.chrome.browser.modelutil.PropertyModelChangeProcessor;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.toolbar.BottomToolbarViewBinder.ViewHolder;
+import org.chromium.chrome.browser.toolbar.ToolbarButtonSlotData.ToolbarButtonData;
 import org.chromium.ui.base.WindowAndroid;
 import org.chromium.ui.resources.ResourceManager;
 
@@ -36,9 +37,6 @@ public class BottomToolbarCoordinator {
     /** The tab switcher button component that lives in the bottom toolbar. */
     private final TabSwitcherButtonCoordinator mTabSwitcherButtonCoordinator;
 
-    /** The home button component that lives in the bottom toolbar. */
-    private final ToolbarButtonCoordinator mHomeButtonCoordinator;
-
     /** The menu button that lives in the bottom toolbar. */
     private final MenuButton mMenuButton;
 
@@ -47,10 +45,12 @@ public class BottomToolbarCoordinator {
      * @param fullscreenManager A {@link ChromeFullscreenManager} to update the bottom controls
      *                          height for the renderer.
      * @param root The root {@link ViewGroup} for locating the vies to inflate.
+     * @param firstSlotData The data required to fill in the leftmost bottom toolbar button slot.
+     * @param secondSlotData The data required to fill in the second bottom toolbar button slot.
      */
-    public BottomToolbarCoordinator(ChromeFullscreenManager fullscreenManager, ViewGroup root) {
+    public BottomToolbarCoordinator(ChromeFullscreenManager fullscreenManager, ViewGroup root,
+            ToolbarButtonSlotData firstSlotData, ToolbarButtonSlotData secondSlotData) {
         BottomToolbarModel model = new BottomToolbarModel();
-        mMediator = new BottomToolbarMediator(model, fullscreenManager, root.getResources());
 
         int shadowHeight =
                 root.getResources().getDimensionPixelOffset(R.dimen.toolbar_shadow_height);
@@ -65,9 +65,11 @@ public class BottomToolbarCoordinator {
                 new PropertyModelChangeProcessor<>(
                         model, new ViewHolder(toolbarRoot), new BottomToolbarViewBinder());
         model.addObserver(processor);
+
+        mMediator = new BottomToolbarMediator(
+                model, fullscreenManager, root.getResources(), firstSlotData, secondSlotData);
+
         mTabSwitcherButtonCoordinator = new TabSwitcherButtonCoordinator(toolbarRoot);
-        mHomeButtonCoordinator =
-                new ToolbarButtonCoordinator(toolbarRoot.findViewById(R.id.home_button));
         mMenuButton = toolbarRoot.findViewById(R.id.menu_button_wrapper);
     }
 
@@ -80,10 +82,6 @@ public class BottomToolbarCoordinator {
      * @param layoutManager A {@link LayoutManager} to attach overlays to.
      * @param tabSwitcherListener An {@link OnClickListener} that is triggered when the
      *                                  tab switcher button is clicked.
-     * @param searchAcceleratorListener An {@link OnClickListener} that is triggered when the
-     *                                  search accelerator is clicked.
-     * @param homeButtonListener An {@link OnClickListener} that is triggered when the
-     *                           home button is clicked.
      * @param menuButtonListener An {@link OnTouchListener} that is triggered when the
      *                           menu button is clicked.
      * @param tabModelSelector A {@link TabModelSelector} that the tab switcher button uses to
@@ -91,26 +89,28 @@ public class BottomToolbarCoordinator {
      * @param overviewModeBehavior The overview mode manager.
      * @param contextualSearchManager The manager for Contextual Search to handle interactions when
      *                                that feature is visible.
+     * @param firstSlotTabSwitcherButtonData The button to be shown in the first slot when in tab
+     *                                       switcher mode.
+     * @param secondSlotTabSwitcherButtonData The button to be shown in the second slot when in tab
+     *                                        switcher mode.
      */
     public void initializeWithNative(ResourceManager resourceManager, LayoutManager layoutManager,
-            OnClickListener tabSwitcherListener, OnClickListener searchAcceleratorListener,
-            OnClickListener homeButtonListener, OnTouchListener menuButtonListener,
+            OnClickListener tabSwitcherListener, OnTouchListener menuButtonListener,
             TabModelSelector tabModelSelector, OverviewModeBehavior overviewModeBehavior,
-            ContextualSearchManager contextualSearchManager, WindowAndroid windowAndroid) {
-        mMediator.setSearchAcceleratorListener(searchAcceleratorListener);
+            ContextualSearchManager contextualSearchManager, WindowAndroid windowAndroid,
+            ToolbarButtonData firstSlotTabSwitcherButtonData,
+            ToolbarButtonData secondSlotTabSwitcherButtonData) {
         mMediator.setLayoutManager(layoutManager);
         mMediator.setResourceManager(resourceManager);
         mMediator.setOverviewModeBehavior(overviewModeBehavior);
         mMediator.setToolbarSwipeHandler(layoutManager.getToolbarSwipeHandler());
         mMediator.setContextualSearchManager(contextualSearchManager);
         mMediator.setWindowAndroid(windowAndroid);
+        mMediator.setTabSwitcherButtonData(
+                firstSlotTabSwitcherButtonData, secondSlotTabSwitcherButtonData);
 
         mTabSwitcherButtonCoordinator.setTabSwitcherListener(tabSwitcherListener);
         mTabSwitcherButtonCoordinator.setTabModelSelector(tabModelSelector);
-
-        mHomeButtonCoordinator.setButtonListeners(homeButtonListener, null);
-        mHomeButtonCoordinator.setOverviewModeBehavior(
-                overviewModeBehavior, ToolbarButtonCoordinator.ButtonVisibility.BROWSING_MODE);
 
         mMenuButton.setTouchListener(menuButtonListener);
     }

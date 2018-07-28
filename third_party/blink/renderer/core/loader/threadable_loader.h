@@ -57,7 +57,6 @@ class Document;
 class KURL;
 class ResourceRequest;
 class SecurityOrigin;
-class ThreadableLoadingContext;
 class ThreadableLoaderClient;
 
 // Useful for doing loader operations from any thread (not threadsafe, just able
@@ -104,8 +103,7 @@ class CORE_EXPORT ThreadableLoader final
   // ThreadableLoaderClient methods may call cancel().
   ThreadableLoader(ExecutionContext&,
                    ThreadableLoaderClient*,
-                   const ResourceLoaderOptions&,
-                   const base::Optional<TimeDelta>& timeout);
+                   const ResourceLoaderOptions&);
   ~ThreadableLoader() override;
 
   // Exposed for testing. Code outside this class should not call this function.
@@ -119,9 +117,11 @@ class CORE_EXPORT ThreadableLoader final
   // cases, for the timeout to be overridden after the request is sent (for
   // example, XMLHttpRequests may override their timeout setting after sending).
   //
-  // Set a new timeout relative to the time the request started, in
-  // milliseconds.
-  void OverrideTimeout(unsigned long timeout_milliseconds);
+  // If the request has already started, the new timeout will be relative to the
+  // time the request started.
+  //
+  // Passing a timeout of zero means there should be no timeout.
+  void SetTimeout(const TimeDelta& timeout);
 
   void Cancel();
 
@@ -135,6 +135,7 @@ class CORE_EXPORT ThreadableLoader final
   void Trace(blink::Visitor* visitor) override;
 
  private:
+  class AssignOnScopeExit;
   class DetachedClient;
 
   static std::unique_ptr<ResourceRequest> CreateAccessControlPreflightRequest(
@@ -186,12 +187,11 @@ class CORE_EXPORT ThreadableLoader final
   void LoadActualRequest();
   // Clears actual_request_ and reports access control check failure to
   // m_client.
-  void HandlePreflightFailure(const KURL&, const String& error_description);
+  void HandlePreflightFailure(const KURL&, const network::CORSErrorStatus&);
   // Investigates the response for the preflight request. If successful,
   // the actual request will be made later in NotifyFinished().
   void HandlePreflightResponse(const ResourceResponse&);
 
-  void DispatchDidFailAccessControlCheck(const ResourceError&);
   void DispatchDidFail(const ResourceError&);
 
   void PrepareCrossOriginRequest(ResourceRequest&) const;
@@ -211,12 +211,11 @@ class CORE_EXPORT ThreadableLoader final
   // Returns null if the loader is not associated with Document.
   // TODO(kinuko): Remove dependency to document.
   Document* GetDocument() const;
-  ExecutionContext* GetExecutionContext() const;
 
   ThreadableLoaderClient* client_;
-  Member<ThreadableLoadingContext> loading_context_;
+  Member<ExecutionContext> execution_context_;
 
-  const base::Optional<TimeDelta> timeout_;
+  TimeDelta timeout_;
   // Some items may be overridden by m_forceDoNotAllowStoredCredentials and
   // m_securityOrigin. In such a case, build a ResourceLoaderOptions with
   // up-to-date values from them and this variable, and use it.
@@ -251,6 +250,9 @@ class CORE_EXPORT ThreadableLoader final
   // handling phase.
   ResourceRequest actual_request_;
   ResourceLoaderOptions actual_options_;
+
+  KURL initial_request_url_;
+  KURL last_request_url_;
 
   // stores request headers in case of a cross-origin redirect.
   HTTPHeaderMap request_headers_;

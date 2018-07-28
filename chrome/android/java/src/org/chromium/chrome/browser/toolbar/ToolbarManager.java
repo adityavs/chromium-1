@@ -4,6 +4,7 @@
 
 package org.chromium.chrome.browser.toolbar;
 
+import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.drawable.Drawable;
 import android.os.Handler;
@@ -28,6 +29,7 @@ import org.chromium.base.metrics.RecordHistogram;
 import org.chromium.base.metrics.RecordUserAction;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ChromeActivity;
+import org.chromium.chrome.browser.ChromeFeatureList;
 import org.chromium.chrome.browser.ChromeTabbedActivity;
 import org.chromium.chrome.browser.NativePage;
 import org.chromium.chrome.browser.TabLoadStatus;
@@ -45,6 +47,7 @@ import org.chromium.chrome.browser.compositor.layouts.LayoutManager;
 import org.chromium.chrome.browser.compositor.layouts.OverviewModeBehavior;
 import org.chromium.chrome.browser.compositor.layouts.OverviewModeBehavior.OverviewModeObserver;
 import org.chromium.chrome.browser.compositor.layouts.SceneChangeObserver;
+import org.chromium.chrome.browser.device.DeviceClassManager;
 import org.chromium.chrome.browser.download.DownloadUtils;
 import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.fullscreen.BrowserStateBrowserControlsVisibilityDelegate;
@@ -61,6 +64,7 @@ import org.chromium.chrome.browser.omnibox.UrlFocusChangeListener;
 import org.chromium.chrome.browser.partnercustomizations.HomepageManager;
 import org.chromium.chrome.browser.partnercustomizations.HomepageManager.HomepageStateListener;
 import org.chromium.chrome.browser.preferences.ChromePreferenceManager;
+import org.chromium.chrome.browser.preferences.PrefServiceBridge;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.search_engines.TemplateUrl;
 import org.chromium.chrome.browser.search_engines.TemplateUrlService;
@@ -77,6 +81,7 @@ import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
 import org.chromium.chrome.browser.tabmodel.TabModelSelectorObserver;
 import org.chromium.chrome.browser.toolbar.ActionModeController.ActionBarDelegate;
+import org.chromium.chrome.browser.toolbar.ToolbarButtonSlotData.ToolbarButtonData;
 import org.chromium.chrome.browser.util.ColorUtils;
 import org.chromium.chrome.browser.util.FeatureUtilities;
 import org.chromium.chrome.browser.widget.ViewHighlighter;
@@ -636,10 +641,45 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
      */
     public void enableBottomToolbar() {
         if (FeatureUtilities.isBottomToolbarEnabled()) {
+            final ToolbarButtonSlotData firstButtonSlot =
+                    new ToolbarButtonSlotData(createHomeButton(mActivity));
+            final ToolbarButtonSlotData secondButtonSlot =
+                    new ToolbarButtonSlotData(createSearchAccelerator(mActivity));
             mBottomToolbarCoordinator = new BottomToolbarCoordinator(
-                    mActivity.getFullscreenManager(), mActivity.findViewById(R.id.coordinator));
+                    mActivity.getFullscreenManager(), mActivity.findViewById(R.id.coordinator),
+                    firstButtonSlot, secondButtonSlot);
             if (mAppMenuButtonHelper != null) mAppMenuButtonHelper.setMenuShowsFromBottom(true);
         }
+    }
+
+    private ToolbarButtonData createHomeButton(Context context) {
+        final OnClickListener homeButtonListener = v -> openHomepage();
+        return new ToolbarButtonData(R.drawable.btn_toolbar_home,
+                R.string.accessibility_toolbar_btn_home, homeButtonListener, true, context);
+    }
+
+    private ToolbarButtonData createNewTabButton(
+            OnClickListener newTabClickListener, Context context) {
+        return new ToolbarButtonData(R.drawable.btn_new_tab_white_normal,
+                R.string.accessibility_toolbar_btn_new_tab, newTabClickListener, false, context);
+    }
+
+    private ToolbarButtonData createSearchAccelerator(Context context) {
+        final OnClickListener searchAcceleratorListener = v -> {
+            recordOmniboxFocusReason(OmniboxFocusReason.ACCELERATOR_TAP);
+            ACCELERATOR_BUTTON_TAP_ACTION.record();
+            setUrlBarFocus(true);
+        };
+        return new ToolbarButtonData(R.drawable.ic_search,
+                R.string.accessibility_toolbar_btn_search_accelerator, searchAcceleratorListener,
+                true, context);
+    }
+
+    private ToolbarButtonData createIncognitoToggleButton(
+            OnClickListener incognitoToggleClickHandler, Context context) {
+        return new ToolbarButtonData(R.drawable.btn_tabstrip_switch_normal,
+                R.string.accessibility_tabstrip_btn_incognito_toggle_standard,
+                incognitoToggleClickHandler, false, context);
     }
 
     /**
@@ -760,18 +800,21 @@ public class ToolbarManager implements ToolbarTabController, UrlFocusChangeListe
         }
 
         if (mBottomToolbarCoordinator != null) {
-            final OnClickListener searchAcceleratorListener = v -> {
-                recordOmniboxFocusReason(OmniboxFocusReason.ACCELERATOR_TAP);
-                ACCELERATOR_BUTTON_TAP_ACTION.record();
-                setUrlBarFocus(true);
-            };
-            final OnClickListener homeButtonListener = v -> openHomepage();
+            final boolean showIncognitoToggleButton =
+                    !DeviceClassManager.enableAccessibilityLayout()
+                    && ChromeFeatureList.isEnabled(
+                               ChromeFeatureList.HORIZONTAL_TAB_SWITCHER_ANDROID)
+                    && PrefServiceBridge.getInstance().isIncognitoModeEnabled();
+            final ToolbarButtonData secondSlotTabSwitcherButtonData = showIncognitoToggleButton
+                    ? createIncognitoToggleButton(incognitoClickHandler, mActivity)
+                    : null;
             mBottomToolbarCoordinator.initializeWithNative(
                     mActivity.getCompositorViewHolder().getResourceManager(),
                     mActivity.getCompositorViewHolder().getLayoutManager(), tabSwitcherClickHandler,
-                    searchAcceleratorListener, homeButtonListener, mAppMenuButtonHelper,
-                    mTabModelSelector, mOverviewModeBehavior,
-                    mActivity.getContextualSearchManager(), mActivity.getWindowAndroid());
+                    mAppMenuButtonHelper, mTabModelSelector, mOverviewModeBehavior,
+                    mActivity.getContextualSearchManager(), mActivity.getWindowAndroid(),
+                    createNewTabButton(newTabClickHandler, mActivity),
+                    secondSlotTabSwitcherButtonData);
         }
 
         onNativeLibraryReady();

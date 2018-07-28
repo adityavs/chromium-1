@@ -237,6 +237,8 @@ source_set("chromeos") {
   sources = [
     "accessibility/accessibility_extension_loader.cc",
     "accessibility/accessibility_extension_loader.h",
+    "accessibility/accessibility_input_method_observer.cc",
+    "accessibility/accessibility_input_method_observer.h",
     "accessibility/accessibility_manager.cc",
     "accessibility/accessibility_manager.h",
     "accessibility/accessibility_panel.cc",
@@ -1443,6 +1445,8 @@ source_set("chromeos") {
     "policy/pre_signin_policy_fetcher.h",
     "policy/remote_commands/affiliated_remote_commands_invalidator.cc",
     "policy/remote_commands/affiliated_remote_commands_invalidator.h",
+    "policy/remote_commands/crd_host_delegate.cc",
+    "policy/remote_commands/crd_host_delegate.h",
     "policy/remote_commands/device_command_fetch_status_job.cc",
     "policy/remote_commands/device_command_fetch_status_job.h",
     "policy/remote_commands/device_command_reboot_job.cc",
@@ -1451,6 +1455,8 @@ source_set("chromeos") {
     "policy/remote_commands/device_command_screenshot_job.h",
     "policy/remote_commands/device_command_set_volume_job.cc",
     "policy/remote_commands/device_command_set_volume_job.h",
+    "policy/remote_commands/device_command_start_crd_session_job.cc",
+    "policy/remote_commands/device_command_start_crd_session_job.h",
     "policy/remote_commands/device_command_wipe_users_job.cc",
     "policy/remote_commands/device_command_wipe_users_job.h",
     "policy/remote_commands/device_commands_factory_chromeos.cc",
@@ -1748,6 +1754,8 @@ source_set("chromeos") {
     "virtual_machines/virtual_machines_util.h",
 
     # Extension API implementations.
+    "extensions/arc_apps_private_api.cc",
+    "extensions/arc_apps_private_api.h",
     "extensions/backdrop_wallpaper_handlers/backdrop_wallpaper_handlers.cc",
     "extensions/backdrop_wallpaper_handlers/backdrop_wallpaper_handlers.h",
     "extensions/echo_private_api.cc",
@@ -2142,6 +2150,7 @@ source_set("unit_tests") {
     "policy/pre_signin_policy_fetcher_unittest.cc",
     "policy/remote_commands/device_command_screenshot_job_unittest.cc",
     "policy/remote_commands/device_command_set_volume_job_unittest.cc",
+    "policy/remote_commands/device_command_start_crd_session_unittest.cc",
     "policy/remote_commands/device_command_wipe_users_job_unittest.cc",
     "policy/remote_commands/user_command_arc_job_unittest.cc",
     "policy/secondary_google_account_signin_policy_handler_unittest.cc",

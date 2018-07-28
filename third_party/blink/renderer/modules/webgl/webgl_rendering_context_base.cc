@@ -783,7 +783,11 @@ scoped_refptr<StaticBitmapImage> WebGLRenderingContextBase::GetImage(
   if (!GetDrawingBuffer())
     return nullptr;
   GetDrawingBuffer()->ResolveAndBindForReadAndDraw();
-  IntSize size = ClampedCanvasSize();
+  // Use the drawing buffer size here instead of the canvas size to ensure that
+  // sizing is consistent for the GetStaticBitmapImage() result. The forced
+  // downsizing logic in Reshape() can lead to the drawing buffer being smaller
+  // than the canvas size. See https:://crbug.com/845742.
+  IntSize size = GetDrawingBuffer()->Size();
   // Since we are grabbing a snapshot that is not for compositing, we use a
   // custom resource provider. This avoids consuming compositing-specific
   // resources (e.g. GpuMemoryBuffer)
@@ -1545,6 +1549,11 @@ bool WebGLRenderingContextBase::PaintRenderingResultsToCanvas(
 
   marked_canvas_dirty_ = false;
 
+  if (Host()->ResourceProvider() &&
+      Host()->ResourceProvider()->Size() != GetDrawingBuffer()->Size()) {
+    Host()->DiscardResourceProvider();
+  }
+
   if (!Host()->GetOrCreateCanvasResourceProvider(kPreferAcceleration))
     return false;
 
@@ -2295,11 +2304,29 @@ void WebGLRenderingContextBase::SetBoundVertexArrayObject(
     bound_vertex_array_object_ = default_vertex_array_object_;
 }
 
+bool WebGLRenderingContextBase::ValidateShaderType(const char* function_name,
+                                                   GLenum shader_type) {
+  switch (shader_type) {
+    case GL_VERTEX_SHADER:
+    case GL_FRAGMENT_SHADER:
+      return true;
+    case GL_COMPUTE_SHADER:
+      if (context_type_ != Platform::kWebGL2ComputeContextType) {
+        SynthesizeGLError(GL_INVALID_ENUM, function_name,
+                          "invalid shader type");
+        return false;
+      }
+      return true;
+    default:
+      SynthesizeGLError(GL_INVALID_ENUM, function_name, "invalid shader type");
+      return false;
+  }
+}
+
 WebGLShader* WebGLRenderingContextBase::createShader(GLenum type) {
   if (isContextLost())
     return nullptr;
-  if (type != GL_VERTEX_SHADER && type != GL_FRAGMENT_SHADER) {
-    SynthesizeGLError(GL_INVALID_ENUM, "createShader", "invalid shader type");
+  if (!ValidateShaderType("createShader", type)) {
     return nullptr;
   }
 
@@ -2695,7 +2722,7 @@ void WebGLRenderingContextBase::framebufferTexture2D(GLenum target,
     return;
   }
   framebuffer_binding->SetAttachmentForBoundFramebuffer(
-      target, attachment, textarget, texture, level, 0);
+      target, attachment, textarget, texture, level, 0, 0);
   ApplyStencilTest();
 }
 
@@ -2779,7 +2806,8 @@ WebGLRenderingContextBase::getAttachedShaders(WebGLProgram* program) {
     return base::nullopt;
 
   HeapVector<Member<WebGLShader>> shader_objects;
-  const GLenum kShaderType[] = {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER};
+  const GLenum kShaderType[] = {GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
+                                GL_COMPUTE_SHADER};
   for (unsigned i = 0; i < sizeof(kShaderType) / sizeof(GLenum); ++i) {
     WebGLShader* shader = program->GetAttachedShader(kShaderType[i]);
     if (shader)
@@ -3305,7 +3333,12 @@ ScriptValue WebGLRenderingContextBase::getParameter(ScriptState* script_state,
           GL_INVALID_ENUM, "getParameter",
           "invalid parameter name, EXT_disjoint_timer_query not enabled");
       return ScriptValue::CreateNull(script_state);
-
+    case GL_MAX_VIEWS_OVR:
+      if (ExtensionEnabled(kWebGLMultiviewName))
+        return GetIntParameter(script_state, pname);
+      SynthesizeGLError(GL_INVALID_ENUM, "getParameter",
+                        "invalid parameter name, WEBGL_multiview not enabled");
+      return ScriptValue::CreateNull(script_state);
     default:
       if ((ExtensionEnabled(kWebGLDrawBuffersName) || IsWebGL2OrHigher()) &&
           pname >= GL_DRAW_BUFFER0_EXT &&
@@ -3454,14 +3487,8 @@ WebGLShaderPrecisionFormat* WebGLRenderingContextBase::getShaderPrecisionFormat(
     GLenum precision_type) {
   if (isContextLost())
     return nullptr;
-  switch (shader_type) {
-    case GL_VERTEX_SHADER:
-    case GL_FRAGMENT_SHADER:
-      break;
-    default:
-      SynthesizeGLError(GL_INVALID_ENUM, "getShaderPrecisionFormat",
-                        "invalid shader type");
-      return nullptr;
+  if (!ValidateShaderType("getShaderPrecisionFormat", shader_type)) {
+    return nullptr;
   }
   switch (precision_type) {
     case GL_LOW_FLOAT:
@@ -7743,7 +7770,7 @@ CanvasResourceProvider* WebGLRenderingContextBase::
       nullptr));  // canvas_resource_dispatcher
   if (!temp)
     return nullptr;
-  i = std::min(resource_providers_.size() - 1, i);
+  i = std::min(static_cast<size_t>(resource_providers_.size() - 1), i);
   resource_providers_[i] = std::move(temp);
 
   CanvasResourceProvider* resource_provider = resource_providers_[i].get();

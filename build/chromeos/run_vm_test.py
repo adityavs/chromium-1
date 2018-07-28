@@ -33,6 +33,9 @@ CHROMITE_PATH = os.path.abspath(os.path.join(
 CROS_RUN_VM_TEST_PATH = os.path.abspath(os.path.join(
     CHROMITE_PATH, 'bin', 'cros_run_vm_test'))
 
+# GN target that corresponds to the cros browser sanity test.
+SANITY_TEST_TARGET = 'cros_vm_sanity_test'
+
 
 class TestFormatError(Exception):
   pass
@@ -252,8 +255,16 @@ class BrowserSanityTest(RemoteTest):
     self._timeout = 300
 
   def build_test_command(self):
+    if '--gtest_filter=%s' % SANITY_TEST_TARGET in self._additional_args:
+      logging.info(
+          'GTest filtering not supported for the sanity test. The '
+          '--gtest_filter arg will be ignored.')
+      self._additional_args.remove('--gtest_filter=%s' % SANITY_TEST_TARGET)
+
     if self._additional_args:
-      raise TestFormatError('Sanity test should not have additional args.')
+      raise TestFormatError(
+          'Sanity test should not have additional args: %s' % (
+              self._additional_args))
 
     # run_cros_vm_test's default behavior when no cmd is specified is the sanity
     # test that's baked into the VM image. This test smoke-checks the system
@@ -276,13 +287,13 @@ class BrowserSanityTest(RemoteTest):
 
   def handle_results(self, return_code):
     # Create a simple json results file for the sanity test if needed. The
-    # results will contain only one test ('cros_vm_sanity_test'), and will
+    # results will contain only one test (SANITY_TEST_TARGET), and will
     # either be a PASS or FAIL depending on the return code of cros_run_vm_test.
     if self._test_launcher_summary_output:
       result = (base_test_result.ResultType.FAIL if return_code else
                     base_test_result.ResultType.PASS)
       sanity_test_result = base_test_result.BaseTestResult(
-          'cros_vm_sanity_test', result)
+          SANITY_TEST_TARGET, result)
       run_results = base_test_result.TestRunResults()
       run_results.AddResult(sanity_test_result)
       with open(self._test_launcher_summary_output, 'w') as f:
@@ -290,10 +301,14 @@ class BrowserSanityTest(RemoteTest):
 
 
 def vm_test(args, unknown_args):
+  # cros_run_vm_test has trouble with relative paths that go up directories,
+  # so cd to src/, which should be the root of all data deps.
+  os.chdir(CHROMIUM_SRC_PATH)
+
   # pylint: disable=redefined-variable-type
   # TODO: Remove the above when depot_tool's pylint is updated to include the
   # fix to https://github.com/PyCQA/pylint/issues/710.
-  if args.test_exe == 'cros_vm_sanity_test':
+  if args.test_exe == SANITY_TEST_TARGET:
     test = BrowserSanityTest(args, unknown_args)
   else:
     test = GTestTest(args, unknown_args)
@@ -362,11 +377,11 @@ def main():
   vm_test_parser.add_argument(
       '--test-exe', type=str, required=True,
       help='Path to test executable to run inside VM. If the value is '
-           '"cros_vm_sanity_test", the sanity test that ships with the VM '
+           '%s, the sanity test that ships with the VM '
            'image runs instead. This test smokes-check the system browser '
            '(eg: loads a simple webpage, executes some javascript), so a '
            'fully-built Chrome binary that can get deployed to the VM is '
-           'expected to available in the out-dir.')
+           'expected to be available in the out-dir.' % SANITY_TEST_TARGET)
 
   # GTest args. Some are passed down to the test binary in the VM. Others are
   # parsed here since they might need tweaking or special handling.
@@ -414,10 +429,6 @@ def main():
     logging.error(
         '/dev/kvm is not writable as current user. Perhaps you should be root?')
     return 1
-
-  # cros_run_vm_test has trouble with relative paths that go up directories, so
-  # cd to src/, which should be the root of all data deps.
-  os.chdir(CHROMIUM_SRC_PATH)
 
   args.cros_cache = os.path.abspath(args.cros_cache)
   return args.func(args, unknown_args)

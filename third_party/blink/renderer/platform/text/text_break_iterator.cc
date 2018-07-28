@@ -53,17 +53,14 @@ unsigned NumGraphemeClusters(const String& string) {
   return num;
 }
 
-void GraphemesClusterList(String text,
-                          unsigned start,
-                          unsigned length,
-                          Vector<unsigned>* graphemes) {
+void GraphemesClusterList(const StringView& text, Vector<unsigned>* graphemes) {
+  const unsigned length = text.length();
   graphemes->resize(length);
   if (!length)
     return;
 
-  String substring = text.Substring(start, length);
-  NonSharedCharacterBreakIterator it(substring);
-
+  String string = text.ToString();
+  NonSharedCharacterBreakIterator it(string);
   int cursor_pos = it.Next();
   unsigned count = 0;
   unsigned pos = 0;
@@ -442,6 +439,14 @@ int LazyLineBreakIterator::NextBreakablePosition(
 
 unsigned LazyLineBreakIterator::NextBreakOpportunity(unsigned offset) const {
   int next_break = NextBreakablePosition(offset, break_type_);
+  DCHECK_GE(next_break, 0);
+  return next_break;
+}
+
+unsigned LazyLineBreakIterator::NextBreakOpportunity(unsigned offset,
+                                                     unsigned len) const {
+  DCHECK_LE(len, string_.length());
+  int next_break = NextBreakablePosition(offset, break_type_, len);
   DCHECK_GE(next_break, 0);
   return next_break;
 }

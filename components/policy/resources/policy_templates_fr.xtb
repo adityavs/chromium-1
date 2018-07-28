@@ -733,7 +733,6 @@ Si cette règle est définie sur "False", les utilisateurs ne pourront pas jouer
       Si cette règle n'est pas définie, <ph name="PRINTERS_ALLOW_ALL" /> est supposé s'appliquer.
       </translation>
 <translation id="2908277604670530363">Nombre maximal de connexions simultanées au serveur proxy</translation>
-<translation id="2951386431828317490">Activer la saisie automatique pour les profils</translation>
 <translation id="2956777931324644324">Cette règle a été supprimée dès la version 36 de <ph name="PRODUCT_NAME" />.
 
       Elle indique si l'extension des certificats TLS liés au domaine doit être activée.
@@ -1506,7 +1505,7 @@ Si cette règle n'est pas configurée, ce paramètre est activé, mais l'utilisa
       Si cette règle est associée à la valeur "True", <ph name="PRODUCT_OS_NAME" /> empêche l'appareil de démarrer en mode développeur. Le système refuse de se lancer et un écran d'erreur s'affiche lorsque le mode développeur est activé.
 
       Si cette règle n'est pas définie ou si elle est associée à la valeur "False", le mode développeur peut être sélectionné sur l'appareil.</translation>
-<translation id="520403427390290017">La fonctionnalité de cycle de vie des onglets récupère le processeur et finalement la mémoire associée aux onglets actuels qui n'ont pas été utilisés depuis longtemps, d'abord en limitant ces derniers, puis en les figeant, et enfin en les supprimant.
+<translation id="520403427390290017">La fonctionnalité de cycle de vie des onglets réutilise le processeur et finalement la mémoire associée aux onglets actuels qui n'ont pas été utilisés depuis longtemps, d'abord en limitant ces derniers, puis en les figeant, et enfin en les supprimant.
 
       Si cette règle est définie sur False, cette fonctionnalité est désactivée, et tous les onglets continuent d'être utilisés normalement.
 
@@ -1558,11 +1557,6 @@ Si cette règle n'est pas configurée, la valeur par défaut globale sera utilis
 
           Si cette règle est définie sur "False", les utilisateurs ne peuvent pas caster de contenu sur leur appareil. Si elle est définie sur "True", les utilisateurs sont autorisés à caster du contenu. Si elle n'est pas définie, les utilisateurs ne peuvent pas caster de contenu sur les appareils Chrome OS enregistrés, mais ils peuvent le faire sur des appareils non enregistrés.</translation>
 <translation id="5330684698007383292">Autoriser <ph name="PRODUCT_FRAME_NAME" /> à gérer les types de contenu suivants</translation>
-<translation id="5360146044009867539">Active la fonctionnalité de saisie automatique de <ph name="PRODUCT_NAME" />, qui permet à l'utilisateur de remplir automatiquement des formulaires Web à partir de données stockées précédemment, telles que des informations relatives à son profil et à son adresse.
-
-      Si ce paramètre est désactivé, ces informations ne sont jamais suggérées ni saisies automatiquement. De même, les informations complémentaires relatives à l'adresse que l'utilisateur est susceptible de fournir sur une page Web ne sont pas enregistrées.
-
-      Si ce paramètre est activé ou vide, l'utilisateur peut contrôler la saisie automatique pour les adresses dans l'interface utilisateur.</translation>
 <translation id="5365946944967967336">Afficher le bouton Accueil sur la barre d'outils</translation>
 <translation id="5366745336748853475">Vous permet de spécifier une liste de formats d'URL indiquant les sites pour lesquels un certificat client est sélectionné automatiquement sur l'écran de connexion (dans le cadre où se trouve le flux SAML), lorsque le site nécessite un certificat. Par exemple, vous pouvez configurer un certificat applicable à l'intégralité de l'appareil afin de le présenter au fournisseur d'identité SAML.
 
@@ -2292,7 +2286,7 @@ Si elle n'est pas configurée, l'utilisateur peut être invité à effectuer l'i
 <translation id="7275334191706090484">Favoris gérés</translation>
 <translation id="729492886167634859">Cette règle dresse une liste de pourcentages qui définit la fraction d'appareils <ph name="PRODUCT_OS_NAME" /> de l'unité organisationnelle qui doivent être mis à jour par semaine à compter de la date où la mise à jour est détectée pour la première fois. La date de détection est postérieure à la date de publication de la mise à jour, car un certain temps peut s'écouler avant que l'appareil ne recherche des mises à jour après la publication de la mise à jour.
 
-      La valeur énième indiquée dans la liste définit le pourcentage d'appareils pour lesquels la nouvelle version doit être installée d'ici la énième semaine une fois qu'elle est détectée. Par exemple, si une mise à jour est détectée aujourd'hui, la première valeur dans la liste définit le pourcentage d'appareils de l'unité organisationnelle pour lesquels cette version doit être installée d'ici une semaine à compter d'aujourd'hui. La deuxième valeur définit le pourcentage d'appareils de l'UO pour lesquels cette version doit être installée d'ici deux semaines à compter d'aujourd'hui, et ainsi de suite.
+      La valeur énième indiquée dans la liste définit le pourcentage d'appareils pour lesquels la nouvelle version doit être installée d'ici la énième semaine une fois qu'elle est détectée. Par exemple, si une mise à jour est détectée aujourd'hui, la première valeur de la liste définit le pourcentage d'appareils de l'unité organisationnelle pour lesquels cette version doit être installée d'ici une semaine à compter d'aujourd'hui. La deuxième valeur définit le pourcentage d'appareils de l'UO pour lesquels cette version doit être installée d'ici deux semaines à compter d'aujourd'hui, et ainsi de suite.
 
       Si cette règle est définie sur une valeur, elle s'applique à la place de la règle <ph name="DEVICE_UPDATE_SCATTER_FACTOR_POLICY_NAME" />.
 
@@ -2766,11 +2760,11 @@ Il est conseillé de configurer les règles sur Windows via GPO, même si la ges
 
           Pour voir des exemples de formats, accédez à l'adresse https://www.chromium.org/developers/how-tos/chrome-frame-getting-started.</translation>
 <translation id="8493645415242333585">Désactiver l'enregistrement de l'historique du navigateur</translation>
-<translation id="8498293625012059298">Permet de configurer l'URL de modification de mot de passe (protocoles HTTP et HTTPS uniquement). Le service de protection par mot de passe dirige les utilisateurs vers cette URL afin que ces derniers modifient leur mot de passe après avoir lu l'avertissement affiché dans le navigateur.
+<translation id="8498293625012059298">Permet de configurer l'URL de modification de mot de passe (protocoles HTTP et HTTPS uniquement). Le service de protection par mot de passe dirigera les utilisateurs vers cette URL afin que ces derniers modifient leur mot de passe après avoir lu l'avertissement affiché dans le navigateur.
       Afin que <ph name="PRODUCT_NAME" /> enregistre correctement la nouvelle empreinte numérique du mot de passe sur la page de modification de ce dernier, vérifiez si cette page respecte bien les consignes indiquées à l'adresse https://www.chromium.org/developers/design-documents/create-amazing-password-forms.
 
-      Si ce paramètre est activé, le service de protection par mot de passe dirige les utilisateurs vers cette URL afin que ces derniers modifient leur mot de passe après avoir lu l'avertissement affiché dans le navigateur.
-      Si ce paramètre est désactivé ou n'est pas défini, le service de protection par mot de passe dirige les utilisateurs vers la page https://myaccounts.google.com afin que ces derniers modifient leur mot de passe.
+      Si ce paramètre est activé, le service de protection par mot de passe dirigera les utilisateurs vers cette URL afin que ces derniers modifient leur mot de passe après avoir lu l'avertissement affiché dans le navigateur.
+      Si ce paramètre est désactivé ou n'est pas défini, le service de protection par mot de passe dirigera les utilisateurs vers la page https://myaccounts.google.com afin que ces derniers modifient leur mot de passe.
       Cette règle n'est pas disponible sur les instances Windows non associées à un domaine <ph name="MS_AD_NAME" />.</translation>
 <translation id="8499172469244085141">Paramètres par défaut (les utilisateurs peuvent les contourner)</translation>
 <translation id="8507835864888987300">Définit une version cible pour les mises à jour automatiques.

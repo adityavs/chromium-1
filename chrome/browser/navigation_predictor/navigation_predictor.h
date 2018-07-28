@@ -8,10 +8,13 @@
 #include <vector>
 
 #include "base/macros.h"
+#include "base/sequence_checker.h"
+#include "base/time/time.h"
 #include "mojo/public/cpp/bindings/interface_request.h"
 #include "third_party/blink/public/mojom/loader/navigation_predictor.mojom.h"
 
 namespace content {
+class BrowserContext;
 class RenderFrameHost;
 }
 
@@ -50,6 +53,10 @@ class NavigationPredictor : public blink::mojom::AnchorElementMetricsHost {
   // score. Return value is guaranteed to be non-null.
   SiteEngagementService* GetEngagementService() const;
 
+  // Merge anchor element metrics that have the same target url (href).
+  void MergeMetricsSameTargetUrl(
+      std::vector<blink::mojom::AnchorElementMetricsPtr>* metrics) const;
+
   // Given metrics of an anchor element from both renderer and browser process,
   // returns navigation score.
   double GetAnchorElementScore(
@@ -65,9 +72,17 @@ class NavigationPredictor : public blink::mojom::AnchorElementMetricsHost {
   void RecordMetricsOnLoad(
       const blink::mojom::AnchorElementMetrics& metric) const;
 
-  // |render_frame_host_| is the host associated with the render frame. It is
-  // used to retrieve metrics at the browser side.
-  content::RenderFrameHost* const render_frame_host_;
+  // Record timing information when an anchor element is clicked.
+  void RecordTimingOnClick();
+
+  // Used to get keyed services.
+  content::BrowserContext* const browser_context_;
+
+  // Timing of document loaded and last click.
+  base::TimeTicks document_loaded_timing_;
+  base::TimeTicks last_click_timing_;
+
+  SEQUENCE_CHECKER(sequence_checker_);
 
   DISALLOW_COPY_AND_ASSIGN(NavigationPredictor);
 };

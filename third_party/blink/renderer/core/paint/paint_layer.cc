@@ -68,7 +68,6 @@
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_resource_clipper.h"
 #include "third_party/blink/renderer/core/layout/svg/layout_svg_root.h"
 #include "third_party/blink/renderer/core/page/page.h"
-#include "third_party/blink/renderer/core/page/scrolling/root_scroller_util.h"
 #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
 #include "third_party/blink/renderer/core/page/scrolling/sticky_position_scrolling_constraints.h"
 #include "third_party/blink/renderer/core/paint/box_reflection_utils.h"
@@ -1704,7 +1703,8 @@ void PaintLayer::AppendSingleFragmentIgnoringPagination(
     const LayoutSize& sub_pixel_accumulation) const {
   PaintLayerFragment fragment;
   ClipRectsContext clip_rects_context(
-      root_layer, kUncachedClipRects, overlay_scrollbar_clip_behavior,
+      root_layer, &root_layer->GetLayoutObject().FirstFragment(),
+      kUncachedClipRects, overlay_scrollbar_clip_behavior,
       respect_overflow_clip, sub_pixel_accumulation);
   Clipper(kUseGeometryMapper)
       .CalculateRects(clip_rects_context, &GetLayoutObject().FirstFragment(),
@@ -1742,9 +1742,15 @@ void PaintLayer::CollectFragments(
     const LayoutPoint* offset_from_root,
     const LayoutSize& sub_pixel_accumulation) const {
   PaintLayerFragment fragment;
-  ClipRectsContext clip_rects_context(
-      root_layer, kUncachedClipRects, overlay_scrollbar_clip_behavior,
-      respect_overflow_clip, sub_pixel_accumulation);
+
+  // If |root_layer| is inside the same pagination container as |this|, and
+  // there is no compositing boundary inside pagination (this is what
+  // ShouldFragmentCompositedBounds() checks), then try to match
+  // fragments from |root_layer| to |this|, so that any
+  // fragment clip for |root_layer|'s fragment matches |this|'s.
+  bool should_match_fragments = root_layer->EnclosingPaginationLayer() &&
+      root_layer->EnclosingPaginationLayer() == EnclosingPaginationLayer() &&
+      ShouldFragmentCompositedBounds();
 
   // The inherited offset_from_root does not include any pagination offsets.
   // In the presence of fragmentation, we cannot use it. Note that we may also
@@ -1755,12 +1761,42 @@ void PaintLayer::CollectFragments(
       !GetLayoutObject().FirstFragment().NextFragment();
   for (auto* fragment_data = &GetLayoutObject().FirstFragment(); fragment_data;
        fragment_data = fragment_data->NextFragment()) {
+    const FragmentData* root_fragment =
+        &root_layer->GetLayoutObject().FirstFragment();
+    if (should_match_fragments) {
+      for (root_fragment = &root_layer->GetLayoutObject().FirstFragment();
+           root_fragment; root_fragment = root_fragment->NextFragment()) {
+        if (root_fragment->LogicalTopInFlowThread() ==
+            fragment_data->LogicalTopInFlowThread())
+          break;
+      }
+    }
+
+    bool cant_find_fragment = !root_fragment;
+    if (cant_find_fragment) {
+      // Fall back to the first fragment, in order to have
+      // PaintLayerClipper at least compute |fragment.layer_bounds|.
+      root_fragment = &root_layer->GetLayoutObject().FirstFragment();
+    }
+
+    ClipRectsContext clip_rects_context(
+        root_layer, root_fragment, kUncachedClipRects,
+        overlay_scrollbar_clip_behavior, respect_overflow_clip,
+        sub_pixel_accumulation);
+
     Clipper(kUseGeometryMapper)
         .CalculateRects(
             clip_rects_context, fragment_data, dirty_rect,
             fragment.layer_bounds, fragment.background_rect,
             fragment.foreground_rect,
             offset_from_root_can_be_used ? offset_from_root : nullptr);
+
+    if (cant_find_fragment) {
+      // If we couldn't find a matching fragment when |should_match_fragments|
+      // was true, then fall back to no clip.
+      fragment.background_rect.Reset();
+      fragment.foreground_rect.Reset();
+    }
 
     fragment.fragment_data = fragment_data;
     fragment.pagination_offset = fragment_data->PaginationOffset();
@@ -1988,9 +2024,10 @@ PaintLayer* PaintLayer::HitTestLayer(
       ClipRect clip_rect;
       Clipper(PaintLayer::kUseGeometryMapper)
           .CalculateBackgroundClipRect(
-              ClipRectsContext(root_layer, kUncachedClipRects,
-                               kExcludeOverlayScrollbarSizeForHitTesting,
-                               clip_behavior),
+              ClipRectsContext(
+                  root_layer, &root_layer->GetLayoutObject().FirstFragment(),
+                  kUncachedClipRects, kExcludeOverlayScrollbarSizeForHitTesting,
+                  clip_behavior),
               clip_rect);
       // Go ahead and test the enclosing clip now.
       if (!clip_rect.Intersects(recursion_data.location))
@@ -2500,7 +2537,7 @@ bool PaintLayer::IntersectsDamageRect(
 LayoutRect PaintLayer::LogicalBoundingBox() const {
   LayoutRect rect = GetLayoutObject().VisualOverflowRect();
 
-  if (RootScrollerUtil::IsEffective(*this) || IsRootLayer()) {
+  if (GetLayoutObject().IsEffectiveRootScroller() || IsRootLayer()) {
     rect.Unite(LayoutRect(rect.Location(),
                           GetLayoutObject().View()->ViewRect().Size()));
   }
@@ -2621,7 +2658,7 @@ LayoutRect PaintLayer::BoundingBoxForCompositingInternal(
       !HasVisibleDescendant())
     return LayoutRect();
 
-  if (RootScrollerUtil::IsEffective(*this) || IsRootLayer()) {
+  if (GetLayoutObject().IsEffectiveRootScroller() || IsRootLayer()) {
     // In root layer scrolling mode, the main GraphicsLayer is the size of the
     // layout viewport. In non-RLS mode, it is the union of the layout viewport
     // and the document's layout overflow rect.

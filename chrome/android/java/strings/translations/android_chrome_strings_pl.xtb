@@ -750,7 +750,6 @@ Na przykład niektóre strony mogą na nie zareagować, wyświetlając reklamy b
 <translation id="7128222689758636196">Zezwalaj na dostęp obecnej wyszukiwarce</translation>
 <translation id="7138678301420049075">Inne</translation>
 <translation id="7141896414559753902">Blokuj wyskakujące okienka i przekierowania na stronach (zalecane)</translation>
-<translation id="7144878232160441200">Ponów próbę</translation>
 <translation id="7149893636342594995">Ostatnie 24 godziny</translation>
 <translation id="7176368934862295254"><ph name="KILOBYTES" /> KB</translation>
 <translation id="7177466738963138057">Możesz zmienić to później w Ustawieniach</translation>
@@ -982,6 +981,7 @@ Aby otrzymać nowe licencje, połącz się z internetem i odtwórz pobrane treś
 <translation id="9100939710791843300">Dotknij przycisku ekranu głównego, by załadować stronę nowej karty i wyświetlić sugerowane artykuły</translation>
 <translation id="9133515669113036225">Zresetuj dane logowania na urządzeniu</translation>
 <translation id="9133703968756164531"><ph name="ITEM_NAME" /> (<ph name="ITEM_ID" />)</translation>
+<translation id="9137013805542155359">Pokaż tekst oryginalny</translation>
 <translation id="9139068048179869749">Pytaj, zanim zezwolisz stronom na wysyłanie powiadomień (zalecane)</translation>
 <translation id="9155898266292537608">Możesz też wyszukiwać szybkim kliknięciem słowa</translation>
 <translation id="9188680907066685419">Wyloguj się z konta zarządzanego</translation>
@@ -992,7 +992,6 @@ Aby otrzymać nowe licencje, połącz się z internetem i odtwórz pobrane treś
 <translation id="932327136139879170">Strona główna</translation>
 <translation id="932599481871055447">Zapisuj dane i szybciej przeglądaj strony</translation>
 <translation id="938850635132480979">Błąd: <ph name="ERROR_CODE" /></translation>
-<translation id="945360730947989880">Za mało miejsca na karcie SD</translation>
 <translation id="945522503751344254">Wyślij zgłoszenie</translation>
 <translation id="945632385593298557">Dostęp do mikrofonu</translation>
 <translation id="951339005376969845">Usuń istniejące dane. Aby je pobrać, przełącz się z powrotem na konto <ph name="FROM_ACCOUNT" />.</translation>

@@ -20,7 +20,7 @@ namespace {
 
 scoped_refptr<base::SequencedTaskRunner> CreateTaskRunner() {
   return base::CreateSequencedTaskRunnerWithTraits(
-      {base::MayBlock(), base::TaskPriority::BACKGROUND});
+      {base::MayBlock(), base::TaskPriority::BEST_EFFORT});
 }
 
 // We never destroy the taskrunner as we may need it for cleanup
@@ -208,6 +208,10 @@ size_t ProducerClient::shared_buffer_page_size_kb() const {
 }
 
 void ProducerClient::NotifyFlushComplete(perfetto::FlushRequestID) {
+  NOTREACHED();
+}
+
+void ProducerClient::NotifyDataSourceStopped(perfetto::DataSourceInstanceID) {
   NOTREACHED();
 }
 

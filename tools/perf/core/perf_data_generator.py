@@ -121,27 +121,6 @@ NEW_PERF_RECIPE_FYI_TESTERS = {
       },
       'testing': True,
     },
-    'Android Go': {
-      'tests': [
-        {
-          'name': 'performance_test_suite',
-          'isolate': 'performance_test_suite',
-          'extra_args': [
-            '--run-ref-build',
-            '--test-shard-map-filename=android_go_shard_map.json',
-          ],
-          'num_shards': 19
-        }
-      ],
-      'platform': 'android',
-      'dimension': {
-        'device_os': 'O',
-        'device_type': 'gobo',
-        'device_os_flavor': 'google',
-        'pool': 'chrome.tests.perf-fyi',
-        'os': 'Android',
-      },
-    },
     'android-pixel2_webview-perf': {
       'tests': [
         {
@@ -189,6 +168,27 @@ NEW_PERF_RECIPE_FYI_TESTERS = {
 # to generate the correct json for each tester
 NEW_PERF_RECIPE_MIGRATED_TESTERS = {
   'testers' : {
+    'android-go-perf': {
+      'tests': [
+        {
+          'name': 'performance_test_suite',
+          'isolate': 'performance_test_suite',
+          'extra_args': [
+            '--run-ref-build',
+            '--test-shard-map-filename=android_go_shard_map.json',
+          ],
+          'num_shards': 19
+        }
+      ],
+      'platform': 'android',
+      'dimension': {
+        'device_os': 'O',
+        'device_type': 'gobo',
+        'device_os_flavor': 'google',
+        'pool': 'chrome.tests.perf',
+        'os': 'Android',
+      },
+    },
     'android-nexus5x-perf': {
       'tests': [
         {
@@ -314,7 +314,6 @@ NEW_PERF_RECIPE_MIGRATED_TESTERS = {
           'isolate': 'performance_webview_test_suite',
           'num_shards': 16,
           'extra_args': [
-              '--run-ref-build',
               '--test-shard-map-filename=android_nexus5x_webview_16_shard_map.json',
               '--assert-gpu-compositing',
           ],
@@ -335,7 +334,6 @@ NEW_PERF_RECIPE_MIGRATED_TESTERS = {
           'isolate': 'performance_webview_test_suite',
           'num_shards': 16,
           'extra_args': [
-              '--run-ref-build',
               '--test-shard-map-filename=android_nexus6_webview_shard_map.json',
               '--assert-gpu-compositing',
           ],

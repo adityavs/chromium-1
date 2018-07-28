@@ -415,6 +415,10 @@
       name: "DocumentWrite",
     },
     {
+      // http://crbug.com/707656 content editable in LayoutNG.
+      name: "EditingNG",
+    },
+    {
       name: "EmbedderCSPEnforcement",
       status: "stable",
     },
@@ -626,6 +630,10 @@
       status: "stable",
     },
     {
+      name: "IsolatedCodeCache",
+      status: "experimental",
+    },
+    {
       // Tracks "jank" from layout objects changing their visual location
       // between animation frames (see crbug.com/581518).
       name: "JankTracking",
@@ -648,7 +656,7 @@
     },
     {
       name: "LayoutNG",
-      implied_by: ["LayoutNGBlockFragmentation", "LayoutNGFlexBox"],
+      implied_by: ["LayoutNGBlockFragmentation", "LayoutNGFlexBox", "EditingNG"],
     },
     {
       name: "LayoutNGBlockFragmentation",
@@ -1071,10 +1079,6 @@
     {
       name: "ReportingObserver",
       implied_by: ["DeprecationReporting", "InterventionReporting"],
-      status: "stable",
-    },
-    {
-      name: "RequestIsHistoryNavigation",
       status: "stable",
     },
     {

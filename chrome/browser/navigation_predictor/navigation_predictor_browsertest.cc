@@ -90,6 +90,7 @@ IN_PROC_BROWSER_TEST_P(NavigationPredictorBrowserTest, NavigationScore) {
 }
 
 // Simulate a click at the anchor element.
+// Test that timing info (DurationLoadToFirstClick) can be recorded.
 IN_PROC_BROWSER_TEST_P(NavigationPredictorBrowserTest, ClickAnchorElement) {
   base::HistogramTester histogram_tester;
 
@@ -106,8 +107,30 @@ IN_PROC_BROWSER_TEST_P(NavigationPredictorBrowserTest, ClickAnchorElement) {
           blink::features::kRecordAnchorMetricsClicked)) {
     histogram_tester.ExpectTotalCount(
         "AnchorElementMetrics.Clicked.HrefEngagementScore2", 1);
+    histogram_tester.ExpectTotalCount(
+        "AnchorElementMetrics.Clicked.DurationLoadToFirstClick", 1);
   } else {
     histogram_tester.ExpectTotalCount(
         "AnchorElementMetrics.Clicked.HrefEngagementScore2", 0);
+  }
+}
+
+// Test that MergeMetricsSameTargetUrl merges anchor elements having the same
+// href. The html file contains two anchor elements having the same href.
+IN_PROC_BROWSER_TEST_P(NavigationPredictorBrowserTest,
+                       MergeMetricsSameTargetUrl) {
+  base::HistogramTester histogram_tester;
+
+  const GURL& url = GetTestURL("/anchors_same_href.html");
+  ui_test_utils::NavigateToURL(browser(), url);
+  base::RunLoop().RunUntilIdle();
+
+  if (base::FeatureList::IsEnabled(
+          blink::features::kRecordAnchorMetricsVisible)) {
+    histogram_tester.ExpectTotalCount("AnchorElementMetrics.Visible.RatioArea",
+                                      1);
+  } else {
+    histogram_tester.ExpectTotalCount("AnchorElementMetrics.Visible.RatioArea",
+                                      0);
   }
 }

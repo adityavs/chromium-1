@@ -81,11 +81,11 @@ void WorkerClassicScriptLoader::LoadSynchronously(
   resource_loader_options.synchronous_policy = kRequestSynchronously;
 
   threadable_loader_ = new ThreadableLoader(
-      execution_context, this, resource_loader_options, base::nullopt);
+      execution_context, this, resource_loader_options);
   threadable_loader_->Start(request);
 }
 
-void WorkerClassicScriptLoader::LoadAsynchronously(
+void WorkerClassicScriptLoader::LoadTopLevelScriptAsynchronously(
     ExecutionContext& execution_context,
     const KURL& url,
     WebURLRequest::RequestContext request_context,
@@ -99,6 +99,7 @@ void WorkerClassicScriptLoader::LoadAsynchronously(
   finished_callback_ = std::move(finished_callback);
   url_ = url;
   execution_context_ = &execution_context;
+  forbid_cross_origin_redirects_ = true;
 
   ResourceRequest request(url);
   request.SetHTTPMethod(HTTPNames::GET);
@@ -117,7 +118,7 @@ void WorkerClassicScriptLoader::LoadAsynchronously(
   scoped_refptr<WorkerClassicScriptLoader> protect(this);
   need_to_cancel_ = true;
   threadable_loader_ = new ThreadableLoader(
-      execution_context, this, resource_loader_options, base::nullopt);
+      execution_context, this, resource_loader_options);
   threadable_loader_->Start(request);
   if (failed_)
     NotifyFinished();
@@ -141,6 +142,18 @@ void WorkerClassicScriptLoader::DidReceiveResponse(
     NotifyError();
     return;
   }
+
+  if (forbid_cross_origin_redirects_ && url_ != response.Url() &&
+      !SecurityOrigin::AreSameSchemeHostPort(url_, response.Url())) {
+    // Forbid cross-origin redirects to ensure the request and response URLs
+    // have the same SecurityOrigin.
+    execution_context_->AddConsoleMessage(ConsoleMessage::Create(
+        kSecurityMessageSource, kErrorMessageLevel,
+        "Refused to cross-origin redirects of the top-level worker script."));
+    NotifyError();
+    return;
+  }
+
   identifier_ = identifier;
   response_url_ = response.Url();
   response_encoding_ = response.TextEncodingName();

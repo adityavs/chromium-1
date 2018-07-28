@@ -16,7 +16,6 @@
 #include "base/memory/scoped_refptr.h"
 #include "base/message_loop/incoming_task_queue.h"
 #include "base/message_loop/message_loop_current.h"
-#include "base/message_loop/message_loop_task_runner.h"
 #include "base/message_loop/message_pump.h"
 #include "base/message_loop/timer_slack.h"
 #include "base/observer_list.h"
@@ -30,7 +29,12 @@
 
 namespace base {
 
+class SequencedTaskSource;
 class ThreadTaskRunnerHandle;
+
+namespace internal {
+class MessageLoopTaskRunner;
+}
 
 // A MessageLoop is used to process events for a particular thread.  There is
 // at most one MessageLoop instance per thread.
@@ -165,16 +169,9 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
     return task_runner_;
   }
 
-  // Sets a new TaskRunner for this message loop. The message loop must already
-  // have been bound to a thread prior to this call, and the task runner must
-  // belong to that thread. Note that changing the task runner will also affect
-  // the ThreadTaskRunnerHandle for the target thread. Must be called on the
-  // thread to which the message loop is bound.
+  // Sets a new TaskRunner for this message loop. If the message loop was
+  // already bound, this must be called on the thread to which it is bound.
   void SetTaskRunner(scoped_refptr<SingleThreadTaskRunner> task_runner);
-
-  // Clears task_runner() and the ThreadTaskRunnerHandle for the target thread.
-  // Must be called on the thread to which the message loop is bound.
-  void ClearTaskRunnerForTesting();
 
   // TODO(https://crbug.com/825327): Remove users of TaskObservers through
   // MessageLoop::current() and migrate the type back here.
@@ -214,7 +211,6 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
   void BindToCurrentThread();
 
  private:
-  friend class internal::IncomingTaskQueue;
   friend class MessageLoopCurrent;
   friend class MessageLoopCurrentForIO;
   friend class MessageLoopCurrentForUI;
@@ -305,15 +301,26 @@ class BASE_EXPORT MessageLoop : public MessagePump::Delegate,
 
   ObserverList<TaskObserver> task_observers_;
 
-  // Pointer to this MessageLoop's Controller, valid until the reference to
-  // |incoming_task_queue_| is dropped below.
+  // Pointer to this MessageLoop's Controller, valid throughout this
+  // MessageLoop's lifetime (until |underlying_task_runner_| is released at the
+  // end of ~MessageLoop()).
   Controller* const message_loop_controller_;
-  scoped_refptr<internal::IncomingTaskQueue> incoming_task_queue_;
 
-  // A task runner which we haven't bound to a thread yet.
-  scoped_refptr<internal::MessageLoopTaskRunner> unbound_task_runner_;
+  // The task runner this MessageLoop will extract its tasks from. By default,
+  // it will also be bound as the ThreadTaskRunnerHandle on the current thread.
+  // That default can be overridden by SetTaskRunner() but this MessageLoop will
+  // nonetheless take its tasks from |underlying_task_runner_| (the overrider is
+  // responsible for doing the routing). This member must be before
+  // |pending_task_queue| as it must outlive it.
+  const scoped_refptr<internal::MessageLoopTaskRunner> underlying_task_runner_;
 
-  // The task runner associated with this message loop.
+  // The source of tasks for this MessageLoop. Currently this is always
+  // |underlying_task_runner_|. TODO(gab): Make this customizable.
+  SequencedTaskSource* const sequenced_task_source_;
+
+  internal::IncomingTaskQueue pending_task_queue_;
+
+  // The task runner exposed by this message loop.
   scoped_refptr<SingleThreadTaskRunner> task_runner_;
   std::unique_ptr<ThreadTaskRunnerHandle> thread_task_runner_handle_;
 

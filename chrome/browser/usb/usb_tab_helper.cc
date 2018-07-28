@@ -9,11 +9,11 @@
 
 #include "chrome/browser/ui/browser_finder.h"
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
+#include "chrome/browser/usb/web_usb_device_manager.h"
 #include "chrome/browser/usb/web_usb_permission_provider.h"
 #include "content/public/browser/navigation_handle.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/common/content_features.h"
-#include "device/usb/mojo/device_manager_impl.h"
 #include "mojo/public/cpp/bindings/message.h"
 #include "third_party/blink/public/mojom/feature_policy/feature_policy.mojom.h"
 
@@ -34,8 +34,6 @@ const char kFeaturePolicyViolation[] =
     "Feature policy blocks access to WebUSB.";
 
 }  // namespace
-
-DEFINE_WEB_CONTENTS_USER_DATA_KEY(UsbTabHelper);
 
 struct FrameUsbServices {
   std::unique_ptr<WebUSBPermissionProvider> permission_provider;
@@ -67,8 +65,8 @@ void UsbTabHelper::CreateDeviceManager(
     mojo::ReportBadMessage(kFeaturePolicyViolation);
     return;
   }
-  device::usb::DeviceManagerImpl::Create(
-      GetPermissionProvider(render_frame_host), std::move(request));
+  WebUsbDeviceManager::Create(GetPermissionProvider(render_frame_host),
+                              std::move(request));
 }
 
 void UsbTabHelper::CreateChooserService(

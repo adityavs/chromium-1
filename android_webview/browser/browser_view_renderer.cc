@@ -262,9 +262,12 @@ void BrowserViewRenderer::OnParentDrawConstraintsUpdated(
   DCHECK(compositor_frame_consumer);
   if (compositor_frame_consumer != current_compositor_frame_consumer_)
     return;
-  PostInvalidate(compositor_);
-  external_draw_constraints_ =
+  ParentCompositorDrawConstraints new_constraints =
       current_compositor_frame_consumer_->GetParentDrawConstraintsOnUI();
+  if (external_draw_constraints_ == new_constraints)
+    return;
+  external_draw_constraints_ = new_constraints;
+  PostInvalidate(compositor_);
   UpdateMemoryPolicy();
 }
 
@@ -320,11 +323,17 @@ void BrowserViewRenderer::ReturnResourceFromParent(
       compositor->ReturnResources(pair.second.layer_tree_frame_sink_id,
                                   resources);
     }
+
+    has_rendered_frame_ = true;
   }
 }
 
 bool BrowserViewRenderer::OnDrawSoftware(SkCanvas* canvas) {
   return CanOnDraw() && CompositeSW(canvas);
+}
+
+bool BrowserViewRenderer::NeedToDrawBackgroundColor() {
+  return !has_rendered_frame_;
 }
 
 sk_sp<SkPicture> BrowserViewRenderer::CapturePicture(int width,
@@ -466,6 +475,7 @@ void BrowserViewRenderer::ReleaseHardware() {
     DCHECK(compositor_frame_consumer->ReturnedResourcesEmptyOnUI());
   }
   hardware_enabled_ = false;
+  has_rendered_frame_ = false;
   UpdateMemoryPolicy();
 }
 

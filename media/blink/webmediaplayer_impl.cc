@@ -362,7 +362,7 @@ void WebMediaPlayerImpl::DemuxerDestructionHelper(
   // used to allow process termination to not block on completing the task.
   base::PostTaskWithTraits(
       FROM_HERE,
-      {base::TaskPriority::BACKGROUND,
+      {base::TaskPriority::BEST_EFFORT,
        base::TaskShutdownBehavior::CONTINUE_ON_SHUTDOWN},
       base::BindOnce(
           [](std::unique_ptr<Demuxer> demuxer_to_destroy) {
@@ -1653,7 +1653,7 @@ void WebMediaPlayerImpl::OnMetadata(PipelineMetadata metadata) {
               &VideoFrameCompositor::EnableSubmission,
               base::Unretained(compositor_.get()), bridge_->GetSurfaceId(),
               pipeline_metadata_.video_decoder_config.video_rotation(),
-              IsInPictureInPicture(),
+              IsInPictureInPicture(), opaque_,
               BindToCurrentLoop(base::BindRepeating(
                   &WebMediaPlayerImpl::OnFrameSinkDestroyed, AsWeakPtr()))));
       bridge_->SetContentsOpaque(opaque_);
@@ -1914,6 +1914,10 @@ void WebMediaPlayerImpl::OnVideoOpacityChange(bool opaque) {
       video_layer_->SetContentsOpaque(opaque_);
   } else if (bridge_->GetCcLayer()) {
     bridge_->SetContentsOpaque(opaque_);
+    vfc_task_runner_->PostTask(
+        FROM_HERE,
+        base::BindOnce(&VideoFrameCompositor::UpdateIsOpaque,
+                       base::Unretained(compositor_.get()), opaque_));
   }
 }
 

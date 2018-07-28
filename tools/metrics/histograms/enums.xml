@@ -1367,6 +1367,13 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="1" label="Peeking App List Folder Design"/>
 </enum>
 
+<enum name="AppListInternalAppName">
+  <int value="0" label="KeyboardShortcutViewer"/>
+  <int value="1" label="Settings"/>
+  <int value="2" label="ContinueReading"/>
+  <int value="3" label="Camera"/>
+</enum>
+
 <enum name="AppListPage">
   <int value="0" label="APPS"/>
   <int value="1" label="SEARCH_RESULTS"/>
@@ -1519,6 +1526,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="1" label="Error bootlockboxd not ready"/>
   <int value="2" label="Error unable to relocate"/>
   <int value="3" label="Error unable to sign"/>
+  <int value="4" label="Salt empty"/>
 </enum>
 
 <enum name="ArcCodeVerificationResult">
@@ -1682,6 +1690,7 @@ uploading your change for review.  These are checked by presubmit scripts.
   <int value="9" label="App started from settings"/>
   <int value="10" label="Interaction with notification"/>
   <int value="11" label="Interaction with app window"/>
+  <int value="12" label="App started from extension API"/>
 </enum>
 
 <enum name="ArcVideoDecodeAcceleratorResult">
@@ -13892,9 +13901,10 @@ Called by update_net_error_codes.py.-->
   <int value="456" label="AllowedInputMethods"/>
   <int value="457" label="OverrideSecurityRestrictionsOnInsecureOrigin"/>
   <int value="458" label="DeviceUpdateStagingPercentOfFleetPerWeek"/>
-  <int value="459" label="AutofillProfileEnabled"/>
+  <int value="459" label="AutofillAddressEnabled"/>
   <int value="460" label="TabLifecyclesEnabled"/>
   <int value="461" label="UrlKeyedAnonymizedDataCollectionEnabled"/>
+  <int value="462" label="NetworkFileSharesAllowed"/>
 </enum>
 
 <enum name="EnterprisePolicyInvalidations">
@@ -14822,6 +14832,7 @@ Called by update_net_error_codes.py.-->
       label="ACCESSIBILITY_PRIVATE_ON_SELECT_TO_SPEAK_STATE_CHANGE_REQUESTED"/>
   <int value="422" label="INPUT_METHOD_PRIVATE_ON_FOCUS"/>
   <int value="423" label="SYSTEM_POWER_SOURCE_ONPOWERCHANGED"/>
+  <int value="424" label="WEB_REQUEST_ON_ACTION_IGNORED"/>
 </enum>
 
 <enum name="ExtensionFileWriteResult">
@@ -16141,6 +16152,8 @@ Called by update_net_error_codes.py.-->
   <int value="1262" label="USERSPRIVATE_GETLOGINSTATUS"/>
   <int value="1263" label="FILEMANAGERPRIVATEINTERNAL_INSTALLLINUXPACKAGE"/>
   <int value="1264" label="VIRTUALKEYBOARDPRIVATE_SETHITTESTBOUNDS"/>
+  <int value="1265" label="ARCAPPSPRIVATE_GETLAUNCHABLEAPPS"/>
+  <int value="1266" label="ARCAPPSPRIVATE_LAUNCHAPP"/>
 </enum>
 
 <enum name="ExtensionIconState">
@@ -16585,6 +16598,8 @@ Called by update_net_error_codes.py.-->
   <int value="211" label="kCecPrivate"/>
   <int value="212" label="kSafeBrowsingPrivate"/>
   <int value="213" label="kFileSystemRequestDownloads"/>
+  <int value="214" label="kSystemPowerSource"/>
+  <int value="215" label="kArcAppsPrivate"/>
 </enum>
 
 <enum name="ExtensionServiceVerifyAllSuccess">
@@ -19456,6 +19471,12 @@ Called by update_net_error_codes.py.-->
   <int value="2514" label="V8RTCRtpTransceiver_Direction_AttributeGetter"/>
   <int value="2515" label="V8RTCRtpTransceiver_Direction_AttributeSetter"/>
   <int value="2516" label="HTMLLinkElementDisabledByParser"/>
+  <int value="2517" label="RequestIsHistoryNavigation"/>
+  <int value="2518" label="AddDocumentLevelPassiveTrueWheelEventListener"/>
+  <int value="2519" label="AddDocumentLevelPassiveFalseWheelEventListener"/>
+  <int value="2520" label="AddDocumentLevelPassiveDefaultWheelEventListener"/>
+  <int value="2521"
+      label="DocumentLevelPassiveDefaultEventListenerPreventedWheel"/>
 </enum>
 
 <enum name="FeedbackSource">
@@ -27670,6 +27691,7 @@ from previous Chrome versions.
   <int value="-1779753607" label="VizDisplayCompositor:disabled"/>
   <int value="-1778993296" label="ContextualSearchMlTapSuppression:disabled"/>
   <int value="-1774818943" label="VrWebInputEditing:enabled"/>
+  <int value="-1772942854" label="LongPressBackForHistory:enabled"/>
   <int value="-1772172557" label="enable-osk-overscroll"/>
   <int value="-1768672408" label="ChromeDuplex:disabled"/>
   <int value="-1767470652" label="out-of-process-pdf"/>
@@ -27890,6 +27912,8 @@ from previous Chrome versions.
   <int value="-1358669137" label="enable-supervised-user-blacklist"/>
   <int value="-1357655121" label="enable-iframe-based-signin"/>
   <int value="-1357008397" label="ContextualSuggestionsCarousel:disabled"/>
+  <int value="-1351328710"
+      label="OmniboxUIExperimentJogTextfieldOnPopup:disabled"/>
   <int value="-1349896789" label="DelayNavigation:enabled"/>
   <int value="-1349872906"
       label="disallow-autofill-sync-credential-for-reauth"/>
@@ -28057,6 +28081,8 @@ from previous Chrome versions.
   <int value="-1022165708" label="BreakingNewsPush:disabled"/>
   <int value="-1020450980" label="gesture-deletion"/>
   <int value="-1019967332" label="VrBrowsing:enabled"/>
+  <int value="-1019492310"
+      label="OmniboxUIExperimentJogTextfieldOnPopup:enabled"/>
   <int value="-1016669222" label="CloudPrinterHandler:enabled"/>
   <int value="-1016202433" label="disable-add-to-shelf"/>
   <int value="-1015006759" label="ImportantSitesInCBD:disabled"/>
@@ -29040,6 +29066,7 @@ from previous Chrome versions.
   <int value="1081546525" label="ash-enable-docked-windows"/>
   <int value="1082054180" label="PersistentWindowBounds:disabled"/>
   <int value="1083201516" label="PersistentWindowBounds:enabled"/>
+  <int value="1085130793" label="LongPressBackForHistory:disabled"/>
   <int value="1087235172" label="file-manager-enable-new-audio-player"/>
   <int value="1088915385" label="new-password-form-parsing:enabled"/>
   <int value="1090377940" label="enable-quic-https"/>
@@ -42088,6 +42115,23 @@ Called by update_net_trust_anchors.py.-->
   <int value="11" label="(gesture) ScheduledPageBlock"/>
 </enum>
 
+<enum name="SchedulerThreadType">
+  <int value="0" label="BrowserUIThread"/>
+  <int value="1" label="BrowserIOThread"/>
+  <int value="2" label="RendererMainThread"/>
+  <int value="3" label="RendererCompositorThread"/>
+  <int value="4" label="RendererDedicatedWorkerThread"/>
+  <int value="5" label="RendererServiceWorkerThread"/>
+  <int value="6" label="RendererOtherBlinkThread"/>
+</enum>
+
+<enum name="SchedulerUkmRecordingStatus">
+  <int value="0" label="Success"/>
+  <int value="1" label="ErrorMissingFrame"/>
+  <int value="2" label="ErrorDetachedFrame"/>
+  <int value="3" label="ErrorMissingUkmRecorder"/>
+</enum>
+
 <enum name="ScoutActiveExtendedReportingPref">
   <int value="0" label="Active pref is the legacy SBER pref"/>
   <int value="1" label="Active pref is the new Scout pref"/>
@@ -43127,6 +43171,15 @@ Called by update_net_trust_anchors.py.-->
   <int value="1" label="Under password suggestions"/>
   <int value="2" label="Standalone suggestion"/>
   <int value="3" label="Context menu"/>
+</enum>
+
+<enum name="ShowTabSwitcherSnapshotResult">
+  <int value="0" label="Snapshot not attempted, page is still loading">
+    Snapshot was not attempted because the page is still loading and would
+    result in a stale snapshot.
+  </int>
+  <int value="1" label="Snapshot was attempted, but the snapshot failed."/>
+  <int value="2" label="Snapshot was successfully taken."/>
 </enum>
 
 <enum name="ShutdownReason">

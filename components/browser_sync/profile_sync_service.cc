@@ -205,6 +205,10 @@ ProfileSyncService::ProfileSyncService(InitParams init_params)
   DCHECK(signin_scoped_device_id_callback_);
   DCHECK(sync_client_);
 
+  // If Sync is disabled via command line flag, then ProfileSyncService
+  // shouldn't be instantiated.
+  DCHECK(IsSyncAllowedByFlag());
+
   ResetCryptoState();
 
   std::string last_version = sync_prefs_.GetLastRunVersion();
@@ -731,8 +735,12 @@ void ProfileSyncService::StopImpl(SyncStopDataFate data_fate) {
 int ProfileSyncService::GetDisableReasons() const {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
+  // If Sync is disabled via command line flag, then ProfileSyncService
+  // shouldn't even be instantiated.
+  DCHECK(IsSyncAllowedByFlag());
+
   int result = DISABLE_REASON_NONE;
-  if (!IsSyncAllowedByFlag() || !IsSyncAllowedByPlatform()) {
+  if (!IsSyncAllowedByPlatform()) {
     result = result | DISABLE_REASON_PLATFORM_OVERRIDE;
   }
   if (sync_prefs_.IsManaged() || sync_disabled_by_admin_) {
@@ -942,7 +950,10 @@ void ProfileSyncService::OnEngineInitialized(
     bool success) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 
-  is_first_time_sync_configure_ = !IsFirstSetupComplete();
+  // The very first time the backend initializes is effectively the first time
+  // we can say we successfully "synced".  LastSyncedTime will only be null in
+  // this case, because the pref wasn't restored on StartUp.
+  is_first_time_sync_configure_ = sync_prefs_.GetLastSyncedTime().is_null();
 
   UpdateEngineInitUMA(success);
 
@@ -970,10 +981,7 @@ void ProfileSyncService::OnEngineInitialized(
     engine_->EnableDirectoryTypeDebugInfoForwarding();
   }
 
-  // The very first time the backend initializes is effectively the first time
-  // we can say we successfully "synced".  LastSyncedTime will only be null in
-  // this case, because the pref wasn't restored on StartUp.
-  if (sync_prefs_.GetLastSyncedTime().is_null()) {
+  if (is_first_time_sync_configure_) {
     UpdateLastSyncedTime();
   }
 
@@ -1285,7 +1293,7 @@ const GoogleServiceAuthError& ProfileSyncService::GetAuthError() const {
 }
 
 bool ProfileSyncService::CanConfigureDataTypes() const {
-  return IsFirstSetupComplete() && !IsSetupInProgress();
+  return data_type_manager_ && IsFirstSetupComplete() && !IsSetupInProgress();
 }
 
 std::unique_ptr<syncer::SyncSetupInProgressHandle>
@@ -2156,7 +2164,7 @@ void ProfileSyncService::RecordMemoryUsageHistograms() {
        type_it.Good(); type_it.Inc()) {
     auto dtc_it = data_type_controllers_.find(type_it.Get());
     if (dtc_it != data_type_controllers_.end())
-      dtc_it->second->RecordMemoryUsageHistogram();
+      dtc_it->second->RecordMemoryUsageAndCountsHistograms();
   }
 }
 

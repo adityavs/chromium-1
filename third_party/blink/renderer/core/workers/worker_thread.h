@@ -39,12 +39,9 @@
 #include "third_party/blink/public/platform/web_thread_type.h"
 #include "third_party/blink/renderer/core/core_export.h"
 #include "third_party/blink/renderer/core/frame/csp/content_security_policy.h"
-#include "third_party/blink/renderer/core/loader/threadable_loading_context.h"
 #include "third_party/blink/renderer/core/workers/parent_execution_context_task_runners.h"
 #include "third_party/blink/renderer/core/workers/worker_backing_thread_startup_data.h"
 #include "third_party/blink/renderer/core/workers/worker_inspector_proxy.h"
-#include "third_party/blink/renderer/core/workers/worker_thread_lifecycle_context.h"
-#include "third_party/blink/renderer/core/workers/worker_thread_lifecycle_observer.h"
 #include "third_party/blink/renderer/platform/scheduler/public/worker_scheduler.h"
 #include "third_party/blink/renderer/platform/waitable_event.h"
 #include "third_party/blink/renderer/platform/web_task_runner.h"
@@ -151,9 +148,6 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
 
   bool IsCurrentThread();
 
-  // Called on the worker thread.
-  ThreadableLoadingContext* GetLoadingContext();
-
   WorkerReportingProxy& GetWorkerReportingProxy() const {
     return worker_reporting_proxy_;
   }
@@ -174,12 +168,6 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
   // and WorkerInspectorController are not thread safe.
   WorkerOrWorkletGlobalScope* GlobalScope();
   WorkerInspectorController* GetWorkerInspectorController();
-
-  // Called for creating WorkerThreadLifecycleObserver on both the main thread
-  // and the worker thread.
-  WorkerThreadLifecycleContext* GetWorkerThreadLifecycleContext() const {
-    return worker_thread_lifecycle_context_;
-  }
 
   // Number of active worker threads.
   static unsigned WorkerThreadCount();
@@ -222,7 +210,7 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
   void ChildThreadTerminatedOnWorkerThread(WorkerThread*);
 
  protected:
-  WorkerThread(ThreadableLoadingContext*, WorkerReportingProxy&);
+  explicit WorkerThread(WorkerReportingProxy&);
 
   virtual WebThreadType GetThreadType() const = 0;
 
@@ -291,8 +279,6 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
           outside_settings_object,
       network::mojom::FetchCredentialsMode);
 
-  void TerminateChildThreadsOnWorkerThread();
-
   // These are called in this order during worker thread termination.
   void PrepareForShutdownOnWorkerThread() LOCKS_EXCLUDED(mutex_);
   void PerformShutdownOnWorkerThread() LOCKS_EXCLUDED(mutex_);
@@ -319,10 +305,6 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
   scoped_refptr<InspectorTaskRunner> inspector_task_runner_;
   const base::UnguessableToken devtools_worker_token_;
 
-  // Created on the main thread, passed to the worker thread but should kept
-  // being accessed only on the main thread.
-  CrossThreadPersistent<ThreadableLoadingContext> loading_context_;
-
   WorkerReportingProxy& worker_reporting_proxy_;
 
   CrossThreadPersistent<ParentExecutionContextTaskRunners>
@@ -347,11 +329,6 @@ class CORE_EXPORT WorkerThread : public WebThread::TaskObserver {
   // Used to cancel a scheduled forcible termination task. See
   // mayForciblyTerminateExecution() for details.
   TaskHandle forcible_termination_task_handle_;
-
-  // Created on the main thread heap, but will be accessed cross-thread
-  // when worker thread posts tasks.
-  CrossThreadPersistent<WorkerThreadLifecycleContext>
-      worker_thread_lifecycle_context_;
 
   HashSet<WorkerThread*> child_threads_;
 

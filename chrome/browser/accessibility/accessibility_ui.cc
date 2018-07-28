@@ -14,7 +14,11 @@
 #include "base/strings/string_number_conversions.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "build/build_config.h"
 #include "chrome/browser/profiles/profile.h"
+#include "chrome/browser/ui/browser.h"
+#include "chrome/browser/ui/browser_list.h"
+#include "chrome/browser/ui/browser_window.h"
 #include "chrome/common/pref_names.h"
 #include "chrome/common/webui_url_constants.h"
 #include "chrome/grit/browser_resources.h"
@@ -130,10 +134,13 @@ bool HandleAccessibilityRequestCallback(
     content::RenderViewHost* rvh = content::RenderViewHost::From(widget);
     if (!rvh)
       continue;
-    // Ignore views that are never visible, like background pages.
     content::WebContents* web_contents =
         content::WebContents::FromRenderViewHost(rvh);
-    if (web_contents->GetDelegate()->IsNeverVisible(web_contents))
+    content::WebContentsDelegate* delegate = web_contents->GetDelegate();
+    if (!delegate)
+      continue;
+    // Ignore views that are never visible, like background pages.
+    if (delegate->IsNeverVisible(web_contents))
       continue;
     content::BrowserContext* context = rvh->GetProcess()->GetBrowserContext();
     if (context != current_context)
@@ -178,14 +185,15 @@ bool HandleAccessibilityRequestCallback(
 
 std::string RecursiveDumpAXPlatformNodeAsString(ui::AXPlatformNode* node,
                                                 int indent) {
+  if (!node)
+    return "";
   std::string str(2 * indent, '+');
   str += node->GetDelegate()->GetData().ToString() + "\n";
   for (int i = 0; i < node->GetDelegate()->GetChildCount(); i++) {
     gfx::NativeViewAccessible child = node->GetDelegate()->ChildAtIndex(i);
     ui::AXPlatformNode* child_node =
         ui::AXPlatformNode::FromNativeViewAccessible(child);
-    if (child_node)
-      str += RecursiveDumpAXPlatformNodeAsString(child_node, indent + 1);
+    str += RecursiveDumpAXPlatformNodeAsString(child_node, indent + 1);
   }
   return str;
 }
@@ -383,15 +391,25 @@ void AccessibilityUIMessageHandler::RequestWebContentsTree(
 void AccessibilityUIMessageHandler::RequestNativeUITree(
     const base::ListValue* args) {
   AllowJavascript();
-  content::WebContents* web_contents = web_ui()->GetWebContents();
-  gfx::NativeWindow native_window = web_contents->GetTopLevelNativeWindow();
-  ui::AXPlatformNode* node =
-      ui::AXPlatformNode::FromNativeWindow(native_window);
-  std::string str = RecursiveDumpAXPlatformNodeAsString(node, 0);
+  base::Value browser_list(base::Value::Type::LIST);
 
-  std::unique_ptr<base::DictionaryValue> result(new base::DictionaryValue());
-  result->SetString("tree", str);
-  CallJavascriptFunction("accessibility.showNativeUITree", *(result.get()));
+#if !defined(OS_ANDROID)
+  for (Browser* browser : *BrowserList::GetInstance()) {
+    base::Value browser_tree(base::Value::Type::DICTIONARY);
+    browser_tree.SetKey("id", base::Value(browser->session_id().id()));
+    browser_tree.SetKey(
+        "title", base::Value(browser->GetWindowTitleForCurrentTab(false)));
+
+    gfx::NativeWindow native_window = browser->window()->GetNativeWindow();
+    ui::AXPlatformNode* node =
+        ui::AXPlatformNode::FromNativeWindow(native_window);
+    browser_tree.SetKey(
+        "tree", base::Value(RecursiveDumpAXPlatformNodeAsString(node, 0)));
+
+    browser_list.GetList().push_back(std::move(browser_tree));
+  }
+#endif  // !defined(OS_ANDROID)
+  CallJavascriptFunction("accessibility.showNativeUITree", browser_list);
 }
 
 // static

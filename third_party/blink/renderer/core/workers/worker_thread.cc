@@ -157,13 +157,6 @@ void WorkerThread::ImportModuleScript(
                       credentials_mode));
 }
 
-void WorkerThread::TerminateChildThreadsOnWorkerThread() {
-  DCHECK(IsCurrentThread());
-  PrepareForShutdownOnWorkerThread();
-  for (WorkerThread* child : child_threads_)
-    child->Terminate();
-}
-
 void WorkerThread::Terminate() {
   DCHECK_CALLED_ON_VALID_THREAD(parent_thread_checker_);
   {
@@ -178,20 +171,7 @@ void WorkerThread::Terminate() {
   // period.
   ScheduleToTerminateScriptExecution();
 
-  worker_thread_lifecycle_context_->NotifyContextDestroyed();
   inspector_task_runner_->Dispose();
-
-  if (!child_threads_.IsEmpty()) {
-    // When child workers are present, wait for them to shutdown before shutting
-    // down this thread. ChildThreadTerminatedOnWorkerThread() is responsible
-    // for completing shutdown on the worker thread after the last child shuts
-    // down.
-    GetWorkerBackingThread().BackingThread().PostTask(
-        FROM_HERE,
-        CrossThreadBind(&WorkerThread::TerminateChildThreadsOnWorkerThread,
-                        CrossThreadUnretained(this)));
-    return;
-  }
 
   GetWorkerBackingThread().BackingThread().PostTask(
       FROM_HERE,
@@ -258,13 +238,6 @@ v8::Isolate* WorkerThread::GetIsolate() {
 
 bool WorkerThread::IsCurrentThread() {
   return GetWorkerBackingThread().BackingThread().IsCurrentThread();
-}
-
-ThreadableLoadingContext* WorkerThread::GetLoadingContext() {
-  DCHECK(IsCurrentThread());
-  // This should be never called after the termination sequence starts.
-  DCHECK(loading_context_);
-  return loading_context_;
 }
 
 void WorkerThread::AppendDebuggerTask(CrossThreadClosure task) {
@@ -342,6 +315,12 @@ scheduler::WorkerScheduler* WorkerThread::GetScheduler() {
 
 void WorkerThread::ChildThreadStartedOnWorkerThread(WorkerThread* child) {
   DCHECK(IsCurrentThread());
+#if DCHECK_IS_ON()
+  {
+    MutexLocker lock(mutex_);
+    DCHECK_EQ(ThreadState::kRunning, thread_state_);
+  }
+#endif
   child_threads_.insert(child);
 }
 
@@ -352,18 +331,15 @@ void WorkerThread::ChildThreadTerminatedOnWorkerThread(WorkerThread* child) {
     PerformShutdownOnWorkerThread();
 }
 
-WorkerThread::WorkerThread(ThreadableLoadingContext* loading_context,
-                           WorkerReportingProxy& worker_reporting_proxy)
+WorkerThread::WorkerThread(WorkerReportingProxy& worker_reporting_proxy)
     : time_origin_(CurrentTimeTicks()),
       worker_thread_id_(GetNextWorkerThreadId()),
       forcible_termination_delay_(kForcibleTerminationDelay),
       devtools_worker_token_(base::UnguessableToken::Create()),
-      loading_context_(loading_context),
       worker_reporting_proxy_(worker_reporting_proxy),
       shutdown_event_(std::make_unique<WaitableEvent>(
           WaitableEvent::ResetPolicy::kManual,
-          WaitableEvent::InitialState::kNonSignaled)),
-      worker_thread_lifecycle_context_(new WorkerThreadLifecycleContext) {
+          WaitableEvent::InitialState::kNonSignaled)) {
   MutexLocker lock(ThreadSetMutex());
   WorkerThreads().insert(this);
 }
@@ -535,6 +511,9 @@ void WorkerThread::PrepareForShutdownOnWorkerThread() {
 
   // No V8 microtasks should get executed after shutdown is requested.
   GetWorkerBackingThread().BackingThread().RemoveTaskObserver(this);
+
+  for (WorkerThread* child : child_threads_)
+    child->Terminate();
 }
 
 void WorkerThread::PerformShutdownOnWorkerThread() {
@@ -546,6 +525,13 @@ void WorkerThread::PerformShutdownOnWorkerThread() {
     DCHECK_EQ(ThreadState::kReadyToShutdown, thread_state_);
   }
 #endif
+
+  // When child workers are present, wait for them to shutdown before shutting
+  // down this thread. ChildThreadTerminatedOnWorkerThread() is responsible
+  // for completing shutdown on the worker thread after the last child shuts
+  // down.
+  if (!child_threads_.IsEmpty())
+    return;
 
   inspector_task_runner_->Dispose();
   if (worker_inspector_controller_) {
@@ -560,7 +546,6 @@ void WorkerThread::PerformShutdownOnWorkerThread() {
     debugger->WorkerThreadDestroyed(this);
 
   console_message_storage_.Clear();
-  loading_context_.Clear();
 
   if (IsOwningBackingThread())
     GetWorkerBackingThread().ShutdownOnBackingThread();

@@ -1795,11 +1795,14 @@ void RenderProcessHostImpl::CreateMessageFilters() {
 
   scoped_refptr<net::URLRequestContextGetter> request_context(
       storage_partition_impl_->GetURLRequestContext());
+  // TODO(crbug.com/867347): Consider registering Mojo interface for
+  // GeneratedCodeCache rather than going through RenderMessageFilter.
   scoped_refptr<RenderMessageFilter> render_message_filter =
       base::MakeRefCounted<RenderMessageFilter>(
           GetID(), GetBrowserContext(), request_context.get(),
           widget_helper_.get(), media_internals,
-          storage_partition_impl_->GetCacheStorageContext());
+          storage_partition_impl_->GetCacheStorageContext(),
+          storage_partition_impl_->GetGeneratedCodeCacheContext());
   AddFilter(render_message_filter.get());
 
   render_frame_message_filter_ = new RenderFrameMessageFilter(
@@ -3933,6 +3936,13 @@ void RenderProcessHostImpl::ProcessDied(
         iter.GetCurrentKey(), static_cast<int>(info.status), info.exit_code));
     iter.Advance();
   }
+
+  // Initialize a new ChannelProxy in case this host is re-used for a new
+  // process. This ensures that new messages can be sent on the host ASAP (even
+  // before Init()) and they'll eventually reach the new process.
+  //
+  // Note that this may have already been called by one of the above observers
+  EnableSendQueue();
 
   // It's possible that one of the calls out to the observers might have caused
   // this object to be no longer needed.

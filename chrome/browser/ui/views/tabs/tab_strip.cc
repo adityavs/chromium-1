@@ -1172,28 +1172,13 @@ base::string16 TabStrip::GetAccessibleTabName(const Tab* tab) const {
   return base::string16();
 }
 
-int TabStrip::GetBackgroundResourceId(bool* custom_image) const {
-  const ui::ThemeProvider* tp = GetThemeProvider();
+int TabStrip::GetBackgroundResourceId(bool* has_custom_image) const {
+  if (!TitlebarBackgroundIsTransparent())
+    return controller_->GetTabBackgroundResourceId(has_custom_image);
 
-  if (TitlebarBackgroundIsTransparent()) {
-    const int kBackgroundIdGlass = IDR_THEME_TAB_BACKGROUND_V;
-    *custom_image = tp->HasCustomImage(kBackgroundIdGlass);
-    return kBackgroundIdGlass;
-  }
-
-  // If a custom theme does not provide a replacement tab background, but does
-  // provide a replacement frame image, HasCustomImage() on the tab background
-  // ID will return false, but the theme provider will make a custom image from
-  // the frame image.  Furthermore, since the theme provider will create the
-  // incognito frame image from the normal frame image, in incognito mode we
-  // need to look for a custom incognito _or_ regular frame image.
-  const bool incognito = IsIncognito();
-  const int id =
-      incognito ? IDR_THEME_TAB_BACKGROUND_INCOGNITO : IDR_THEME_TAB_BACKGROUND;
-  *custom_image = tp->HasCustomImage(id) ||
-                  tp->HasCustomImage(IDR_THEME_FRAME) ||
-                  (incognito && tp->HasCustomImage(IDR_THEME_FRAME_INCOGNITO));
-  return id;
+  constexpr int kBackgroundIdGlass = IDR_THEME_TAB_BACKGROUND_V;
+  *has_custom_image = GetThemeProvider()->HasCustomImage(kBackgroundIdGlass);
+  return kBackgroundIdGlass;
 }
 
 gfx::Rect TabStrip::GetTabAnimationTargetBounds(const Tab* tab) {
@@ -1239,7 +1224,28 @@ void TabStrip::PaintChildren(const views::PaintInfo& paint_info) {
     ui::CompositingRecorder opacity_recorder(paint_info.context(),
                                              GetInactiveAlpha(false), false);
 
-    PaintClosingTabs(tab_count(), paint_info);
+    // Under refresh, the different tab shape can lead to odd painting artifacts
+    // of hovered background tabs due to the painting order. This manifests as
+    // the lower left curve the tab being visibly overwritten. This code detects
+    // the hovered cases and defers painting of the given tab to below.
+    auto check_hovered_or_paint = [&paint_info, &hovered_tab,
+                                   &hovered_tabs](Tab* tab) {
+      if (MD::IsRefreshUi() && tab->mouse_hovered())
+        hovered_tab = tab;
+      else if (MD::IsRefreshUi() && tab->hover_controller()->ShouldDraw())
+        hovered_tabs.push_back(tab);
+      else
+        tab->Paint(paint_info);
+    };
+
+    auto paint_closing_tabs = [=](int index) {
+      if (tabs_closing_map_.find(index) == tabs_closing_map_.end())
+        return;
+      for (Tab* tab : base::Reversed(tabs_closing_map_[index]))
+        check_hovered_or_paint(tab);
+    };
+
+    paint_closing_tabs(tab_count());
 
     int active_tab_index = -1;
     for (int i = tab_count() - 1; i >= 0; --i) {
@@ -1257,16 +1263,10 @@ void TabStrip::PaintChildren(const views::PaintInfo& paint_info) {
         active_tab_index = i;
       } else if (tab->IsSelected()) {
         selected_tabs.push_back(tab);
-      } else if (stacked_layout_) {
-        // Do nothing; this will be handled below.
-      } else if (MD::IsRefreshUi() && tab->mouse_hovered()) {
-        hovered_tab = tab;
-      } else if (MD::IsRefreshUi() && tab->hover_controller()->ShouldDraw()) {
-        hovered_tabs.push_back(tab);
-      } else {
-        tab->Paint(paint_info);
+      } else if (!stacked_layout_) {
+        check_hovered_or_paint(tab);
       }
-      PaintClosingTabs(i, paint_info);
+      paint_closing_tabs(i);
     }
 
     // Draw from the left and then the right if we're in touch mode.
@@ -1972,13 +1972,6 @@ TabStrip::FindClosingTabResult TabStrip::FindClosingTab(const Tab* tab) {
   }
   NOTREACHED();
   return FindClosingTabResult(tabs_closing_map_.end(), Tabs::iterator());
-}
-
-void TabStrip::PaintClosingTabs(int index, const views::PaintInfo& paint_info) {
-  if (tabs_closing_map_.find(index) == tabs_closing_map_.end())
-    return;
-  for (Tab* tab : base::Reversed(tabs_closing_map_[index]))
-    tab->Paint(paint_info);
 }
 
 void TabStrip::UpdateStackedLayoutFromMouseEvent(views::View* source,

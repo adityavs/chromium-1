@@ -701,7 +701,6 @@
       Ha a házirend nincs beállítva, akkor az <ph name="PRINTERS_ALLOW_ALL" /> van érvényben.
       </translation>
 <translation id="2908277604670530363">Egyidejű kapcsolatok maximális száma a proxyszerverhez</translation>
-<translation id="2951386431828317490">Automatikus kitöltés engedélyezése profilokhoz</translation>
 <translation id="2956777931324644324">Ezt a házirendet a <ph name="PRODUCT_NAME" /> 36-os verziójától kezdve visszavontuk.
 
       Azt adja meg, hogy a TLS-domainhez kötött tanúsítványbővítmények engedélyezve legyenek-e.
@@ -1128,6 +1127,15 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
           Ha a házirend konfigurálatlanul marad, akkor a rendszer a globális alapértelmezett értéket használja a „DefaultKeygenSetting” házirendből (ha az be van állítva), egyéb esetben pedig a felhasználó saját személyes beállításából.</translation>
 <translation id="4239720644496144453">Az Android-alkalmazások nem használják a gyorsítótárat. Ha több felhasználó telepíti ugyanazt az Android-alkalmazást, akkor az mindegyik felhasználó számára újonnan töltődik le.</translation>
+<translation id="4243336580717651045">Engedélyezi az URL-alapú anonimizált adatgyűjtést a(z) <ph name="PRODUCT_NAME" /> esetében és megakadályozza, hogy a felhasználók megváltoztassák ezt a beállítást.
+
+      Az URL-alapú anonimizált adatgyűjtés a Google-nak továbbítja a felhasználó által megnyitott oldalak URL-jét a keresés és a böngészés javítása érdekében.
+
+      Ha bekapcsolja a házirendet, az URL-alapú anonimizált adatgyűjtés mindig aktív lesz.
+
+      Ha kikapcsolja a házirendet, az URL-alapú anonimizált adatgyűjtés soha nem lesz aktív.
+
+      Ha a házirend beállítatlanul marad, az URL-alapú anonimizált adatgyűjtés aktív lesz, de a felhasználó kikapcsolhatja.</translation>
 <translation id="4250680216510889253">Nem</translation>
 <translation id="4261820385751181068">Az eszköz bejelentkezési képernyőjének nyelv- és országkódja</translation>
 <translation id="427220754384423013">Meghatározza, hogy mely nyomtatókat használhatja a felhasználó.
@@ -1479,11 +1487,6 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
 
           Ha a házirend értéke hamis, a felhasználók nem tudnak tartalmat átküldeni eszközükre. Ha a házirend értéke igaz, a felhasználók átküldhetnek tartalmat. Ha a házirend nincs beállítva, a felhasználók a regisztrált Chrome OS-t használó eszközökre nem küldhetnek át tartalmat, de a nem regisztráltakra igen.</translation>
 <translation id="5330684698007383292">A következő tartalomtípusok kezelésének engedélyezése a(z) <ph name="PRODUCT_FRAME_NAME" /> számára</translation>
-<translation id="5360146044009867539">Engedélyezi a <ph name="PRODUCT_NAME" /> automatikus kitöltés funkcióját, és lehetővé teszi a felhasználók számára az internetes űrlapok automatikus kitöltését korábban eltárolt profil- és címadatokkal.
-
-      Ha le van tiltva ez a beállítás, az automatikus kitöltés funkció nem ajánlja fel és nem végzi el a címadatok kitöltését, és nem ment további címadatokat, amelyeket a felhasználó az interneten való böngészés közben ad meg.
-
-      Ha engedélyezve van ez a beállítás, vagy nincs értéke, a felhasználó vezérelheti az automatikus kitöltés funkció címekkel kapcsolatos használatát a kezelőfelületen.</translation>
 <translation id="5365946944967967336">Kezdőoldal gomb megjelenítése az eszköztáron</translation>
 <translation id="5366745336748853475">Lehetővé teszi olyan URL-mintákból álló lista megadását, amelyek meghatározzák azokat a webhelyeket, amelyeknél automatikusan megtörténik az ügyféltanúsítvány kiválasztása a bejelentkezési képernyőn a SAML-folyamatot tároló keretben, amennyiben a webhelynek szüksége van tanúsítványra. Használati példa: eszközre vonatkozó tanúsítvány konfigurálása, amely a SAML IdP-nek lesz bemutatva.
 
@@ -1758,6 +1761,7 @@ Ha a házirend értéke hamis, a böngésző nem jelenti a kioszkmunkamenet info
           A javasolt módszer a tétlenség esetén bekövetkező zárolásra az, hogy engedélyezze a képernyő zárolását felfüggesztés esetén, és a <ph name="PRODUCT_OS_NAME" /> a felfüggesztést a tétlenségi késleltetés után végezze el. Ezt a házirendet csak akkor használja, ha azt szeretné, hogy a képernyő zárolása jóval hamarabb történjen, mint a felfüggesztés, vagy ha egyáltalán nem szeretné, hogy bekövetkezzen a felfüggesztés tétlenség esetén.
 
           A házirend értékét milliszekundumban kell megadni. Az értékeknek alacsonyabbnak kell lenniük a tétlenség késleltetésénél.</translation>
+<translation id="6097601282776163274">URL-alapú adatgyűjtés engedélyezése</translation>
 <translation id="6111936128861357925">A rejtett dinoszauruszos játék engedélyezése</translation>
 <translation id="6114416803310251055">elavult</translation>
 <translation id="6133088669883929098">Kulcsgenerálás használatának engedélyezése minden webhelyen</translation>
@@ -2639,7 +2643,7 @@ A házirend konfigurálásának ajánlott módja Windows rendszerben a GPO, noha
 
       A beállítás engedélyezése esetén a jelszóvédelmi szolgáltatás erre az URL-re küldi a felhasználókat jelszómódosítás céljából, miután figyelmeztetés jelenik meg számukra a böngészőben.
       Ha a beállítás le van tiltva, vagy ha nincs konfigurálva, akkor a jelszóvédelmi szolgáltatás a https://myaccounts.google.com webhelyre küldi a felhasználókat jelszómódosítás céljából.
-      Ez a házirend nem áll rendelkezésre olyan Windows-példányokon, amelyek nem csatlakoztak <ph name="MS_AD_NAME" />-domainhez.</translation>
+      Ez a házirend nem áll rendelkezésre olyan Windows-példányokon, amelyek nem <ph name="MS_AD_NAME" />-domainhez kapcsolódnak.</translation>
 <translation id="8499172469244085141">Alapértelmezett beállítások (a felhasználók felülbírálhatják)</translation>
 <translation id="8507835864888987300">Célverziót állít be az automatikus frissítésekhez.
 

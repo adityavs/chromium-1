@@ -1372,6 +1372,7 @@ test("browser_tests") {
         "../browser/extensions/webstore_reinstaller_browsertest.cc",
         "../browser/extensions/webstore_startup_installer_browsertest.cc",
         "../browser/extensions/window_open_apitest.cc",
+        "../browser/extensions/worker_apitest.cc",
         "../browser/notifications/notification_permission_context_apitest.cc",
         "../browser/safe_browsing/chrome_cleaner/chrome_cleaner_dialog_controller_impl_browsertest_win.cc",
         "../browser/safe_browsing/chrome_cleaner/chrome_cleaner_reboot_dialog_controller_impl_browsertest_win.cc",
@@ -1566,6 +1567,7 @@ test("browser_tests") {
         "../browser/chromeos/drive/drive_integration_service_browsertest.cc",
         "../browser/chromeos/extensions/accessibility_features_apitest.cc",
         "../browser/chromeos/extensions/action_handlers/action_handlers_apitest.cc",
+        "../browser/chromeos/extensions/arc_apps_private_apitest.cc",
         "../browser/chromeos/extensions/default_keyboard_extension_browser_test.cc",
         "../browser/chromeos/extensions/default_keyboard_extension_browser_test.h",
         "../browser/chromeos/extensions/echo_private_apitest.cc",
@@ -2836,6 +2838,7 @@ test("unit_tests") {
     "//device/base:mocks",
     "//device/bluetooth:mocks",
     "//device/usb:test_support",
+    "//device/usb/mojo:test_support",
     "//extensions/buildflags",
     "//google_apis",
     "//gpu:test_support",
@@ -2889,6 +2892,7 @@ test("unit_tests") {
       "../browser/offline_pages/offline_page_utils_unittest.cc",
       "../browser/offline_pages/prefetch/offline_metrics_collector_impl_unittest.cc",
       "../browser/offline_pages/prefetch/prefetch_background_task_handler_impl_unittest.cc",
+      "../browser/offline_pages/prefetch/prefetch_configuration_impl_unittest.cc",
       "../browser/offline_pages/prefetch/prefetch_instance_id_proxy_unittest.cc",
       "../browser/offline_pages/prefetch/prefetched_pages_notifier_unittest.cc",
       "../browser/offline_pages/prefetch/thumbnail_fetcher_impl_unittest.cc",
@@ -2919,6 +2923,7 @@ test("unit_tests") {
       "../browser/password_manager/auto_signin_first_run_dialog_android_unittest.cc",
       "../browser/password_manager/password_accessory_controller_unittest.cc",
       "../browser/password_manager/save_password_infobar_delegate_android_unittest.cc",
+      "../browser/password_manager/update_password_infobar_delegate_android_unittest.cc",
     ]
     deps += [
       "//base:base_java",
@@ -3136,6 +3141,7 @@ test("unit_tests") {
       "../browser/usb/usb_chooser_context_unittest.cc",
       "../browser/usb/usb_chooser_controller_unittest.cc",
       "../browser/usb/web_usb_detector_unittest.cc",
+      "../browser/usb/web_usb_device_manager_unittest.cc",
 
       # The importer code is not used on Android.
       "../common/importer/firefox_importer_utils_unittest.cc",
@@ -3545,7 +3551,6 @@ test("unit_tests") {
       "../browser/extensions/external_pref_loader_unittest.cc",
       "../browser/extensions/external_provider_impl_chromeos_unittest.cc",
       "../browser/extensions/external_provider_impl_unittest.cc",
-      "../browser/extensions/favicon_downloader_unittest.cc",
       "../browser/extensions/forced_extensions/installation_tracker_unittest.cc",
       "../browser/extensions/install_tracker_unittest.cc",
       "../browser/extensions/install_verifier_unittest.cc",

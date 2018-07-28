@@ -137,7 +137,6 @@
 <translation id="1195447618553298278">తెలియని లోపం.</translation>
 <translation id="119738088725604856">స్క్రీన్‌షాట్ విండో</translation>
 <translation id="1197979282329025000">ముద్రకం <ph name="PRINTER_NAME" />కి ముద్రకం సామర్థ్యాలను తిరిగి పొందడంలో లోపం సంభవించింది. ఈ ముద్రకాన్ని <ph name="CLOUD_PRINT_NAME" />తో నమోదు చెయ్యడం సాధ్యం కాలేదు.</translation>
-<translation id="1198271701881992799">ఇప్పుడు ప్రారంభించండి</translation>
 <translation id="119944043368869598">అన్ని క్లియర్ చెయ్యి</translation>
 <translation id="1201402288615127009">తదుపరి</translation>
 <translation id="1202596434010270079">కియోస్క్ అనువర్తనం నవీకరించబడింది. దయచేసి USB స్టిక్‌ను తీసివేయండి.</translation>
@@ -262,7 +261,6 @@
 <translation id="1386387014181100145">హాయ్.</translation>
 <translation id="138784436342154190">డిఫాల్ట్ ప్రారంభ పేజీని పునరుద్ధరించాలా?</translation>
 <translation id="1390548061267426325">సాధారణ ట్యాబ్‌ వలె తెరువు</translation>
-<translation id="1391150459909312706">Android ఉత్తమ సామర్ధ్యాలను మీ Chromebookకు ఆటోమేటిక్‌గా షేర్ చేయండి.</translation>
 <translation id="1393283411312835250">సూర్యుడు మరియు మేఘాలు</translation>
 <translation id="1395262318152388157">సీక్ స్లయిడర్</translation>
 <translation id="1395730723686586365">అప్‌డేటర్ ప్రారంభించబడింది</translation>
@@ -4108,7 +4106,6 @@
 <translation id="7410344089573941623"><ph name="HOST" /> మీ కెమెరా మరియు మైక్రోఫోన్‌ను ప్రాప్యత చేయాలని అనుకుంటే నాకు తెలియజేయి</translation>
 <translation id="741204030948306876">సరే, సమ్మతమే</translation>
 <translation id="7412226954991670867">GPU మెమరీ</translation>
-<translation id="7413455776853560343">నేపథ్యాన్ని అనుకూలీకరించండి</translation>
 <translation id="7414464185801331860">18x</translation>
 <translation id="7416362041876611053">తెలియని నెట్‌వర్క్ లోపం.</translation>
 <translation id="7417705661718309329">Google మ్యాప్</translation>
@@ -4305,7 +4302,6 @@
 <translation id="7758143121000533418">Family Link</translation>
 <translation id="7758450972308449809">మీ ప్రదర్శన సరిహద్దులను సర్దుబాటు చేయండి</translation>
 <translation id="7760004034676677601">మీరు ఆశిస్తున్న ప్రారంభ పేజీ ఇదేనా?</translation>
-<translation id="7760756088376329221">Google ఫోటో ఆల్బమ్‌ను ఎంచుకోండి</translation>
 <translation id="7764225426217299476">చిరునామాను జోడించు</translation>
 <translation id="7764256770584298012"><ph name="DOWNLOAD_DOMAIN" /> నుండి <ph name="DOWNLOAD_RECEIVED" /></translation>
 <translation id="7765158879357617694">తరలించు</translation>
@@ -4453,7 +4449,6 @@
 <translation id="7930294771522048157">సేవ్ చేయబడిన చెల్లింపు పద్ధతులు ఇక్కడ కనిపిస్తాయి</translation>
 <translation id="79312157130859720"><ph name="APP_NAME" /> మీ స్క్రీన్ మరియు ఆడియోను భాగస్వామ్యం చేస్తోంది.</translation>
 <translation id="7931318309563332511">తెలియదు</translation>
-<translation id="7932099209000254951">మీ కంప్యూటర్ నుండి వచన సందేశాలను పంపడానికి మీ ఫోన్‌ను కనెక్ట్ చేయండి, మీ ఫోన్ ఇంటర్నెట్ కనెక్షన్‌ను షేర్ చేసి, మీ Chromebook స్క్రీన్‌ను అన్‌లాక్ చేయండి. <ph name="FOOTNOTE_POINTER" /> <ph name="LINK_BEGIN" />మరింత తెలుసుకోండి<ph name="LINK_END" /></translation>
 <translation id="7934414805353235750"><ph name="URL" /> రక్షిత కంటెంట్‌ని ప్లే చేయాలనుకుంటోంది. మీ పరికర గుర్తింపును Google ధృవీకరిస్తుంది.</translation>
 <translation id="793531125873261495">వర్చువల్ మెషిన్‌ను డౌన్‌లోడ్ చేయడంలో ఎర్రర్ ఏర్పడింది. దయచేసి మళ్లీ ప్రయత్నించండి.</translation>
 <translation id="7938594894617528435">ప్రస్తుతం ఆఫ్‌లైన్‌లో ఉంది</translation>

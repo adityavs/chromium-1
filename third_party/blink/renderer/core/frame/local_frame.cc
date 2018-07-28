@@ -323,23 +323,6 @@ void LocalFrame::Navigate(const FrameLoadRequest& request) {
   loader_.StartNavigation(request);
 }
 
-void LocalFrame::Reload(WebFrameLoadType load_type,
-                        ClientRedirectPolicy client_redirect_policy) {
-  DCHECK(IsReloadLoadType(load_type));
-  if (client_redirect_policy == ClientRedirectPolicy::kNotClientRedirect) {
-    if (!loader_.GetDocumentLoader()->GetHistoryItem())
-      return;
-    FrameLoadRequest request = FrameLoadRequest(
-        nullptr,
-        loader_.ResourceRequestForReload(load_type, client_redirect_policy));
-    request.SetClientRedirect(client_redirect_policy);
-    loader_.StartNavigation(request, load_type);
-  } else {
-    DCHECK_EQ(WebFrameLoadType::kReload, load_type);
-    navigation_scheduler_->ScheduleReload();
-  }
-}
-
 void LocalFrame::Detach(FrameDetachType type) {
   // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   // BEGIN RE-ENTRANCY SAFE BLOCK
@@ -504,6 +487,23 @@ Frame* LocalFrame::FindFrameForNavigation(const AtomicString& name,
   if (!frame || !active_frame.CanNavigate(*frame, destination_url))
     return nullptr;
   return frame;
+}
+
+void LocalFrame::Reload(WebFrameLoadType load_type,
+                        ClientRedirectPolicy client_redirect_policy) {
+  DCHECK(IsReloadLoadType(load_type));
+  if (client_redirect_policy == ClientRedirectPolicy::kNotClientRedirect) {
+    if (!loader_.GetDocumentLoader()->GetHistoryItem())
+      return;
+    FrameLoadRequest request = FrameLoadRequest(
+        nullptr,
+        loader_.ResourceRequestForReload(load_type, client_redirect_policy));
+    request.SetClientRedirect(client_redirect_policy);
+    loader_.StartNavigation(request, load_type);
+  } else {
+    DCHECK_EQ(WebFrameLoadType::kReload, load_type);
+    navigation_scheduler_->ScheduleReload();
+  }
 }
 
 LocalWindowProxy* LocalFrame::WindowProxy(DOMWrapperWorld& world) {
@@ -916,6 +916,7 @@ inline LocalFrame::LocalFrame(LocalFrameClient* client,
     : Frame(client, page, owner, LocalWindowProxyManager::Create(*this)),
       frame_scheduler_(page.GetPageScheduler()
                            ? page.GetPageScheduler()->CreateFrameScheduler(
+                                 this,
                                  client->GetFrameBlameContext(),
                                  IsMainFrame()
                                      ? FrameScheduler::FrameType::kMainFrame
@@ -1356,8 +1357,10 @@ void LocalFrame::SetViewportIntersectionFromParent(
     const IntRect& viewport_intersection) {
   if (remote_viewport_intersection_ != viewport_intersection) {
     remote_viewport_intersection_ = viewport_intersection;
-    if (View())
+    if (View()) {
+      View()->SetNeedsIntersectionObservation(LocalFrameView::kRequired);
       View()->ScheduleAnimation();
+    }
   }
 }
 
@@ -1447,6 +1450,20 @@ void LocalFrame::BindPreviewsResourceLoadingHintsRequest(
   previews_resource_loading_hints_receiver_ =
       std::make_unique<PreviewsResourceLoadingHintsReceiverImpl>(
           std::move(request), GetDocument());
+}
+
+ukm::UkmRecorder* LocalFrame::GetUkmRecorder() {
+  Document* document = GetDocument();
+  if (!document)
+    return nullptr;
+  return document->UkmRecorder();
+}
+
+int64_t LocalFrame::GetUkmSourceId() {
+  Document* document = GetDocument();
+  if (!document)
+    return ukm::kInvalidSourceId;
+  return document->UkmSourceID();
 }
 
 }  // namespace blink

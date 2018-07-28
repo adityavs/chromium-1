@@ -55,6 +55,7 @@
 #include "third_party/blink/renderer/platform/timer.h"
 #include "third_party/blink/renderer/platform/wtf/text/wtf_string.h"
 #include "third_party/khronos/GLES2/gl2.h"
+#include "third_party/khronos/GLES3/gl31.h"
 
 namespace cc {
 class Layer;
@@ -630,6 +631,7 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
   friend class WebGLCompressedTexturePVRTC;
   friend class WebGLCompressedTextureS3TC;
   friend class WebGLCompressedTextureS3TCsRGB;
+  friend class WebGLMultiview;
   friend class WebGLRenderingContextErrorMessageCallback;
   friend class WebGLVertexArrayObjectBase;
   friend class ScopedDrawingBufferBinder;
@@ -1064,7 +1066,12 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                                     bool* selecting_sub_rectangle) {
     DCHECK(function_name);
     DCHECK(selecting_sub_rectangle);
-    DCHECK(image);
+    if (!image) {
+      // Probably indicates a failure to allocate the image.
+      SynthesizeGLError(GL_OUT_OF_MEMORY, function_name, "out of memory");
+      return false;
+    }
+
     int image_width = static_cast<int>(image->width());
     int image_height = static_cast<int>(image->height());
     *selecting_sub_rectangle =
@@ -1699,6 +1706,8 @@ class MODULES_EXPORT WebGLRenderingContextBase : public CanvasRenderingContext,
                            GLint,
                            GLint,
                            const IntRect&);
+
+  bool ValidateShaderType(const char* function_name, GLenum shader_type);
 
   const Platform::ContextType context_type_;
 

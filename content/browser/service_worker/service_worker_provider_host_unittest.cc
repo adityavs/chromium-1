@@ -477,14 +477,13 @@ TEST_P(ServiceWorkerProviderHostTest, Controller) {
 
   // Finish the navigation.
   FinishNavigation(host.get(), std::move(info));
-  host->AssociateRegistration(registration1_.get(),
-                              false /* notify_controllerchange */);
+  host->SetControllerRegistration(registration1_,
+                                  false /* notify_controllerchange */);
   base::RunLoop().RunUntilIdle();
 
   // The page should be controlled since there was an active version at the
   // time navigation started. The SetController IPC should have been sent.
-  EXPECT_TRUE(host->active_version());
-  EXPECT_EQ(host->active_version(), host->controller());
+  EXPECT_TRUE(host->controller());
   EXPECT_TRUE(container->was_set_controller_called());
   EXPECT_EQ(registration1_.get(), host->MatchRegistration());
 }
@@ -517,7 +516,6 @@ TEST_P(ServiceWorkerProviderHostTest, UncontrolledWithMatchingRegistration) {
   // The page should not be controlled since there was no active version at the
   // time navigation started. Furthermore, no SetController IPC should have been
   // sent.
-  EXPECT_FALSE(host->active_version());
   EXPECT_FALSE(host->controller());
   EXPECT_FALSE(container->was_set_controller_called());
   // However, the host should know the registration is its best match, for
@@ -929,7 +927,7 @@ TEST_P(ServiceWorkerProviderHostTest, DontSetControllerInDestructor) {
   // Make the active worker the controller and give it an ongoing request. This
   // way when a waiting worker calls SkipWaiting(), activation won't trigger
   // until we're ready.
-  provider_host1->AssociateRegistration(registration1_.get(), false);
+  provider_host1->SetControllerRegistration(registration1_, false);
   EXPECT_EQ(version1.get(), provider_host1->controller());
   // The worker must be running to have a request.
   version1->StartWorker(ServiceWorkerMetrics::EventType::PUSH,

@@ -784,6 +784,9 @@ extern const char kOmniboxUIElideSuggestionUrlAfterHostDescription[];
 extern const char kOmniboxUIHideSteadyStateUrlSchemeAndSubdomainsName[];
 extern const char kOmniboxUIHideSteadyStateUrlSchemeAndSubdomainsDescription[];
 
+extern const char kOmniboxUIJogTextfieldOnPopupName[];
+extern const char kOmniboxUIJogTextfieldOnPopupDescription[];
+
 extern const char kOmniboxUIMaxAutocompleteMatchesName[];
 extern const char kOmniboxUIMaxAutocompleteMatchesDescription[];
 
@@ -1465,6 +1468,9 @@ extern const char kKeepPrefetchedContentSuggestionsDescription[];
 
 extern const char kLanguagesPreferenceName[];
 extern const char kLanguagesPreferenceDescription[];
+
+extern const char kLongPressBackForHistoryName[];
+extern const char kLongPressBackForHistoryDescription[];
 
 extern const char kLsdPermissionPromptName[];
 extern const char kLsdPermissionPromptDescription[];

@@ -64,15 +64,9 @@
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "url/url_constants.h"
 
-#if defined(OS_WIN)
-#include "chrome/browser/web_applications/web_app_win.h"
-#endif
-
 using content::NavigationController;
 using content::NavigationEntry;
 using content::WebContents;
-
-DEFINE_WEB_CONTENTS_USER_DATA_KEY(extensions::TabHelper);
 
 namespace extensions {
 

@@ -30,9 +30,9 @@
 #include "chrome/common/buildflags.h"
 #include "chrome/common/chrome_switches.h"
 #include "chrome/common/pref_names.h"
+#include "components/autofill/core/browser/autofill_address_policy_handler.h"
 #include "components/autofill/core/browser/autofill_credit_card_policy_handler.h"
 #include "components/autofill/core/browser/autofill_policy_handler.h"
-#include "components/autofill/core/browser/autofill_profile_policy_handler.h"
 #include "components/bookmarks/common/bookmark_pref_names.h"
 #include "components/browsing_data/core/pref_names.h"
 #include "components/certificate_transparency/pref_names.h"
@@ -645,6 +645,9 @@ const PolicyToPreferenceMapEntry kSimplePolicyMap[] = {
   { key::kEnableSyncConsent,
     prefs::kEnableSyncConsent,
     base::Value::Type::BOOLEAN },
+  { key::kNetworkFileSharesAllowed,
+    prefs::kNetworkFileSharesAllowed,
+    base::Value::Type::BOOLEAN },
 #endif  // defined(OS_CHROMEOS)
 
 // Metrics reporting is controlled by a platform specific policy for ChromeOS
@@ -998,7 +1001,7 @@ std::unique_ptr<ConfigurationPolicyHandlerList> BuildHandlerList(
   }
 
   handlers->AddHandler(
-      std::make_unique<autofill::AutofillProfilePolicyHandler>());
+      std::make_unique<autofill::AutofillAddressPolicyHandler>());
   handlers->AddHandler(
       std::make_unique<autofill::AutofillCreditCardPolicyHandler>());
   handlers->AddHandler(std::make_unique<autofill::AutofillPolicyHandler>());

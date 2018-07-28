@@ -14,7 +14,6 @@
 #include "ash/public/cpp/app_list/app_list_constants.h"
 #include "ash/public/cpp/shelf_types.h"
 #include "ash/session/session_observer.h"
-#include "ash/wm/cursor_manager_chromeos.h"
 #include "ash/wm/system_modal_container_event_filter_delegate.h"
 #include "base/gtest_prod_util.h"
 #include "base/macros.h"
@@ -273,7 +272,6 @@ class ASH_EXPORT Shell : public SessionObserver,
   static bool IsSystemModalWindowOpen();
 
   static Config GetAshConfig();
-  static bool ShouldUseIMEService();
 
   // Registers all ash related local state prefs to the given |registry|.
   static void RegisterLocalStatePrefs(PrefRegistrySimple* registry,
@@ -369,10 +367,7 @@ class ASH_EXPORT Shell : public SessionObserver,
   CrosDisplayConfig* cros_display_config() {
     return cros_display_config_.get();
   }
-
-  // Returns nullptr in mash which has no global cursor manager.
   ::wm::CursorManager* cursor_manager() { return cursor_manager_.get(); }
-
   DetachableBaseHandler* detachable_base_handler() {
     return detachable_base_handler_.get();
   }
